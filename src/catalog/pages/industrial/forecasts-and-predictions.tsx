@@ -65,11 +65,10 @@ const TEMP_FORECAST = extendSeries(TEMP_HISTORY, { steps: 48, lookback: 48 });
 const TEMP_BAND = confidenceBand(TEMP_FORECAST, { initial: 0.4, growth: 3.6 });
 const TEMP_LIMIT_AT = timeToLimit(TEMP_FORECAST, TEMPERATURE.highLimit) ?? NOW + 6 * HOUR;
 const TEMP_EARLIEST = timeToLimit(TEMP_BAND.map((point) => ({ t: point.t, v: point.high })), TEMPERATURE.highLimit) ?? TEMP_LIMIT_AT;
-const TEMP_LATEST = timeToLimit(TEMP_BAND.map((point) => ({ t: point.t, v: point.low })), TEMPERATURE.highLimit) ?? NOW + 12 * HOUR;
 /** Predicted change over the next hour (four 15-minute steps). */
 const TEMP_RATE = TEMP_FORECAST[3].v - TEMPERATURE.value;
 const TEMP_LEAD = formatLeadTime(TEMP_LIMIT_AT - NOW);
-const TEMP_LEAD_RANGE = `between ${formatLeadTime(TEMP_EARLIEST - NOW)} and ${formatLeadTime(TEMP_LATEST - NOW)}`;
+const TEMP_LEAD_RANGE = `${formatLeadTime(TEMP_EARLIEST - NOW)} at the earliest`;
 
 const TEMP_LIMITS = [
   { value: 155, label: 'Trip 155', tone: 'critical', align: 'left' },

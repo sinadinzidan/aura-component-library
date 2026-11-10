@@ -743,7 +743,7 @@ export default definePage({
         {
           id: 'AnomalyDetectMatrix',
           title: 'Multi-sensor anomaly matrix',
-          note: 'Pick it to see which sensors moved together and in what order; darker cells are higher scores.',
+          note: 'Pick it to see which sensors moved together and in what order; stronger cells are higher scores.',
           origin: 'custom',
           size: 'lg',
           align: 'stretch',

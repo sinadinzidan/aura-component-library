@@ -161,8 +161,12 @@ const LIST_DETAIL_SENSOR_COLUMNS: readonly DataTableColumn<Sensor>[] = [
     id: 'limits',
     header: 'Limits',
     align: 'end',
-    cell: (sensor) => `${formatValue(sensor.lowLimit, sensor.decimals)} to ${formatValue(sensor.highLimit, sensor.decimals)}`,
-    width: 'w-32',
+    cell: (sensor) => (
+      <span className="whitespace-nowrap">
+        {formatValue(sensor.lowLimit, sensor.decimals)} to {formatValue(sensor.highLimit, sensor.decimals)}
+      </span>
+    ),
+    width: 'w-44',
   },
 ];
 
@@ -314,8 +318,12 @@ function ListDetailTemplateTable() {
             onClear={() => setQuery('')}
             className="w-72 max-w-full"
           />
-          <OptionSelect aria-label="Status" options={LIST_DETAIL_STATUS_OPTIONS} value={status} onValueChange={setStatus} width="compact" />
-          <OptionSelect aria-label="Priority" options={LIST_DETAIL_PRIORITY_OPTIONS} value={priority} onValueChange={setPriority} width="compact" />
+          <div className="w-40">
+            <OptionSelect aria-label="Status" options={LIST_DETAIL_STATUS_OPTIONS} value={status} onValueChange={setStatus} />
+          </div>
+          <div className="w-40">
+            <OptionSelect aria-label="Priority" options={LIST_DETAIL_PRIORITY_OPTIONS} value={priority} onValueChange={setPriority} />
+          </div>
         </FilterBar>
         <DataTable
           label="Work orders"
@@ -504,17 +512,19 @@ function ListDetailTemplateEmpty() {
           rows={[]}
           getRowId={(round) => round.id}
           empty={
-            <EmptyState type="new-object">
-              <EmptyStateIcon />
-              <EmptyStateTitle as="h2">No inspection rounds yet</EmptyStateTitle>
-              <EmptyStateDescription>
-                A round is a route through an area with the checks to make at each stop. Create one, or import the rounds you already run on paper.
-              </EmptyStateDescription>
-              <EmptyStateActions>
-                <Button>Create round</Button>
-                <Button variant="outline">Import from spreadsheet</Button>
-              </EmptyStateActions>
-            </EmptyState>
+            <div className="flex justify-center py-8">
+              <EmptyState type="new-object">
+                <EmptyStateIcon />
+                <EmptyStateTitle as="h2">No inspection rounds yet</EmptyStateTitle>
+                <EmptyStateDescription>
+                  A round is a route through an area with the checks to make at each stop. Create one, or import the rounds you already run on paper.
+                </EmptyStateDescription>
+                <EmptyStateActions>
+                  <Button>Create round</Button>
+                  <Button variant="outline">Import from spreadsheet</Button>
+                </EmptyStateActions>
+              </EmptyState>
+            </div>
           }
         />
       </ContentContainer>
@@ -665,6 +675,10 @@ function ListDetailTemplateTabs() {
             <p className="max-w-prose text-sm text-medium-foreground">
               Duty pump for condensate export. Pump B is the installed standby and is test-started every 30 days; the last test is overdue.
             </p>
+            <section className="flex flex-col gap-3">
+              <SectionHeader title="Right now" size="sm" />
+              <DataTable label="Current readings" columns={LIST_DETAIL_SENSOR_COLUMNS} rows={sensors} getRowId={(sensor) => sensor.id} density="dense" />
+            </section>
           </TabsPanel>
           <TabsPanel value="readings">
             <DataTable label="Readings" columns={LIST_DETAIL_SENSOR_COLUMNS} rows={sensors} getRowId={(sensor) => sensor.id} />
@@ -856,24 +870,19 @@ function ListDetailTemplateWorkOrder() {
       <ContentContainer width="detail">
         <PageHeader
           title={order.title}
-          status={
-            <>
-              <PriorityBadge priority={order.priority} />
-              <StatusBadge status={order.status} />
-            </>
-          }
           meta={
-            <p className="text-sm text-muted-foreground">
-              <span className="font-mono">{order.id}</span> · corrective · due {formatDateTime(order.dueAt)} UTC
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <PriorityBadge priority={order.priority} showMeaning />
+              <StatusBadge status={order.status} />
+              <span>
+                <span className="font-mono">{order.id}</span> · corrective · due {formatDateTime(order.dueAt)} UTC
+              </span>
+            </div>
           }
           actions={
-            <>
-              <Button variant="outline">Put on hold</Button>
-              <Button disabled={progress < 100} aria-describedby="list-detail-complete-hint">
-                <IconCheck /> Complete work order
-              </Button>
-            </>
+            <Button disabled={progress < 100} aria-describedby="list-detail-complete-hint">
+              <IconCheck /> Complete work order
+            </Button>
           }
         >
           <Stepper steps={LIST_DETAIL_ORDER_STEPS} current={2} label="Work order status" />

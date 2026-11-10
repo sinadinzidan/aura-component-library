@@ -25,7 +25,11 @@ import source from './reports.tsx?raw';
 /** The production day the daily report covers: 11 March, 06:00 to 06:00. */
 const REPORT_DAY_END = REFERENCE_NOW - 8 * HOUR;
 
-const REPORT_EXPORT_HOURLY = makeSeries({ seed: 31, points: 25, base: 4.3, amplitude: 0.12, noise: 0.04, cycles: 1.2, end: REPORT_DAY_END, decimals: 2 }).map((point) => ({ t: point.t, v: point.v }));
+/** Hourly export rate for the day: steady, a dip while the recompressor was off load (13:46 to 19:45), then recovery. */
+const REPORT_EXPORT_HOURLY = makeSeries({ seed: 31, points: 25, base: 4.42, noise: 0.015, end: REPORT_DAY_END, decimals: 2 }).map((point, index) => ({
+  t: point.t,
+  v: Math.round((point.v - (index >= 8 && index <= 13 ? 0.3 : index === 14 ? 0.12 : 0)) * 100) / 100,
+}));
 
 const REPORT_FEBRUARY: CategoryRow[] = makeSeries({ seed: 77, points: 28, base: 4.46, amplitude: 0.08, noise: 0.06, cycles: 2, stepMs: DAY, decimals: 2 }).map((point, index) => ({
   category: String(index + 1),
@@ -41,7 +45,7 @@ type ReportLayoutTableProps = { label: string; columns: readonly ReportColumn[];
 /** A print-style table: hairlines between rows, a heavier rule above the totals, right-aligned figures. */
 function ReportLayoutTable({ label, columns, rows, totals, dense = false }: ReportLayoutTableProps) {
   const pad = dense ? 'py-1' : 'py-2';
-  const cell = (column: ReportColumn) => `${pad} pr-4 last:pr-0 ${column.align === 'right' ? 'text-right tabular-nums' : 'text-left'} ${column.mono ? 'font-mono text-xs' : ''}`;
+  const cell = (column: ReportColumn) => `${pad} pr-4 last:pr-0 ${column.align === 'right' ? 'text-right tabular-nums' : 'text-left'} ${column.mono ? 'whitespace-nowrap font-mono text-xs' : ''}`;
   return (
     <table aria-label={label} className={`w-full ${dense ? 'text-xs' : 'text-sm'}`}>
       <thead>
@@ -91,13 +95,13 @@ function ReportLayoutSection({ number, title, children }: { number: string; titl
   );
 }
 
-function ReportLayoutFooterStrip({ page, pages, documentId }: { page: number; pages: number; documentId: string }) {
+function ReportLayoutFooterStrip({ page, pages, documentId, generated = '12 Mar 2026, 06:15 UTC' }: { page: number; pages: number; documentId: string; generated?: string }) {
   return (
     <footer className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-t border-default pt-3 text-xs text-muted-foreground">
       <span>
         Nordkapp gas processing plant · <span className="font-mono">{documentId}</span>
       </span>
-      <span>Internal · generated 12 Mar 2026, 06:15 UTC</span>
+      <span>Internal · generated {generated}</span>
       <span className="tabular-nums">
         Page {page} of {pages}
       </span>
@@ -217,10 +221,10 @@ function ReportLayoutDailyKpiTable() {
 
 function ReportLayoutExportFigure({ number }: { number: number }) {
   return (
-    <Figure number={number} caption="Gas export rate through the production day. The dip from 13:46 follows the recompressor trip; export recovered after the restart at 19:45." source="Source: 27-FT-20011, hourly averages, 11 Mar 06:00 to 12 Mar 06:00 UTC.">
+    <Figure number={number} caption="Gas export rate through the production day. The dip from 14:00 follows the recompressor trip at 13:46; export recovered after the restart at 19:45." source="Source: 27-FT-20011, hourly averages, 11 Mar 06:00 to 12 Mar 06:00 UTC.">
       <TrendChart
         heightClassName="h-48"
-        label="Gas export rate on 11 March by hour against the 4.5 plan, dipping after the recompressor trip at 13:46 and recovering in the evening"
+        label="Gas export rate on 11 March by hour against the 4.5 plan, about 0.3 lower between 14:00 and 19:00 after the recompressor trip, then back to 4.4"
         series={[{ key: 'export', label: 'Gas export', points: REPORT_EXPORT_HOURLY }]}
         limits={[{ value: 4.5, label: 'Plan 4.50', tone: 'neutral', align: 'left' }]}
         yDomain={[4, 4.6]}
@@ -259,7 +263,9 @@ function ReportLayoutSummaryText() {
   return (
     <section aria-label="Executive summary" className="flex flex-col gap-3 border-l-2 border-emphasized pl-4">
       <h4 className="text-xs font-semibold text-muted-foreground">Executive summary</h4>
-      <p className="text-base text-base-foreground">February export was 124.3 MSm³, 1.3 % under plan. Two recompressor trips account for three quarters of the shortfall.</p>
+      <p className="text-base text-base-foreground">
+        February export was {formatValue(REPORT_FEBRUARY_TOTAL, 1)} MSm³, {formatValue(((126 - REPORT_FEBRUARY_TOTAL) / 126) * 100, 1)} % under the plan of 126.0. Two recompressor trips are the largest single cause of the shortfall.
+      </p>
       <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-medium-foreground">
         <li>Availability 97.1 % against a 97.5 % target; 21 hours of downtime in 8 events.</li>
         <li>Flaring 14 % under the monthly allowance.</li>
@@ -314,7 +320,7 @@ function ReportLayoutPageFooter() {
   return (
     <ReportPage label="Page footer strip" orientation="auto">
       <p className="text-sm text-muted-foreground">The footer carries what identifies a loose page: plant, document number, classification, when it was generated and the page count.</p>
-      <ReportLayoutFooterStrip page={2} pages={8} documentId="NK-RPT-M-0226" />
+      <ReportLayoutFooterStrip page={2} pages={8} documentId="NK-RPT-M-0226" generated="3 Mar 2026, 10:12 UTC" />
     </ReportPage>
   );
 }
@@ -360,7 +366,7 @@ function ReportLayoutFigureCaption() {
     <ReportPage label="Figure with caption" orientation="auto">
       <ReportLayoutExportFigure number={1} />
       <p className="text-sm text-medium-foreground">
-        Export fell to 4.12 MSm³/d after the trip and was back at plan by 05:00 (see <span className="font-semibold text-base-foreground">{figureReference(1)}</span>).
+        Export fell to about 4.1 MSm³/d after the trip and recovered once the recompressor was back on load (see <span className="font-semibold text-base-foreground">{figureReference(1)}</span>).
       </p>
     </ReportPage>
   );
@@ -521,7 +527,7 @@ function ReportLayoutShiftReport() {
       label="Shift report, night shift 11 March"
       className="mx-auto"
       header={<ReportHeader overline="Shift report" title="Night shift, 11 March" period="11 Mar 18:00 – 12 Mar 06:00" site="Nordkapp · control room" generatedAt="12 Mar 2026, 06:02 UTC" author="Liv Wold" />}
-      footer={<ReportLayoutFooterStrip page={1} pages={1} documentId="NK-RPT-S-0311N" />}
+      footer={<ReportLayoutFooterStrip page={1} pages={1} documentId="NK-RPT-S-0311N" generated="12 Mar 2026, 06:02 UTC" />}
     >
       <ReportLayoutSection number="1" title="Summary for the incoming shift">
         <p>Plant at full capacity since 19:45. Watch discharge temperature on the 1st stage compressor; it is 3.8 °C under its high limit and rising slowly.</p>
@@ -549,7 +555,7 @@ function ReportLayoutMonthlySummary() {
       label="Monthly performance summary, February 2026"
       className="mx-auto"
       header={<ReportHeader overline="Monthly report" title="Performance summary" status={<Badge variant="success">Final</Badge>} period="February 2026" site="Nordkapp" generatedAt="3 Mar 2026, 10:12 UTC" documentId="NK-RPT-M-0226" />}
-      footer={<ReportLayoutFooterStrip page={1} pages={8} documentId="NK-RPT-M-0226" />}
+      footer={<ReportLayoutFooterStrip page={1} pages={8} documentId="NK-RPT-M-0226" generated="3 Mar 2026, 10:12 UTC" />}
     >
       <ReportLayoutSummaryText />
       <ReportLayoutSection number="1" title="Key figures">
@@ -580,7 +586,7 @@ function ReportLayoutMonthlySummary() {
 
 function ReportLayoutIncidentCover() {
   return (
-    <ReportPage label="Incident report cover" footer={<ReportLayoutFooterStrip page={1} pages={6} documentId="NK-RPT-I-0041" />}>
+    <ReportPage label="Incident report cover" footer={<ReportLayoutFooterStrip page={1} pages={6} documentId="NK-RPT-I-0041" generated="11 Mar 2026, 17:30 UTC" />}>
       <div className="flex flex-1 flex-col justify-center gap-10">
         <ReportHeader
           variant="cover"
@@ -616,7 +622,7 @@ function ReportLayoutIncidentSummary() {
     <ReportPage
       label="Incident report summary"
       header={<ReportHeader variant="compact" title="Recompressor trip on high vibration" site="Nordkapp" period="11 March 2026" documentId="NK-RPT-I-0041" />}
-      footer={<ReportLayoutFooterStrip page={2} pages={6} documentId="NK-RPT-I-0041" />}
+      footer={<ReportLayoutFooterStrip page={2} pages={6} documentId="NK-RPT-I-0041" generated="11 Mar 2026, 17:30 UTC" />}
     >
       <ReportLayoutSection number="1" title="What happened">
         <p>At 13:46 the recompressor tripped on drive-end vibration of 11.6 mm/s against a trip limit of 11.0. Vibration had been above its 7.1 mm/s high limit since 11:30.</p>

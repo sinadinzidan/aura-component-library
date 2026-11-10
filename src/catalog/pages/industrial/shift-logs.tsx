@@ -182,7 +182,7 @@ function ShiftLogCompactRows() {
       {EARLY.slice(-4).map((entry) => (
         <li key={entry.id} className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-baseline gap-2">
           <time className="text-xs text-muted-foreground tabular-nums">{entry.time}</time>
-          <span className="truncate text-sm text-base-foreground">{entry.text}</span>
+          <span className="line-clamp-2 text-sm text-base-foreground">{entry.text}</span>
         </li>
       ))}
     </ul>
@@ -405,7 +405,7 @@ function ShiftLogFilterBar() {
             <li key={entry.id} className="grid grid-cols-[2.5rem_7rem_minmax(0,1fr)_8rem] items-center gap-3 py-2">
               <time className="text-xs text-muted-foreground tabular-nums">{entry.time}</time>
               <LogCategoryBadge category={entry.category} />
-              <span className="truncate text-sm text-base-foreground">{entry.text}</span>
+              <span className="line-clamp-2 text-sm text-base-foreground">{entry.text}</span>
               <span className="truncate text-right text-xs text-muted-foreground">{entry.author}</span>
             </li>
           ))}

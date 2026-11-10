@@ -651,7 +651,7 @@ function AiWorkspaceTemplateChatCanvas() {
             </div>
             <div className="flex flex-1 flex-col rounded-xl bg-base-background p-4">
               {view === 'chart' ? (
-                <AiwVibrationChart heightClassName="h-72" />
+                <AiwVibrationChart heightClassName="h-96" />
               ) : (
                 <table className="w-full text-left text-sm">
                   <caption className="sr-only">Drive-end vibration, every eighth hourly value</caption>
@@ -959,7 +959,7 @@ function AiWorkspaceTemplateReviewAction() {
   };
 
   return (
-    <PageFrame title="Review and approve agent action" address="nordkapp.example/agents/reviews/rev-118" height="lg">
+    <PageFrame title="Review and approve agent action" address="nordkapp.example/agents/reviews/rev-118">
       <div className="flex min-h-full flex-col bg-base-background">
         <header className="flex min-h-12 shrink-0 items-center gap-3 border-b border-default px-4 py-2">
           <AiwTitle title="Review agent action" context="rev-118 · proposed 13:58 by the maintenance agent">

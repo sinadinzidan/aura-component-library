@@ -60,7 +60,7 @@ export function ReportHeader({ title, overline, period, site, generatedAt, autho
         </div>
       </div>
       {fields.length > 0 ? (
-        <dl className={cn('grid gap-x-8 gap-y-3', cover ? 'grid-cols-1 border-t border-emphasized pt-6' : 'grid-cols-2 md:grid-cols-4')}>
+        <dl className={cn('grid gap-x-8 gap-y-3', cover ? 'grid-cols-1 border-t border-emphasized pt-6' : 'grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]')}>
           {fields.map((field) => (
             <div key={field.label} className={cn('flex min-w-0', cover ? 'gap-4' : 'flex-col gap-0.5')}>
               <dt className={cn('text-xs text-muted-foreground', cover ? 'w-28 shrink-0 pt-0.5' : '')}>{field.label}</dt>

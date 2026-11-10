@@ -49,7 +49,16 @@ export function Hotspot({ position, index, tag, value, tone, selected = false, p
       <SceneEnvironmentContext.Provider value={markerEnvironment}>
         <SensorMarker position={[0, 0, 0]} tone={tone} size={selected ? 0.16 : 0.12} />
       </SceneEnvironmentContext.Provider>
-      <mesh onClick={onSelect ? (event) => (event.stopPropagation(), onSelect()) : undefined}>
+      <mesh
+        onClick={
+          onSelect
+            ? (event) => {
+                event.stopPropagation();
+                onSelect();
+              }
+            : undefined
+        }
+      >
         <sphereGeometry args={[0.32, 8, 6]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
