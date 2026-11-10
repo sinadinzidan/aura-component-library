@@ -945,7 +945,7 @@ function DashboardTemplateLoading() {
         <PageHeader
           title="Plant overview"
           description={loaded ? 'Nordkapp gas processing plant · updated 14:00 UTC' : 'Nordkapp gas processing plant · loading the last 24 hours'}
-          actions={<Switch label="Show loaded page" textLeft checked={loaded} onCheckedChange={setLoaded} />}
+          actions={<Switch label="Show loaded page" checked={loaded} onCheckedChange={setLoaded} />}
         />
         <DashboardKpiRow loading={!loaded} />
         <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-3">

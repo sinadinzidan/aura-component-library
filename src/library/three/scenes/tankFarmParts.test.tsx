@@ -139,8 +139,11 @@ describe(TankFarm.name, () => {
     );
     await busy.advance();
 
-    expect(withGeometry(idle.objects(), 'ConeGeometry')).toHaveLength(0);
-    expect(withGeometry(busy.objects(), 'ConeGeometry').length).toBeGreaterThan(5);
+    // Tank roofs are cones too, so count what the flow adds.
+    const roofs = withGeometry(idle.objects(), 'ConeGeometry').length;
+
+    expect(roofs).toBe(TANKS.length);
+    expect(withGeometry(busy.objects(), 'ConeGeometry').length - roofs).toBeGreaterThan(5);
 
     await idle.unmount();
     await busy.unmount();
