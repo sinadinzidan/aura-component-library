@@ -1,4 +1,4 @@
-import { branchRoute, bundRect, farmBounds, headerRoute, movementRoute, shellVolume, tankBounds, tankLabelAnchor } from './tankFarmLayout';
+import { branchRoute, bundRect, farmBounds, farmCameraTarget, headerRoute, movementRoute, plotBounds, shellVolume, tankBounds, tankLabelAnchor } from './tankFarmLayout';
 import type { Manifold, TankSpot } from './tankFarmLayout';
 
 const NORTH: TankSpot = { id: 'ta-201', center: [-20, -24], diameter: 16, height: 12 };
@@ -133,5 +133,45 @@ describe(tankLabelAnchor.name, () => {
 describe(shellVolume.name, () => {
   it('computes a cylinder, rounded to the nearest 10', () => {
     expect(shellVolume(16, 12)).toBe(2410);
+  });
+});
+
+describe(plotBounds.name, () => {
+  it('boxes the plot alone', () => {
+    expect(plotBounds({ center: [0, 0], size: [100, 60] }, undefined, 10)).toEqual({ min: [-50, 0, -30], max: [50, 10, 30] });
+  });
+
+  it('grows to take in the water beside it', () => {
+    const bounds = plotBounds({ center: [0, 0], size: [100, 60] }, { center: [70, 0], size: [40, 60] }, 10);
+
+    expect(bounds.min[0]).toBe(-50);
+    expect(bounds.max[0]).toBe(90);
+  });
+});
+
+describe(farmCameraTarget.name, () => {
+  const bounds = plotBounds({ center: [0, 0], size: [100, 60] }, undefined, 10);
+
+  it('looks at the middle of the farm from the south, above it', () => {
+    const target = farmCameraTarget(bounds);
+
+    expect(target.lookAt).toEqual([0, 5, 0]);
+    expect(target.position[1]).toBeGreaterThan(5);
+    expect(target.position[2]).toBeGreaterThan(Math.abs(target.position[0]));
+  });
+
+  it('looks straight down in the plan view', () => {
+    const target = farmCameraTarget(bounds, { plan: true });
+
+    expect(target.position[0]).toBeCloseTo(0);
+    expect(target.position[1]).toBeGreaterThan(50);
+    expect(Math.abs(target.position[2])).toBeLessThan(2);
+  });
+
+  it('stands further back on a narrow canvas', () => {
+    const wide = farmCameraTarget(bounds, { aspect: 2 });
+    const narrow = farmCameraTarget(bounds, { aspect: 0.6 });
+
+    expect(narrow.position[1]).toBeGreaterThan(wide.position[1]);
   });
 });

@@ -6,13 +6,15 @@ import { geometryParameter, renderScene } from '../renderScene.fixture';
 import { DepthPlane } from './DepthPlane';
 import { horizonDepthAt } from './horizonHeight';
 import type { Horizon } from './horizonHeight';
-import { HorizonSurface, horizonGeometry } from './HorizonSurface';
+import { horizonGeometry } from './horizonGeometry';
+import { HorizonSurface } from './HorizonSurface';
 import { ReservoirZone } from './ReservoirZone';
 import { SubseaTemplate } from './SubseaTemplate';
 import { WellFieldScene } from './WellFieldScene';
 import type { WellFieldSceneWell } from './WellFieldScene';
 import { Wellhead } from './Wellhead';
-import { WellTube, wellTubeGeometry } from './WellTube';
+import { WellTube } from './WellTube';
+import { wellTubeGeometry } from './wellTubeGeometry';
 
 function isMesh(object: Object3D): object is Mesh {
   return 'isMesh' in object && object.isMesh === true;

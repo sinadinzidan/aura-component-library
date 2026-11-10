@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import type { DotShape } from '../../industrial/status';
 import { CameraRig } from '../CameraRig';
-import { boundsFromFootprint, frameBounds, freeViewport, scaleTargetDistance } from '../cameraTargets';
+import { freeViewport, scaleTargetDistance } from '../cameraTargets';
 import type { CameraView, Vec3, ViewInsetsValue } from '../cameraTargets';
 import { Ground } from '../Ground';
 import { PipeRun } from '../PipeRun';
@@ -20,7 +20,7 @@ import { ViewInsets } from '../ViewInsets';
 import { BundWall } from './BundWall';
 import { IndicatorRing } from './IndicatorRing';
 import { SeaPlane } from './SeaPlane';
-import { branchRoute, headerRoute, tankLabelAnchor } from './tankFarmLayout';
+import { branchRoute, farmCameraTarget, headerRoute, plotBounds, tankLabelAnchor } from './tankFarmLayout';
 import type { GroundRect, Manifold, TankSpot } from './tankFarmLayout';
 
 /** One tank in the scene: where it stands, how full it is, and what its ring and label say. */
@@ -54,9 +54,11 @@ export type TankFarmProps = {
   selectedId?: string | null;
   /** Called with a tank id. */
   onSelect?: (id: string) => void;
-  /** `top` is the plan view. */
+  /** `top` is the plan view; anything else is the 3D view from the south. */
   view?: CameraView;
   showLabels?: boolean;
+  /** Extra height given to every other label, so neighbours in a row do not collide. */
+  labelStagger?: number;
   /** Pixels that overlays cover on each edge of the canvas. */
   insets?: ViewInsetsValue;
   /** Scenery in plot coordinates: jetty, ship, pump house, flare. */
@@ -69,7 +71,7 @@ export type TankFarmProps = {
  * transferring. Selecting a tank dims the others. Everything shown is a prop, so a time scrubber
  * can drive levels and flows from `levelsAt`. Render it inside `SceneCanvas`.
  */
-export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, selectedId = null, onSelect, view = 'perspective', showLabels = true, insets, children }: TankFarmProps) {
+export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, selectedId = null, onSelect, view = 'perspective', showLabels = true, labelStagger = 6, insets, children }: TankFarmProps) {
   const { palette } = useSceneEnvironment();
   const size = useThree((state) => state.size);
   const fov = useThree((state) => ('fov' in state.camera && typeof state.camera.fov === 'number' ? state.camera.fov : 40));
@@ -77,19 +79,9 @@ export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, s
   const free = freeViewport(size, { top, right, bottom, left });
   const aspect = Math.round((free.width / free.height) * 10) / 10;
   const zoomOut = Math.round((size.height / free.height) * 20) / 20;
-  const minX = Math.min(plot.center[0] - plot.size[0] / 2, sea ? sea.center[0] - sea.size[0] / 2 : Infinity);
-  const maxX = Math.max(plot.center[0] + plot.size[0] / 2, sea ? sea.center[0] + sea.size[0] / 2 : -Infinity);
-  const minZ = plot.center[1] - plot.size[1] / 2;
-  const maxZ = plot.center[1] + plot.size[1] / 2;
-  const target = useMemo(
-    () =>
-      scaleTargetDistance(
-        frameBounds(boundsFromFootprint([(minX + maxX) / 2, 0, (minZ + maxZ) / 2], [maxX - minX, 10, maxZ - minZ]), { view, aspect, fov, padding: view === 'top' ? 0.74 : 0.62 }),
-        zoomOut
-      ),
-    [minX, maxX, minZ, maxZ, view, aspect, fov, zoomOut]
-  );
-  const span = Math.hypot(maxX - minX, maxZ - minZ);
+  const bounds = useMemo(() => plotBounds(plot, sea, 10), [plot, sea]);
+  const target = useMemo(() => scaleTargetDistance(farmCameraTarget(bounds, { plan: view === 'top', aspect, fov }), zoomOut), [bounds, view, aspect, fov, zoomOut]);
+  const span = Math.hypot(bounds.max[0] - bounds.min[0], bounds.max[2] - bounds.min[2]);
   const header = useMemo(() => headerRoute(tanks, manifold), [tanks, manifold]);
   const branches = useMemo(() => tanks.map((tank) => ({ id: tank.id, points: branchRoute(tank, manifold) })), [tanks, manifold]);
   const hasSelection = selectedId !== null;
@@ -119,7 +111,7 @@ export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, s
             <IndicatorRing position={position} radius={tank.diameter / 2 + 2.2} width={1.1} color={ring.color} opacity={0.95 * ring.opacity} dimmed={isDimmed} />
             {showLabels ? (
               <SceneLabel
-                position={tankLabelAnchor(tank, 1.2 + (index % 2) * 2.4)}
+                position={tankLabelAnchor(tank, 1.2 + (index % 2) * labelStagger)}
                 tag={tank.tag}
                 value={tank.value}
                 tone={tank.tone}

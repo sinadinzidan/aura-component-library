@@ -28,6 +28,15 @@ export function isTrainAssemblyId(value: string): value is TrainAssemblyId {
 export const TRAIN_SHAFT_HEIGHT = 2.4;
 export const TRAIN_DECK_HEIGHT = 0.6;
 
+/** Station of the first impeller on the shaft, and the distance between stages. */
+export const IMPELLER_FIRST_X = -5.9;
+export const IMPELLER_PITCH = 0.7;
+
+/** Positions of the impellers along the shaft, suction end first. */
+export function impellerPositions(stages: number): number[] {
+  return Array.from({ length: Math.max(0, Math.floor(stages)) }, (_, index) => IMPELLER_FIRST_X + index * IMPELLER_PITCH);
+}
+
 /** The assembly breakdown shown in the parts tree. Leaves match `TRAIN_ASSEMBLY_IDS`. */
 export const COMPRESSOR_TRAIN_TREE: AssemblyNode = {
   id: 'train',

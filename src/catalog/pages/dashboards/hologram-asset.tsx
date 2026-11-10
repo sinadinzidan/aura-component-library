@@ -354,7 +354,8 @@ function HoloAssetScan({ initial = {}, still = false }: { initial?: HoloAssetIni
   const asset = findAsset(HOLOASSET_ASSET_ID);
   const fault = HOLOASSET_COMPONENTS.find((component) => component.part.id === HOLOASSET_FAULT_ID);
   const canMove = !still && !reducedMotion;
-  const sweeping = auto && canMove;
+  // Sweep and turn pause while someone is on the screen, so what they read holds still.
+  const sweeping = auto && canMove && !engaged;
 
   const moveTo = (fraction: number) => {
     setAuto(false);

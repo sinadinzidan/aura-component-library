@@ -42,8 +42,9 @@ export function HomeView() {
       <header>
         <h1 className="text-4xl font-semibold text-base-foreground">Aura Library</h1>
         <p className="mt-3 max-w-[37.5rem] text-base text-medium-foreground">
-          Every Aura primitive in at least 20 variants, the patterns they combine into, and a separate set of
-          industrial data components. Pick a variant, copy its code, and build on Aura tokens.
+          Every Aura primitive in at least 20 variants, the patterns they combine into, industrial data
+          components, and complete dashboards from classic operations screens to interactive 3D plants. Pick a
+          variant, copy its code, and build on Aura tokens in any theme.
         </p>
         <dl className="mt-8 flex flex-wrap gap-12">
           <Stat value={index.totalSpecimens} label="Variants" />

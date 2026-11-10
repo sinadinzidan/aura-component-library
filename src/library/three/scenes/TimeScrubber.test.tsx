@@ -97,6 +97,12 @@ describe(TimeScrubber.name, () => {
     expect(screen.getByRole('img', { name: 'Receipt 61-TA-206, +46 h to +54 h, planned' })).toBeInTheDocument();
   });
 
+  it('describes a span in full when its bar text is short', () => {
+    setup({ spans: [{ id: 'm3', label: 'TA-204', description: 'Condensate lifting from 61-TA-204', startHour: 34, endHour: 44 }] });
+
+    expect(screen.getByRole('img', { name: 'Condensate lifting from 61-TA-204, +34 h to +44 h, planned' })).toHaveTextContent('TA-204');
+  });
+
   it('marks a finished span as done', () => {
     setup({ spans: SPANS, hour: 20 });
 

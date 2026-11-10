@@ -65,6 +65,8 @@ export function HologramScene({
   const model = useRef<Group>(null);
   const plane = useRef<Group>(null);
   const reported = useRef(scan);
+  /** Clock offset that makes a sweep start from where the plane stands, instead of jumping. */
+  const phase = useRef<number | null>(null);
   const slices = useMemo(() => parts.map(partSlice), [parts]);
   const range = useMemo(() => scanRange(slices), [slices]);
   const radius = Math.max(1, ...slices.map((slice) => slice.radius));
@@ -77,8 +79,10 @@ export function HologramScene({
 
   useFrame((state, delta) => {
     if (turning && model.current) model.current.rotation.y += Math.min(delta, 0.1) * ROTATION_SPEED;
+    if (!sweeping) phase.current = null;
     if (sweeping && plane.current) {
-      const fraction = sweepFraction(state.clock.elapsedTime, scanPeriod);
+      phase.current ??= (scan * scanPeriod) / 2 - state.clock.elapsedTime;
+      const fraction = sweepFraction(state.clock.elapsedTime + phase.current, scanPeriod);
       plane.current.position.y = scanHeight(range, fraction);
       const step = quantizeFraction(fraction);
       if (step !== reported.current) {

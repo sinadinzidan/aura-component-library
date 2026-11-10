@@ -15,7 +15,10 @@ export type ScrubberTimers = {
 /** A span on the timeline, drawn as a bar over the slider: a movement, a shift, an outage. */
 export type ScrubberSpan = {
   id: string;
+  /** Short text on the bar. */
   label: string;
+  /** What the span is, in full, for assistive technology. Defaults to the label. */
+  description?: string;
   startHour: number;
   endHour: number;
   /** Row the bar sits in, from the top. Spans in one lane must not overlap. */
@@ -123,7 +126,7 @@ export function TimeScrubber({
                 span.dimmed && 'opacity-40'
               );
               const style = { left: `${left}%`, width: `${width}%`, top: `${(span.lane ?? 0) * 1.375}rem` };
-              const title = `${span.label}, +${span.startHour} h to +${span.endHour} h, ${state}`;
+              const title = `${span.description ?? span.label}, +${span.startHour} h to +${span.endHour} h, ${state}`;
               return onSelectSpan ? (
                 <button
                   key={span.id}
@@ -155,7 +158,7 @@ export function TimeScrubber({
           {ticks.map((mark) => (
             <span
               key={mark.hour}
-              className={cn('absolute text-xs tabular-nums text-muted-foreground', mark.hour <= 0 ? '' : mark.hour >= horizon ? '-translate-x-full' : '-translate-x-1/2')}
+              className={cn('absolute text-xs whitespace-nowrap tabular-nums text-muted-foreground', mark.hour <= 0 ? '' : mark.hour >= horizon ? '-translate-x-full' : '-translate-x-1/2')}
               style={{ left: `${percent(mark.hour)}%` }}
             >
               {mark.label}

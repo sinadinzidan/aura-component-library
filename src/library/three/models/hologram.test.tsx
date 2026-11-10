@@ -180,10 +180,21 @@ describe(HologramScene.name, () => {
     const onScanChange = vi.fn();
     const view = await renderScene(<HologramScene parts={PARTS} scan={0} autoScan scanPeriod={10} onScanChange={onScanChange} />, { reducedMotion: false });
 
+    await view.advance(0.01);
     await view.advance(2.5);
 
     expect(planeHeight(view.objects())).toBeCloseTo(0.65 + (3.8 - 0.65) * 0.5);
     expect(onScanChange).toHaveBeenLastCalledWith(0.5);
+
+    await view.unmount();
+  });
+
+  it('starts a sweep from where the plane stands', async () => {
+    const view = await renderScene(<HologramScene parts={PARTS} scan={0.4} autoScan scanPeriod={10} />, { reducedMotion: false });
+
+    await view.advance(3.3);
+
+    expect(planeHeight(view.objects())).toBeCloseTo(0.65 + (3.8 - 0.65) * 0.4);
 
     await view.unmount();
   });

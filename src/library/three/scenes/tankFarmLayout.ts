@@ -1,5 +1,5 @@
-import { boundsFromFootprint, unionBounds } from '../cameraTargets';
-import type { Bounds, Vec3 } from '../cameraTargets';
+import { addVec3, boundsCenter, boundsFromFootprint, boundsRadius, distanceToFit, normalizeVec3, scaleVec3, unionBounds, VIEW_DIRECTIONS } from '../cameraTargets';
+import type { Bounds, CameraTarget, Vec3 } from '../cameraTargets';
 
 /** Where a tank stands and how big it is. */
 export type TankSpot = {
@@ -98,4 +98,34 @@ export function tankLabelAnchor(tank: TankSpot, gap = 1.2): Vec3 {
 /** Working volume of a cylindrical tank from its size, rounded to the nearest 10. */
 export function shellVolume(diameter: number, height: number): number {
   return Math.round((Math.PI * (diameter / 2) ** 2 * height) / 10) * 10;
+}
+
+/** Box around the plot and the water beside it, up to `height`. */
+export function plotBounds(plot: GroundRect, sea: GroundRect | undefined, height: number): Bounds {
+  const rects = sea ? [plot, sea] : [plot];
+  const boxes = rects.map((rect) => boundsFromFootprint([rect.center[0], 0, rect.center[1]], [rect.size[0], height, rect.size[1]]));
+  return unionBounds(boxes) ?? boxes[0];
+}
+
+/** Direction from the farm towards the camera in the 3D view: from the south, well above the roofs. */
+export const FARM_VIEW_DIRECTION: Vec3 = [0.16, 0.62, 0.77];
+
+export type FarmFraming = {
+  /** Look straight down, north up. */
+  plan?: boolean;
+  /** Canvas width / height. */
+  aspect?: number;
+  fov?: number;
+};
+
+/**
+ * The camera target for a tank farm. A farm is wide and flat, so the 3D view looks along its
+ * short side from high up, which keeps the rows apart; the plan view looks straight down.
+ */
+export function farmCameraTarget(bounds: Bounds, framing: FarmFraming = {}): CameraTarget {
+  const { plan = false, aspect = 1.6, fov = 40 } = framing;
+  const lookAt = boundsCenter(bounds);
+  const distance = distanceToFit(boundsRadius(bounds), fov, aspect) * (plan ? 0.7 : 0.56);
+  const direction = normalizeVec3(plan ? VIEW_DIRECTIONS.top : FARM_VIEW_DIRECTION);
+  return { position: addVec3(lookAt, scaleVec3(direction, distance)), lookAt };
 }

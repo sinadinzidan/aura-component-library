@@ -2,20 +2,20 @@ import { fireEvent } from '@testing-library/react';
 import { MeshStandardMaterial } from 'three';
 import type { Mesh, Object3D } from 'three';
 
-import { useSceneEnvironment } from '../sceneEnvironment';
 import { geometryParameter, renderScene } from '../renderScene.fixture';
+import { useSceneEnvironment } from '../sceneEnvironment';
 
 import { AxialCylinder } from './AxialCylinder';
 import { BarrelCasing } from './BarrelCasing';
 import { BearingHousing } from './BearingHousing';
 import { CompressorTrain } from './CompressorTrain';
-import { COMPRESSOR_TRAIN_EXPLODE, TRAIN_ASSEMBLY_IDS } from './compressorTrainLayout';
+import { COMPRESSOR_TRAIN_EXPLODE, TRAIN_ASSEMBLY_IDS, impellerPositions } from './compressorTrainLayout';
 import { CouplingGuard } from './CouplingGuard';
 import { ExplodeGroup } from './ExplodeGroup';
 import { Hotspot } from './Hotspot';
 import { InstrumentStand } from './InstrumentStand';
 import { LubeOilSkid } from './LubeOilSkid';
-import { RotorBundle, impellerPositions } from './RotorBundle';
+import { RotorBundle } from './RotorBundle';
 import { SealGasPanel } from './SealGasPanel';
 import { SectionCut } from './SectionCut';
 import { StillScene } from './StillScene';

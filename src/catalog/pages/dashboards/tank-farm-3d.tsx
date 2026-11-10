@@ -119,19 +119,19 @@ const TANKFARM3D_MANIFOLD: Manifold = {
   y: 1,
   jetty: [
     [46, 1, -7],
-    [58, 1, -7],
-    [58, 3.4, -7],
+    [60, 1, -7],
+    [60, 3.4, -7],
     [84, 3.4, -7],
   ],
   pipeline: [
-    [-78, 1, -7],
-    [-88, 1, -7],
+    [-76, 1, -7],
+    [-83, 1, -7],
   ],
 };
 
-const TANKFARM3D_PLOT: GroundRect = { center: [-13, -5], size: [156, 92] };
+const TANKFARM3D_PLOT: GroundRect = { center: [-10, -6], size: [148, 84] };
 
-const TANKFARM3D_SEA: GroundRect = { center: [91, -5], size: [52, 92] };
+const TANKFARM3D_SEA: GroundRect = { center: [83, -6], size: [38, 84] };
 
 const TANKFARM3D_BUNDS: readonly GroundRect[] = (['north', 'south'] as const).flatMap((row) => {
   const rect = bundRect(
@@ -222,7 +222,8 @@ function tankFarm3dReducer(state: TankFarm3dState, action: TankFarm3dAction): Ta
 function tankFarm3dSnapshot(tank: TankFarm3dTank, volume: number, colourBy: TankFarm3dColourBy, colours: TokenColors<typeof TANKFARM3D_PRODUCT_TOKENS> | null): FarmTank {
   const fill = fillFraction(volume, tank.capacity);
   const cover = daysOfCover(volume, tank.dailyDemand);
-  const base = { id: tank.id, tag: tank.tag, center: tank.center, diameter: tank.diameter, height: tank.height, fill };
+  // The scene label drops the system prefix: every tank here is in system 61.
+  const base = { id: tank.id, tag: tank.tag.slice(3), center: tank.center, diameter: tank.diameter, height: tank.height, fill };
   if (colourBy === 'product') return { ...base, value: TANKFARM3D_PRODUCTS[tank.product].name, ringColor: colours?.[tank.product] };
   if (colourBy === 'cover') {
     const mark = tankFarm3dCoverMark(cover);
@@ -472,7 +473,8 @@ function tankFarm3dSpans(selectedId: string | null): ScrubberSpan[] {
     const tank = tankFarm3dTank(movement.from ?? movement.to ?? '');
     return {
       id: movement.id,
-      label: `${movement.name} ${tank ? tank.tag.slice(3) : ''}`.trim(),
+      label: tank ? tank.tag.slice(3) : movement.name,
+      description: `${movement.name}, ${tank?.tag ?? ''}, ${movement.counterparty}`,
       startHour: movement.startHour,
       endHour: movement.endHour,
       lane: movement.lane,
@@ -485,10 +487,10 @@ function tankFarm3dSpans(selectedId: string | null): ScrubberSpan[] {
 function TankFarm3dScenery({ berthed }: { berthed: boolean }) {
   return (
     <>
-      <Building position={[52, 0, 8]} size={[9, 4.2, 7]} />
-      <FlareStack position={[-80, 0, 30]} height={18} />
-      <Jetty position={[60, -0.6, -7]} length={22} height={4} />
-      {berthed ? <TankerShip position={[96, -0.6, -9]} rotationY={Math.PI / 2} length={48} /> : null}
+      <Building position={[50, 0, 10]} size={[9, 4.2, 7]} />
+      <FlareStack position={[-76, 0, 28]} height={18} />
+      <Jetty position={[62, -0.6, -7]} length={20} height={4} />
+      {berthed ? <TankerShip position={[94, -0.6, -8]} rotationY={Math.PI / 2} length={46} /> : null}
     </>
   );
 }

@@ -1,10 +1,11 @@
 import { useThree } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useState } from 'react';
-import { CatmullRomCurve3, TubeGeometry, Vector3 } from 'three';
 
 import type { Vec3 } from '../cameraTargets';
 import { setSceneCursor } from '../sceneCursor';
+
+import { wellTubeGeometry } from './wellTubeGeometry';
 
 export type WellTubeProps = {
   id: string;
@@ -19,16 +20,6 @@ export type WellTubeProps = {
   onSelect?: (id: string) => void;
   onHoverChange?: (id: string | null) => void;
 };
-
-/** Builds the tube of a well path. Exported for tests. */
-export function wellTubeGeometry(points: readonly Vec3[], radius: number): TubeGeometry {
-  const curve = new CatmullRomCurve3(
-    points.map((point) => new Vector3(point[0], point[1], point[2])),
-    false,
-    'centripetal'
-  );
-  return new TubeGeometry(curve, Math.max(8, points.length * 2), radius, 8, false);
-}
 
 /**
  * A wellbore as a smooth tube through its path points. It glows in its type colour, thickens when

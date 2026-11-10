@@ -2,7 +2,7 @@ import type { EquipmentVisualState } from '../equipmentMaterials';
 import { useEquipmentMaterials } from '../useEquipmentMaterials';
 
 import { AxialCylinder } from './AxialCylinder';
-import { TRAIN_SHAFT_HEIGHT } from './compressorTrainLayout';
+import { IMPELLER_FIRST_X, IMPELLER_PITCH, TRAIN_SHAFT_HEIGHT, impellerPositions } from './compressorTrainLayout';
 
 export type RotorBundleProps = EquipmentVisualState & {
   /** Number of impeller stages. */
@@ -10,14 +10,6 @@ export type RotorBundleProps = EquipmentVisualState & {
 };
 
 const SHAFT = TRAIN_SHAFT_HEIGHT;
-const FIRST_STAGE_X = -5.9;
-const STAGE_PITCH = 0.7;
-
-/** Positions of the impellers along the shaft, suction end first. */
-export function impellerPositions(stages: number): number[] {
-  return Array.from({ length: Math.max(0, Math.floor(stages)) }, (_, index) => FIRST_STAGE_X + index * STAGE_PITCH);
-}
-
 /**
  * The rotor of a centrifugal compressor: shaft, shrouded impellers with their hubs, a balance
  * piston at the discharge end and the journals the bearings run on.
@@ -38,7 +30,7 @@ export function RotorBundle({ stages = 5, ...state }: RotorBundleProps) {
         </group>
       ))}
       {/* Balance piston */}
-      <AxialCylinder x={FIRST_STAGE_X + stages * STAGE_PITCH - 0.1} y={SHAFT} radius={0.6} length={0.36} material={steel} segments={20} />
+      <AxialCylinder x={IMPELLER_FIRST_X + stages * IMPELLER_PITCH - 0.1} y={SHAFT} radius={0.6} length={0.36} material={steel} segments={20} />
       {/* Journals and thrust collar */}
       {[-7.1, -1.8].map((x) => (
         <AxialCylinder key={x} x={x} y={SHAFT} radius={0.24} length={0.5} material={detail} segments={14} />
