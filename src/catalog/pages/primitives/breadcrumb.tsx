@@ -413,7 +413,12 @@ function BreadcrumbCollapsing() {
         items={trail}
         onNavigate={(item) => setDepth(SENSOR_TRAIL.findIndex((entry) => entry.id === item.id) + 1)}
       />
-      <Button variant="ghost" size="sm" disabled={depth === SENSOR_TRAIL.length} onClick={() => setDepth(SENSOR_TRAIL.length)}>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={depth === SENSOR_TRAIL.length}
+        onClick={() => setDepth(SENSOR_TRAIL.length)}
+      >
         Back to the deepest page
       </Button>
     </div>
@@ -546,7 +551,10 @@ function BreadcrumbNoAccess() {
           <Tooltip>
             <TooltipTrigger
               render={
-                <span tabIndex={0} className="inline-flex h-7 items-center gap-2 rounded-md px-1.5 text-sm text-muted-foreground">
+                <span
+                  tabIndex={0}
+                  className="inline-flex h-7 items-center gap-2 rounded-md px-1.5 text-sm text-muted-foreground"
+                >
                   <IconLock className="size-4" /> Restricted
                 </span>
               }

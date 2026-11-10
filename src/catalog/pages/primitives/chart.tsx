@@ -275,7 +275,7 @@ function ChartStepLine() {
         <LineChart data={CHART_VALVE} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} />
           <XAxis dataKey="time" tickLine={false} axisLine={false} minTickGap={32} />
-          <YAxis domain={[0, 50]} tickLine={false} axisLine={false} width={32} unit="%" />
+          <YAxis domain={[0, 50]} tickLine={false} axisLine={false} width={40} unit="%" />
           <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => `${value} %`} />} />
           <Line
             dataKey="position"

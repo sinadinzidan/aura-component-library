@@ -14,12 +14,29 @@ export function extractFunctionSource(moduleSource: string, name: string): strin
   return match ? match[0].replace(/^export /, '') : null;
 }
 
-/** Top-level identifiers declared in a module: functions, consts and types. */
+const DECLARATION_START = /^(?:export )?(?:function|const|type) ([A-Za-z_$][\w$]*)\b/;
+/** A line at column 0 that closes a multi-line declaration: `}`, `};`, `];`, `);`, `}) as const;` … */
+const DECLARATION_END = /^[}\])]/;
+
+/**
+ * Top-level identifiers declared in a module: functions, consts and types, each with its full
+ * source. A declaration ends on its own first line when that line ends with `;`, otherwise at the
+ * next line that closes it in column 0 — which is how the formatter lays out every multi-line
+ * declaration, so statements inside a body are never mistaken for the end.
+ */
 function topLevelDeclarations(moduleSource: string): Map<string, string> {
   const declarations = new Map<string, string>();
-  const pattern = /^(?:export )?(?:function|const|type) ([A-Za-z_$][\w$]*)\b[\s\S]*?(?:^}[;)]*$|;$)/gm;
-  for (const match of moduleSource.matchAll(pattern)) {
-    declarations.set(match[1], match[0].replace(/^export /, ''));
+  const lines = moduleSource.split('\n');
+  for (let start = 0; start < lines.length; start += 1) {
+    const name = DECLARATION_START.exec(lines[start])?.[1];
+    if (!name) continue;
+    let end = start;
+    if (!lines[start].trimEnd().endsWith(';')) {
+      end = lines.findIndex((line, index) => index > start && DECLARATION_END.test(line));
+      if (end === -1) continue;
+    }
+    declarations.set(name, lines.slice(start, end + 1).join('\n').replace(/^export /, ''));
+    start = end;
   }
   return declarations;
 }

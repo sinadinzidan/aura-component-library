@@ -78,13 +78,7 @@ export function DateRangePresetPicker({
         })}
       </div>
       <div className="w-64">
-        <DateRangePicker<Date>
-          value={value}
-          onChange={onChange}
-          valueType="date"
-          defaultDate={now}
-          format={format}
-        />
+        <DateRangePicker<Date> value={value} onChange={onChange} valueType="date" defaultDate={now} format={format} />
       </div>
     </div>
   );

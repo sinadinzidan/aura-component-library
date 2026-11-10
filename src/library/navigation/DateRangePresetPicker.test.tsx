@@ -26,7 +26,11 @@ describe(DateRangePresetPicker.name, () => {
 
   it('shows the preset that matches the current range as pressed', () => {
     render(
-      <DateRangePresetPicker value={[new Date(2026, 2, 6), new Date(2026, 2, 12, 9, 30)]} onChange={vi.fn()} now={NOW} />
+      <DateRangePresetPicker
+        value={[new Date(2026, 2, 6), new Date(2026, 2, 12, 9, 30)]}
+        onChange={vi.fn()}
+        now={NOW}
+      />
     );
 
     expect(screen.getByRole('button', { name: 'Last 7 days' })).toHaveAttribute('aria-pressed', 'true');
@@ -34,9 +38,7 @@ describe(DateRangePresetPicker.name, () => {
   });
 
   it('presses no preset for a custom range', () => {
-    render(
-      <DateRangePresetPicker value={[new Date(2026, 2, 2), new Date(2026, 2, 5)]} onChange={vi.fn()} now={NOW} />
-    );
+    render(<DateRangePresetPicker value={[new Date(2026, 2, 2), new Date(2026, 2, 5)]} onChange={vi.fn()} now={NOW} />);
 
     for (const button of screen.getAllByRole('button', { pressed: false })) {
       expect(button).toHaveAttribute('aria-pressed', 'false');

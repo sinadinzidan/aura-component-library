@@ -314,7 +314,7 @@ function CommandWithKeywords() {
               keywords={[sensor.name, sensor.unit, findAsset(sensor.assetId)?.name ?? '']}
             >
               <IconGauge /> <span className="font-mono text-xs">{sensor.tag}</span>
-              <CommandShortcut>{sensor.name}</CommandShortcut>
+              <span className="ml-auto text-xs text-muted-foreground">{sensor.name}</span>
             </CommandItem>
           ))}
         </CommandList>
@@ -415,11 +415,11 @@ function CommandDisabledItems() {
             </CommandItem>
             <CommandItem disabled>
               <IconLock /> Start compressor
-              <CommandShortcut>Tripped</CommandShortcut>
+              <span className="ml-auto text-xs text-muted-foreground">Tripped</span>
             </CommandItem>
             <CommandItem disabled>
               <IconLock /> Change setpoint
-              <CommandShortcut>Needs operator role</CommandShortcut>
+              <span className="ml-auto text-xs text-muted-foreground">Needs operator role</span>
             </CommandItem>
           </CommandGroup>
         </CommandList>
@@ -430,12 +430,13 @@ function CommandDisabledItems() {
 
 function CommandLoadingResults() {
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('pressure');
 
   return (
     <div className="flex w-full max-w-sm flex-col items-center gap-2">
       <CommandFrame>
         <Command label="Search time series" shouldFilter={false}>
-          <CommandInput placeholder="Search time series" defaultValue="pressure" />
+          <CommandInput placeholder="Search time series" value={search} onValueChange={setSearch} />
           <CommandList aria-busy={loading}>
             {loading ? (
               <div role="status" className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
@@ -446,7 +447,7 @@ function CommandLoadingResults() {
                 {SENSORS.filter((sensor) => sensor.name.includes('pressure')).map((sensor) => (
                   <CommandItem key={sensor.id} value={sensor.tag}>
                     <IconGauge /> {sensor.name}
-                    <CommandShortcut>{sensor.tag}</CommandShortcut>
+                    <span className="ml-auto text-xs text-muted-foreground">{sensor.tag}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -462,19 +463,23 @@ function CommandLoadingResults() {
 }
 
 function CommandCustomMatching() {
+  const [search, setSearch] = useState('23pt');
+
   return (
     <CommandFrame>
       <Command
         label="Find a sensor by tag"
-        filter={(value, search) => (value.toLowerCase().replace(/-/g, '').startsWith(search.replace(/[-\s]/g, '').toLowerCase()) ? 1 : 0)}
+        filter={(value, search) =>
+          value.toLowerCase().replace(/-/g, '').startsWith(search.replace(/[-\s]/g, '').toLowerCase()) ? 1 : 0
+        }
       >
-        <CommandInput placeholder="Tag starts with, for example 23pt" defaultValue="23pt" />
+        <CommandInput placeholder="Tag starts with, for example 23pt" value={search} onValueChange={setSearch} />
         <CommandList>
           <CommandEmpty>No tag starts with that.</CommandEmpty>
           {SENSORS.slice(0, 8).map((sensor) => (
             <CommandItem key={sensor.id} value={sensor.tag}>
               <span className="font-mono text-xs">{sensor.tag}</span>
-              <CommandShortcut>{sensor.name}</CommandShortcut>
+              <span className="ml-auto text-xs text-muted-foreground">{sensor.name}</span>
             </CommandItem>
           ))}
         </CommandList>
@@ -556,7 +561,7 @@ function CommandNestedPages() {
             <CommandGroup heading="Vibration survey, 1st stage compressor">
               <CommandItem onSelect={() => open('assign')}>
                 <IconUser /> Assign to…
-                <CommandShortcut>{assignee}</CommandShortcut>
+                <span className="ml-auto text-xs text-muted-foreground">{assignee}</span>
               </CommandItem>
               <CommandItem>
                 <IconFileText /> Add note
@@ -577,7 +582,7 @@ function CommandNestedPages() {
                   }}
                 >
                   {person.name}
-                  <CommandShortcut>{person.role}</CommandShortcut>
+                  <span className="ml-auto text-xs text-muted-foreground">{person.role}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -603,7 +608,12 @@ function CommandInDialog() {
         <IconSearch /> Open command palette
       </Button>
       <p className="text-xs text-muted-foreground">{last ? `Last command: ${last}` : 'Nothing run yet'}</p>
-      <CommandDialog open={open} onOpenChange={setOpen} title="Command palette" description="Search for a command to run">
+      <CommandDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Command palette"
+        description="Search for a command to run"
+      >
         <CommandInput placeholder="Type a command or search" />
         <CommandList>
           <CommandEmpty>No matching commands.</CommandEmpty>
@@ -646,16 +656,40 @@ function CommandPaletteWithHotkey() {
             id: 'go',
             heading: 'Go to',
             items: [
-              { id: 'alarms', label: 'Go to alarms', icon: <IconBell />, shortcut: 'G A', onSelect: () => setLast('Go to alarms') },
-              { id: 'trends', label: 'Go to trends', icon: <IconChartLine />, shortcut: 'G T', onSelect: () => setLast('Go to trends') },
+              {
+                id: 'alarms',
+                label: 'Go to alarms',
+                icon: <IconBell />,
+                shortcut: 'G A',
+                onSelect: () => setLast('Go to alarms'),
+              },
+              {
+                id: 'trends',
+                label: 'Go to trends',
+                icon: <IconChartLine />,
+                shortcut: 'G T',
+                onSelect: () => setLast('Go to trends'),
+              },
             ],
           },
           {
             id: 'actions',
             heading: 'Actions',
             items: [
-              { id: 'create', label: 'Create work order', icon: <IconPlus />, shortcut: 'C W', onSelect: () => setLast('Create work order') },
-              { id: 'export', label: 'Export data', icon: <IconDownload />, keywords: ['csv', 'download'], onSelect: () => setLast('Export data') },
+              {
+                id: 'create',
+                label: 'Create work order',
+                icon: <IconPlus />,
+                shortcut: 'C W',
+                onSelect: () => setLast('Create work order'),
+              },
+              {
+                id: 'export',
+                label: 'Export data',
+                icon: <IconDownload />,
+                keywords: ['csv', 'download'],
+                onSelect: () => setLast('Export data'),
+              },
             ],
           },
         ]}
@@ -711,18 +745,13 @@ function CommandInPopover() {
 
 function CommandShortcutHint() {
   return (
-    <div className="flex flex-col items-center gap-3">
-      <Button variant="ghost" size="sm">
-        <IconSearch /> Search
-        <KbdGroup>
-          <Kbd>⌘</Kbd>
-          <Kbd>K</Kbd>
-        </KbdGroup>
-      </Button>
-      <p className="max-w-56 text-center text-xs text-muted-foreground">
-        Show the shortcut on whatever opens the palette, so people learn it without reading docs.
-      </p>
-    </div>
+    <Button variant="outline" size="sm">
+      <IconSearch /> Search
+      <KbdGroup>
+        <Kbd>⌘</Kbd>
+        <Kbd>K</Kbd>
+      </KbdGroup>
+    </Button>
   );
 }
 
@@ -952,7 +981,7 @@ export default definePage({
           title: 'Nested pages',
           note: 'A command that needs one more choice, such as who to assign to. Backspace goes back.',
           origin: 'custom',
-          size: 'md',
+          align: 'stretch',
           Component: CommandNestedPages,
         },
       ],

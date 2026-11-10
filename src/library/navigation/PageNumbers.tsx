@@ -69,11 +69,7 @@ export function PageNumbers({
         : getPageItems(current, count).map((item) =>
             typeof item === 'number' ? (
               <PaginationItem key={item}>
-                <PaginationLink
-                  isActive={item === current}
-                  aria-label={`Page ${item}`}
-                  {...linkProps(item, false)}
-                >
+                <PaginationLink isActive={item === current} aria-label={`Page ${item}`} {...linkProps(item, false)}>
                   {item}
                 </PaginationLink>
               </PaginationItem>

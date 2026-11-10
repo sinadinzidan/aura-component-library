@@ -804,7 +804,7 @@ function TreeWithDetail() {
         </div>
         <MetadataList
           items={[
-            { label: 'Type', value: asset.type },
+            { label: 'Type', value: <span className="capitalize">{asset.type}</span> },
             { label: 'Criticality', value: asset.criticality },
             { label: 'Health score', value: `${asset.healthScore} / 100` },
             { label: 'Sensors', value: sensorsOf(asset.id).length || undefined },

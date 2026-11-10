@@ -322,7 +322,7 @@ function TooltipConditional() {
         />
         <TooltipContent side="right">Alarms</TooltipContent>
       </Tooltip>
-      <Switch label="Collapse label" textRight checked={collapsed} onCheckedChange={(checked) => setCollapsed(checked)} />
+      <Switch label="Collapsed" checked={collapsed} onCheckedChange={(checked) => setCollapsed(checked)} />
     </div>
   );
 }
@@ -422,7 +422,7 @@ function TooltipKpiTile() {
     <div className="w-full max-w-xs rounded-xl bg-muted-background p-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-muted-foreground">Availability</p>
-        <InfoTooltip label="About availability" side="left">
+        <InfoTooltip label="About availability">
           Availability. Share of the last 30 days the plant was able to export gas.
         </InfoTooltip>
       </div>

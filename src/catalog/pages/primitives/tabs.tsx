@@ -325,7 +325,10 @@ function TabsKeepMounted() {
       </TabsList>
       <TabsPanel value="notes" keepMounted>
         <Label htmlFor="tabs-handover-notes">Notes for the night shift</Label>
-        <Textarea id="tabs-handover-notes" defaultValue="Recompressor tripped at 13:46. Bearing inspection under way." />
+        <Textarea
+          id="tabs-handover-notes"
+          defaultValue="Recompressor tripped at 13:46. Bearing inspection under way."
+        />
       </TabsPanel>
       <TabsPanel value="checklist" keepMounted className="text-sm text-medium-foreground">
         Switch back: the draft is still there, because both panels stay mounted.

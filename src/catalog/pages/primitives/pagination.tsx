@@ -722,8 +722,7 @@ export default definePage({
     {
       id: 'controlled',
       title: 'Controlled',
-      description:
-        'One page number in, one callback out. The library component works out which numbers to show.',
+      description: 'One page number in, one callback out. The library component works out which numbers to show.',
       specimens: [
         {
           id: 'PaginationControlled',

@@ -98,6 +98,44 @@ describe(extractSpecimenSource.name, () => {
     expect(result).toContain("import { SplitButton } from '@/library/actions/SplitButton';");
   });
 
+  it('keeps multi-statement helpers and multi-line declarations whole', () => {
+    const module = `import { useState } from 'react';
+
+type Reading = {
+  tag: string;
+  value: number;
+};
+
+const READINGS: Reading[] = [
+  { tag: '23-PT-92531', value: 48.6 },
+  { tag: '23-TT-92532', value: 141.2 },
+];
+
+const formatReading = (reading: Reading) => {
+  const rounded = reading.value.toFixed(1);
+  return \`\${reading.tag}: \${rounded}\`;
+};
+
+function useToggle() {
+  const [on, setOn] = useState(false);
+  const toggle = () => setOn(!on);
+  return { on, toggle };
+}
+
+function SampleComplex() {
+  const { on, toggle } = useToggle();
+  return <button onClick={toggle}>{on ? formatReading(READINGS[0]) : 'Show'}</button>;
+}
+`;
+
+    const result = extractSpecimenSource(module, 'SampleComplex');
+
+    expect(result).toContain('type Reading = {\n  tag: string;\n  value: number;\n};');
+    expect(result).toContain("  { tag: '23-TT-92532', value: 141.2 },\n];");
+    expect(result).toContain('  return `${reading.tag}: ${rounded}`;\n};');
+    expect(result).toContain('  return { on, toggle };\n}');
+  });
+
   it('returns null for an unknown specimen', () => {
     expect(extractSpecimenSource(MODULE, 'Missing')).toBeNull();
   });

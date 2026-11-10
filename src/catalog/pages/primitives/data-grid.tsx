@@ -653,7 +653,7 @@ function DataGridWorkOrders() {
           header: 'Type',
           size: 120,
         },
-        { accessorKey: 'priority', header: 'Priority', size: 110, filterFn: dataGridArrHasFilterFn },
+        { accessorKey: 'priority', header: 'Priority', size: 130, filterFn: dataGridArrHasFilterFn },
         {
           accessorKey: 'status',
           header: 'Status',
@@ -720,22 +720,34 @@ function DataGridAlarms() {
         {
           accessorKey: 'severity',
           header: 'Severity',
-          size: 110,
+          size: 130,
           filterFn: dataGridArrHasFilterFn,
           cell: ({ row }) => (
             <Badge variant={GRID_SEVERITY[row.original.severity].variant}>{GRID_SEVERITY[row.original.severity].label}</Badge>
           ),
         },
-        { accessorKey: 'message', header: 'Alarm', size: 300 },
+        { accessorKey: 'message', header: 'Alarm' },
         {
           accessorKey: 'sensorTag',
           header: 'Tag',
-          size: 130,
+          size: 125,
+          enableSorting: false,
           cell: ({ row }) => <GridTag>{row.original.sensorTag}</GridTag>,
         },
-        { accessorFn: gridAssetName, id: 'asset', header: 'Equipment', size: 180 },
-        { accessorKey: 'value', header: 'Value', size: 110 },
-        { accessorKey: 'limit', header: 'Limit', size: 110 },
+        { accessorFn: gridAssetName, id: 'asset', header: 'Equipment', size: 175 },
+        {
+          accessorKey: 'value',
+          header: 'Value',
+          size: 185,
+          cell: ({ row }) => (
+            <span className="whitespace-nowrap tabular-nums">
+              {row.original.value}
+              {row.original.limit === '—' ? null : (
+                <span className="text-muted-foreground"> of {row.original.limit}</span>
+              )}
+            </span>
+          ),
+        },
         {
           accessorKey: 'raisedAt',
           header: 'Raised',
@@ -750,7 +762,8 @@ function DataGridAlarms() {
           accessorFn: (alarm) => GRID_ALARM_STATE[alarm.state],
           id: 'state',
           header: 'State',
-          size: 130,
+          size: 125,
+          enableSorting: false,
         },
       ]}
       getRowId={(alarm) => alarm.id}
@@ -984,7 +997,7 @@ export default definePage({
           title: 'Paginated',
           note: 'More rows than anyone scrolls: numbered pages, a page size picker and a status line.',
           origin: 'custom',
-          size: 'lg',
+          size: 'full',
           align: 'stretch',
           uses: ['data/NumberCell.tsx'],
           Component: DataGridPaginated,

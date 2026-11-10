@@ -510,7 +510,9 @@ function CalendarWithTypedDate() {
             }
           }}
         />
-        <HelperText isError={!valid}>{valid ? 'Type a date or pick one below.' : 'Use the format YYYY-MM-DD.'}</HelperText>
+        <HelperText isError={!valid}>
+          {valid ? 'Type a date or pick one below.' : 'Use the format YYYY-MM-DD.'}
+        </HelperText>
       </div>
       <Calendar
         displayedMonth={month}
@@ -758,8 +760,7 @@ export default definePage({
     {
       id: 'constraints',
       title: 'Constraints',
-      description:
-        'The calendar has no disabled days, so the page rejects the click and says which dates are allowed.',
+      description: 'The calendar has no disabled days, so the page rejects the click and says which dates are allowed.',
       specimens: [
         {
           id: 'CalendarMinMax',
