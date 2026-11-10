@@ -15,6 +15,8 @@ export type ParetoChartProps = {
   /** Name of the bar series in the legend and tooltip. */
   valueLabel?: string;
   legend?: boolean;
+  /** Wrap long cause names under the bars. */
+  wrapLabels?: boolean;
   /** Replaces the generated one-line finding. */
   summary?: string;
   heightClassName?: string;
@@ -44,6 +46,7 @@ export function ParetoChart({
   threshold = 80,
   valueLabel = 'Amount',
   legend = false,
+  wrapLabels = false,
   summary,
   heightClassName = 'h-64',
   className,
@@ -69,6 +72,7 @@ export function ParetoChart({
       rightUnit="%"
       decimals={decimals}
       legend={legend}
+      wrapLabels={wrapLabels}
       summary={finding}
       heightClassName={heightClassName}
       className={className}

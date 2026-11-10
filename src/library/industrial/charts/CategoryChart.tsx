@@ -33,6 +33,8 @@ export type CategoryReference = {
   tone?: 'neutral' | 'warning' | 'critical';
   axis?: 'left' | 'right';
   align?: 'left' | 'right';
+  /** Put the label under the line instead of above it, when a series runs through the space above. */
+  below?: boolean;
 };
 
 export type CategoryChartProps = {
@@ -60,6 +62,8 @@ export type CategoryChartProps = {
   hideValueAxis?: boolean;
   /** Show every nth category label when there are many columns. */
   labelEvery?: number;
+  /** Wrap long category names under the columns onto several lines. */
+  wrapLabels?: boolean;
   legend?: boolean;
   summary?: string;
   heightClassName?: string;
@@ -130,6 +134,7 @@ export function CategoryChart({
   valueLabels = false,
   hideValueAxis = false,
   labelEvery = 1,
+  wrapLabels = false,
   legend = false,
   summary,
   heightClassName = 'h-56',
@@ -221,6 +226,9 @@ export function CategoryChart({
                 axisLine={false}
                 tickMargin={8}
                 interval={labelEvery > 1 ? labelEvery - 1 : 0}
+                tick={wrapLabels ? { width: 76 } : undefined}
+                height={wrapLabels ? 48 : undefined}
+                padding={hasBars ? undefined : { left: 20, right: 20 }}
               />
             )}
             {valueAxis('left')}
@@ -250,7 +258,8 @@ export function CategoryChart({
                         className="fill-base-foreground"
                         formatter={(value: unknown) => {
                           const amount = isPair(value) ? Math.abs(value[1] - value[0]) : value;
-                          return isNumber(amount) ? `${formatValue(amount, decimals)}${unit ? ` ${unit}` : ''}` : '';
+                          // The unit is repeated on the bar only when no axis header carries it.
+                          return isNumber(amount) ? `${formatValue(amount, decimals)}${unit && (isRows || hideValueAxis) ? `\u00a0${unit}` : ''}` : '';
                         }}
                       />
                     ) : null}
@@ -275,7 +284,8 @@ export function CategoryChart({
             })}
 
             {references.map((reference) => {
-              const position = isRows ? 'insideTopRight' : reference.align === 'left' ? 'insideBottomLeft' : 'insideBottomRight';
+              const side = reference.align === 'left' ? 'Left' : 'Right';
+              const position = isRows ? 'insideTopRight' : (`inside${reference.below ? 'Top' : 'Bottom'}${side}` as const);
               const shared = {
                 stroke: REFERENCE_STROKE[reference.tone ?? 'neutral'],
                 strokeDasharray: '4 4',

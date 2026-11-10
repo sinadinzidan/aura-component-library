@@ -366,7 +366,7 @@ function AssetHierarchyAreaList() {
                     <span className="font-mono text-xs text-muted-foreground">{area.tag}</span>
                   </span>
                   <span className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground tabular-nums">{summary.equipment} units</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{summary.equipment} {summary.equipment === 1 ? 'unit' : 'units'}</span>
                     <IconSelector aria-hidden="true" className="text-muted-foreground" />
                   </span>
                 </Button>
@@ -527,7 +527,7 @@ function AssetHierarchyDrillDown() {
             tag={node.tag}
             name={node.name}
             state={node.state ?? 'running'}
-            stateDetail={`${rollUp(HIERARCHY, node.id).equipment} units`}
+            stateDetail={`${node.children.length} ${node.children.length === 1 ? 'unit' : 'units'}`}
             alarms={cardAlarms(node.id)}
             selected={node.id === areaId}
             onSelect={() => {

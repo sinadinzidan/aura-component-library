@@ -53,7 +53,7 @@ export function HealthBreakdown({
                 <ValueReadout value={indicator.score} size="xs" tone={tone} className="w-7 justify-end" />
                 {showStatus ? (
                   <span className="inline-flex w-14 items-center gap-1.5 text-xs text-muted-foreground">
-                    {status ? <StatusDot size="sm" tone={tone} shape={status.shape} /> : null}
+                    {status ? <StatusDot size="sm" tone={status.tone} shape={status.shape} /> : null}
                     {status ? status.label : 'No data'}
                   </span>
                 ) : null}

@@ -30,7 +30,8 @@ type FilterBarProps = {
 
 /**
  * The bar above a list or table: controls on the first row and, while filters are applied, a
- * second row of removable chips with "Clear all" and the result count. The second row takes no
+ * second row of removable chips with "Clear all". The result count sits at the end of the chip row,
+ * or at its start while nothing is applied. The second row takes no
  * space until it has something to show.
  */
 export function FilterBar({
@@ -52,7 +53,7 @@ export function FilterBar({
         {end ? <div className="ml-auto flex items-center gap-2">{end}</div> : null}
       </div>
       {hasChips || summary ? (
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex items-start justify-between gap-4">
           {hasChips ? (
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <ul aria-label="Applied filters" className="flex min-w-0 list-none flex-wrap items-center gap-2">
@@ -68,11 +69,9 @@ export function FilterBar({
                 </Button>
               ) : null}
             </div>
-          ) : (
-            <span />
-          )}
+          ) : null}
           {summary ? (
-            <output aria-live="polite" className="shrink-0 text-sm tabular-nums text-muted-foreground">
+            <output aria-live="polite" className="flex min-h-7 shrink-0 items-center text-sm tabular-nums text-muted-foreground">
               {summary}
             </output>
           ) : null}

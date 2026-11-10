@@ -184,10 +184,10 @@ const CALENDAR = Array.from({ length: 31 }, (_, index) => {
 });
 
 const CALENDAR_CELL = {
-  'on-plan': 'bg-muted-background text-base-foreground',
+  'on-plan': 'bg-chart-neutral-100 text-base-foreground',
   below: 'bg-warning-background text-warning-foreground',
   'well-below': 'bg-critical-background text-critical-foreground',
-  today: 'bg-muted-background text-base-foreground outline-2 -outline-offset-2 outline-base-foreground',
+  today: 'bg-chart-neutral-100 text-base-foreground outline-2 -outline-offset-2 outline-base-foreground',
   planned: 'border border-dashed border-default text-muted-foreground',
   shutdown: 'bg-neutral-background text-neutral-foreground',
 };
@@ -354,11 +354,11 @@ function ProdOeeTaktRate() {
       <dl className="flex flex-col gap-1.5 text-xs">
         <div className="flex justify-between gap-3">
           <dt className="text-muted-foreground">Plan rate</dt>
-          <dd className="tabular-nums text-base-foreground">187.5 kSm³/h</dd>
+          <dd className="whitespace-nowrap tabular-nums text-base-foreground">187.5 kSm³/h</dd>
         </div>
         <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Needed to reach plan by 06:00</dt>
-          <dd className="tabular-nums text-base-foreground">191.3 kSm³/h</dd>
+          <dt className="text-muted-foreground">Catch-up rate to 06:00</dt>
+          <dd className="whitespace-nowrap tabular-nums text-base-foreground">191.3 kSm³/h</dd>
         </div>
       </dl>
     </Card>
@@ -385,7 +385,7 @@ function ProdOeeShiftProgress() {
 
 function ProdOeeVsPlanDaily() {
   return (
-    <Panel title="Gas export against plan" meta="MSm³ per day, by shift">
+    <Panel title="Gas export against plan" meta="MSm³ per day · dashed line is the plan, 4.50">
       <div className="h-56 w-full">
         <ChartContainer
           config={SHIFT_CONFIG}
@@ -400,12 +400,7 @@ function ProdOeeVsPlanDaily() {
             <ChartLegend itemSorter={null} content={<ChartLegendContent />} />
             <Bar dataKey="day" stackId="shift" fill="var(--color-day)" isAnimationActive={false} />
             <Bar dataKey="night" stackId="shift" fill="var(--color-night)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <ReferenceLine
-              y={DAILY_PLAN}
-              stroke="var(--color-chart-neutral-450)"
-              strokeDasharray="4 4"
-              label={{ value: 'Plan 4.50', position: 'insideTopRight', className: 'fill-muted-foreground' }}
-            />
+            <ReferenceLine y={DAILY_PLAN} stroke="var(--color-chart-neutral-450)" strokeDasharray="4 4" />
           </BarChart>
         </ChartContainer>
       </div>
@@ -469,7 +464,7 @@ function ProdOeeCalendarStrip() {
       </div>
       <ul aria-label="Legend" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-medium-foreground">
         <li className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="size-3 rounded-xs bg-muted-background" />
+          <span aria-hidden="true" className="size-3 rounded-xs bg-chart-neutral-100" />
           On plan, 98 or above
         </li>
         <li className="flex items-center gap-1.5">
@@ -611,7 +606,7 @@ function ProdOeeDowntimeLog() {
 
 function ProdOeeDowntimePareto() {
   return (
-    <Panel title="Top downtime causes" meta="Last 30 days · 100 h in total">
+    <Panel title="Top downtime causes" meta="Hours, last 30 days · 100 h in total">
       <div className="h-60 w-full">
         <ChartContainer
           config={PARETO_CONFIG}
@@ -621,7 +616,7 @@ function ProdOeeDowntimePareto() {
           <ComposedChart data={PARETO} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} />
             <XAxis dataKey="cause" tickLine={false} axisLine={false} />
-            <YAxis yAxisId="hours" domain={[0, 50]} tickLine={false} axisLine={false} width={32} unit=" h" />
+            <YAxis yAxisId="hours" domain={[0, 50]} ticks={[0, 10, 20, 30, 40, 50]} tickLine={false} axisLine={false} width={24} />
             <YAxis yAxisId="share" orientation="right" domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} tickLine={false} axisLine={false} width={44} unit="%" />
             <ChartTooltip content={<ChartTooltipContent />} />
             <ChartLegend itemSorter={null} content={<ChartLegendContent />} />
@@ -893,7 +888,26 @@ function ProdOeeOverviewPanel() {
             </div>
             <TrendDelta value={KPI.oee.value} reference={KPI.oee.target} goodDirection="up" decimals={1} unit="pts" caption="to target" />
           </div>
-          <OeeBreakdown {...FACTORS} />
+          <dl className="grid grid-cols-3 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <dt className="text-xs text-muted-foreground">Availability</dt>
+              <dd>
+                <ValueReadout size="sm" value={FACTORS.availability} unit="%" decimals={1} />
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <dt className="text-xs text-muted-foreground">Performance</dt>
+              <dd>
+                <ValueReadout size="sm" value={FACTORS.performance} unit="%" decimals={1} />
+              </dd>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <dt className="text-xs text-muted-foreground">Quality</dt>
+              <dd>
+                <ValueReadout size="sm" value={FACTORS.quality} unit="%" decimals={1} />
+              </dd>
+            </div>
+          </dl>
         </section>
         <section aria-label="Losses" className="flex flex-col gap-3">
           <h4 className="text-xs font-medium text-muted-foreground">Losses, OEE points</h4>
@@ -1181,7 +1195,7 @@ export default definePage({
           title: 'Production overview',
           note: 'Pick it as the top block of a production dashboard: OEE, its losses and the lost volume in one card.',
           origin: 'custom',
-          uses: ['industrial/domains/OeeBreakdown.tsx', 'industrial/domains/LossStack.tsx', 'industrial/domains/ShareBarList.tsx', 'industrial/domains/oee.ts'],
+          uses: ['industrial/domains/LossStack.tsx', 'industrial/domains/ShareBarList.tsx', 'industrial/domains/oee.ts', 'industrial/ValueReadout.tsx'],
           size: 'full',
           align: 'stretch',
           Component: ProdOeeOverviewPanel,

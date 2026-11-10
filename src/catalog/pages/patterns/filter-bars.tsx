@@ -215,7 +215,7 @@ function FilterBarInlineSelects() {
   ).length;
   return (
     <FilterBar label="Filter work orders" summary={`${count} of ${WORK_ORDERS.length} work orders`}>
-      <div className="w-56">
+      <div className="w-48">
         <Search aria-label="Search work orders" placeholder="Search" />
       </div>
       <div className="w-36">
@@ -982,8 +982,8 @@ function FilterBarAlarmList() {
 
 function FilterBarAssetCascade() {
   const [site, setSite] = useState('nordkapp');
-  const [area, setArea] = useState(ALL);
-  const [type, setType] = useState(ALL);
+  const [area, setArea] = useState('nk-23');
+  const [type, setType] = useState('compressor');
   const areaOptions = [{ value: ALL, label: 'All systems' }, ...AREAS.map((item) => ({ value: item.id, label: item.name }))];
   const typeOptions = [
     { value: ALL, label: 'All types' },
@@ -1129,8 +1129,44 @@ function FilterBarAssigneeMenu() {
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="w-36">
-        <OptionSelect aria-label="Priority" options={PRIORITY_OPTIONS} defaultValue={ALL} width="compact" />
+    </FilterBar>
+  );
+}
+
+function FilterBarRunHistory() {
+  const [result, setResult] = useState('failed');
+  const runs: Record<string, number> = { all: 96, failed: 3, succeeded: 93 };
+  return (
+    <FilterBar label="Filter pipeline runs" summary={`${runs[result] ?? 0} runs in the last 24 hours`}>
+      <SegmentedControl
+        value={result}
+        onValueChange={(next) => {
+          if (typeof next === 'string') setResult(next);
+        }}
+      >
+        <SegmentedControlList aria-label="Run result">
+          <SegmentedControlButton value="all" tabContent="label-only">
+            All
+          </SegmentedControlButton>
+          <SegmentedControlButton value="failed" tabContent="label-only">
+            Failed
+          </SegmentedControlButton>
+          <SegmentedControlButton value="succeeded" tabContent="label-only">
+            Succeeded
+          </SegmentedControlButton>
+        </SegmentedControlList>
+      </SegmentedControl>
+      <div className="w-44">
+        <OptionSelect
+          aria-label="Pipeline"
+          options={[
+            { value: ALL, label: 'All pipelines' },
+            { value: 'telemetry', label: 'Compressor telemetry ingest' },
+            { value: 'lab', label: 'Lab results import' },
+          ]}
+          defaultValue={ALL}
+          width="compact"
+        />
       </div>
     </FilterBar>
   );
@@ -1396,10 +1432,20 @@ export default definePage({
           title: 'Asset filter by site, system and type',
           note: 'For hierarchy filters: each select narrows the next, and changing a parent resets its children.',
           origin: 'custom',
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
           uses: ['patterns/data-entry/FilterBar.tsx', 'patterns/data-entry/OptionSelect.tsx'],
           Component: FilterBarAssetCascade,
+        },
+        {
+          id: 'FilterBarAssigneeMenu',
+          title: 'Multi-select menu filter',
+          note: 'For a filter with a handful of values where several are often picked, such as assignees; the button shows the count.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          uses: ['patterns/data-entry/FilterBar.tsx'],
+          Component: FilterBarAssigneeMenu,
         },
         {
           id: 'FilterBarTrendToolbar',
@@ -1412,14 +1458,14 @@ export default definePage({
           Component: FilterBarTrendToolbar,
         },
         {
-          id: 'FilterBarAssigneeMenu',
-          title: 'Multi-select menu filter',
-          note: 'For a filter with a handful of values where several are often picked, such as assignees; the button shows the count.',
+          id: 'FilterBarRunHistory',
+          title: 'Run history bar',
+          note: 'For logs where one outcome matters most: the result is a segmented control and the count names the time window.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
           uses: ['patterns/data-entry/FilterBar.tsx', 'patterns/data-entry/OptionSelect.tsx'],
-          Component: FilterBarAssigneeMenu,
+          Component: FilterBarRunHistory,
         },
       ],
     },
