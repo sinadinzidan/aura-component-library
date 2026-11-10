@@ -18,6 +18,11 @@ type EditableCellProps = {
   inputMode?: 'text' | 'decimal' | 'numeric';
   /** Replaces the plain text in read mode, for example a formatted number. */
   display?: ReactNode;
+  /**
+   * Starts the cell open with this unsaved text, already validated. Use it to bring back an edit
+   * that a failed save or a reload interrupted. Focus is not moved on mount.
+   */
+  defaultDraft?: string;
 };
 
 const acceptAnything = () => null;
@@ -36,16 +41,25 @@ export function EditableCell({
   align = 'start',
   inputMode = 'text',
   display,
+  defaultDraft,
 }: EditableCellProps) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(defaultDraft !== undefined);
+  const [draft, setDraft] = useState(defaultDraft ?? value);
+  const [error, setError] = useState<string | null>(() =>
+    defaultDraft === undefined ? null : validate(defaultDraft.trim())
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const restoreFocus = useRef(false);
+  const skipFocus = useRef(defaultDraft !== undefined);
   const errorId = useId();
 
   useEffect(() => {
+    if (skipFocus.current) {
+      // A restored draft must not pull focus to itself when the page loads.
+      skipFocus.current = false;
+      return;
+    }
     if (editing) {
       inputRef.current?.focus();
       inputRef.current?.select();

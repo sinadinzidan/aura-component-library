@@ -455,7 +455,7 @@ function ProcessDiagramCoolingLoop() {
 
 function ProcessDiagramAlarmUnit() {
   const y = 112;
-  const upstream: PlacedUnit = { kind: 'horizontal-separator', x: 90, y, tag: '20-VA-1002', name: 'Test separator', state: 'running' };
+  const upstream = place(COMPRESSOR_2, 'compressor', 90, y);
   const tripped = place(RECOMPRESSOR, 'compressor', 240, y);
   const downstream = place(COOLER, 'heat-exchanger', 390, y);
   const alarm = ALARMS[0];

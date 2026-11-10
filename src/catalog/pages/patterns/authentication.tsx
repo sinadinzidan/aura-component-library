@@ -498,11 +498,9 @@ function AuthPatternConsent() {
 }
 
 function AuthPatternVerifyEmailBanner() {
-  const [visible, setVisible] = useState(true);
-
   return (
-    <div className="flex w-full flex-col gap-3">
-      <Banner variant="warning" inset visible={visible} onClose={() => setVisible(false)}>
+    <div className="w-full">
+      <Banner variant="warning" inset>
         <BannerIcon icon={IconInfoCircleFilled} />
         <BannerTitle>
           <span className="truncate text-base-foreground">
@@ -513,11 +511,6 @@ function AuthPatternVerifyEmailBanner() {
           <BannerAction>Send verification email</BannerAction>
         </BannerActions>
       </Banner>
-      {visible ? null : (
-        <Button variant="ghost" size="sm" className="self-start" onClick={() => setVisible(true)}>
-          Show the banner again
-        </Button>
-      )}
     </div>
   );
 }

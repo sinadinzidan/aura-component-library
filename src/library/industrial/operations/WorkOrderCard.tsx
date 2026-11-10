@@ -57,9 +57,9 @@ export function WorkOrderCard({
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <PriorityBadge priority={order.priority} />
-          <span className="truncate font-mono text-xs text-muted-foreground">{order.id}</span>
+          <span className="shrink-0 font-mono text-xs text-muted-foreground">{order.id}</span>
         </span>
-        {showStatus ? <StatusBadge status={order.status} /> : <span className="shrink-0 text-xs text-muted-foreground">{workOrderTypeLabel(order.type)}</span>}
+        {showStatus ? <StatusBadge status={order.status} /> : <span className="truncate text-xs text-muted-foreground">{workOrderTypeLabel(order.type)}</span>}
       </div>
 
       <div className="flex min-w-0 flex-col gap-1">
@@ -84,8 +84,8 @@ export function WorkOrderCard({
 
       {children}
 
-      <div className="flex items-center justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
           <DueLabel due={due} overdue={overdue} done={done} />
           {permitRequired ? (
             <span className="inline-flex items-center gap-1 text-xs text-warning-foreground-strong">

@@ -31,7 +31,7 @@ export function AuthCard({ title, description, icon, children, footer, as: Headi
     >
       <header className="flex flex-col gap-4">
         {icon ? (
-          <span className="flex size-10 items-center justify-center rounded-lg bg-muted-background text-medium-foreground [&>svg]:size-5">
+          <span className="flex size-10 items-center justify-center rounded-lg border border-default text-medium-foreground [&>svg]:size-5">
             {icon}
           </span>
         ) : null}

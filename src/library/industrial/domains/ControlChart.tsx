@@ -74,11 +74,11 @@ export function ControlChart({
           <div className="absolute inset-x-2 inset-y-0">
             <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none" className="absolute inset-0 size-full overflow-visible">
               {sigmaLines.map((value) => (
-                <line key={value} data-slot="sigma-line" x1={-2} x2={102} y1={y(value)} y2={y(value)} strokeWidth={1} className="stroke-chart-gridlines" {...LINE} />
+                <line key={value} data-slot="sigma-line" x1={-1} x2={101} y1={y(value)} y2={y(value)} strokeWidth={1} className="stroke-chart-gridlines" {...LINE} />
               ))}
-              <line data-slot="limit-line" x1={-2} x2={102} y1={y(limits.ucl)} y2={y(limits.ucl)} strokeWidth={1} strokeDasharray="4 3" className="stroke-chart-critical-450" {...LINE} />
-              <line data-slot="limit-line" x1={-2} x2={102} y1={y(limits.lcl)} y2={y(limits.lcl)} strokeWidth={1} strokeDasharray="4 3" className="stroke-chart-critical-450" {...LINE} />
-              <line data-slot="center-line" x1={-2} x2={102} y1={y(limits.center)} y2={y(limits.center)} strokeWidth={1} className="stroke-chart-neutral-400" {...LINE} />
+              <line data-slot="limit-line" x1={-1} x2={101} y1={y(limits.ucl)} y2={y(limits.ucl)} strokeWidth={1} strokeDasharray="4 3" className="stroke-chart-critical-450" {...LINE} />
+              <line data-slot="limit-line" x1={-1} x2={101} y1={y(limits.lcl)} y2={y(limits.lcl)} strokeWidth={1} strokeDasharray="4 3" className="stroke-chart-critical-450" {...LINE} />
+              <line data-slot="center-line" x1={-1} x2={101} y1={y(limits.center)} y2={y(limits.center)} strokeWidth={1} className="stroke-chart-neutral-400" {...LINE} />
               <polyline
                 data-slot="series"
                 points={values.map((value, index) => `${x(index)},${y(value)}`).join(' ')}

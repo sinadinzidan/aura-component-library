@@ -91,6 +91,16 @@ describe(EditableCell.name, () => {
     expect(screen.getByRole('textbox')).toBeInvalid();
   });
 
+  it('starts open with a restored draft and its error, without taking focus', () => {
+    const validate = (text: string) => (Number(text) > 60 ? 'Enter a value up to 60.' : null);
+    render(<EditableCell value="52.0" defaultDraft="72" label={LABEL} validate={validate} onSave={vi.fn()} />);
+
+    const input = screen.getByRole('textbox', { name: LABEL });
+    expect(input).toHaveValue('72');
+    expect(input).not.toHaveFocus();
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a value up to 60.');
+  });
+
   it('shows a custom read-mode rendering', () => {
     render(<EditableCell value="9840" display="9,840" label="Shaft speed" onSave={vi.fn()} />);
 

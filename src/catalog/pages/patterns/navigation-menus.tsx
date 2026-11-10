@@ -553,7 +553,7 @@ function NavMenuPreferences() {
         </Tooltip>
       )}
     >
-      <Command label="Display preferences" tabIndex={0}>
+      <Command label="Display preferences" tabIndex={0} defaultValue="Match system">
         <NavMenuList>
           <CommandGroup heading="Theme">
             {THEMES.map((option) => (
@@ -654,7 +654,7 @@ function NavMenuSubmenu() {
           </Button>
         )}
       >
-        <Command label="Work order actions" tabIndex={0} value="Move to">
+        <Command label="Work order actions" tabIndex={0} defaultValue="Move to">
           <NavMenuList>
             <CommandItem>
               <IconPencil /> Edit
@@ -871,7 +871,7 @@ function NavMenuAssignPicker() {
         </Button>
       )}
     >
-      <Command label="Assign work order">
+      <Command label="Assign work order" defaultValue={`${assignee.name} ${assignee.role}`}>
         <CommandInput placeholder="Search people" />
         <NavMenuList>
           <CommandEmpty>No people match the search.</CommandEmpty>
@@ -897,8 +897,8 @@ function NavMenuTabsOverflow() {
   ];
 
   return (
-    <div className="flex w-full flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-default">
+    <div className="relative h-48 w-full">
+      <div className="border-b border-default pr-32">
         <Tabs
           value={hidden.some((item) => item.id === tab) ? null : tab}
           onValueChange={(next) => {
@@ -918,7 +918,7 @@ function NavMenuTabsOverflow() {
           </TabsList>
         </Tabs>
       </div>
-      <div className="flex justify-end pt-1">
+      <div className="absolute top-0 right-0 -mt-1">
         <MenuPanel
           label="More tabs"
           align="end"
@@ -932,7 +932,7 @@ function NavMenuTabsOverflow() {
             <NavMenuList>
               {hidden.map((item) => (
                 <CommandItem key={item.id} onSelect={() => setTab(item.id)}>
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
                   <NavMenuCheck checked={item.id === tab} />
                 </CommandItem>
               ))}

@@ -218,7 +218,7 @@ function PermissionRoleCards() {
               </li>
             </ul>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="mt-auto">
             <CardFooterStart>
               <span className="text-xs tabular-nums text-muted-foreground">{card.members} members</span>
             </CardFooterStart>
@@ -756,7 +756,7 @@ function PermissionRoleAuditRows() {
           <p className="min-w-0 flex-1 text-base-foreground">
             <span className="font-medium">{entry.actor}</span> {entry.text}
           </p>
-          <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex w-48 shrink-0 items-center justify-end gap-2 text-xs text-muted-foreground">
             {entry.from}
             <IconArrowRight aria-hidden="true" className="size-3" />
             <span className="sr-only">changed to</span>

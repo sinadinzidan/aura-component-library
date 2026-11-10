@@ -562,8 +562,8 @@ function ConfirmationPopover() {
               </PopoverHeaderContent>
               <PopoverDescription>The time series is kept. You can add the chart again from the library.</PopoverDescription>
             </PopoverHeader>
-            <PopoverSlot>
-              <div className="flex justify-end gap-2">
+            <PopoverSlot className="w-full">
+              <div className="flex w-full justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
                   Cancel
                 </Button>

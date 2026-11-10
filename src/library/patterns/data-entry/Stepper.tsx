@@ -129,7 +129,7 @@ export function Stepper({ steps, current, orientation = 'horizontal', onStepSele
             key={step.id}
             aria-current={status === 'current' ? 'step' : undefined}
             data-status={status}
-            className={last ? 'flex min-w-0 items-center gap-3' : 'flex min-w-0 flex-1 items-center gap-3'}
+            className={last ? 'flex min-w-0 items-center gap-3' : 'flex min-w-0 flex-auto items-center gap-3'}
           >
             {body}
             {last ? null : (

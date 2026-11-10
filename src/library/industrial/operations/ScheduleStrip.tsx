@@ -55,6 +55,9 @@ export function ScheduleStrip({ columns, bars, now, label, className }: Schedule
         const start = clamp(bar.start);
         const end = clamp(bar.end);
         const tone = bar.tone ?? 'neutral';
+        // A short bar cannot hold its text, so the text moves beside it: after the bar, or before it near the right edge.
+        const textInside = end - start >= 1.5;
+        const textBefore = end > total - 1.5;
         return (
           <div key={bar.id} data-slot="schedule-row" className="col-span-2 grid grid-cols-subgrid items-center border-t border-default py-2">
             <div className="flex min-w-0 flex-col gap-0.5">
@@ -78,10 +81,20 @@ export function ScheduleStrip({ columns, bars, now, label, className }: Schedule
                 )}
                 style={{ left: percent(start, total), width: percent(Math.max(end - start, 0), total) }}
               >
-                {bar.text ? (
+                {bar.text && textInside ? (
                   <span className={cn('truncate text-xs font-medium', bar.tentative ? 'text-base-foreground' : 'text-primary-foreground')}>{bar.text}</span>
                 ) : null}
               </span>
+              {bar.text && !textInside ? (
+                <span
+                  aria-hidden="true"
+                  data-slot="schedule-bar-text"
+                  className={cn('absolute inset-y-0 flex items-center whitespace-nowrap text-xs text-muted-foreground', textBefore ? 'pr-2' : 'pl-2')}
+                  style={textBefore ? { right: percent(total - start, total) } : { left: percent(end, total) }}
+                >
+                  {bar.text}
+                </span>
+              ) : null}
               {now !== undefined && now >= 0 && now <= total ? (
                 <span data-slot="schedule-now" aria-hidden="true" className="absolute -inset-y-2 w-px bg-base-foreground" style={{ left: percent(now, total) }} />
               ) : null}

@@ -692,6 +692,7 @@ function TeamMemberTable() {
                         External
                       </Badge>
                     ) : null}
+                    {member.status === 'suspended' ? <Badge variant="warning">Suspended</Badge> : null}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">{member.email}</span>
                 </span>
@@ -877,7 +878,7 @@ function TeamMemberTeamPage() {
   const members = membersOf(team.memberIds);
 
   return (
-    <div className="flex h-128 w-full flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-base-background p-6">
+    <div className="flex h-96 w-full flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-base-background p-6">
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h3 className="text-xl font-semibold tracking-tight text-base-foreground">{team.name}</h3>

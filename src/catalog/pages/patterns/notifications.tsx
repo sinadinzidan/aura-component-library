@@ -491,7 +491,7 @@ function NotificationPopoverPanel() {
           }
         />
         <PopoverContent align="center" className="w-96 max-w-[calc(100vw-2rem)]">
-          <div className="max-h-96 overflow-y-auto">
+          <div className="max-h-96 w-full overflow-y-auto">
             <NotificationPanel
               notifications={inbox.notifications}
               onOpen={inbox.markRead}

@@ -272,12 +272,12 @@ function DataQualityRunRow() {
   return (
     <ul aria-label="Latest pipeline runs" className="flex w-full flex-col divide-y divide-default">
       {PIPELINES.slice(0, 4).map((pipeline) => (
-        <li key={pipeline.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_4rem_8rem_5rem] items-center gap-3 py-2">
+        <li key={pipeline.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_3.5rem_8rem_6.5rem] items-center gap-3 py-2">
           <PipelineName pipeline={pipeline} />
           <StatusIndicator size="sm" {...RUN_STATUS[pipeline.status]} />
-          <span className="text-right text-xs text-muted-foreground tabular-nums">{pipeline.durationMs === null ? 'Running' : formatDuration(pipeline.durationMs)}</span>
+          <span className="text-right text-xs text-muted-foreground tabular-nums">{pipeline.durationMs === null ? '—' : formatDuration(pipeline.durationMs)}</span>
           <span className="text-right text-sm whitespace-nowrap text-base-foreground tabular-nums">{formatRows(pipeline.rows)} rows</span>
-          <span className="text-right text-xs text-muted-foreground tabular-nums">{ageOf(pipeline.startedAt)} ago</span>
+          <span className="text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums">{ageOf(pipeline.startedAt)} ago</span>
         </li>
       ))}
     </ul>

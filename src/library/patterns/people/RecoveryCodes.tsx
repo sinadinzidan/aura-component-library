@@ -39,16 +39,16 @@ export function RecoveryCodes({ label = 'Recovery codes', codes, usedCodes = [],
           );
         })}
       </ul>
-      <div className="flex items-center gap-2">
+      <p className="text-xs tabular-nums text-muted-foreground">
+        {unused.length} of {codes.length} left
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
         <CopyButton variant="secondary" size="sm" text={text} label="Copy codes" writeText={writeText} />
         {onDownload ? (
           <Button variant="secondary" size="sm" onClick={() => onDownload(text)}>
             <IconDownload /> Download codes
           </Button>
         ) : null}
-        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-          {unused.length} of {codes.length} left
-        </span>
       </div>
     </div>
   );

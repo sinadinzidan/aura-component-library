@@ -123,7 +123,7 @@ const COMPLETENESS = [
 ];
 
 const IDENTITIES = [
-  { id: 'sso', name: 'Nordkapp single sign-on', detail: AISHA_EMAIL, icon: IconKey, connected: true, primary: true },
+  { id: 'sso', name: 'Single sign-on', detail: 'Managed by your organisation', icon: IconKey, connected: true, primary: true },
   { id: 'totp', name: 'Authenticator app', detail: 'Added 4 Mar', icon: IconShieldLock, connected: true, primary: false },
   { id: 'historian', name: 'Plant historian account', detail: 'Not connected', icon: IconLock, connected: false, primary: false },
 ];
@@ -506,9 +506,7 @@ function ProfileAccountConnectedIdentities() {
               </p>
               <p className="truncate text-xs text-muted-foreground">{identity.detail}</p>
             </div>
-            {identity.primary ? (
-              <span className="text-xs text-muted-foreground">Managed by your organisation</span>
-            ) : identity.connected ? (
+            {identity.primary ? null : identity.connected ? (
               <Button variant="ghost" size="sm">
                 Disconnect
               </Button>
@@ -537,12 +535,14 @@ function ProfileAccountActivitySummary() {
           <dd className="text-2xl font-semibold tabular-nums text-base-foreground">37</dd>
         </div>
         <div>
-          <dt className="text-xs text-muted-foreground">Last signed in</dt>
-          <dd className="text-2xl font-semibold tabular-nums text-base-foreground">{formatAgo(REFERENCE_NOW - 42 * MINUTE)}</dd>
+          <dt className="text-xs text-muted-foreground">Comments written</dt>
+          <dd className="text-2xl font-semibold tabular-nums text-base-foreground">9</dd>
         </div>
       </dl>
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-medium text-muted-foreground">Last 7 days</h3>
+        <h3 className="text-xs font-medium tabular-nums text-muted-foreground">
+          Last 7 days · Signed in {formatAgo(REFERENCE_NOW - 42 * MINUTE)}
+        </h3>
         <ul className="flex flex-col gap-2">
           {ACTIVITY.map((entry) => (
             <li key={entry.id} className="flex items-baseline justify-between gap-4 text-sm">
@@ -704,7 +704,7 @@ function ProfileAccountDeactivated() {
         </CardHeaderStart>
         <CardHeaderCenter>
           <CardTitle as="h4">Nora Dahl</CardTitle>
-          <CardDescription>Former process engineer</CardDescription>
+          <CardDescription>Process engineer</CardDescription>
         </CardHeaderCenter>
         <CardHeaderEnd>
           <Badge variant="archived">

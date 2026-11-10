@@ -741,9 +741,15 @@ function ApiKeyTokenUnusedKeys() {
               </p>
             </div>
             <ExpiryBadge expiresAt={key.expiresAt} revokedAt={key.revokedAt} now={REFERENCE_NOW} />
-            <ConfirmButton size="sm" confirmLabel="Confirm revoke" aria-label={`Revoke ${key.name}`} onConfirm={() => undefined}>
-              Revoke
-            </ConfirmButton>
+            {key.expiresAt !== null && key.expiresAt <= REFERENCE_NOW ? (
+              <ConfirmButton size="sm" confirmLabel="Confirm removal" aria-label={`Remove ${key.name}`} onConfirm={() => undefined}>
+                Remove
+              </ConfirmButton>
+            ) : (
+              <ConfirmButton size="sm" confirmLabel="Confirm revoke" aria-label={`Revoke ${key.name}`} onConfirm={() => undefined}>
+                Revoke
+              </ConfirmButton>
+            )}
           </li>
         ))}
       </ul>
@@ -770,7 +776,7 @@ function ApiKeyTokenDetail() {
   const usage = usageOf(key);
 
   return (
-    <div className="flex h-112 w-full flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-base-background p-6">
+    <div className="flex h-96 w-full flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-base-background p-6">
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <h3 className="text-xl font-semibold tracking-tight text-base-foreground">{key.name}</h3>
@@ -1056,7 +1062,7 @@ export default definePage({
         {
           id: 'ApiKeyTokenUnusedKeys',
           title: 'Unused keys review',
-          note: 'Periodic clean-up: keys with no recent requests, each with a two-step revoke.',
+          note: 'Periodic clean-up: keys with no recent requests, each with a two-step revoke or removal.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
