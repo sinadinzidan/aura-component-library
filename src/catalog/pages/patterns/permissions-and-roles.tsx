@@ -829,7 +829,7 @@ function PermissionRoleAccessPanel() {
   const people = [LIV, AISHA, MAGNUS, TOMAS, INGRID];
 
   return (
-    <div className="flex h-128 w-full flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-base-background p-6">
+    <div className="flex h-112 w-full flex-col gap-4 overflow-y-auto rounded-xl border border-default bg-base-background p-6">
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h3 className="text-xl font-semibold tracking-tight text-base-foreground">Access to Compressor telemetry</h3>

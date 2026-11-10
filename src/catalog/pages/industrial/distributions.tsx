@@ -6,7 +6,7 @@ import { ChartPlaceholder } from '../../../library/industrial/charts/ChartPlaceh
 import { HeatMapGrid } from '../../../library/industrial/charts/HeatMapGrid';
 import { HeatScaleLegend } from '../../../library/industrial/charts/HeatScaleLegend';
 import { Histogram } from '../../../library/industrial/charts/Histogram';
-import { RiskMatrix } from '../../../library/industrial/charts/RiskMatrix';
+import { RiskMatrix, countByRiskLevel } from '../../../library/industrial/charts/RiskMatrix';
 import type { RiskItem } from '../../../library/industrial/charts/RiskMatrix';
 import { ScatterPlot } from '../../../library/industrial/charts/ScatterPlot';
 import { boxStats, bucketize, correlation, quantile } from '../../../library/industrial/charts/stats';
@@ -163,9 +163,10 @@ const HOURLY_QUANTILES = HOURS.map((_, hour) => {
 const RISK_ITEMS: RiskItem[] = EQUIPMENT.map((asset) => ({
   id: asset.id,
   label: asset.name,
-  likelihood: asset.healthScore >= 93 ? 1 : asset.healthScore >= 88 ? 2 : asset.healthScore >= 70 ? 3 : asset.healthScore >= 50 ? 4 : 5,
+  likelihood: asset.healthScore >= 93 ? 1 : asset.healthScore >= 85 ? 2 : asset.healthScore >= 60 ? 3 : asset.healthScore >= 50 ? 4 : 5,
   consequence: asset.criticality === 'A' ? (asset.type === 'compressor' || asset.type === 'turbine' ? 5 : 4) : asset.criticality === 'B' ? 3 : 2,
 }));
+const RISK_COUNTS = countByRiskLevel(RISK_ITEMS);
 
 function DistributionHistogram() {
   return (
@@ -488,9 +489,9 @@ function DistributionHourStrip() {
 function DistributionRiskMatrix() {
   return (
     <RiskMatrix
-      label="Equipment risk matrix by likelihood and consequence of failure; the recompressor is the one high-risk item"
+      label={`Equipment risk matrix by likelihood and consequence of failure; ${RISK_COUNTS.high} of ${RISK_ITEMS.length} items are high risk, led by the recompressor`}
       items={RISK_ITEMS}
-      summary="11 pieces of equipment. The recompressor sits at likely × severe after the trip on 8 March."
+      summary={`${RISK_ITEMS.length} pieces of equipment: ${RISK_COUNTS.high} high, ${RISK_COUNTS.medium} medium, ${RISK_COUNTS.low} low. The recompressor sits at almost certain × severe after its trip.`}
     />
   );
 }

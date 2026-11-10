@@ -1,34 +1,28 @@
-import { ChartContainer, chartSeriesColor } from '@cognite/aura/chart';
-import type { ChartConfig } from '@cognite/aura/chart';
 import { Badge } from '@cognite/aura/components/badge';
 import { Button } from '@cognite/aura/components/button';
-import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
 import { IconExternalLink } from '@cognite/aura/icons';
 import { useState } from 'react';
-import { CartesianGrid, ComposedChart, Line, Scatter, XAxis, YAxis, ZAxis } from 'recharts';
 
 import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
 import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
 import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { SeriesLegend } from '../../../library/industrial/charts/SeriesLegend';
 import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { KpiTile } from '../../../library/industrial/KpiTile';
+import { DiagramCanvas } from '../../../library/industrial/diagrams/DiagramCanvas';
+import { DiagramHotspot } from '../../../library/industrial/diagrams/DiagramHotspot';
+import { PipeLine } from '../../../library/industrial/diagrams/PipeLine';
+import { ValueTag } from '../../../library/industrial/diagrams/ValueTag';
 import { DueLabel } from '../../../library/industrial/operations/DueLabel';
 import { HealthBreakdown } from '../../../library/industrial/operations/HealthBreakdown';
 import { PriorityBadge } from '../../../library/industrial/operations/PriorityBadge';
 import { workOrderStatusLabel } from '../../../library/industrial/operations/workOrders';
-import { ProgressRing } from '../../../library/industrial/ProgressRing';
 import { RadialGauge } from '../../../library/industrial/RadialGauge';
-import { formatLimit, healthStatus, runStateStatus } from '../../../library/industrial/status';
+import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
+import { formatLimit, formatReading, healthStatus, runStateStatus } from '../../../library/industrial/status';
+import type { Tone } from '../../../library/industrial/status';
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
+import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { SENSORS } from '../../data/plant';
-import type { Sensor } from '../../data/plant';
-import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatDate, makeSeries, makeValues } from '../../data/series';
+import { DAY, MINUTE, REFERENCE_NOW, formatDate, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './compressor-health.tsx?raw';
@@ -42,266 +36,443 @@ const COMP_ASSET = {
   criticality: 'A',
 } as const;
 
-const COMP_FALLBACK_SENSOR: Sensor = {
-  id: 'none',
-  tag: '23-XX-00000',
-  name: 'No signal',
-  assetId: '23-ka-9101',
-  unit: '',
-  value: 0,
-  lowLimit: 0,
-  highLimit: 0,
-  rangeMin: 0,
-  rangeMax: 1,
-  decimals: 0,
-  quality: 'bad',
-  seed: 1,
+type CompPoint = {
+  id: string;
+  /** Where on the machine the measurement is taken. */
+  location: string;
+  name: string;
+  tag: string;
+  unit: string;
+  value: number;
+  decimals: number;
+  low?: number;
+  high: number;
+  trip?: number;
+  rangeMax: number;
+  /** Y axis of the 24-hour trend. */
+  domain: readonly [number, number];
+  ticks: readonly number[];
+  /** Value 24 hours ago; the trend runs from here to `value`. */
+  dayAgo: number;
+  seed: number;
+  /** Top-left corner of the callout on the diagram, and the point it measures. */
+  x: number;
+  y: number;
+  target: { x: number; y: number };
+  finding: string;
 };
 
-const compSensor = (id: string): Sensor => SENSORS.find((sensor) => sensor.id === id) ?? COMP_FALLBACK_SENSOR;
+/** Measurement points on the machine. Limits follow the plant's sensor records for 23-KA-9101. */
+const COMP_POINTS: readonly CompPoint[] = [
+  {
+    id: 'suction',
+    location: 'Suction nozzle',
+    name: 'Suction pressure',
+    tag: '23-PT-92530',
+    unit: 'barg',
+    value: 12.4,
+    decimals: 1,
+    low: 10,
+    high: 15,
+    rangeMax: 20,
+    domain: [8, 16],
+    ticks: [8, 10, 12, 14, 16],
+    dayAgo: 12.6,
+    seed: 12,
+    x: 196,
+    y: 84,
+    target: { x: 330, y: 110 },
+    finding: 'Steady in the middle of its band; the inlet separator is holding pressure.',
+  },
+  {
+    id: 'discharge',
+    location: 'Discharge nozzle',
+    name: 'Discharge pressure',
+    tag: '23-PT-92531',
+    unit: 'barg',
+    value: 48.6,
+    decimals: 1,
+    low: 40,
+    high: 52,
+    trip: 55,
+    rangeMax: 60,
+    domain: [36, 56],
+    ticks: [36, 40, 44, 48, 52, 56],
+    dayAgo: 47.9,
+    seed: 11,
+    x: 502,
+    y: 84,
+    target: { x: 480, y: 110 },
+    finding: 'Inside the band with 3.4 barg left to the high limit.',
+  },
+  {
+    id: 'temperature',
+    location: 'Discharge nozzle',
+    name: 'Discharge temperature',
+    tag: '23-TT-92532',
+    unit: '°C',
+    value: 141.2,
+    decimals: 1,
+    low: 90,
+    high: 145,
+    trip: 155,
+    rangeMax: 180,
+    domain: [120, 160],
+    ticks: [120, 130, 140, 150, 160],
+    dayAgo: 138.4,
+    seed: 13,
+    x: 560,
+    y: 12,
+    target: { x: 610, y: 60 },
+    finding: 'Up 2.8 °C in 24 hours and 3.8 °C under the high limit; the interstage cooler is fouling.',
+  },
+  {
+    id: 'de-bearing',
+    location: 'Drive-end bearing',
+    name: 'Drive-end vibration',
+    tag: '23-VT-92540',
+    unit: 'mm/s',
+    value: 6.8,
+    decimals: 1,
+    high: 7.1,
+    trip: 11,
+    rangeMax: 15,
+    domain: [4, 12],
+    ticks: [4, 6, 8, 10, 12],
+    dayAgo: 5.6,
+    seed: 14,
+    x: 150,
+    y: 296,
+    target: { x: 225, y: 238 },
+    finding: 'Rising 1.2 mm/s in 24 hours at running speed and 0.3 mm/s under the high limit.',
+  },
+  {
+    id: 'seal',
+    location: 'Drive-end dry gas seal',
+    name: 'Seal leakage flow',
+    tag: '23-FT-92560',
+    unit: 'Nm³/h',
+    value: 1.8,
+    decimals: 1,
+    high: 3,
+    trip: 5,
+    rangeMax: 6,
+    domain: [0, 6],
+    ticks: [0, 2, 4, 6],
+    dayAgo: 1.7,
+    seed: 23,
+    x: 280,
+    y: 296,
+    target: { x: 265, y: 232 },
+    finding: 'Primary seal leakage is flat and well under its limit.',
+  },
+  {
+    id: 'nde-bearing',
+    location: 'Non-drive-end bearing',
+    name: 'Non-drive-end vibration',
+    tag: '23-VT-92541',
+    unit: 'mm/s',
+    value: 4.2,
+    decimals: 1,
+    high: 7.1,
+    trip: 11,
+    rangeMax: 15,
+    domain: [0, 12],
+    ticks: [0, 3, 6, 9, 12],
+    dayAgo: 4.1,
+    seed: 24,
+    x: 540,
+    y: 296,
+    target: { x: 585, y: 238 },
+    finding: 'Unchanged, which places the fault at the drive end, not across the rotor.',
+  },
+  {
+    id: 'speed',
+    location: 'Coupling',
+    name: 'Shaft speed',
+    tag: '23-ST-92501',
+    unit: 'rpm',
+    value: 9840,
+    decimals: 0,
+    low: 7000,
+    high: 10500,
+    rangeMax: 12000,
+    domain: [6000, 11000],
+    ticks: [6000, 7000, 8000, 9000, 10000, 11000],
+    dayAgo: 9790,
+    seed: 15,
+    x: 20,
+    y: 296,
+    target: { x: 175, y: 228 },
+    finding: 'Constant speed, so the vibration rise is not a load or speed effect.',
+  },
+];
 
-const COMP_VIBRATION = compSensor('vt-92540');
-const COMP_TEMPERATURE = compSensor('tt-92532');
-const COMP_DIALS = [compSensor('pt-92530'), compSensor('pt-92531'), compSensor('st-92501')];
+/** Near a limit when less than a tenth of the band is left. */
+function compPointTone(point: CompPoint): Tone {
+  if (point.trip !== undefined && point.value >= point.trip) return 'critical';
+  if (point.value > point.high) return 'warning';
+  return (point.high - point.value) / (point.high - (point.low ?? 0)) < 0.1 ? 'warning' : 'neutral';
+}
 
-const COMP_RUN_HOURS = 14620;
-const COMP_OVERHAUL_INTERVAL = 24000;
+const compPointState = (point: CompPoint): string => (compPointTone(point) === 'neutral' ? 'Within limits' : 'Near high limit');
 
-const COMP_ALARM_AT = REFERENCE_NOW - 2 * HOUR;
+/** 24 hours at 30-minute resolution, from the value a day ago to the live value. */
+function compPointTrend(point: CompPoint) {
+  const span = point.domain[1] - point.domain[0];
+  const points = makeSeries({
+    seed: point.seed,
+    points: 49,
+    base: point.dayAgo,
+    drift: point.value - point.dayAgo,
+    noise: span * 0.012,
+    stepMs: 30 * MINUTE,
+    decimals: point.decimals,
+  });
+  return points.map((sample, index) => ({ t: sample.t, v: index === points.length - 1 ? point.value : sample.v }));
+}
 
-/** 24 hours of drive-end vibration at 30-minute resolution, ending on the live value. */
-const COMP_VIBRATION_POINTS = makeSeries({
-  seed: COMP_VIBRATION.seed,
-  points: 49,
-  base: 5.5,
-  amplitude: 0.15,
-  noise: 0.12,
-  drift: 1.2,
-  cycles: 2,
-  stepMs: 30 * MINUTE,
-  max: 6.9,
-}).map((point, index, all) => ({ t: point.t, v: index === all.length - 1 ? COMP_VIBRATION.value : point.v }));
+function compPointLimits(point: CompPoint) {
+  const inDomain = (value: number) => value > point.domain[0] && value <= point.domain[1];
+  return [
+    ...(point.low !== undefined && inDomain(point.low)
+      ? [{ value: point.low, label: `Low ${formatLimit(point.low, point.decimals)}`, tone: 'neutral', align: 'left' } as const]
+      : []),
+    ...(inDomain(point.high)
+      ? [{ value: point.high, label: `High ${formatLimit(point.high, point.decimals)}`, tone: 'warning', align: 'left' } as const]
+      : []),
+    ...(point.trip !== undefined && inDomain(point.trip)
+      ? [{ value: point.trip, label: `Trip ${formatLimit(point.trip, point.decimals)}`, tone: 'critical', align: 'left' } as const]
+      : []),
+  ];
+}
 
-const COMP_VIBRATION_SERIES = [{ key: 'vibration', label: 'Drive-end vibration', points: COMP_VIBRATION_POINTS }];
-
-const COMP_VIBRATION_LIMITS = [
-  { value: COMP_VIBRATION.highLimit, label: 'High 7.1', tone: 'warning', align: 'left' },
-  { value: 11, label: 'Trip 11', tone: 'critical', align: 'left' },
-] as const;
-
-const COMP_VIBRATION_EVENTS = [{ t: COMP_ALARM_AT, label: 'Alarm', tone: 'warning' }] as const;
+const COMP_FIGURES = [
+  { id: 'vibration', label: 'Drive-end vibration', value: 6.8, unit: 'mm/s', decimals: 1, caption: '+1.2 in 24 h · high 7.1' },
+  { id: 'temperature', label: 'Discharge temperature', value: 141.2, unit: '°C', decimals: 1, caption: '+2.8 in 24 h · high 145' },
+  { id: 'hours', label: 'Run hours since overhaul', value: 14620, unit: 'h', decimals: 0, caption: 'Overhaul due at 24,000 h' },
+];
 
 const COMP_INDICATORS = [
-  { id: 'vibration', label: 'Vibration', score: 61, detail: '6.8 mm/s, rising' },
-  { id: 'temperature', label: 'Temperature', score: 68, detail: '141 °C, near limit' },
-  { id: 'performance', label: 'Performance', score: 84, detail: 'Efficiency −1.2%' },
-  { id: 'lubrication', label: 'Lubrication', score: 90, detail: 'Oil sample clean' },
+  { id: 'vibration', label: 'Vibration', score: 61 },
+  { id: 'temperature', label: 'Temperature', score: 68 },
+  { id: 'performance', label: 'Performance', score: 84 },
+  { id: 'lubrication', label: 'Lubrication', score: 90 },
 ];
 
-/** Compressor map: inlet flow in kSm³/h against pressure ratio, with the two limits of the envelope. */
-const COMP_SURGE_LINE = [
-  { flow: 110, surge: 3.0 },
-  { flow: 130, surge: 3.5 },
-  { flow: 150, surge: 4.0 },
-  { flow: 170, surge: 4.5 },
-  { flow: 182, surge: 4.8 },
+/** The operating point against the three edges of the compressor envelope. */
+const COMP_ENVELOPE = [
+  { id: 'flow', label: 'Inlet flow, surge to choke', value: 182, unit: 'kSm³/h', decimals: 0, min: 100, max: 240, low: 138, high: 221 },
+  { id: 'ratio', label: 'Pressure ratio', value: 3.7, unit: '', decimals: 1, min: 2, max: 5.5, low: 2.8, high: 4.6 },
+  { id: 'speed', label: 'Shaft speed', value: 9840, unit: 'rpm', decimals: 0, min: 6000, max: 12000, low: 7000, high: 10500 },
 ];
-
-const COMP_CHOKE_LINE = [
-  { flow: 202, choke: 2.6 },
-  { flow: 215, choke: 3.3 },
-  { flow: 227, choke: 4.0 },
-  { flow: 236, choke: 4.6 },
-];
-
-const COMP_MAP_FLOW = makeValues({ seed: 61, points: 24, base: 178, amplitude: 14, noise: 5, cycles: 1.5, decimals: 0 });
-const COMP_MAP_RATIO = makeValues({ seed: 62, points: 24, base: 3.66, amplitude: 0.22, noise: 0.08, cycles: 1.5, decimals: 2 });
-
-const COMP_MAP_HISTORY = COMP_MAP_FLOW.map((flow, index) => ({ flow, history: COMP_MAP_RATIO[index] ?? 3.7 }));
-
-const COMP_MAP_NOW = [{ flow: 182, now: 3.7 }];
-
-const COMP_MAP_CONFIG = {
-  history: { label: 'Last 24 hours', color: 'var(--color-chart-1-300)' },
-  now: { label: 'Now', color: chartSeriesColor(1) },
-  surge: { label: 'Surge limit', color: 'var(--color-chart-critical-450)' },
-  choke: { label: 'Choke limit', color: 'var(--color-chart-neutral-450)' },
-} satisfies ChartConfig;
-
-const COMP_MAP_LEGEND = [
-  { key: 'now', label: 'Now', color: 'var(--color-chart-1-450)', mark: 'dot' },
-  { key: 'history', label: 'Last 24 hours', color: 'var(--color-chart-1-300)', mark: 'dot' },
-  { key: 'surge', label: 'Surge limit', color: 'var(--color-chart-critical-450)', mark: 'line' },
-  { key: 'choke', label: 'Choke limit', color: 'var(--color-chart-neutral-450)', mark: 'dashed' },
-] as const;
 
 const COMP_ORDERS = [
-  {
-    id: 'WO-104466',
-    title: 'Vibration survey, 1st stage compressor',
-    priority: 'P2',
-    status: 'open',
-    dueAt: REFERENCE_NOW + 2 * DAY,
-    hours: 4,
-  },
-  {
-    id: 'WO-104473',
-    title: 'Replace drive-end bearing temperature probe',
-    priority: 'P2',
-    status: 'planned',
-    dueAt: REFERENCE_NOW + 5 * DAY,
-    hours: 3,
-  },
-  {
-    id: 'WO-104451',
-    title: 'Lube oil sample and analysis',
-    priority: 'P3',
-    status: 'open',
-    dueAt: REFERENCE_NOW - 2 * DAY,
-    hours: 1,
-  },
-  {
-    id: 'WO-104402',
-    title: 'Change dry gas seal filter elements',
-    priority: 'P3',
-    status: 'waiting',
-    dueAt: REFERENCE_NOW + 9 * DAY,
-    hours: 6,
-  },
+  { id: 'WO-104466', title: 'Vibration survey, 1st stage compressor', priority: 'P2', status: 'open', dueAt: REFERENCE_NOW + 2 * DAY },
+  { id: 'WO-104473', title: 'Replace drive-end bearing temperature probe', priority: 'P2', status: 'planned', dueAt: REFERENCE_NOW + 5 * DAY },
+  { id: 'WO-104451', title: 'Lube oil sample and analysis', priority: 'P3', status: 'open', dueAt: REFERENCE_NOW - 2 * DAY },
+  { id: 'WO-104402', title: 'Change dry gas seal filter elements', priority: 'P3', status: 'waiting', dueAt: REFERENCE_NOW + 9 * DAY },
 ] as const;
 
 const COMP_EVIDENCE = [
-  { id: 'trend', label: 'Vibration trend', value: '+1.2 mm/s in 24 h' },
   { id: 'margin', label: 'Margin to high limit', value: '0.3 mm/s' },
   { id: 'limit', label: 'Projected to reach limit', value: 'In about 6 h' },
   { id: 'spectrum', label: 'Dominant frequency', value: '1× running speed' },
 ];
 
-function CompKpiRow() {
+const COMP_IMPELLERS = [318, 362, 406, 450, 494];
+
+/** The headline figures as one calm strip in the frame toolbar, instead of a row of tiles. */
+function CompFigureStrip() {
   return (
-    <DashboardGrid>
-      <DashboardCell span={3}>
-        <KpiTile
-          label="Health score"
-          value={COMP_ASSET.healthScore}
-          decimals={0}
-          tone="warning"
-          status={{ ...healthStatus(COMP_ASSET.health) }}
-          delta={{ reference: 79, goodDirection: 'up', caption: 'vs last week', decimals: 0 }}
-        />
-      </DashboardCell>
-      <DashboardCell span={3}>
-        <KpiTile
-          label="Drive-end vibration"
-          value={COMP_VIBRATION.value}
-          unit={COMP_VIBRATION.unit}
-          decimals={1}
-          delta={{ reference: 5.6, goodDirection: 'down', caption: 'vs 24 h ago' }}
-          trend={{ values: COMP_VIBRATION_POINTS.map((point) => point.v), limit: COMP_VIBRATION.highLimit }}
-        />
-      </DashboardCell>
-      <DashboardCell span={3}>
-        <KpiTile
-          label="Discharge temperature"
-          value={COMP_TEMPERATURE.value}
-          unit={COMP_TEMPERATURE.unit}
-          decimals={1}
-          delta={{ reference: 138.4, goodDirection: 'down', caption: 'vs 24 h ago' }}
-          trend={{
-            values: makeValues({ seed: COMP_TEMPERATURE.seed, points: 24, base: 138.6, amplitude: 1.2, noise: 0.5, drift: 2.6 }),
-            limit: COMP_TEMPERATURE.highLimit,
-          }}
-        />
-      </DashboardCell>
-      <DashboardCell span={3}>
-        <KpiTile
-          label="Run hours since overhaul"
-          value={COMP_RUN_HOURS}
-          unit="h"
-          decimals={0}
-          target={{ value: COMP_OVERHAUL_INTERVAL, label: 'Overhaul due at' }}
-        />
-      </DashboardCell>
-    </DashboardGrid>
+    <dl className="flex w-full flex-wrap items-start gap-x-10 gap-y-4 border-y border-default py-4">
+      <div className="flex flex-col gap-1">
+        <dt className="text-xs text-muted-foreground">Health score</dt>
+        <dd className="flex flex-wrap items-baseline gap-x-3">
+          <ValueReadout value={COMP_ASSET.healthScore} size="md" tone="warning" />
+          <StatusIndicator {...healthStatus(COMP_ASSET.health)} size="sm" detail="−7 in a week" />
+        </dd>
+      </div>
+      {COMP_FIGURES.map((figure) => (
+        <div key={figure.id} className="flex flex-col gap-1">
+          <dt className="text-xs text-muted-foreground">{figure.label}</dt>
+          <dd className="flex flex-wrap items-baseline gap-x-3">
+            <ValueReadout value={figure.value} unit={figure.unit} decimals={figure.decimals} size="md" />
+            <span className="text-xs tabular-nums text-muted-foreground">{figure.caption}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
-function CompVibrationPanel() {
+type CompSelection = { selectedId: string; onSelect: (id: string) => void };
+
+/** The dominant element: a cutaway of the train with a selectable callout at every measurement point. */
+function CompDiagramPanel({ selectedId, onSelect }: CompSelection) {
   return (
     <DashboardPanel
-      title="Vibration trend"
-      description="Drive-end, last 24 hours, with high and trip limits"
-      actions={
-        <Button variant="ghost" size="sm">
-          Open trend
-        </Button>
-      }
-      footnote="Vibration rose from 5.6 to 6.8 mm/s in 24 hours and is 0.3 mm/s under the high limit; the alarm was raised at 12:00."
+      title="Machine"
+      description="Gas turbine, coupling and barrel compressor. Select a measurement point to inspect it."
+      footnote="Seven live measurement points. A callout is tinted and flagged only when its reading is near or beyond a limit."
     >
+      <DiagramCanvas
+        interactive
+        label="Cutaway of the 1st stage compressor train with seven selectable measurement points"
+        width={720}
+        height={344}
+        className="w-full"
+      >
+        <PipeLine
+          points={[
+            { x: 30, y: 60 },
+            { x: 330, y: 60 },
+            { x: 330, y: 140 },
+          ]}
+          weight="heavy"
+          flow="forward"
+          arrows={2}
+        />
+        <PipeLine
+          points={[
+            { x: 480, y: 140 },
+            { x: 480, y: 60 },
+            { x: 700, y: 60 },
+          ]}
+          weight="heavy"
+          flow="forward"
+          arrows={2}
+        />
+        <text x={30} y={48} fontSize={10} className="fill-muted-foreground">
+          Suction
+        </text>
+        <text x={700} y={78} fontSize={10} textAnchor="end" className="fill-muted-foreground">
+          Discharge
+        </text>
+
+        <path d="M 150 210 H 640" stroke="currentColor" strokeWidth={5} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <rect x={30} y={160} width={120} height={100} rx={6} stroke="currentColor" strokeWidth={1.5} className="fill-muted-background" />
+        <text x={90} y={206} fontSize={11} textAnchor="middle" className="fill-base-foreground font-medium">
+          Gas turbine
+        </text>
+        <text x={90} y={222} fontSize={9} textAnchor="middle" className="fill-muted-foreground font-mono">
+          23-GT-9001
+        </text>
+        <rect x={162} y={194} width={26} height={32} rx={3} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
+        <rect x={205} y={184} width={40} height={52} rx={4} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
+        <rect x={256} y={192} width={18} height={36} rx={2} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
+        <rect x={285} y={140} width={240} height={140} rx={20} stroke="currentColor" strokeWidth={1.5} className="fill-muted-background" />
+        {COMP_IMPELLERS.map((x) => (
+          <path
+            key={x}
+            d={`M ${x - 5} 162 H ${x + 5} L ${x + 13} 258 H ${x - 13} Z`}
+            stroke="currentColor"
+            strokeWidth={1}
+            fill="currentColor"
+            fillOpacity={0.12}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        <rect x={536} y={192} width={18} height={36} rx={2} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
+        <rect x={565} y={184} width={40} height={52} rx={4} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
+        <text x={405} y={272} fontSize={9} textAnchor="middle" className="fill-muted-foreground font-mono">
+          {COMP_ASSET.tag}
+        </text>
+
+        {COMP_POINTS.map((point) => {
+          const tone = compPointTone(point);
+          return (
+            <DiagramHotspot
+              key={point.id}
+              x={point.x - 4}
+              y={point.y - 4}
+              width={116}
+              height={40}
+              selected={point.id === selectedId}
+              onSelect={() => onSelect(point.id)}
+              label={`${point.name} at the ${point.location.toLowerCase()}: ${formatReading(point.value, point.unit, point.decimals)}, ${compPointState(point).toLowerCase()}`}
+            >
+              <ValueTag
+                x={point.x}
+                y={point.y}
+                width={108}
+                label={point.tag}
+                mono
+                value={point.value}
+                unit={point.unit}
+                decimals={point.decimals}
+                tone={tone}
+                flag={tone === 'neutral' ? undefined : 'near H'}
+                leaderTo={point.target}
+              />
+            </DiagramHotspot>
+          );
+        })}
+      </DiagramCanvas>
+    </DashboardPanel>
+  );
+}
+
+/** Side inspector: the selected point's dial, limits and 24-hour trend. */
+function CompInspectorPanel({ pointId }: { pointId: string }) {
+  const point = COMP_POINTS.find((candidate) => candidate.id === pointId) ?? COMP_POINTS[0];
+  if (!point) return null;
+  const tone = compPointTone(point);
+  const limits = [
+    { label: 'Low limit', value: point.low },
+    { label: 'High limit', value: point.high },
+    { label: 'Trip limit', value: point.trip },
+    { label: 'Margin to high', value: point.high - point.value },
+  ];
+
+  return (
+    <DashboardPanel title={point.name} description={point.location} footnote={point.finding}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-mono text-xs text-muted-foreground">{point.tag}</span>
+        <StatusIndicator
+          tone={tone === 'neutral' ? 'success' : tone}
+          shape={tone === 'neutral' ? 'dot' : 'square'}
+          label={compPointState(point)}
+          size="sm"
+        />
+      </div>
+      <div className="flex justify-center">
+        <RadialGauge
+          label={point.name}
+          value={point.value}
+          min={0}
+          max={point.rangeMax}
+          unit={point.unit}
+          decimals={point.decimals}
+          limits={{ low: point.low, high: point.high, highHigh: point.trip }}
+          tone={tone}
+          size="md"
+          showLabel={false}
+        />
+      </div>
+      <dl className="grid grid-cols-2 gap-x-6 border-t border-default pt-3">
+        {limits.map((limit) => (
+          <div key={limit.label} className="flex flex-wrap items-baseline justify-between gap-x-2 py-1 text-xs">
+            <dt className="text-muted-foreground">{limit.label}</dt>
+            <dd className="tabular-nums text-base-foreground">
+              {limit.value === undefined ? '—' : formatLimit(limit.value, point.decimals)}
+            </dd>
+          </div>
+        ))}
+      </dl>
       <TrendChart
-        label="Drive-end vibration over the last 24 hours, rising from 5.6 to 6.8 millimetres per second, under the 7.1 high limit and the 11 trip limit, with an alarm at 12:00"
-        series={COMP_VIBRATION_SERIES}
-        limits={COMP_VIBRATION_LIMITS}
-        events={COMP_VIBRATION_EVENTS}
-        yDomain={[4, 12]}
-        yTicks={[4, 6, 8, 10, 12]}
-        unit={COMP_VIBRATION.unit}
-        decimals={1}
+        label={`${point.name} over the last 24 hours, from ${formatReading(point.dayAgo, point.unit, point.decimals)} to ${formatReading(point.value, point.unit, point.decimals)}`}
+        series={[{ key: point.id, label: point.name, points: compPointTrend(point) }]}
+        limits={compPointLimits(point)}
+        yDomain={point.domain}
+        yTicks={point.ticks}
+        unit={point.unit}
+        decimals={point.decimals}
+        maxTicks={3}
         showLast
-        heightClassName="h-64"
+        heightClassName="h-40"
         className="w-full"
       />
-    </DashboardPanel>
-  );
-}
-
-function CompHealthPanel() {
-  return (
-    <DashboardPanel
-      title="Health breakdown"
-      description="Score per condition indicator, 0 to 100"
-      footnote="Watch below 80, poor below 60. Scores are recalculated every hour from live readings and the latest inspections."
-    >
-      <div className="flex items-center gap-4">
-        <ProgressRing label="Overall health" value={COMP_ASSET.healthScore} unit="" decimals={0} size="md" tone="warning" showLabel={false} />
-        <div className="min-w-0 flex-1">
-          <StatusIndicator {...healthStatus(COMP_ASSET.health)} />
-          <p className="mt-1 text-xs text-muted-foreground">Down 7 points in a week, driven by vibration and temperature.</p>
-        </div>
-      </div>
-      <HealthBreakdown indicators={COMP_INDICATORS} label="Compressor health by indicator" className="border-t border-default pt-3" />
-    </DashboardPanel>
-  );
-}
-
-function CompDialsPanel() {
-  return (
-    <DashboardPanel
-      title="Operating readings"
-      description="Suction, discharge and speed against their limits"
-      footnote="All three readings are inside their operating limits; discharge pressure has 3.4 barg left to its high limit."
-    >
-      <ul className="flex w-full flex-wrap items-start justify-around gap-x-4 gap-y-6 py-4">
-        {COMP_DIALS.map((sensor) => (
-          <li key={sensor.id} className="flex min-w-0 flex-col items-center gap-2">
-            <RadialGauge
-              label={sensor.name}
-              value={sensor.value}
-              min={sensor.rangeMin}
-              max={sensor.rangeMax}
-              unit={sensor.unit}
-              decimals={sensor.decimals}
-              limits={{ low: sensor.lowLimit, high: sensor.highLimit, highHigh: sensor.highHighLimit }}
-              size="md"
-            />
-            <p className="text-center text-xs tabular-nums text-muted-foreground">
-              Limits {formatLimit(sensor.lowLimit, sensor.decimals)}–{formatLimit(sensor.highLimit, sensor.decimals)}
-              {sensor.highHighLimit === undefined ? '' : ` · trip ${formatLimit(sensor.highHighLimit, sensor.decimals)}`}
-            </p>
-            <p className="font-mono text-xs text-muted-foreground">{sensor.tag}</p>
-          </li>
-        ))}
-      </ul>
     </DashboardPanel>
   );
 }
@@ -310,118 +481,60 @@ function CompEnvelopePanel() {
   return (
     <DashboardPanel
       title="Operating envelope"
-      description="Pressure ratio against inlet flow, kSm³/h"
-      footnote="Operating at 182 kSm³/h and ratio 3.7, 24% right of the surge limit; the last 24 hours stayed inside the envelope."
+      description="Where the machine runs between the edges of its map"
+      footnote="The operating point is 24% right of the surge limit and inside the band on all three axes."
     >
-      <div className="h-56 w-full">
-        <ChartContainer
-          config={COMP_MAP_CONFIG}
-          className="aspect-auto h-full w-full"
-          aria-label="Compressor map: the operating point at 182 thousand standard cubic metres per hour and pressure ratio 3.7 sits between the surge and choke limits, as did the last 24 hours"
-        >
-          <ComposedChart margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              type="number"
-              dataKey="flow"
-              domain={[100, 240]}
-              ticks={[100, 120, 140, 160, 180, 200, 220, 240]}
-              tickLine={false}
-              axisLine={false}
-              allowDuplicatedCategory={false}
+      <ul className="grid w-full grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-3">
+        {COMP_ENVELOPE.map((axis) => (
+          <li key={axis.id} className="min-w-0">
+            <RangeIndicator
+              label={axis.label}
+              value={axis.value}
+              unit={axis.unit}
+              decimals={axis.decimals}
+              min={axis.min}
+              max={axis.max}
+              limits={{ low: axis.low, high: axis.high }}
             />
-            <YAxis type="number" domain={[2.5, 5]} ticks={[2.5, 3, 3.5, 4, 4.5, 5]} tickLine={false} axisLine={false} width={32} />
-            <Line
-              data={COMP_SURGE_LINE}
-              dataKey="surge"
-              type="monotone"
-              stroke="var(--color-surge)"
-              strokeWidth={2}
-              dot={false}
-              activeDot={false}
-              isAnimationActive={false}
-            />
-            <Line
-              data={COMP_CHOKE_LINE}
-              dataKey="choke"
-              type="monotone"
-              stroke="var(--color-choke)"
-              strokeWidth={2}
-              strokeDasharray="4 4"
-              dot={false}
-              activeDot={false}
-              isAnimationActive={false}
-            />
-            <ZAxis zAxisId="history" range={[24, 24]} />
-            <ZAxis zAxisId="now" range={[140, 140]} />
-            <Scatter data={COMP_MAP_HISTORY} dataKey="history" zAxisId="history" fill="var(--color-history)" isAnimationActive={false} />
-            <Scatter
-              data={COMP_MAP_NOW}
-              dataKey="now"
-              zAxisId="now"
-              fill="var(--color-now)"
-              stroke="var(--color-base-background)"
-              strokeWidth={2}
-              isAnimationActive={false}
-            />
-          </ComposedChart>
-        </ChartContainer>
-      </div>
-      <SeriesLegend items={COMP_MAP_LEGEND} label="Compressor map legend" />
+          </li>
+        ))}
+      </ul>
+    </DashboardPanel>
+  );
+}
+
+function CompHealthPanel() {
+  return (
+    <DashboardPanel
+      title="Health breakdown"
+      description="Score per indicator, 0 to 100"
+      footnote="Watch below 80, poor below 60. Vibration and temperature pull the score down."
+    >
+      <HealthBreakdown indicators={COMP_INDICATORS} label="Compressor health by indicator" />
     </DashboardPanel>
   );
 }
 
 function CompWorkOrdersPanel() {
   return (
-    <DashboardPanel
-      title="Open work orders"
-      description={`${COMP_ORDERS.length} on ${COMP_ASSET.tag}, by priority`}
-      actions={
-        <Button variant="ghost" size="sm">
-          Create work order
-        </Button>
-      }
-    >
-      <table className="w-full table-fixed text-left text-sm">
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="pb-2 pr-3 font-medium">
-              Work order
-            </th>
-            <th scope="col" className="w-16 pb-2 pr-3 font-medium">
-              Priority
-            </th>
-            <th scope="col" className="w-24 pb-2 pr-3 font-medium">
-              Status
-            </th>
-            <th scope="col" className="w-14 pb-2 pr-3 text-right font-medium">
-              Hours
-            </th>
-            <th scope="col" className="w-36 pb-2 font-medium">
-              Due
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {COMP_ORDERS.map((order) => (
-            <tr key={order.id} className="border-t border-default align-top">
-              <td className="py-2 pr-3">
-                <p className="line-clamp-2 text-base-foreground">{order.title}</p>
-                <p className="font-mono text-xs text-muted-foreground">{order.id}</p>
-              </td>
-              <td className="py-2 pr-3">
-                <PriorityBadge priority={order.priority} />
-              </td>
-              <td className="py-2 pr-3 text-medium-foreground">{workOrderStatusLabel(order.status)}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-medium-foreground">{order.hours}</td>
-              <td className="py-2">
+    <DashboardPanel title="Open work orders" description={`${COMP_ORDERS.length} on ${COMP_ASSET.tag}, by priority`}>
+      <ul className="flex w-full flex-col">
+        {COMP_ORDERS.map((order) => (
+          <li key={order.id} className="flex items-start gap-3 border-t border-default py-2 first:border-t-0 first:pt-0">
+            <div className="shrink-0 pt-0.5">
+              <PriorityBadge priority={order.priority} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-sm text-base-foreground">{order.title}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-mono text-xs text-muted-foreground">{order.id}</span>
+                <span className="text-xs text-muted-foreground">{workOrderStatusLabel(order.status)}</span>
                 <DueLabel due={formatDate(order.dueAt)} overdue={order.dueAt < REFERENCE_NOW} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </DashboardPanel>
   );
 }
@@ -432,15 +545,15 @@ function CompRecommendationPanel() {
       <div className="flex flex-col gap-1">
         <p className="text-base font-medium text-base-foreground">Bring the vibration survey forward to this shift</p>
         <p className="text-sm text-medium-foreground">
-          Drive-end vibration is climbing steadily at running speed, which points to developing unbalance or a bearing
-          fault. A survey now decides between a planned stop and running to the next window.
+          Drive-end vibration is climbing at running speed while speed and the far bearing are steady, which points to
+          a developing drive-end bearing fault. A survey now decides between a planned stop and running on.
         </p>
       </div>
       <dl className="flex flex-col border-t border-default">
         {COMP_EVIDENCE.map((item) => (
-          <div key={item.id} className="flex items-baseline justify-between gap-3 border-b border-default py-2 text-sm">
+          <div key={item.id} className="flex flex-wrap items-baseline justify-between gap-x-3 border-b border-default py-2 text-sm">
             <dt className="text-muted-foreground">{item.label}</dt>
-            <dd className="text-right tabular-nums text-base-foreground">{item.value}</dd>
+            <dd className="tabular-nums text-base-foreground">{item.value}</dd>
           </div>
         ))}
       </dl>
@@ -454,8 +567,13 @@ function CompRecommendationPanel() {
   );
 }
 
+/**
+ * Archetype: diagram-first with a side inspector and a footer band.
+ * Dominant element: the cutaway of the compressor train with its measurement callouts.
+ * Interaction: selecting a measurement point on the diagram swaps the inspector's dial, limits and trend.
+ */
 function CompDashboard() {
-  const [range, setRange] = useState('24h');
+  const [selectedId, setSelectedId] = useState('de-bearing');
 
   return (
     <DashboardFrame
@@ -469,39 +587,32 @@ function CompDashboard() {
         </>
       }
       actions={
-        <>
-          <SegmentedControl value={range} onValueChange={(value) => setRange(String(value))}>
-            <SegmentedControlList size="small" aria-label="Time range">
-              <SegmentedControlButton value="24h">24 h</SegmentedControlButton>
-              <SegmentedControlButton value="7d">7 d</SegmentedControlButton>
-              <SegmentedControlButton value="30d">30 d</SegmentedControlButton>
-            </SegmentedControlList>
-          </SegmentedControl>
-          <Button variant="outline" size="sm">
-            <IconExternalLink /> Open asset
-          </Button>
-        </>
+        <Button variant="outline" size="sm">
+          <IconExternalLink /> Open asset
+        </Button>
       }
+      toolbar={<CompFigureStrip />}
     >
       <div className="flex flex-col gap-4">
-        <CompKpiRow />
         <DashboardGrid>
           <DashboardCell span={8}>
-            <CompVibrationPanel />
+            <CompDiagramPanel selectedId={selectedId} onSelect={setSelectedId} />
           </DashboardCell>
+          <DashboardCell span={4}>
+            <CompInspectorPanel pointId={selectedId} />
+          </DashboardCell>
+          <DashboardCell span={12}>
+            <CompEnvelopePanel />
+          </DashboardCell>
+        </DashboardGrid>
+        <DashboardGrid>
           <DashboardCell span={4}>
             <CompHealthPanel />
           </DashboardCell>
-          <DashboardCell span={6}>
-            <CompDialsPanel />
-          </DashboardCell>
-          <DashboardCell span={6}>
-            <CompEnvelopePanel />
-          </DashboardCell>
-          <DashboardCell span={7}>
+          <DashboardCell span={4}>
             <CompWorkOrdersPanel />
           </DashboardCell>
-          <DashboardCell span={5}>
+          <DashboardCell span={4}>
             <CompRecommendationPanel />
           </DashboardCell>
         </DashboardGrid>
@@ -542,24 +653,25 @@ function CompHealthDashSchematic() {
   );
 }
 
-function CompHealthDashKpiRow() {
-  return <CompKpiRow />;
+function CompHealthDashFigures() {
+  return <CompFigureStrip />;
 }
 
-function CompHealthDashVibrationTrend() {
-  return <CompVibrationPanel />;
+function CompHealthDashMachine() {
+  const [selectedId, setSelectedId] = useState('discharge');
+  return <CompDiagramPanel selectedId={selectedId} onSelect={setSelectedId} />;
 }
 
-function CompHealthDashBreakdown() {
-  return <CompHealthPanel />;
-}
-
-function CompHealthDashReadings() {
-  return <CompDialsPanel />;
+function CompHealthDashInspector() {
+  return <CompInspectorPanel pointId="temperature" />;
 }
 
 function CompHealthDashEnvelope() {
   return <CompEnvelopePanel />;
+}
+
+function CompHealthDashBreakdown() {
+  return <CompHealthPanel />;
 }
 
 function CompHealthDashWorkOrders() {
@@ -574,18 +686,18 @@ export default definePage({
   id: 'compressor-health',
   title: 'Compressor health',
   summary:
-    'One machine in depth: how healthy the 1st stage compressor is, which indicator is pulling the score down, where it runs inside its envelope, and what to do next.',
+    'One machine in depth, built around a cutaway of the compressor train: select a measurement point to inspect its dial, limits and trend, then act on the open work and the recommendation underneath.',
   guidance: {
     use: [
       'As the detail screen behind an asset card, an alarm or a bad-actor list.',
-      'When one critical machine justifies its own screen: compressors, turbines, large pumps.',
+      'When where a reading is taken matters as much as its value: bearings, seals, nozzles.',
       'Put the tag, run state and criticality beside the title so the machine is never in doubt.',
       'End with the open work and one recommendation, so the screen leads to an action.',
     ],
     avoid: [
-      'Dials for more than three readings; use a table of tags and limits instead.',
+      'A dial for every point at once; one inspector that follows the selection scales better.',
+      'Colouring the drawing itself by health; tint only the callout that is near a limit.',
       'A trend without its limits, or limits without their values printed on the line.',
-      'A health score with no breakdown; a single number cannot be acted on.',
       'Recommendations without the evidence and the reason behind them.',
     ],
   },
@@ -594,7 +706,8 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Shown in the Blueprint theme: sharp corners and blue-tinted surfaces for engineering users.',
+      description:
+        'Shown in the Blueprint theme. Diagram-first: the machine is the navigation, a side inspector follows the selected point, and work sits in a footer band.',
       specimens: [
         {
           id: 'CompHealthDashSignature',
@@ -608,12 +721,15 @@ export default definePage({
             'dashboards/DashboardFrame.tsx',
             'dashboards/DashboardGrid.tsx',
             'dashboards/DashboardPanel.tsx',
-            'industrial/KpiTile.tsx',
+            'industrial/diagrams/DiagramCanvas.tsx',
+            'industrial/diagrams/DiagramHotspot.tsx',
+            'industrial/diagrams/PipeLine.tsx',
+            'industrial/diagrams/ValueTag.tsx',
             'industrial/RadialGauge.tsx',
-            'industrial/ProgressRing.tsx',
+            'industrial/RangeIndicator.tsx',
+            'industrial/ValueReadout.tsx',
             'industrial/StatusIndicator.tsx',
             'industrial/charts/TrendChart.tsx',
-            'industrial/charts/SeriesLegend.tsx',
             'industrial/operations/HealthBreakdown.tsx',
             'industrial/operations/PriorityBadge.tsx',
             'industrial/operations/DueLabel.tsx',
@@ -669,24 +785,55 @@ export default definePage({
       description: 'Each part on its own, ready to drop into another dashboard.',
       specimens: [
         {
-          id: 'CompHealthDashKpiRow',
-          title: 'Headline figures',
-          note: 'Pick it as the first row: the score, the two readings behind it and the hours run.',
+          id: 'CompHealthDashFigures',
+          title: 'Figure strip',
+          note: 'Pick it instead of a tile row when the figures support a larger element below.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['dashboards/DashboardGrid.tsx', 'industrial/KpiTile.tsx'],
-          Component: CompHealthDashKpiRow,
+          uses: ['industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx'],
+          Component: CompHealthDashFigures,
         },
         {
-          id: 'CompHealthDashVibrationTrend',
-          title: 'Trend with limits',
-          note: 'Pick it when distance to a high or trip limit is the story of the trend.',
+          id: 'CompHealthDashMachine',
+          title: 'Machine diagram',
+          note: 'Pick it when the location of each measurement is how people find it.',
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/charts/TrendChart.tsx'],
-          Component: CompHealthDashVibrationTrend,
+          uses: [
+            'dashboards/DashboardPanel.tsx',
+            'industrial/diagrams/DiagramCanvas.tsx',
+            'industrial/diagrams/DiagramHotspot.tsx',
+            'industrial/diagrams/PipeLine.tsx',
+            'industrial/diagrams/ValueTag.tsx',
+          ],
+          Component: CompHealthDashMachine,
+        },
+        {
+          id: 'CompHealthDashInspector',
+          title: 'Point inspector',
+          note: 'Pick it as the detail beside a diagram or table: one dial, its limits and its trend.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          uses: [
+            'dashboards/DashboardPanel.tsx',
+            'industrial/RadialGauge.tsx',
+            'industrial/StatusIndicator.tsx',
+            'industrial/charts/TrendChart.tsx',
+          ],
+          Component: CompHealthDashInspector,
+        },
+        {
+          id: 'CompHealthDashEnvelope',
+          title: 'Operating envelope',
+          note: 'Pick it to show how far a machine runs from the edges of its map without drawing the map.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          uses: ['dashboards/DashboardPanel.tsx', 'industrial/RangeIndicator.tsx'],
+          Component: CompHealthDashEnvelope,
         },
         {
           id: 'CompHealthDashBreakdown',
@@ -695,40 +842,15 @@ export default definePage({
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: [
-            'dashboards/DashboardPanel.tsx',
-            'industrial/operations/HealthBreakdown.tsx',
-            'industrial/ProgressRing.tsx',
-            'industrial/StatusIndicator.tsx',
-          ],
+          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/HealthBreakdown.tsx'],
           Component: CompHealthDashBreakdown,
-        },
-        {
-          id: 'CompHealthDashReadings',
-          title: 'Three dials',
-          note: 'Pick it for the two or three readings an engineer checks first on a machine.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/RadialGauge.tsx'],
-          Component: CompHealthDashReadings,
-        },
-        {
-          id: 'CompHealthDashEnvelope',
-          title: 'Operating envelope',
-          note: 'Pick it to show where a machine runs between its surge and choke limits.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/charts/SeriesLegend.tsx'],
-          Component: CompHealthDashEnvelope,
         },
         {
           id: 'CompHealthDashWorkOrders',
           title: 'Open work orders',
-          note: 'Pick it to list the open jobs on one asset with priority and due date.',
+          note: 'Pick it to list the open jobs on one asset in a narrow column.',
           origin: 'custom',
-          size: 'lg',
+          size: 'sm',
           align: 'stretch',
           uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/PriorityBadge.tsx', 'industrial/operations/DueLabel.tsx'],
           Component: CompHealthDashWorkOrders,

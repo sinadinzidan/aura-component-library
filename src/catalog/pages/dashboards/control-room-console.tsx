@@ -179,7 +179,7 @@ function consoleLimitText(reading: ConsoleReading): string {
   const { low, high } = reading.limits;
   if (low !== undefined && high !== undefined) return `${formatValue(low, 0)} to ${formatValue(high, Number.isInteger(high) ? 0 : 1)}`;
   if (high !== undefined) return `High ${formatValue(high, Number.isInteger(high) ? 0 : 1)}`;
-  return 'Not judged';
+  return '';
 }
 
 function consoleExtent(points: readonly SeriesPoint[]): readonly [number, number] {
@@ -202,7 +202,9 @@ function ConsoleReadingsStrip({ unitId }: { unitId: string }) {
                 <ValueReadout value={reading.value} unit={reading.unit} decimals={reading.decimals} size="md" tone={state.tone} />
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <StatusIndicator tone={state.tone} label={state.label} shape={state.tone === 'neutral' ? 'ring' : 'diamond'} size="sm" />
-                  <span className="text-xs tabular-nums text-muted-foreground">{consoleLimitText(reading)}</span>
+                  {consoleLimitText(reading) ? (
+                    <span className="text-xs tabular-nums text-muted-foreground">{consoleLimitText(reading)}</span>
+                  ) : null}
                 </span>
               </dd>
             </div>
@@ -405,7 +407,7 @@ function ConsoleDashboard() {
     >
       <div className="flex flex-col gap-4">
         <ConsoleReadingsStrip unitId={unitId} />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,3fr)_minmax(0,6fr)_minmax(0,3fr)]">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,5fr)_minmax(0,10fr)_minmax(0,7fr)]">
           <div className={rail}>
             <ConsoleCompressorRail unitId={unitId} onSelect={setUnitId} />
             <ConsoleAuxiliariesPanel />

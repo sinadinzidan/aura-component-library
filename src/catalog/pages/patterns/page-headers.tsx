@@ -707,14 +707,7 @@ function PageHeaderSticky() {
           as="h2"
           title={COMPRESSOR.name}
           status={<StatusBadge status={COMPRESSOR.state} />}
-          actions={
-            <>
-              <Button size="sm" variant="secondary">
-                Open trend
-              </Button>
-              <Button size="sm">Create work order</Button>
-            </>
-          }
+          actions={<Button size="sm">Create work order</Button>}
         />
       </div>
       <ul className="flex flex-col gap-4 p-4">

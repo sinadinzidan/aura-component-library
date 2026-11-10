@@ -138,7 +138,8 @@ export function ScatterPlot({
                 key={group.key}
                 name={group.label}
                 data={[...group.points]}
-                fill={group.emphasis ? group.color : group.color.replace(/-450\)$/, '-300)')}
+                fill={group.color}
+                fillOpacity={group.emphasis ? 1 : 0.35}
                 stroke={group.color}
                 strokeWidth={group.emphasis ? 2 : 1}
                 isAnimationActive={false}

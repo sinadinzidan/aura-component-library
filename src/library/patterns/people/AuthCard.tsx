@@ -27,7 +27,7 @@ export function AuthCard({ title, description, icon, children, footer, as: Headi
   return (
     <section
       aria-labelledby={titleId}
-      className="flex w-full flex-col gap-6 rounded-xl border border-default bg-card-background p-6"
+      className="flex w-full flex-col gap-6 rounded-xl border border-default bg-base-background p-6"
     >
       <header className="flex flex-col gap-4">
         {icon ? (

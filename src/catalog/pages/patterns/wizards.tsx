@@ -156,10 +156,10 @@ function WizardStepStates() {
       current={2}
       steps={[
         { id: 'done', label: 'Done' },
-        { id: 'error', label: 'Needs attention', state: 'error' },
+        { id: 'error', label: 'Error', state: 'error' },
         { id: 'current', label: 'Current' },
-        { id: 'upcoming', label: 'Not started' },
-        { id: 'disabled', label: 'Not available', state: 'disabled' },
+        { id: 'upcoming', label: 'Upcoming' },
+        { id: 'disabled', label: 'Locked', state: 'disabled' },
       ]}
     />
   );
@@ -478,8 +478,8 @@ function WizardBranching() {
     method === 'file'
       ? [
           { id: 'method', label: 'Method' },
-          { id: 'upload', label: 'Upload file' },
-          { id: 'columns', label: 'Map columns' },
+          { id: 'upload', label: 'Upload' },
+          { id: 'columns', label: 'Columns' },
           { id: 'review', label: 'Review' },
         ]
       : [
@@ -883,7 +883,7 @@ export default definePage({
         {
           id: 'WizardStepStates',
           title: 'Step states',
-          note: 'A reference for the five states: done, needs attention, current, not started and not available.',
+          note: 'A reference for the five states a step can be in; each also differs in shape and in its spoken name.',
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
