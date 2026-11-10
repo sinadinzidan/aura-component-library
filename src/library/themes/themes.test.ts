@@ -76,7 +76,7 @@ describe('theme stylesheet', () => {
   });
 
   it('only references ramp steps that exist in Aura', () => {
-    const references = buildThemeCss().match(/var\(--[\w-]+\)/g) ?? [];
+    const references = buildThemeCss().match(/var\(--[a-z]+-(?:\d+|white)\)/g) ?? [];
 
     expect(references.length).toBeGreaterThan(0);
     for (const reference of new Set(references)) expect(() => rampColor(reference)).not.toThrow();
@@ -135,17 +135,31 @@ describe(parseThemeSettings.name, () => {
       surface: 'neutral',
       shape: 'default',
       contrast: 'high',
+      density: 'default',
+      typeface: 'inter',
     });
   });
 });
 
 describe(themeAttributes.name, () => {
   it('maps settings to root data attributes', () => {
-    expect(themeAttributes({ mode: 'dark', accent: 'dusk', surface: 'tinted', shape: 'soft', contrast: 'high' })).toEqual({
+    expect(
+      themeAttributes({
+        mode: 'dark',
+        accent: 'dusk',
+        surface: 'tinted',
+        shape: 'soft',
+        contrast: 'high',
+        density: 'compact',
+        typeface: 'technical',
+      })
+    ).toEqual({
       'data-accent': 'dusk',
       'data-surface': 'tinted',
       'data-shape': 'soft',
       'data-contrast': 'high',
+      'data-density': 'compact',
+      'data-typeface': 'technical',
     });
   });
 });

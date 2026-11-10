@@ -20,12 +20,16 @@ import {
   ACCENTS,
   CONTRAST_LABELS,
   CONTRASTS,
+  DENSITIES,
+  DENSITY_LABELS,
   sameTheme,
   SHAPE_LABELS,
   SHAPES,
   SURFACE_LABELS,
   SURFACES,
   THEME_PRESETS,
+  TYPEFACE_LABELS,
+  TYPEFACES,
   type Accent,
 } from '../../library/themes/themes';
 import { useCatalogViewModel } from '../state/useCatalogViewModel';
@@ -34,6 +38,7 @@ import { useCatalogViewModel } from '../state/useCatalogViewModel';
 const ACCENT_SWATCH: Record<Accent, string> = {
   mountain: 'bg-mountain-900 dark:bg-mountain-10',
   fjord: 'bg-fjord-700 dark:bg-fjord-300',
+  sky: 'bg-sky-700 dark:bg-sky-300',
   nordic: 'bg-nordic-700 dark:bg-nordic-300',
   aurora: 'bg-aurora-700 dark:bg-aurora-300',
   dusk: 'bg-dusk-700 dark:bg-dusk-300',
@@ -94,7 +99,7 @@ export function ThemeMenu() {
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent align="end" className="max-h-[80vh] w-96 overflow-y-auto">
         <PopoverHeader>
           <PopoverTitle>Theme</PopoverTitle>
           <PopoverDescription>Applies to every variant in the library.</PopoverDescription>
@@ -162,6 +167,20 @@ export function ThemeMenu() {
             labels={CONTRAST_LABELS}
             value={theme.contrast}
             onChange={(contrast) => setTheme({ contrast })}
+          />
+          <Segments
+            label="Density"
+            options={DENSITIES}
+            labels={DENSITY_LABELS}
+            value={theme.density}
+            onChange={(density) => setTheme({ density })}
+          />
+          <Segments
+            label="Typeface"
+            options={TYPEFACES}
+            labels={TYPEFACE_LABELS}
+            value={theme.typeface}
+            onChange={(typeface) => setTheme({ typeface })}
           />
         </div>
       </PopoverContent>

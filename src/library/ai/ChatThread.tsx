@@ -91,15 +91,19 @@ export function ChatThread({
             ) : (
               <Message key={message.id} isResponse>
                 <MessageContent>
-                  {message.reasoning ? (
-                    <ReasoningDisclosure
-                      steps={message.reasoning.steps}
-                      durationSeconds={message.reasoning.durationSeconds}
-                      status={message.reasoning.streaming ? 'streaming' : 'done'}
-                    />
-                  ) : null}
-                  {message.tools && message.tools.length > 0 ? (
-                    <ToolCallList calls={message.tools} collapsible onApprove={onApproveTool} onDeny={onDenyTool} />
+                  {message.reasoning || (message.tools && message.tools.length > 0) ? (
+                    <div className="flex flex-col">
+                      {message.reasoning ? (
+                        <ReasoningDisclosure
+                          steps={message.reasoning.steps}
+                          durationSeconds={message.reasoning.durationSeconds}
+                          status={message.reasoning.streaming ? 'streaming' : 'done'}
+                        />
+                      ) : null}
+                      {message.tools && message.tools.length > 0 ? (
+                        <ToolCallList calls={message.tools} collapsible onApprove={onApproveTool} onDeny={onDenyTool} />
+                      ) : null}
+                    </div>
                   ) : null}
                   {message.status === 'pending' ? <Shimmer as="span">{pendingLabel}</Shimmer> : null}
                   {message.text ? <MessageResponse>{message.text}</MessageResponse> : null}

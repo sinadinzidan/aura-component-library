@@ -79,7 +79,7 @@ describe(useCatalogViewModel.name, () => {
     act(() => result.current.setQuery('gauge'));
 
     expect(lastSynced(channel)).toMatchObject({
-      theme: { mode: 'dark', accent: 'fjord', shape: 'soft', surface: 'neutral', contrast: 'default' },
+      theme: { mode: 'dark', accent: 'fjord', shape: 'soft', surface: 'neutral', contrast: 'default', density: 'default' },
       query: 'gauge',
     });
   });

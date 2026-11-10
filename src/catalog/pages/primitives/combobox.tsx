@@ -313,7 +313,7 @@ function ComboboxMultiOverflow() {
   const id = useId();
   const [people, setPeople] = useState(['ih', 'ms', 'ak', 'tb', 'lw']);
   return (
-    <div className="flex w-full max-w-sm flex-col">
+    <div className="flex w-full max-w-md flex-col">
       <Label htmlFor={id}>Watchers</Label>
       <MultiSelectCombobox
         id={id}
@@ -746,7 +746,7 @@ export default definePage({
         {
           id: 'ComboboxMultiOverflow',
           title: 'Collapsed chips',
-          note: 'Many selections in a field that must stay one line high: show two, count the rest.',
+          note: 'Many selections in a field that should not keep growing: show the first two and count the rest.',
           origin: 'custom',
           size: 'md',
           uses: ['forms/MultiSelectCombobox.tsx'],

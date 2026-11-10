@@ -3,7 +3,8 @@
  * tokens, switched with data attributes on the root element — components and specimens need no
  * changes, because they only ever reference the tokens.
  *
- *   <html class="dark" data-accent="fjord" data-surface="tinted" data-shape="soft" data-contrast="high">
+ *   <html class="dark" data-accent="fjord" data-surface="tinted" data-shape="soft" data-contrast="high"
+ *         data-density="compact" data-typeface="technical">
  *
  * `themes.css` is generated from this file (see themes.test.ts) and is the only thing an app
  * needs to import, after Aura's own stylesheet.
@@ -12,7 +13,7 @@
 export const MODES = ['light', 'dark'] as const;
 export type Mode = (typeof MODES)[number];
 
-export const ACCENTS = ['mountain', 'fjord', 'nordic', 'aurora', 'dusk', 'amber', 'pink'] as const;
+export const ACCENTS = ['mountain', 'fjord', 'sky', 'nordic', 'aurora', 'dusk', 'amber', 'pink'] as const;
 export type Accent = (typeof ACCENTS)[number];
 
 export const SURFACES = ['neutral', 'tinted'] as const;
@@ -24,12 +25,20 @@ export type Shape = (typeof SHAPES)[number];
 export const CONTRASTS = ['default', 'high'] as const;
 export type Contrast = (typeof CONTRASTS)[number];
 
+export const DENSITIES = ['compact', 'default', 'spacious'] as const;
+export type Density = (typeof DENSITIES)[number];
+
+export const TYPEFACES = ['inter', 'grotesk', 'technical'] as const;
+export type Typeface = (typeof TYPEFACES)[number];
+
 export type ThemeSettings = {
   mode: Mode;
   accent: Accent;
   surface: Surface;
   shape: Shape;
   contrast: Contrast;
+  density: Density;
+  typeface: Typeface;
 };
 
 export const DEFAULT_THEME: ThemeSettings = {
@@ -38,11 +47,14 @@ export const DEFAULT_THEME: ThemeSettings = {
   surface: 'neutral',
   shape: 'default',
   contrast: 'default',
+  density: 'default',
+  typeface: 'inter',
 };
 
 export const ACCENT_LABELS: Record<Accent, string> = {
   mountain: 'Mountain',
   fjord: 'Fjord',
+  sky: 'Sky',
   nordic: 'Nordic',
   aurora: 'Aurora',
   dusk: 'Dusk',
@@ -53,6 +65,8 @@ export const ACCENT_LABELS: Record<Accent, string> = {
 export const SURFACE_LABELS: Record<Surface, string> = { neutral: 'Neutral', tinted: 'Tinted' };
 export const SHAPE_LABELS: Record<Shape, string> = { sharp: 'Sharp', default: 'Default', soft: 'Soft' };
 export const CONTRAST_LABELS: Record<Contrast, string> = { default: 'Default', high: 'High' };
+export const DENSITY_LABELS: Record<Density, string> = { compact: 'Compact', default: 'Default', spacious: 'Spacious' };
+export const TYPEFACE_LABELS: Record<Typeface, string> = { inter: 'Inter', grotesk: 'Grotesk', technical: 'Technical' };
 
 export type ThemePreset = {
   id: string;
@@ -63,67 +77,117 @@ export type ThemePreset = {
 
 /** Named starting points. Every combination of the options is valid; these are the curated ones. */
 export const THEME_PRESETS: readonly ThemePreset[] = [
-  {
-    id: 'aura',
-    name: 'Aura',
-    description: 'The design system as shipped: neutral actions on quiet surfaces.',
-    settings: DEFAULT_THEME,
-  },
-  {
-    id: 'aura-dark',
-    name: 'Aura dark',
-    description: 'The default theme for low-light rooms.',
-    settings: { ...DEFAULT_THEME, mode: 'dark' },
-  },
-  {
-    id: 'fjord',
-    name: 'Fjord',
-    description: 'Brand blue actions and links for product surfaces.',
-    settings: { ...DEFAULT_THEME, accent: 'fjord' },
-  },
-  {
-    id: 'control-room',
-    name: 'Control room',
-    description: 'Dark, sharp and high contrast for wall displays and operator consoles.',
-    settings: { mode: 'dark', accent: 'nordic', surface: 'neutral', shape: 'sharp', contrast: 'high' },
-  },
-  {
-    id: 'blueprint',
-    name: 'Blueprint',
-    description: 'Sharp corners and blue-tinted surfaces for engineering tools.',
-    settings: { mode: 'light', accent: 'fjord', surface: 'tinted', shape: 'sharp', contrast: 'default' },
-  },
-  {
-    id: 'field',
-    name: 'Field',
-    description: 'High contrast and soft, large shapes for tablets used outdoors.',
-    settings: { mode: 'light', accent: 'aurora', surface: 'neutral', shape: 'soft', contrast: 'high' },
-  },
-  {
-    id: 'nordic-night',
-    name: 'Nordic night',
-    description: 'Teal on tinted dark surfaces for monitoring views.',
-    settings: { mode: 'dark', accent: 'nordic', surface: 'tinted', shape: 'default', contrast: 'default' },
-  },
-  {
-    id: 'dusk',
-    name: 'Dusk',
-    description: 'Purple accents on soft shapes for analytics and AI features.',
-    settings: { mode: 'light', accent: 'dusk', surface: 'tinted', shape: 'soft', contrast: 'default' },
-  },
-  {
-    id: 'amber-shift',
-    name: 'Amber shift',
-    description: 'Warm accents on dark surfaces for night shifts.',
-    settings: { mode: 'dark', accent: 'amber', surface: 'tinted', shape: 'default', contrast: 'default' },
-  },
-  {
-    id: 'pink-soft',
-    name: 'Pink soft',
-    description: 'A friendly, rounded theme for onboarding and internal tools.',
-    settings: { mode: 'light', accent: 'pink', surface: 'tinted', shape: 'soft', contrast: 'default' },
-  },
+  preset('aura', 'Aura', 'The design system as shipped: neutral actions on quiet surfaces.', {}),
+  preset('aura-dark', 'Aura dark', 'The default theme for low-light rooms.', { mode: 'dark' }),
+  preset('fjord', 'Fjord', 'Brand blue actions and links for product surfaces.', { accent: 'fjord' }),
+  preset('fjord-dark', 'Fjord dark', 'Brand blue on dark surfaces.', { mode: 'dark', accent: 'fjord' }),
+  preset('control-room', 'Control room', 'Dark, sharp, dense and high contrast for operator consoles.', {
+    mode: 'dark',
+    accent: 'nordic',
+    shape: 'sharp',
+    contrast: 'high',
+    density: 'compact',
+  }),
+  preset('wall-display', 'Wall display', 'Dark, spacious and high contrast for screens read from across a room.', {
+    mode: 'dark',
+    accent: 'sky',
+    contrast: 'high',
+    density: 'spacious',
+  }),
+  preset('blueprint', 'Blueprint', 'Sharp corners and blue-tinted surfaces for engineering tools.', {
+    accent: 'fjord',
+    surface: 'tinted',
+    shape: 'sharp',
+  }),
+  preset('schematic', 'Schematic', 'Monospaced, sharp and compact for configuration and tag-heavy tools.', {
+    accent: 'sky',
+    shape: 'sharp',
+    density: 'compact',
+    typeface: 'technical',
+  }),
+  preset('terminal', 'Terminal', 'Monospaced on dark for logs, queries and developer consoles.', {
+    mode: 'dark',
+    accent: 'aurora',
+    shape: 'sharp',
+    density: 'compact',
+    typeface: 'technical',
+  }),
+  preset('field', 'Field', 'High contrast and large, soft shapes for tablets used outdoors.', {
+    accent: 'aurora',
+    shape: 'soft',
+    contrast: 'high',
+    density: 'spacious',
+  }),
+  preset('field-night', 'Field night', 'The field theme for night rounds.', {
+    mode: 'dark',
+    accent: 'amber',
+    shape: 'soft',
+    contrast: 'high',
+    density: 'spacious',
+  }),
+  preset('nordic', 'Nordic', 'Teal actions on neutral surfaces for monitoring products.', { accent: 'nordic' }),
+  preset('nordic-night', 'Nordic night', 'Teal on tinted dark surfaces for views that stay open all shift.', {
+    mode: 'dark',
+    accent: 'nordic',
+    surface: 'tinted',
+  }),
+  preset('aurora', 'Aurora', 'Green accents on tinted surfaces for sustainability and energy views.', {
+    accent: 'aurora',
+    surface: 'tinted',
+  }),
+  preset('dusk', 'Dusk', 'Purple accents on soft shapes for analytics and AI features.', {
+    accent: 'dusk',
+    surface: 'tinted',
+    shape: 'soft',
+  }),
+  preset('dusk-night', 'Dusk night', 'Purple on tinted dark surfaces for AI workspaces.', {
+    mode: 'dark',
+    accent: 'dusk',
+    surface: 'tinted',
+    shape: 'soft',
+  }),
+  preset('amber-shift', 'Amber shift', 'Warm accents on dark surfaces for night shifts.', {
+    mode: 'dark',
+    accent: 'amber',
+    surface: 'tinted',
+  }),
+  preset('sandstone', 'Sandstone', 'Warm tinted surfaces for reports and documents.', {
+    accent: 'amber',
+    surface: 'tinted',
+    density: 'spacious',
+  }),
+  preset('pink-soft', 'Pink soft', 'A friendly, rounded theme for onboarding and internal tools.', {
+    accent: 'pink',
+    surface: 'tinted',
+    shape: 'soft',
+  }),
+  preset('sky', 'Sky', 'Light blue accents for a lighter product tone.', { accent: 'sky', surface: 'tinted' }),
+  preset('editorial', 'Editorial', 'Grotesk type and generous space for landing pages and summaries.', {
+    typeface: 'grotesk',
+    density: 'spacious',
+    shape: 'soft',
+  }),
+  preset('editorial-dark', 'Editorial dark', 'The editorial theme on dark.', {
+    mode: 'dark',
+    accent: 'pink',
+    typeface: 'grotesk',
+    density: 'spacious',
+    shape: 'soft',
+  }),
+  preset('dense-data', 'Dense data', 'Compact and sharp for large tables and trading-style screens.', {
+    shape: 'sharp',
+    density: 'compact',
+  }),
+  preset('accessible', 'Accessible', 'High contrast, default shapes and extra space for maximum legibility.', {
+    accent: 'fjord',
+    contrast: 'high',
+    density: 'spacious',
+  }),
 ];
+
+function preset(id: string, name: string, description: string, overrides: Partial<ThemeSettings>): ThemePreset {
+  return { id, name, description, settings: { ...DEFAULT_THEME, ...overrides } };
+}
 
 type TokenMap = Record<string, string>;
 
@@ -204,6 +268,21 @@ export const SHAPE_RADII: Record<Exclude<Shape, 'default'>, Record<string, numbe
   soft: { xs: 4, sm: 6, md: 10, lg: 12, xl: 18, '2xl': 24, '3xl': 32, '4xl': 40 },
 };
 
+/**
+ * Tailwind's base spacing unit per density. Every padding, gap and control height is a multiple
+ * of it, so one variable tightens or loosens the whole interface. Default is 0.25rem (4px).
+ */
+export const DENSITY_SPACING: Record<Exclude<Density, 'default'>, string> = {
+  compact: '0.21875rem',
+  spacious: '0.28125rem',
+};
+
+/** UI font per typeface, using the families Aura already loads. */
+export const TYPEFACE_FAMILIES: Record<Exclude<Typeface, 'inter'>, string> = {
+  grotesk: "'Space Grotesk', 'Inter', sans-serif",
+  technical: "'Source Code Pro', ui-monospace, monospace",
+};
+
 function block(selector: string, tokens: Record<string, string>): string {
   const lines = Object.entries(tokens).map(([name, value]) => `  --${name}: ${value};`);
   return `${selector} {\n${lines.join('\n')}\n}`;
@@ -212,8 +291,9 @@ function block(selector: string, tokens: Record<string, string>): string {
 const HEADER = `/*
  * Aura theme options. Generated from themes.ts — do not edit by hand.
  * Import after Aura's stylesheet, then set attributes on the root element:
- *   data-accent="mountain|fjord|nordic|aurora|dusk|amber|pink"
+ *   data-accent="mountain|fjord|sky|nordic|aurora|dusk|amber|pink"
  *   data-surface="neutral|tinted"   data-shape="sharp|default|soft"   data-contrast="default|high"
+ *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|technical"
  * Light and dark come from Aura's own .dark class.
  */`;
 
@@ -244,6 +324,14 @@ export function buildThemeCss(): string {
     blocks.push(block(`[data-shape='${shape}']`, tokens));
   }
 
+  for (const [density, spacing] of Object.entries(DENSITY_SPACING)) {
+    blocks.push(block(`[data-density='${density}']`, { spacing }));
+  }
+
+  for (const [typeface, family] of Object.entries(TYPEFACE_FAMILIES)) {
+    blocks.push(block(`[data-typeface='${typeface}']`, { 'font-inter': family }));
+  }
+
   return `${blocks.join('\n\n')}\n`;
 }
 
@@ -254,6 +342,8 @@ export function themeAttributes(settings: ThemeSettings): Record<string, string>
     'data-surface': settings.surface,
     'data-shape': settings.shape,
     'data-contrast': settings.contrast,
+    'data-density': settings.density,
+    'data-typeface': settings.typeface,
   };
 }
 
@@ -271,6 +361,8 @@ export function parseThemeSettings(value: unknown): ThemeSettings {
     surface: isOneOf(SURFACES, record.surface) ? record.surface : DEFAULT_THEME.surface,
     shape: isOneOf(SHAPES, record.shape) ? record.shape : DEFAULT_THEME.shape,
     contrast: isOneOf(CONTRASTS, record.contrast) ? record.contrast : DEFAULT_THEME.contrast,
+    density: isOneOf(DENSITIES, record.density) ? record.density : DEFAULT_THEME.density,
+    typeface: isOneOf(TYPEFACES, record.typeface) ? record.typeface : DEFAULT_THEME.typeface,
   };
 }
 
@@ -280,6 +372,8 @@ export function sameTheme(a: ThemeSettings, b: ThemeSettings): boolean {
     a.accent === b.accent &&
     a.surface === b.surface &&
     a.shape === b.shape &&
-    a.contrast === b.contrast
+    a.contrast === b.contrast &&
+    a.density === b.density &&
+    a.typeface === b.typeface
   );
 }

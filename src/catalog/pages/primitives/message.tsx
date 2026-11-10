@@ -58,10 +58,10 @@ The recompressor **23-KA-9103** tripped at 13:46 on *high drive-end vibration*.
 const CODE_ANSWER = `Use the time series external ID \`23-PT-92531\` with hourly aggregates:
 
 \`\`\`python
-points = client.time_series.data.retrieve(
+series = client.time_series.data
+points = series.retrieve(
     external_id="23-PT-92531",
     start="24h-ago",
-    end="now",
     aggregates=["average", "max"],
     granularity="1h",
 )
@@ -69,12 +69,12 @@ points = client.time_series.data.retrieve(
 
 const TABLE_ANSWER = `Active alarms in gas compression, most severe first:
 
-| Alarm | Severity | Tag | Value | Limit |
-| --- | --- | --- | --- | --- |
-| Recompressor tripped on high vibration | Critical | 23-VT-92740 | 11.6 mm/s | 11.0 mm/s |
-| Discharge temperature high | High | 23-TT-92532 | 146.3 °C | 145.0 °C |
-| Drive-end vibration approaching limit | High | 23-VT-92540 | 6.8 mm/s | 7.1 mm/s |
-| Cooler outlet temperature high | Medium | 23-TT-91141 | 40.8 °C | 40.0 °C |`;
+| Alarm | Severity | Tag | Value |
+| --- | --- | --- | --- |
+| Recompressor tripped on high vibration | Critical | 23-VT-92740 | 11.6 mm/s |
+| Discharge temperature high | High | 23-TT-92532 | 146.3 °C |
+| Drive-end vibration approaching limit | High | 23-VT-92540 | 6.8 mm/s |
+| Cooler outlet temperature high | Medium | 23-TT-91141 | 40.8 °C |`;
 
 const QUOTE_ANSWER = `The operating manual sets the trip level:
 
@@ -93,7 +93,7 @@ A ratio of $3.70$ is inside the normal operating envelope.`;
 const DIAGRAM_ANSWER = `The likely chain of events:
 
 \`\`\`mermaid
-flowchart LR
+flowchart TD
   A[Bearing wear] --> B[Vibration rises]
   B --> C[Trip limit passed]
   C --> D[Recompressor trips]
@@ -742,7 +742,7 @@ export default definePage({
           title: 'Table',
           note: 'The default table renderer, for a handful of rows that need no interaction.',
           origin: 'aura',
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
           Component: MessageMarkdownTable,
         },
@@ -751,7 +751,7 @@ export default definePage({
           title: 'Table as data grid',
           note: 'Opt in for longer results: resizable columns, paging, expand and CSV download.',
           origin: 'aura',
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
           Component: MessageTableGrid,
         },

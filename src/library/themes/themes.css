@@ -1,8 +1,9 @@
 /*
  * Aura theme options. Generated from themes.ts — do not edit by hand.
  * Import after Aura's stylesheet, then set attributes on the root element:
- *   data-accent="mountain|fjord|nordic|aurora|dusk|amber|pink"
+ *   data-accent="mountain|fjord|sky|nordic|aurora|dusk|amber|pink"
  *   data-surface="neutral|tinted"   data-shape="sharp|default|soft"   data-contrast="default|high"
+ *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|technical"
  * Light and dark come from Aura's own .dark class.
  */
 
@@ -47,6 +48,50 @@
   --secondary-background: var(--fjord-800);
   --secondary-background-hover: var(--fjord-700);
   --secondary-foreground: var(--fjord-100);
+  --muted-foreground: var(--mountain-400);
+}
+
+[data-accent='sky'] {
+  --primary-background: var(--sky-700);
+  --primary-background-hover: var(--sky-800);
+  --primary-foreground: var(--mountain-white);
+  --ring-default: var(--sky-600);
+  --link-foreground: var(--sky-700);
+  --link-foreground-hover: var(--sky-800);
+}
+
+.dark[data-accent='sky'],
+.dark [data-accent='sky'],
+[data-accent='sky'] .dark {
+  --primary-background: var(--sky-300);
+  --primary-background-hover: var(--sky-200);
+  --primary-foreground: var(--sky-950);
+  --ring-default: var(--sky-400);
+  --link-foreground: var(--sky-300);
+  --link-foreground-hover: var(--sky-200);
+}
+
+[data-accent='sky'][data-surface='tinted'] {
+  --muted-background: var(--sky-50);
+  --muted-background-hover: var(--sky-100);
+  --card-background: var(--sky-50);
+  --card-background-hover: var(--sky-100);
+  --secondary-background: var(--sky-100);
+  --secondary-background-hover: var(--sky-200);
+  --secondary-foreground: var(--sky-800);
+  --muted-foreground: var(--mountain-650);
+}
+
+.dark[data-accent='sky'][data-surface='tinted'],
+.dark [data-accent='sky'][data-surface='tinted'],
+[data-accent='sky'][data-surface='tinted'] .dark {
+  --muted-background: var(--sky-950);
+  --muted-background-hover: var(--sky-900);
+  --card-background: var(--sky-900);
+  --card-background-hover: var(--sky-800);
+  --secondary-background: var(--sky-800);
+  --secondary-background-hover: var(--sky-700);
+  --secondary-foreground: var(--sky-100);
   --muted-foreground: var(--mountain-400);
 }
 
@@ -308,4 +353,20 @@
   --radius-2xl: 24px;
   --radius-3xl: 32px;
   --radius-4xl: 40px;
+}
+
+[data-density='compact'] {
+  --spacing: 0.21875rem;
+}
+
+[data-density='spacious'] {
+  --spacing: 0.28125rem;
+}
+
+[data-typeface='grotesk'] {
+  --font-inter: 'Space Grotesk', 'Inter', sans-serif;
+}
+
+[data-typeface='technical'] {
+  --font-inter: 'Source Code Pro', ui-monospace, monospace;
 }

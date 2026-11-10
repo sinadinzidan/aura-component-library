@@ -852,7 +852,7 @@ export default definePage({
         {
           id: 'SelectRowsPerPage',
           title: 'Rows per page',
-          note: 'A table footer: an inline label, a narrow small select and the resulting range.',
+          note: 'A table footer: an inline label, a narrow select and the resulting range.',
           origin: 'custom',
           Component: SelectRowsPerPage,
         },

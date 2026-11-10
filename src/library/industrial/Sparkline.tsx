@@ -98,8 +98,8 @@ export function Sparkline({
       {band ? (
         <rect
           data-slot="sparkline-band"
-          x={0}
-          width={VIEW_WIDTH}
+          x={box.paddingX}
+          width={VIEW_WIDTH - box.paddingX * 2}
           y={scaleY(band.high, resolvedDomain, box)}
           height={Math.max(scaleY(band.low, resolvedDomain, box) - scaleY(band.high, resolvedDomain, box), 0)}
           className="fill-chart-neutral-100"
@@ -154,8 +154,8 @@ export function Sparkline({
       {limitY !== undefined ? (
         <line
           data-slot="sparkline-limit"
-          x1={0}
-          x2={VIEW_WIDTH}
+          x1={box.paddingX}
+          x2={VIEW_WIDTH - box.paddingX}
           y1={limitY}
           y2={limitY}
           strokeWidth={1}

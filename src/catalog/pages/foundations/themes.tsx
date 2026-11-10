@@ -11,12 +11,16 @@ import {
   CONTRAST_LABELS,
   CONTRASTS,
   DEFAULT_THEME,
+  DENSITIES,
+  DENSITY_LABELS,
   SHAPE_LABELS,
   SHAPES,
   SURFACE_LABELS,
   SURFACES,
   THEME_PRESETS,
   themeAttributes,
+  TYPEFACE_LABELS,
+  TYPEFACES,
   type ThemeSettings,
 } from '../../../library/themes/themes';
 import { definePage } from '../../types';
@@ -28,12 +32,15 @@ const APPLY_SNIPPET = `/* styles.css */
 @import './library/themes/themes.css';
 
 <!-- index.html: pick any combination -->
-<html class="dark" data-accent="nordic" data-surface="tinted" data-shape="sharp" data-contrast="high">`;
+<html class="dark" data-accent="nordic" data-surface="tinted" data-shape="sharp"
+      data-contrast="high" data-density="compact" data-typeface="technical">`;
 
 const SCOPE_SNIPPET = `import { themeAttributes } from '@/library/themes/themes';
 
 // Theme one region only, for example a wall-display panel inside a light app.
-<section className="dark" {...themeAttributes({ mode: 'dark', accent: 'amber', surface: 'tinted', shape: 'sharp', contrast: 'high' })}>
+const wallDisplay = THEME_PRESETS.find((preset) => preset.id === 'wall-display').settings;
+
+<section className="dark" {...themeAttributes(wallDisplay)}>
   …
 </section>`;
 
@@ -127,32 +134,88 @@ function ThemesPresetFjord() {
   return <PresetSample presetId="fjord" />;
 }
 
+function ThemesPresetFjordDark() {
+  return <PresetSample presetId="fjord-dark" />;
+}
+
 function ThemesPresetControlRoom() {
   return <PresetSample presetId="control-room" />;
+}
+
+function ThemesPresetWallDisplay() {
+  return <PresetSample presetId="wall-display" />;
 }
 
 function ThemesPresetBlueprint() {
   return <PresetSample presetId="blueprint" />;
 }
 
+function ThemesPresetSchematic() {
+  return <PresetSample presetId="schematic" />;
+}
+
+function ThemesPresetTerminal() {
+  return <PresetSample presetId="terminal" />;
+}
+
 function ThemesPresetField() {
   return <PresetSample presetId="field" />;
+}
+
+function ThemesPresetFieldNight() {
+  return <PresetSample presetId="field-night" />;
+}
+
+function ThemesPresetNordic() {
+  return <PresetSample presetId="nordic" />;
 }
 
 function ThemesPresetNordicNight() {
   return <PresetSample presetId="nordic-night" />;
 }
 
+function ThemesPresetAurora() {
+  return <PresetSample presetId="aurora" />;
+}
+
 function ThemesPresetDusk() {
   return <PresetSample presetId="dusk" />;
+}
+
+function ThemesPresetDuskNight() {
+  return <PresetSample presetId="dusk-night" />;
 }
 
 function ThemesPresetAmberShift() {
   return <PresetSample presetId="amber-shift" />;
 }
 
+function ThemesPresetSandstone() {
+  return <PresetSample presetId="sandstone" />;
+}
+
 function ThemesPresetPinkSoft() {
   return <PresetSample presetId="pink-soft" />;
+}
+
+function ThemesPresetSky() {
+  return <PresetSample presetId="sky" />;
+}
+
+function ThemesPresetEditorial() {
+  return <PresetSample presetId="editorial" />;
+}
+
+function ThemesPresetEditorialDark() {
+  return <PresetSample presetId="editorial-dark" />;
+}
+
+function ThemesPresetDenseData() {
+  return <PresetSample presetId="dense-data" />;
+}
+
+function ThemesPresetAccessible() {
+  return <PresetSample presetId="accessible" />;
 }
 
 function ThemesAccentOptions() {
@@ -209,6 +272,26 @@ function ThemesContrastOptions() {
   );
 }
 
+function ThemesDensityOptions() {
+  return (
+    <div className="flex w-full flex-col gap-2">
+      {DENSITIES.map((density) => (
+        <OptionRow key={density} label={DENSITY_LABELS[density]} settings={{ ...DEFAULT_THEME, density }} />
+      ))}
+    </div>
+  );
+}
+
+function ThemesTypefaceOptions() {
+  return (
+    <div className="flex w-full flex-col gap-2">
+      {TYPEFACES.map((typeface) => (
+        <OptionRow key={typeface} label={TYPEFACE_LABELS[typeface]} settings={{ ...DEFAULT_THEME, typeface }} />
+      ))}
+    </div>
+  );
+}
+
 function ThemesApplyGlobally() {
   return <Snippet code={APPLY_SNIPPET} />;
 }
@@ -221,7 +304,7 @@ export default definePage({
   id: 'themes',
   title: 'Themes',
   summary:
-    'Every variant in the library can be shown in any theme. A theme overrides a handful of Aura tokens — accent, surface, shape and contrast — on top of light or dark, so components never change.',
+    'Every variant in the library can be shown in any theme. A theme overrides a handful of Aura tokens — accent, surface, shape, contrast, density and typeface — on top of light or dark, so components never change.',
   guidance: {
     use: [
       'Pick one theme per product and keep it; switch only light and dark per user.',
@@ -242,12 +325,12 @@ export default definePage({
       id: 'presets',
       title: 'Presets',
       description:
-        'Ten curated combinations. Dark presets always preview dark; the others follow the mode you are in.',
+        'Twenty-four curated combinations. Dark presets always preview dark; the others follow the mode you are in.',
       specimens: [
         {
           id: 'ThemesPresetAura',
           title: 'Aura',
-          note: 'The default: pick it unless the product has a reason to differ.',
+          note: 'The design system as shipped: neutral actions on quiet surfaces.',
           origin: 'aura',
           size: 'md',
           align: 'stretch',
@@ -256,7 +339,7 @@ export default definePage({
         {
           id: 'ThemesPresetAuraDark',
           title: 'Aura dark',
-          note: 'The default for low-light rooms and users who prefer dark.',
+          note: 'The default theme for low-light rooms.',
           origin: 'aura',
           size: 'md',
           align: 'stretch',
@@ -265,7 +348,7 @@ export default definePage({
         {
           id: 'ThemesPresetFjord',
           title: 'Fjord',
-          note: 'Brand blue actions and links for customer-facing product surfaces.',
+          note: 'Brand blue actions and links for product surfaces.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -273,9 +356,19 @@ export default definePage({
           Component: ThemesPresetFjord,
         },
         {
+          id: 'ThemesPresetFjordDark',
+          title: 'Fjord dark',
+          note: 'Brand blue on dark surfaces.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetFjordDark,
+        },
+        {
           id: 'ThemesPresetControlRoom',
           title: 'Control room',
-          note: 'Wall displays and operator consoles: dark, sharp, high contrast.',
+          note: 'Dark, sharp, dense and high contrast for operator consoles.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -283,9 +376,19 @@ export default definePage({
           Component: ThemesPresetControlRoom,
         },
         {
+          id: 'ThemesPresetWallDisplay',
+          title: 'Wall display',
+          note: 'Dark, spacious and high contrast for screens read from across a room.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetWallDisplay,
+        },
+        {
           id: 'ThemesPresetBlueprint',
           title: 'Blueprint',
-          note: 'Engineering and configuration tools: sharp corners on blue-tinted surfaces.',
+          note: 'Sharp corners and blue-tinted surfaces for engineering tools.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -293,9 +396,29 @@ export default definePage({
           Component: ThemesPresetBlueprint,
         },
         {
+          id: 'ThemesPresetSchematic',
+          title: 'Schematic',
+          note: 'Monospaced, sharp and compact for configuration and tag-heavy tools.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetSchematic,
+        },
+        {
+          id: 'ThemesPresetTerminal',
+          title: 'Terminal',
+          note: 'Monospaced on dark for logs, queries and developer consoles.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetTerminal,
+        },
+        {
           id: 'ThemesPresetField',
           title: 'Field',
-          note: 'Tablets used outdoors: high contrast and large, soft shapes.',
+          note: 'High contrast and large, soft shapes for tablets used outdoors.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -303,9 +426,29 @@ export default definePage({
           Component: ThemesPresetField,
         },
         {
+          id: 'ThemesPresetFieldNight',
+          title: 'Field night',
+          note: 'The field theme for night rounds.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetFieldNight,
+        },
+        {
+          id: 'ThemesPresetNordic',
+          title: 'Nordic',
+          note: 'Teal actions on neutral surfaces for monitoring products.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetNordic,
+        },
+        {
           id: 'ThemesPresetNordicNight',
           title: 'Nordic night',
-          note: 'Monitoring views that stay open all shift: teal on tinted dark surfaces.',
+          note: 'Teal on tinted dark surfaces for views that stay open all shift.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -313,9 +456,19 @@ export default definePage({
           Component: ThemesPresetNordicNight,
         },
         {
+          id: 'ThemesPresetAurora',
+          title: 'Aurora',
+          note: 'Green accents on tinted surfaces for sustainability and energy views.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetAurora,
+        },
+        {
           id: 'ThemesPresetDusk',
           title: 'Dusk',
-          note: 'Analytics and AI features that should feel distinct from operations.',
+          note: 'Purple accents on soft shapes for analytics and AI features.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -323,9 +476,19 @@ export default definePage({
           Component: ThemesPresetDusk,
         },
         {
+          id: 'ThemesPresetDuskNight',
+          title: 'Dusk night',
+          note: 'Purple on tinted dark surfaces for AI workspaces.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetDuskNight,
+        },
+        {
           id: 'ThemesPresetAmberShift',
           title: 'Amber shift',
-          note: 'Night shifts: warm accents on dark surfaces are easier on adapted eyes.',
+          note: 'Warm accents on dark surfaces for night shifts.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -333,21 +496,81 @@ export default definePage({
           Component: ThemesPresetAmberShift,
         },
         {
+          id: 'ThemesPresetSandstone',
+          title: 'Sandstone',
+          note: 'Warm tinted surfaces for reports and documents.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetSandstone,
+        },
+        {
           id: 'ThemesPresetPinkSoft',
           title: 'Pink soft',
-          note: 'Onboarding and internal tools where a friendlier tone fits.',
+          note: 'A friendly, rounded theme for onboarding and internal tools.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
           uses: ['themes/themes.css', 'themes/themes.ts'],
           Component: ThemesPresetPinkSoft,
         },
+        {
+          id: 'ThemesPresetSky',
+          title: 'Sky',
+          note: 'Light blue accents for a lighter product tone.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetSky,
+        },
+        {
+          id: 'ThemesPresetEditorial',
+          title: 'Editorial',
+          note: 'Grotesk type and generous space for landing pages and summaries.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetEditorial,
+        },
+        {
+          id: 'ThemesPresetEditorialDark',
+          title: 'Editorial dark',
+          note: 'The editorial theme on dark.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetEditorialDark,
+        },
+        {
+          id: 'ThemesPresetDenseData',
+          title: 'Dense data',
+          note: 'Compact and sharp for large tables and trading-style screens.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetDenseData,
+        },
+        {
+          id: 'ThemesPresetAccessible',
+          title: 'Accessible',
+          note: 'High contrast, default shapes and extra space for maximum legibility.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetAccessible,
+        },
       ],
     },
     {
       id: 'options',
       title: 'Options',
-      description: 'The four axes behind the presets. Any combination is valid: 7 accents × 2 surfaces × 3 shapes × 2 contrasts × 2 modes.',
+      description: 'The six axes behind the presets. Any combination is valid: 8 accents × 2 surfaces × 3 shapes × 2 contrasts × 3 densities × 3 typefaces × 2 modes — 1,728 themes.',
       specimens: [
         {
           id: 'ThemesAccentOptions',
@@ -388,6 +611,26 @@ export default definePage({
           align: 'stretch',
           uses: ['themes/themes.css', 'themes/themes.ts'],
           Component: ThemesShapeOptions,
+        },
+        {
+          id: 'ThemesDensityOptions',
+          title: 'Density',
+          note: 'Compact for dense tables and consoles, spacious for touch and distance viewing; every padding, gap and height scales.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesDensityOptions,
+        },
+        {
+          id: 'ThemesTypefaceOptions',
+          title: 'Typeface',
+          note: 'Inter for product UI, Grotesk for editorial and marketing surfaces, Technical for tag-heavy and developer tools.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesTypefaceOptions,
         },
         {
           id: 'ThemesContrastOptions',

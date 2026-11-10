@@ -87,15 +87,14 @@ function HoverCardBasic() {
 function HoverCardInSentence() {
   return (
     <p className="max-w-xs text-sm text-base-foreground">
-      The recompressor tripped at 13:46 and{' '}
       <HoverCard>
         <HoverCardTrigger render={<a href="#work-order" className={LINK} onClick={stay} />}>WO-104482</HoverCardTrigger>
-        <HoverCardContent>
+        <HoverCardContent align="start">
           <p className="text-sm font-semibold text-base-foreground">{WORK_ORDERS[0].title}</p>
           <p className="pt-1 text-sm text-muted-foreground">Corrective, priority P1, in progress.</p>
         </HoverCardContent>
       </HoverCard>{' '}
-      was raised to inspect the drive-end bearing.
+      was raised when the recompressor tripped at 13:46, to inspect the drive-end bearing.
     </p>
   );
 }

@@ -42,7 +42,9 @@ export function ToolCallList({ calls, collapsible = false, defaultOpen = false, 
     <Collapsible open={open} onOpenChange={setUserOpen}>
       <CollapsibleTrigger className="-ml-3 w-fit gap-2">
         <IconTool aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-        <span>{summarizeToolCalls(calls)}</span>
+        <span className="text-base leading-5 font-normal tracking-tighter text-muted-foreground">
+          {summarizeToolCalls(calls)}
+        </span>
         <IconChevronDown
           aria-hidden
           className={`size-4 shrink-0 text-muted-foreground transition-transform duration-200 ${open ? 'rotate-180' : ''}`}

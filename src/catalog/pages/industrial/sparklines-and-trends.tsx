@@ -314,7 +314,7 @@ function SparklineSmallMultiples() {
 }
 
 function SparklineTagTable() {
-  const rows = SENSORS.slice(0, 9).map((sensor) => ({
+  const rows = [...SENSORS.slice(0, 4), ...SENSORS.slice(6)].map((sensor) => ({
     sensor,
     values: sensor.quality === 'bad' ? [] : sensorTrend(sensor, 48, sensor.seed % 3 === 0 ? (sensor.highLimit - sensor.lowLimit) * 0.12 : 0),
   }));

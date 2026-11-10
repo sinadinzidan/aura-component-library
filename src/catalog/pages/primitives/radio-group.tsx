@@ -372,17 +372,17 @@ function RadioGroupChoiceCardGrid() {
   const [plan, setPlan] = useState('hourly');
   return (
     <div className="my-auto w-full">
-    <ChoiceCardGroup
-      label="Run schedule"
-      layout="grid"
-      value={plan}
-      onValueChange={setPlan}
-      options={[
-        { value: 'hourly', label: 'Every hour', description: 'For dashboards that operators watch.' },
-        { value: 'daily', label: 'Every day', description: 'For reports read the next morning.' },
-        { value: 'manual', label: 'Manually', description: 'For one-off backfills and tests.' },
-      ]}
-    />
+      <ChoiceCardGroup
+        label="Run schedule"
+        layout="grid"
+        value={plan}
+        onValueChange={setPlan}
+        options={[
+          { value: 'hourly', label: 'Every hour', description: 'For dashboards that operators watch.' },
+          { value: 'daily', label: 'Every day', description: 'For reports read the next morning.' },
+          { value: 'manual', label: 'Manually', description: 'For one-off backfills and tests.' },
+        ]}
+      />
     </div>
   );
 }

@@ -3,7 +3,8 @@
 
 @source '../node_modules/@cognite/aura/dist/components';
 
-:root {
+/* On `html`, not `:root`, so the typeface themes (attribute selectors) can override it. */
+html {
   --font-inter: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-source-code-pro: "Source Code Pro", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;

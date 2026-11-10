@@ -38,6 +38,8 @@ type CommandPaletteProps = {
   groups: readonly CommandPaletteGroup[];
   /** Text on the button that opens the palette. */
   triggerLabel?: string;
+  /** `sm` for a topbar or toolbar, `default` elsewhere. */
+  triggerSize?: 'default' | 'sm';
   placeholder?: string;
   emptyMessage?: string;
   /** Accessible title of the dialog. */
@@ -55,6 +57,7 @@ type CommandPaletteProps = {
 export function CommandPalette({
   groups,
   triggerLabel = 'Search or run a command',
+  triggerSize = 'default',
   placeholder = 'Type a command or search',
   emptyMessage = 'No matching commands.',
   title = 'Command palette',
@@ -82,7 +85,7 @@ export function CommandPalette({
 
   return (
     <>
-      <Button variant="outline" className="w-full justify-start" onClick={() => setOpen(true)}>
+      <Button variant="outline" size={triggerSize} className="w-full justify-start" onClick={() => setOpen(true)}>
         <IconSearch />
         <span className="min-w-0 flex-1 truncate text-left">{triggerLabel}</span>
         {hotkey ? (
