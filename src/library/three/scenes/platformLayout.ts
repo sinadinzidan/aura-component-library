@@ -107,7 +107,7 @@ export function platformCameraTarget(layout: PlatformLayout, framing: PlatformFr
     view: 'perspective',
     aspect: framing.aspect,
     fov: framing.fov,
-    padding: level ? (isJacket ? 0.95 : 0.8) : 0.82,
+    padding: level ? (isJacket ? 0.9 : 0.74) : 0.8,
     minDistance: 30,
   });
 }

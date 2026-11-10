@@ -288,7 +288,7 @@ function FormSettingsTemplateCentred() {
           </FormField>
         </FormSection>
         <FormSection title="Planning" description="Priority decides the order in the planner.">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 @lg:grid-cols-2">
             <FormField label="Priority" required>
               {(control) => <OptionSelect {...control} options={FORM_SETTINGS_PRIORITY_OPTIONS} defaultValue="P1" />}
             </FormField>
@@ -818,7 +818,7 @@ function FormSettingsTemplateUnsaved() {
           <FormField label="Name" required>
             {(control) => <Input {...control} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />}
           </FormField>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 @lg:grid-cols-2">
             <FormField label="Area">
               {(control) => <OptionSelect {...control} options={FORM_SETTINGS_AREA_OPTIONS} value={draft.area} onValueChange={(area) => setDraft({ ...draft, area })} />}
             </FormField>
