@@ -67,7 +67,7 @@ export function PipeRun({ points, radius = 0.25, flow = false, flowTone, spacing
         <group ref={chevrons}>
           {Array.from({ length: count }, (_, index) => (
             <mesh key={index}>
-              <coneGeometry args={[radius * 1.9, radius * 3.4, 10]} />
+              <coneGeometry args={[radius * 1.5, radius * 2.8, 10]} />
               <meshBasicMaterial color={palette[flowTone ?? 'accent'].color} transparent opacity={dimmed ? 0.2 : 0.95} depthWrite={!dimmed} />
             </mesh>
           ))}

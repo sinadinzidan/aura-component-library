@@ -124,6 +124,23 @@ export function viewportFor(layout: PlanLayout, node: Pick<DrillNode, 'id' | 'le
   return { x: place.cx - width / 2, y: place.cy - height / 2, width, height };
 }
 
+/**
+ * The zoom factor at which every area, and every machine, is framed: the smallest over each
+ * level. Detail layers key off these instead of fixed numbers, so the reveal works whatever the
+ * proportions of the plan.
+ */
+export function levelScales(layout: PlanLayout, tree: DrillTree): { area: number; equipment: number; sensor: number } {
+  const smallest = (nodes: readonly DrillNode[], fallback: number): number =>
+    nodes.length === 0 ? fallback : Math.min(...nodes.map((node) => layout.world.width / viewportFor(layout, node).width));
+  const areas = tree.root.children;
+  const area = smallest(areas, PLAN_ZOOM.area);
+  const equipment = Math.max(area, smallest(areas.flatMap((node) => node.children), PLAN_ZOOM.equipment));
+  return { area, equipment, sensor: Math.max(equipment, PLAN_ZOOM.sensor) };
+}
+
+/** A zoom factor part of the way from one level's scale to the next. */
+export const between = (from: number, to: number, share: number): number => from + (to - from) * share;
+
 /** Zoom factor of a viewport: 1 shows the whole world. */
 export const viewportScale = (layout: PlanLayout, viewport: PlanRect): number => layout.world.width / viewport.width;
 

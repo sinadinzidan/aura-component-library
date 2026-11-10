@@ -22,7 +22,7 @@ export function StorageTank({ diameter = 10, height = 8, fill = 0.5, hovered, se
   const { frame, steel } = useEquipmentMaterials({ hovered, selected, dimmed });
   const radius = diameter / 2;
   const level = Math.min(1, Math.max(0, fill)) * (height - 0.2);
-  const fade = dimmed ? 0.3 : 1;
+  const fade = dimmed ? 0.18 : 1;
 
   return (
     <EquipmentBase {...base} dimmed={dimmed} beaconRadius={radius + 1}>

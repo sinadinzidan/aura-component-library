@@ -85,6 +85,6 @@ describe(GlassPanel.name, () => {
 
     const region = screen.getByRole('region', { name: 'Train A' });
     expect(region).toHaveAttribute('data-receded', 'true');
-    expect(region).toHaveClass('opacity-60');
+    expect(region).toHaveClass('scale-[0.97]');
   });
 });

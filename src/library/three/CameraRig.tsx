@@ -23,9 +23,8 @@ export type CameraRigProps = {
   onArrive?: () => void;
 };
 
-type Flight = { from: CameraTarget; to: CameraTarget; elapsed: number };
-
-const MAX_STEP = 0.05;
+/** `startedAt` is set on the flight's first frame, so a slow first render does not eat the animation. */
+type Flight = { from: CameraTarget; to: CameraTarget; startedAt: number | null };
 
 /**
  * Orbit controls plus a smooth fly-to. Drive it with a `target` (see `frameBounds` and
@@ -80,19 +79,21 @@ export function CameraRig({
     flight.current = {
       from: { position: [camera.position.x, camera.position.y, camera.position.z], lookAt: [orbit.target.x, orbit.target.y, orbit.target.z] },
       to: next,
-      elapsed: 0,
+      startedAt: null,
     };
     invalidate();
     // `apply` only touches refs and the camera; the key carries the target's values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetKey, reducedMotion, duration, camera, invalidate]);
 
-  useFrame((_, delta) => {
+  useFrame((state) => {
     const current = flight.current;
     if (!current) return;
-    current.elapsed += Math.min(delta, MAX_STEP);
-    apply(interpolateTarget(current.from, current.to, current.elapsed / duration));
-    if (current.elapsed >= duration) {
+    const now = state.clock.elapsedTime;
+    current.startedAt ??= now;
+    const progress = (now - current.startedAt) / duration;
+    apply(interpolateTarget(current.from, current.to, progress));
+    if (progress >= 1) {
       flight.current = null;
       onArriveRef.current?.();
     }

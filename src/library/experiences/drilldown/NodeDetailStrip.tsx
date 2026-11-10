@@ -24,6 +24,8 @@ export type NodeDetailStripProps = {
  */
 export function NodeDetailStrip({ node, metrics, activeMetric, period = '24 h', className }: NodeDetailStripProps) {
   const values = node.series.map((point) => point.v);
+  // A sensor's figure is named after the sensor, which the strip already prints.
+  const figureLabel = node.level === 'sensor' ? 'Value' : node.figure.label;
 
   return (
     <div data-slot="node-detail-strip" className={cn('flex min-w-0 flex-wrap items-center gap-x-8 gap-y-3', className)}>
@@ -52,14 +54,14 @@ export function NodeDetailStrip({ node, metrics, activeMetric, period = '24 h', 
       <div className="flex w-52 shrink-0 flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className={cn(LABEL_TEXT, 'truncate')}>
-            {node.figure.label}, {period}
+            {figureLabel}, {period}
           </span>
           <ValueReadout value={node.figure.value} unit={node.figure.unit} decimals={node.figure.decimals} size="xs" tone={node.figure.tone} />
         </div>
         {values.length > 1 ? (
           <Sparkline
             values={values}
-            label={`${node.figure.label} of ${node.name}, ${period}`}
+            label={`${figureLabel} of ${node.name}, ${period}`}
             unit={node.figure.unit}
             decimals={node.figure.decimals}
             height={28}

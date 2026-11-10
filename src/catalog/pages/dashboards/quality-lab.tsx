@@ -15,7 +15,7 @@ import { RUN_RULE_TEXT, capability, mean, runRuleViolations, sampleStdDev } from
 import type { ControlLimits, RunRule } from '../../../library/industrial/domains/spc';
 import { StageFlow } from '../../../library/industrial/domains/StageFlow';
 import type { Stage } from '../../../library/industrial/domains/StageFlow';
-import { formatReading, formatValue } from '../../../library/industrial/status';
+import { formatLimit, formatReading, formatValue } from '../../../library/industrial/status';
 import type { StatusDescriptor } from '../../../library/industrial/status';
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { ValueReadout } from '../../../library/industrial/ValueReadout';
@@ -178,7 +178,7 @@ function QualityLabSpecBar({ sample }: { sample: QualityLabSample }) {
   return (
     <span
       role="img"
-      aria-label={`${formatReading(sample.result, parameter.unit, parameter.decimals)}, ${inSpec ? 'inside' : 'outside'} the specification of ${formatValue(parameter.lsl, 1)} to ${formatValue(parameter.usl, 1)}`}
+      aria-label={`${formatReading(sample.result, parameter.unit, parameter.decimals)}, ${inSpec ? 'inside' : 'outside'} the specification of ${formatLimit(parameter.lsl, 1)} to ${formatLimit(parameter.usl, 1)}`}
       className="relative block h-1.5 w-full rounded-full bg-chart-neutral-100"
     >
       <span className="absolute inset-y-0 left-[14.3%] right-[14.3%] bg-chart-neutral-200" />
@@ -237,7 +237,7 @@ function QualityLabQueuePanel({ samples, selectedId, onSelect }: QualityLabQueue
             <th scope="col" className="pb-2 pr-3 font-medium">
               Analysis
             </th>
-            <th scope="col" className="w-44 pb-2 pr-3 font-medium">
+            <th scope="col" className="w-48 pb-2 pr-3 font-medium">
               Result against spec
             </th>
             <th scope="col" className="w-40 pb-2 pr-2 font-medium">
@@ -255,14 +255,14 @@ function QualityLabQueuePanel({ samples, selectedId, onSelect }: QualityLabQueue
                 key={sample.id}
                 aria-selected={selected}
                 onClick={() => onSelect(sample.id)}
-                className={`cursor-pointer border-t border-default align-top ${selected ? 'bg-muted-background' : 'hover:bg-muted-background'}`}
+                className={`cursor-pointer border-t border-default align-top ${selected ? 'bg-card-background-hover' : 'hover:bg-card-background-hover'}`}
               >
-                <td className="py-2.5 pl-2 pr-3">
+                <td className={`border-l-2 py-2.5 pl-2 pr-3 ${selected ? 'border-l-base-foreground' : 'border-l-transparent'}`}>
                   <button
                     type="button"
                     aria-pressed={selected}
                     aria-label={`Inspect sample ${sample.id}`}
-                    className={`rounded-md font-mono text-sm text-base-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus ${selected ? 'font-semibold' : ''}`}
+                    className={`rounded-md font-mono text-sm text-base-foreground outline-none focus-visible:shadow-focus-ring ${selected ? 'font-semibold' : ''}`}
                   >
                     {sample.id}
                   </button>
@@ -275,12 +275,12 @@ function QualityLabQueuePanel({ samples, selectedId, onSelect }: QualityLabQueue
                 </td>
                 <td className="py-2.5 pr-3">
                   <div className="flex flex-col gap-1.5">
-                    <p className="flex flex-wrap items-baseline justify-between gap-x-2">
+                    <p className="flex flex-col">
                       <span className={`font-medium tabular-nums ${inSpec ? 'text-base-foreground' : 'text-critical-foreground-strong'}`}>
                         {sample.result === null ? 'Pending' : formatReading(sample.result, parameter.unit, parameter.decimals)}
                       </span>
                       <span className="text-xs tabular-nums text-muted-foreground">
-                        {formatValue(parameter.lsl, 1)} to {formatValue(parameter.usl, 1)}
+                        Spec {formatLimit(parameter.lsl, 1)} to {formatLimit(parameter.usl, 1)}
                       </span>
                     </p>
                     <QualityLabSpecBar sample={sample} />
@@ -353,7 +353,7 @@ function QualityLabCapabilityPanel({ sample }: { sample: QualityLabSample }) {
   return (
     <DashboardPanel
       title="Capability"
-      description={`Against ${formatValue(parameter.lsl, 1)} to ${formatReading(parameter.usl, parameter.unit, 1)}`}
+      description={`Against ${formatLimit(parameter.lsl, 1)} to ${formatLimit(parameter.usl, 1)}${parameter.unit ? ` ${parameter.unit}` : ''}`}
       footnote={`Cpk ${formatValue(result.cpk, 2)}: the nearest limit is ${formatValue(result.cpk * 3, 1)} standard deviations from the mean.`}
     >
       <CapabilitySummary label={parameter.name} values={values} lsl={parameter.lsl} usl={parameter.usl} unit={parameter.unit} decimals={parameter.decimals} bins={12} height={120} />
@@ -385,7 +385,7 @@ function QualityLabJourneyPanel({ sample }: { sample: QualityLabSample }) {
         current={sample.stage}
         complete={sample.stage === 'approved'}
         currentTone={sample.held ? 'critical' : 'neutral'}
-        currentNote={sample.held ? `Held: above the ${formatReading(parameter.usl, parameter.unit, 1)} limit` : undefined}
+        currentNote={sample.held ? `Held: above the ${formatLimit(parameter.usl, 1)} ${parameter.unit} limit` : undefined}
         orientation="vertical"
       />
     </DashboardPanel>

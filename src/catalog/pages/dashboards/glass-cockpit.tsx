@@ -137,8 +137,8 @@ const GLASS_COCKPIT_CAUTIONS: readonly CautionItem[] = ALARMS.filter((alarm) => 
 const GLASS_COCKPIT_COLUMNS: Record<GlassCockpitPanelId | 'none', string> = {
   none: '1fr 1.9fr 1fr',
   primary: '0.92fr 2.2fr 0.92fr',
-  left: '1.45fr 1.55fr 0.92fr',
-  right: '0.92fr 1.55fr 1.45fr',
+  left: '1.35fr 1.8fr 0.92fr',
+  right: '0.92fr 1.8fr 1.35fr',
   alerts: '1fr 1.9fr 1fr',
 };
 
@@ -171,75 +171,78 @@ function GlassCockpitPrimaryDisplay({ mode }: { mode: GlassCockpitMode }) {
   const deviation = variable.value - variable.setpoint;
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[auto_minmax(0,1fr)] gap-5">
-      <TapeIndicator
-        label={variable.name}
-        value={variable.value}
-        unit={variable.unit}
-        decimals={variable.decimals}
-        span={variable.span}
-        majorStep={variable.majorStep}
-        minorPerMajor={variable.minorPerMajor}
-        min={variable.min}
-        max={variable.max}
-        setpoint={variable.setpoint}
-        limits={variable.limits}
-      />
-      <div className="flex min-h-0 min-w-0 flex-col justify-between gap-3">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-          <div>
-            <ValueReadout value={variable.value} unit={variable.unit} decimals={variable.decimals} size="xl" tone={tone} />
-            <p className="font-mono text-xs text-muted-foreground">{variable.tag}</p>
-          </div>
-          <dl className="flex gap-6 text-xs text-muted-foreground">
-            <div>
-              <dt>Setpoint</dt>
-              <dd className="text-base font-semibold tabular-nums text-base-foreground">{variable.setpoint.toFixed(variable.decimals)}</dd>
-            </div>
-            <div>
-              <dt>Deviation</dt>
-              <dd className="text-base font-semibold tabular-nums text-base-foreground">{formatDelta(deviation, variable.decimals)}</dd>
-            </div>
-            <div>
-              <dt>High limit</dt>
-              <dd className="text-base font-semibold tabular-nums text-base-foreground">{variable.limits.high}</dd>
-            </div>
-          </dl>
-        </div>
-        <div>
-          <p className="pb-1 text-xs text-muted-foreground">Last 60 minutes, dashed line at the high limit</p>
-          <Sparkline
-            values={variable.trend}
-            label={`${variable.name}, last 60 minutes`}
-            variant="area"
-            height={88}
-            tone={tone}
-            showLast
-            limit={variable.limits.high}
-            unit={variable.unit}
-            decimals={variable.decimals}
-          />
-        </div>
+    <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-3">
+      <div className="grid min-h-0 grid-cols-[auto_minmax(0,1fr)] gap-5">
         <TapeIndicator
-          label="Shaft speed"
-          value={9840}
-          unit="rpm"
-          span={1600}
-          majorStep={400}
-          minorPerMajor={4}
-          min={0}
-          max={12000}
-          setpoint={9900}
-          limits={{ low: 7000, high: 10500 }}
-          orientation="horizontal"
-          length={340}
+          label={variable.name}
+          value={variable.value}
+          unit={variable.unit}
+          decimals={variable.decimals}
+          span={variable.span}
+          majorStep={variable.majorStep}
+          minorPerMajor={variable.minorPerMajor}
+          min={variable.min}
+          max={variable.max}
+          setpoint={variable.setpoint}
+          limits={variable.limits}
+          length={250}
         />
+        <div className="flex min-h-0 min-w-0 flex-col justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+            <div>
+              <ValueReadout value={variable.value} unit={variable.unit} decimals={variable.decimals} size="xl" tone={tone} />
+              <p className="font-mono text-xs text-muted-foreground">{variable.tag}</p>
+            </div>
+            <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+              <div>
+                <dt>Setpoint</dt>
+                <dd className="text-base font-semibold tabular-nums text-base-foreground">{variable.setpoint.toFixed(variable.decimals)}</dd>
+              </div>
+              <div>
+                <dt>Deviation</dt>
+                <dd className="text-base font-semibold tabular-nums text-base-foreground">{formatDelta(deviation, variable.decimals)}</dd>
+              </div>
+              <div>
+                <dt>High limit</dt>
+                <dd className="text-base font-semibold tabular-nums text-base-foreground">{variable.limits.high}</dd>
+              </div>
+            </dl>
+          </div>
+          <div>
+            <p className="pb-1 text-xs text-muted-foreground">Last 60 minutes, dashed line at the high limit</p>
+            <Sparkline
+              values={variable.trend}
+              label={`${variable.name}, last 60 minutes`}
+              variant="area"
+              height={72}
+              tone={tone}
+              showLast
+              limit={variable.limits.high}
+              unit={variable.unit}
+              decimals={variable.decimals}
+            />
+          </div>
+        </div>
       </div>
+      <TapeIndicator
+        label="Shaft speed"
+        value={9840}
+        unit="rpm"
+        span={2400}
+        majorStep={400}
+        minorPerMajor={4}
+        min={0}
+        max={12000}
+        setpoint={9900}
+        limits={{ low: 7000, high: 10500 }}
+        orientation="horizontal"
+        length={470}
+      />
     </div>
   );
 }
 
-function GlassCockpitScreen() {
+function GlassCockpitScreen({ animated = false }: { animated?: boolean }) {
   const [mode, setMode] = useState<GlassCockpitMode>('pressure');
   const [focus, setFocus] = useState<GlassCockpitPanelId | null>(null);
   const [cautions, setCautions] = useState(GLASS_COCKPIT_CAUTIONS);
@@ -251,8 +254,8 @@ function GlassCockpitScreen() {
   const acknowledge = (id: string) => setCautions((items) => items.map((item) => (item.id === id ? { ...item, acknowledged: true } : item)));
 
   return (
-    <div className="relative h-[46rem] w-full overflow-hidden rounded-xl border border-default">
-      <ContourBackdrop />
+    <div className="relative h-[48rem] w-full overflow-hidden rounded-xl border border-default">
+      <ContourBackdrop animated={animated} />
       <div className="relative grid h-full grid-rows-[auto_minmax(0,1fr)_auto] gap-3 p-4">
         <header className={`flex flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-2 ${GLASS_COCKPIT_BAR}`}>
           <div className="min-w-0">
@@ -289,7 +292,7 @@ function GlassCockpitScreen() {
 function GlassCockpitExperience() {
   return (
     <ThemeScope preset="neon-dusk" className="w-full">
-      <GlassCockpitScreen />
+      <GlassCockpitScreen animated />
     </ThemeScope>
   );
 }
@@ -313,7 +316,7 @@ function GlassCockpitAuraDark() {
 function GlassCockpitPanel() {
   return (
     <div className="relative w-full overflow-hidden rounded-xl p-6">
-      <ContourBackdrop lines={10} />
+      <ContourBackdrop lines={10} animated={false} />
       <GlassPanel title="Export header" caption="27-PT-20010" className="relative">
         <ValueReadout value={131.4} unit="barg" decimals={1} size="lg" />
         <p className="pt-1 text-xs text-muted-foreground">Steady for 6 hours</p>
@@ -327,7 +330,7 @@ function GlassCockpitFocusStates() {
 
   return (
     <div className="relative w-full overflow-hidden rounded-xl p-6">
-      <ContourBackdrop lines={10} />
+      <ContourBackdrop lines={10} animated={false} />
       <div className="relative grid grid-cols-2 gap-4">
         <GlassPanel
           title="Stage 1"
@@ -395,7 +398,7 @@ function GlassCockpitTapeOutsideLimits() {
 function GlassCockpitEngineDisplay() {
   return (
     <div className="relative w-full max-w-xs overflow-hidden rounded-xl p-4">
-      <ContourBackdrop lines={10} />
+      <ContourBackdrop lines={10} animated={false} />
       <GlassPanel title={GLASS_COCKPIT_ENGINE_ONE.title} caption={GLASS_COCKPIT_ENGINE_ONE.tag} className="relative">
         <GlassCockpitEngineGauges engine={GLASS_COCKPIT_ENGINE_ONE} />
       </GlassPanel>
@@ -524,7 +527,7 @@ export default definePage({
     {
       id: 'themes',
       title: 'In other themes',
-      description: 'The same screen, unchanged, in two more presets. Glass, glow and backdrop all come from the theme accent.',
+      description: 'The same screen in two more presets, with the backdrop held still. Glass, glow and backdrop all come from the theme accent.',
       specimens: [
         {
           id: 'GlassCockpitHologram',

@@ -84,7 +84,9 @@ export function MonthGrid({
                         {count > MAX_DOTS ? <span className="text-xs tabular-nums text-muted-foreground">+{count - MAX_DOTS}</span> : null}
                       </>
                     ) : count > 0 ? (
-                      <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+                      <span data-slot="month-grid-count" className="text-xs tabular-nums text-muted-foreground">
+                        {count}
+                      </span>
                     ) : null}
                   </span>
                 </>

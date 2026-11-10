@@ -36,7 +36,7 @@ export function LineStatusStrip({ label, stations, showSummary = true, className
 
   return (
     <div data-slot="line-status-strip" className={cn('flex w-full min-w-0 flex-col gap-3', className)}>
-      <ol aria-label={`${label} stations in flow order`} className="grid grid-cols-[repeat(auto-fit,minmax(5.5rem,1fr))] gap-1">
+      <ol aria-label={`${label} stations in flow order`} className="grid grid-cols-[repeat(auto-fit,minmax(4.75rem,1fr))] gap-1">
         {stations.map((station) => {
           const status = stationStatus(station.state);
           return (

@@ -1,8 +1,8 @@
 import { TrendChart } from '../../industrial/charts/TrendChart';
-import type { TrendLimit } from '../../industrial/charts/TrendChart';
-import { formatLimit, formatReading } from '../../industrial/status';
+import { formatReading } from '../../industrial/status';
 
 import type { DrillNode } from './hierarchy';
+import { trendFrame } from './trendFrame';
 
 export type SensorTrendProps = {
   /** A sensor node: its `series` is plotted against the limits of its `reading`. */
@@ -34,25 +34,16 @@ export function SensorTrend({ node, period = 'last 24 hours', heightClassName = 
 
   const { limits, unit, decimals } = reading;
   const values = node.series.map((point) => point.v);
-  const lines: TrendLimit[] = [];
-  if (limits.highHigh !== undefined) lines.push({ value: limits.highHigh, label: `Trip ${formatLimit(limits.highHigh, decimals)}`, tone: 'critical' });
-  if (limits.high !== undefined) lines.push({ value: limits.high, label: `High ${formatLimit(limits.high, decimals)}`, tone: 'warning' });
-  if (limits.low !== undefined && limits.low > reading.rangeMin) lines.push({ value: limits.low, label: `Low ${formatLimit(limits.low, decimals)}`, tone: 'neutral' });
-
   const low = Math.min(...values);
   const high = Math.max(...values);
-  // Show the nearest limits without flattening the line: pad the data by a third of the band.
-  const band = (limits.high ?? high) - (limits.low ?? low);
-  const pad = Math.max(band * 0.15, (high - low) * 0.2, 10 ** -decimals);
-  const top = Math.max(high, limits.high ?? high, Math.min(limits.highHigh ?? high, high + band)) + pad;
-  const bottom = Math.max(reading.rangeMin, Math.min(low, limits.low !== undefined && limits.low > reading.rangeMin ? limits.low : low) - pad);
+  const { lines, bottom, top } = trendFrame(low, high, reading);
 
   return (
     <TrendChart
       label={`${node.name} (${node.tag}), ${period}: between ${formatReading(low, unit, decimals)} and ${formatReading(high, unit, decimals)}`}
       series={[{ key: 'value', label: node.name, points: node.series, variant: 'area' }]}
       limits={lines}
-      band={limits.low !== undefined && limits.high !== undefined ? { low: Math.max(limits.low, bottom), high: limits.high } : undefined}
+      band={limits.low !== undefined && limits.high !== undefined ? { low: Math.max(limits.low, bottom), high: Math.min(limits.high, top) } : undefined}
       yDomain={[bottom, top]}
       unit={unit}
       decimals={decimals}

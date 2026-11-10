@@ -29,11 +29,18 @@ const VERTICAL =
   "before:content-['│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│_│']";
 
 function HorizontalRun() {
-  return <span aria-hidden="true" className={cn('min-w-0 flex-1 overflow-hidden whitespace-nowrap', HORIZONTAL)} />;
+  // Positioned, so the long run never adds to the pane's own width.
+  return <span aria-hidden="true" className={cn('relative min-w-[1ch] flex-1 overflow-hidden whitespace-nowrap before:absolute before:left-0 before:top-0', HORIZONTAL)} />;
 }
 
 function VerticalRun() {
-  return <span aria-hidden="true" className={cn('w-[1ch] shrink-0 overflow-hidden break-words', VERTICAL)} />;
+  // Positioned, so the long run never adds to the pane's own height.
+  return (
+    <span
+      aria-hidden="true"
+      className={cn('relative w-[1ch] shrink-0 overflow-hidden before:absolute before:left-0 before:top-0 before:w-[1ch] before:break-words', VERTICAL)}
+    />
+  );
 }
 
 /**

@@ -37,12 +37,12 @@ const NODE_FILL: Record<SankeySeries, string> = {
 };
 
 const LINK_FILL: Record<SankeySeries, string> = {
-  1: 'fill-chart-1-300',
-  2: 'fill-chart-2-300',
-  3: 'fill-chart-3-300',
-  4: 'fill-chart-4-300',
-  5: 'fill-chart-5-300',
-  neutral: 'fill-chart-neutral-300',
+  1: 'fill-chart-1-400',
+  2: 'fill-chart-2-400',
+  3: 'fill-chart-3-400',
+  4: 'fill-chart-4-400',
+  5: 'fill-chart-5-400',
+  neutral: 'fill-chart-neutral-400',
 };
 
 const percent = (fraction: number): string => `${Math.round(fraction * 10000) / 100}%`;
@@ -82,7 +82,8 @@ export function SankeyDiagram({ nodes, links, unit, decimals = 0, label, selecti
       className={cn(
         'flex cursor-pointer flex-col rounded-md px-1.5 py-0.5 outline-none transition-opacity motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring-default)]',
         align === 'end' ? 'items-end text-right' : 'items-start text-left',
-        active && !path.nodes.has(node.id) ? 'opacity-50' : undefined,
+        // Names stay readable when their node is off the lit path; only the marks dim.
+        active && !path.nodes.has(node.id) ? 'opacity-75' : undefined,
         isSelected('node', node.id) ? 'bg-muted-background' : 'hover:bg-muted-background'
       )}
     >
@@ -110,7 +111,7 @@ export function SankeyDiagram({ nodes, links, unit, decimals = 0, label, selecti
   return (
     <div
       data-slot="sankey-diagram"
-      className={cn('grid h-[27rem] w-full min-w-0 grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_minmax(0,7.5rem)] gap-1', className)}
+      className={cn('grid h-[27rem] w-full min-w-0 grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)_minmax(0,7.5rem)] gap-1 pt-6', className)}
     >
       {gutter(firstColumn, 'end')}
       <div className="relative h-full min-w-0">
@@ -142,7 +143,7 @@ export function SankeyDiagram({ nodes, links, unit, decimals = 0, label, selecti
                 className={cn(
                   'cursor-pointer outline-none transition-opacity duration-200 motion-reduce:transition-none focus-visible:stroke-[color:var(--ring-default)] focus-visible:stroke-2',
                   LINK_FILL[linkSeries.get(link.id) ?? 'neutral'],
-                  active ? (lit ? 'opacity-90' : 'opacity-20') : 'opacity-55'
+                  active ? (lit ? 'opacity-90' : 'opacity-25') : 'opacity-60'
                 )}
               >
                 <title>{text}</title>
@@ -175,7 +176,7 @@ export function SankeyDiagram({ nodes, links, unit, decimals = 0, label, selecti
           .map((node) => (
             <div
               key={node.id}
-              className="absolute -translate-y-full [&>button]:flex-row [&>button]:items-baseline [&>button]:gap-1.5 [&>button]:whitespace-nowrap"
+              className="absolute -translate-y-full [&>button]:flex-row [&>button]:items-baseline [&>button]:gap-1.5 [&>button]:whitespace-nowrap [&>button:not(:hover)]:bg-[color-mix(in_oklab,var(--card-background)_72%,transparent)]"
               style={{ left: percent(node.x / BOX.width), top: percent(node.y / BOX.height) }}
             >
               {nodeButton(node, 'start')}

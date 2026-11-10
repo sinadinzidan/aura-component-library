@@ -56,7 +56,7 @@ describe(RadarScope.name, () => {
     const { container } = render(<RadarScope groups={GROUPS} label="Scope" />);
 
     expect(container.querySelector('[data-slot="reticle"]')).toHaveAttribute('data-locked', 'false');
-    expect(container.querySelector('[data-slot="reticle"]')).toHaveStyle({ transform: 'translate(220px, 220px)' });
+    expect(container.querySelector('[data-slot="reticle"]')).toHaveStyle({ transform: 'translate(210px, 210px)' });
     expect(container.querySelector('[data-slot="radar-bearing"]')).not.toBeInTheDocument();
   });
 

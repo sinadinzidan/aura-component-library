@@ -45,10 +45,10 @@ export function GlassPanel({ title, caption, focused = false, receded = false, o
       aria-label={title}
       onClick={onFocusChange && !focused ? () => onFocusChange(true) : undefined}
       className={cn(
-        'relative flex min-h-0 min-w-0 flex-col rounded-xl border transition-[transform,opacity,box-shadow,border-color] duration-300 motion-reduce:transition-none',
+        'relative flex min-h-0 min-w-0 flex-col rounded-xl border transition-[transform,filter,box-shadow,border-color] duration-300 motion-reduce:transition-none',
         SURFACE,
         focused ? cn(BORDER_FOCUS, 'z-10') : BORDER_REST,
-        receded && 'scale-[0.97] opacity-60',
+        receded && 'scale-[0.97] brightness-[0.62] saturate-[0.7]',
         onFocusChange && !focused && 'cursor-pointer',
         className
       )}

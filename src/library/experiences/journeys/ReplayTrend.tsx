@@ -66,7 +66,7 @@ export function ReplayTrend({ signal, from, to, cursor, domain, eventTimes = [],
         aria-label={`${signal.label} up to the playhead: ${formatReading(reading.value, signal.unit, signal.decimals)}, ${ALARM_LABEL[reading.alarm].toLowerCase()}`}
         viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
         preserveAspectRatio="none"
-        className="block h-[4.5rem] w-full rounded-md bg-muted-background"
+        className="block h-full min-h-[4.5rem] w-full self-stretch rounded-md bg-base-background"
         fill="none"
       >
         {eventTimes

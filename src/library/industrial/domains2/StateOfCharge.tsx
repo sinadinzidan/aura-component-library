@@ -47,16 +47,16 @@ export function StateOfCharge({ label, charge, capacity, power, reserve = 0, cla
 
   return (
     <div data-slot="state-of-charge" data-mode={runtime.mode} data-tone={tone} className={cn('flex w-full min-w-0 flex-col gap-3', className)}>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className={cn(LABEL_TEXT, 'truncate')}>{label}</span>
+      <span className={LABEL_TEXT}>{label}</span>
+
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <ValueReadout size="lg" value={level} unit="%" tone={tone} />
         <span data-slot="charge-mode" className={cn('inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium', TONE_TEXT[mode.tone])}>
           <mode.Icon aria-hidden className="size-3.5" />
           {mode.label}
           {runtime.mode === 'idle' ? null : <span className="tabular-nums">{formatValue(Math.abs(power), 1)} MW</span>}
         </span>
       </div>
-
-      <ValueReadout size="lg" value={level} unit="%" tone={tone} />
 
       <div role="img" aria-label={name} className="flex items-center gap-0.5">
         <div className="relative h-6 flex-1 rounded-md border border-emphasized p-0.5">

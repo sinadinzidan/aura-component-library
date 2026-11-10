@@ -31,7 +31,7 @@ const STREAM = 'stroke-[color-mix(in_oklab,var(--primary-background)_90%,var(--b
 export function ContourBackdrop({ lines = 22, streamEvery = 3, animated = true, className }: ContourBackdropProps) {
   const reducedMotion = usePrefersReducedMotion();
   const moving = animated && !reducedMotion;
-  const paths = contourPaths({ width: WIDTH, height: HEIGHT, count: lines, step: 16, amplitude: 1.8 });
+  const paths = contourPaths({ width: WIDTH, height: HEIGHT, count: lines, step: 16, amplitude: 1.3 });
 
   return (
     <div

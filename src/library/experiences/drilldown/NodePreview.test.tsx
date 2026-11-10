@@ -37,7 +37,7 @@ describe(NodePreview.name, () => {
   it('shows equipment as health plus its live readings', () => {
     render(<NodePreview node={node('comp-1')} formatAge={formatAge} />);
 
-    expect(screen.getByText('Measurement points').nextElementSibling).toHaveTextContent('2');
+    expect(screen.getByText('Sensors').nextElementSibling).toHaveTextContent('2');
     expect(screen.getByText('Readings')).toBeInTheDocument();
     expect(screen.getByText('Discharge temperature')).toBeInTheDocument();
     expect(screen.getByText('Above high limit')).toBeInTheDocument();

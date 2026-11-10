@@ -29,7 +29,7 @@ export function NodeRow({ node, showChevron = false, className }: NodeRowProps) 
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-sm leading-5 text-base-foreground">{node.name}</span>
-        <span className="flex items-baseline justify-between gap-2">
+        <span className="flex flex-wrap items-baseline justify-between gap-x-2">
           <span className="font-mono text-xs text-muted-foreground">{node.tag}</span>
           <span className={cn('shrink-0 text-xs font-medium tabular-nums', abnormal ? TONE_TEXT[node.figure.tone] : 'text-base-foreground')}>
             {formatValue(node.figure.value, node.figure.decimals)}

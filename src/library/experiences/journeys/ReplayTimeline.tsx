@@ -116,11 +116,15 @@ export function ReplayTimeline({
           className="absolute left-0 top-[3.25rem] h-1.5 rounded-full bg-primary-background"
           style={{ width: percent(position) }}
         />
-        {ticks.map((tick) => (
+        {ticks.map((tick, index) => (
           <span
             key={tick}
             aria-hidden
-            className="absolute top-[4.25rem] flex -translate-x-1/2 flex-col items-center gap-0.5 text-xs text-muted-foreground tabular-nums"
+            className={cn(
+              'absolute top-[4.25rem] flex flex-col gap-0.5 text-xs text-muted-foreground tabular-nums',
+              // The first and last labels stay inside the track instead of hanging over its ends.
+              index === 0 ? 'items-start' : index === ticks.length - 1 ? '-translate-x-full items-end' : '-translate-x-1/2 items-center'
+            )}
             style={{ left: percent(timeFraction(tick, from, to)) }}
           >
             <span className="h-1.5 border-l border-emphasized" />

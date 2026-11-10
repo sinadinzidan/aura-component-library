@@ -115,6 +115,12 @@ describe(createDrillReducer.name, () => {
     expect(run([{ type: 'focus-step', delta: 1 }, { type: 'focus-step', delta: 1 }], start).focusId).toBe('comp-1');
   });
 
+  it('previews the child the keyboard lands on, like a hover', () => {
+    const start = run([{ type: 'drill', id: 'area-b' }]);
+
+    expect(reduce(start, { type: 'focus-step', delta: 1 }).hoverId).toBe('comp-3');
+  });
+
   it('only focuses children of the current node', () => {
     const start = createDrillState(tree);
 

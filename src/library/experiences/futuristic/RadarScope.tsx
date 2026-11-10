@@ -41,7 +41,7 @@ export type RadarScopeProps = {
   className?: string;
 };
 
-const SIZE = 440;
+const SIZE = 420;
 const CENTER = SIZE / 2;
 const OUTER = 176;
 const INNER = 26;
@@ -198,7 +198,9 @@ export function RadarScope({
       {blips.map((blip) => {
         const isLocked = blip.item.id === lockedId;
         const blipTone = blip.item.tone ?? 'accent';
-        const leftSide = blip.x < CENTER;
+        // Labels near the rim point inwards so they never leave the scope; near the core, outwards.
+        const nearRim = blip.radius > OUTER * 0.85;
+        const leftSide = nearRim ? blip.x >= CENTER : blip.x < CENTER;
         return (
           <g
             key={blip.item.id}

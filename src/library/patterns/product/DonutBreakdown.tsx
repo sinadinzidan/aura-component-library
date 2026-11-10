@@ -91,7 +91,7 @@ export function DonutBreakdown({
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
           {center ?? (
             <>
-              <span data-slot="donut-total" className="text-xl font-semibold tabular-nums text-base-foreground">
+              <span data-slot="donut-total" className="text-lg font-semibold tabular-nums text-base-foreground">
                 {format(total)}
               </span>
               {totalLabel ? <span className="text-xs text-muted-foreground">{totalLabel}</span> : null}

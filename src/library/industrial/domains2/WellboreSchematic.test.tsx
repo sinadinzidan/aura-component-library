@@ -42,7 +42,15 @@ describe(WellboreSchematic.name, () => {
   it('places labels at their depth on the scale', () => {
     renderSchematic();
 
-    expect(screen.getByText('Tubing end').parentElement?.style.top).toBe('82.86%');
+    expect(screen.getByText('13⅜ in surface casing').parentElement?.style.top).toBe('40%');
+  });
+
+  it('moves labels at nearly the same depth apart', () => {
+    renderSchematic();
+
+    const top = (text: string) => parseFloat(screen.getByText(text).parentElement?.style.top ?? '');
+    expect(top('Production packer')).toBeCloseTo(81.43, 2);
+    expect(top('Tubing end') - top('Production packer')).toBeGreaterThanOrEqual(6.5);
   });
 
   it('prints a depth tick at every interval', () => {

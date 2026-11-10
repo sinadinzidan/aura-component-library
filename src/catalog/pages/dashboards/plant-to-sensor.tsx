@@ -78,7 +78,7 @@ const PLAN_TREE = buildHierarchy({
   series: Object.fromEntries(PLAN_SENSORS.map((sensor) => [sensor.id, planSeries(sensor)])),
 });
 
-const PLAN_LAYOUT = layoutPlan(PLAN_TREE);
+const PLAN_LAYOUT = layoutPlan(PLAN_TREE, { height: 700 });
 
 const PLAN_REDUCER = createDrillReducer(PLAN_TREE);
 
@@ -138,7 +138,7 @@ const PLAN_HINT: Record<DrillNode['level'], string> = {
   site: 'Click an area to zoom in',
   area: 'Click a machine to see its measurement points',
   equipment: 'Click a point to open its trend',
-  sensor: 'Deepest level',
+  sensor: 'Deepest level: trend, limits and alarms',
 };
 
 function PlanSensorCard({ node }: { node: DrillNode }) {
@@ -188,7 +188,6 @@ function PlanJourney({ startId }: { startId?: string }) {
     <div className="flex h-[44rem] w-full flex-col overflow-hidden rounded-xl border border-default bg-base-background">
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-default px-3 py-2">
         <PathBar nodes={nodes} onSelect={(id) => dispatch({ type: 'jump', id })} className="flex-1" />
-        <PlanKeys />
       </header>
 
       <div className="flex min-h-0 flex-1">
@@ -215,14 +214,21 @@ function PlanJourney({ startId }: { startId?: string }) {
                 </Button>
               </div>
             ) : null}
-            <MiniMap
-              world={PLAN_LAYOUT.world}
-              regions={PLAN_REGIONS}
-              viewport={viewportFor(PLAN_LAYOUT, current)}
-              label={`Overview: showing ${current.name}`}
-              onSelectRegion={(id) => dispatch({ type: 'jump', id })}
-              className="absolute bottom-3 left-3"
-            />
+            {current.level === 'sensor' ? null : (
+              <p className="pointer-events-none absolute right-3 top-3 rounded-md bg-card-background px-2 py-1 text-xs text-muted-foreground">
+                {PLAN_HINT[current.level]}
+              </p>
+            )}
+            {parent ? (
+              <MiniMap
+                world={PLAN_LAYOUT.world}
+                regions={PLAN_REGIONS}
+                viewport={viewportFor(PLAN_LAYOUT, current)}
+                label={`Overview: showing ${current.name}`}
+                onSelectRegion={(id) => dispatch({ type: 'jump', id })}
+                className="absolute bottom-3 left-3"
+              />
+            ) : null}
           </PlotPlan>
         </div>
       </div>
@@ -234,7 +240,7 @@ function PlanJourney({ startId }: { startId?: string }) {
             <span key={part}>· {part}</span>
           ))}
         </p>
-        <p className="text-muted-foreground">{PLAN_HINT[current.level]}</p>
+        <PlanKeys />
       </footer>
     </div>
   );

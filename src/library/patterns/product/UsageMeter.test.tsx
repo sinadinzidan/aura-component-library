@@ -44,7 +44,7 @@ describe(UsageMeter.name, () => {
       <UsageMeter label="Storage" used={120.5} limit={500} unit="GB" format={(value) => value.toFixed(1)} hint="Resets 1 April" layout="row" />
     );
 
-    expect(screen.getByText('120.5 of 500.0\u00a0GB')).toBeInTheDocument();
+    expect(screen.getByText('120.5 of 500.0 GB')).toBeInTheDocument();
     expect(screen.getByText('Resets 1 April')).toBeInTheDocument();
   });
 });

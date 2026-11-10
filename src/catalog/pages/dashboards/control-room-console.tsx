@@ -258,8 +258,8 @@ function ConsoleAuxiliariesPanel() {
     <DashboardPanel title="Equipment run states" description="Driver, cooler and auxiliaries">
       <ul className="flex w-full flex-col gap-3">
         {CONSOLE_AUXILIARIES.map((unit) => (
-          <li key={unit.tag} className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <div className="min-w-0">
+          <li key={unit.tag} className="flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <p className="text-sm text-base-foreground">{unit.name}</p>
               <p className="font-mono text-xs text-muted-foreground">{unit.tag}</p>
             </div>

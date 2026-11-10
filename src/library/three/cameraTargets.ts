@@ -113,3 +113,25 @@ export function frameBounds(bounds: Bounds, options: FrameOptions = {}): CameraT
 export function toTuple(vector: Vec3): [number, number, number] {
   return [vector[0], vector[1], vector[2]];
 }
+
+/** The same target seen from `factor` times as far away, along the same line of sight. */
+export function scaleTargetDistance(target: CameraTarget, factor: number): CameraTarget {
+  const offset: Vec3 = [target.position[0] - target.lookAt[0], target.position[1] - target.lookAt[1], target.position[2] - target.lookAt[2]];
+  return { position: addVec3(target.lookAt, scaleVec3(offset, factor)), lookAt: target.lookAt };
+}
+
+/** Space, in pixels, that overlays take from each edge of a canvas. */
+export type ViewInsetsValue = { top?: number; right?: number; bottom?: number; left?: number };
+
+/** Size of the part of a canvas that overlays leave free. Never smaller than 1 × 1. */
+export function freeViewport(size: { width: number; height: number }, insets: ViewInsetsValue = {}): { width: number; height: number } {
+  return {
+    width: Math.max(1, size.width - (insets.left ?? 0) - (insets.right ?? 0)),
+    height: Math.max(1, size.height - (insets.top ?? 0) - (insets.bottom ?? 0)),
+  };
+}
+
+/** How far to shift the camera's view window so the subject sits in the middle of the free part. */
+export function viewOffsetFor(insets: ViewInsetsValue = {}): { x: number; y: number } {
+  return { x: ((insets.right ?? 0) - (insets.left ?? 0)) / 2 + 0, y: ((insets.bottom ?? 0) - (insets.top ?? 0)) / 2 + 0 };
+}

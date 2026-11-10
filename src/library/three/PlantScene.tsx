@@ -6,7 +6,8 @@ import type { DotShape } from '../industrial/status';
 
 import { AreaVolume } from './AreaVolume';
 import { CameraRig } from './CameraRig';
-import type { CameraView, Vec3 } from './cameraTargets';
+import { freeViewport, scaleTargetDistance } from './cameraTargets';
+import type { CameraView, Vec3, ViewInsetsValue } from './cameraTargets';
 import { EquipmentModel } from './EquipmentModel';
 import { Ground } from './Ground';
 import { PipeRun } from './PipeRun';
@@ -17,6 +18,7 @@ import { SceneLights } from './SceneLights';
 import type { SceneTone } from './scenePalette';
 import { Selectable } from './Selectable';
 import { SensorMarker } from './SensorMarker';
+import { ViewInsets } from './ViewInsets';
 
 /** What a scene shows about one area or piece of equipment. Keyed by node id in `statuses`. */
 export type PlantNodeStatus = {
@@ -53,6 +55,8 @@ export type PlantSceneProps = {
   showLabels?: boolean;
   /** A sensor position to highlight on a machine. */
   marker?: PlantSceneMarker | null;
+  /** Pixels that HUD overlays cover on each edge of the canvas. The camera frames the free part. */
+  insets?: ViewInsetsValue;
   /** Extra three.js content in plant coordinates. */
   children?: ReactNode;
 };
@@ -72,14 +76,18 @@ export function PlantScene({
   onSelect,
   showLabels = true,
   marker = null,
+  insets,
   children,
 }: PlantSceneProps) {
-  const aspect = useThree((state) => state.size.width / Math.max(1, state.size.height));
+  const size = useThree((state) => state.size);
   const fov = useThree((state) => ('fov' in state.camera && typeof state.camera.fov === 'number' ? state.camera.fov : 40));
-  const roundedAspect = Math.round(aspect * 10) / 10;
+  const { top = 0, right = 0, bottom = 0, left = 0 } = insets ?? {};
+  const free = freeViewport(size, { top, right, bottom, left });
+  const aspect = Math.round((free.width / free.height) * 10) / 10;
+  const zoomOut = Math.round((size.height / free.height) * 20) / 20;
   const target = useMemo(
-    () => cameraTargetFor(layout, focusId ?? layout.id, { view, aspect: roundedAspect, fov }),
-    [layout, focusId, view, roundedAspect, fov]
+    () => scaleTargetDistance(cameraTargetFor(layout, focusId ?? layout.id, { view, aspect, fov }), zoomOut),
+    [layout, focusId, view, aspect, fov, zoomOut]
   );
   const span = Math.hypot(layout.size[0], layout.size[1]);
   const markerNode = marker ? findNode(layout, marker.equipmentId) : null;
@@ -89,6 +97,7 @@ export function PlantScene({
     <>
       <SceneLights sunPosition={[span * 0.35, span * 0.6, span * 0.45]} />
       <CameraRig target={target} minDistance={8} maxDistance={span * 1.8} />
+      <ViewInsets top={top} right={right} bottom={bottom} left={left} />
       <Ground size={[layout.size[0], layout.size[1]]} />
 
       {layout.areas.map((area) => {
@@ -96,12 +105,13 @@ export function PlantScene({
         const isDimmed = activeAreaId !== null && !isActive;
         const status = statuses[area.id];
         const height = area.height ?? 7;
+        const [offsetX, offsetY, offsetZ] = area.labelOffset ?? [0, 0, 0];
         return (
           <group key={area.id}>
             <AreaVolume id={area.id} center={area.center} size={area.size} height={height} active={isActive} dimmed={isDimmed} onSelect={onSelect} />
             {showLabels && !isActive ? (
               <SceneLabel
-                position={[area.center[0], height + 1.5, area.center[1]]}
+                position={[area.center[0] + offsetX, height + 1.5 + offsetY, area.center[1] + offsetZ]}
                 tag={area.tag}
                 name={area.name}
                 value={status?.text}

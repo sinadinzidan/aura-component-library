@@ -1,6 +1,6 @@
 import { FIXTURE_INPUT, fixtureTree } from './drilldownFixture';
 import { buildHierarchy } from './hierarchy';
-import { PLAN_ZOOM, SENSOR_ANCHOR_X, layoutPlan, linkSegment, mixViewport, project, projectRect, reveal, viewportFor, viewportScale } from './planLayout';
+import { PLAN_ZOOM, SENSOR_ANCHOR_X, between, layoutPlan, levelScales, linkSegment, mixViewport, project, projectRect, reveal, viewportFor, viewportScale } from './planLayout';
 import type { PlanRect } from './planLayout';
 
 const tree = fixtureTree();
@@ -169,5 +169,29 @@ describe(linkSegment.name, () => {
     const segment = linkSegment({ x: 0, y: 0, width: 100, height: 60 }, { x: 0, y: 100, width: 100, height: 60 });
 
     expect(segment).toEqual({ x1: 50, y1: 60, x2: 50, y2: 100 });
+  });
+});
+
+describe(levelScales.name, () => {
+  it('reports the zoom at which every area and every machine is framed', () => {
+    const scales = levelScales(layout, tree);
+
+    expect(scales.area).toBeCloseTo(1000 / viewportFor(layout, { id: 'area-a', level: 'area' }).width);
+    expect(scales.equipment).toBeGreaterThanOrEqual(scales.area);
+    expect(scales.sensor).toBe(PLAN_ZOOM.sensor);
+  });
+
+  it('never orders the levels backwards', () => {
+    const scales = levelScales(layoutPlan(tree, { width: 300, height: 900 }), tree);
+
+    expect(scales.area).toBeLessThanOrEqual(scales.equipment);
+    expect(scales.equipment).toBeLessThanOrEqual(scales.sensor);
+  });
+});
+
+describe(between.name, () => {
+  it('interpolates between two zoom factors', () => {
+    expect(between(1, 2, 0.25)).toBe(1.25);
+    expect(between(2, 5, 1)).toBe(5);
   });
 });

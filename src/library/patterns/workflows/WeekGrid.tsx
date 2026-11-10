@@ -110,7 +110,7 @@ export function WeekGrid({ label, days, events, startHour = 8, endHour = 18, now
                         {event.detail ? ` · ${event.detail}` : ''}
                       </span>
                     ) : null}
-                    {event.conflict && tall ? <span className="truncate text-xs font-medium text-warning-foreground-strong">Conflict</span> : null}
+                    {event.conflict && event.end - event.start >= 90 ? <span className="truncate text-xs font-medium text-warning-foreground-strong">Conflict</span> : null}
                   </>
                 );
                 const name = `${event.title}, ${time}${event.detail ? `, ${event.detail}` : ''}${isWindow ? ', reserved window' : ''}${event.conflict ? ', conflict' : ''}`;

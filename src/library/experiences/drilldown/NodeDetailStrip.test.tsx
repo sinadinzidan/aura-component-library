@@ -45,6 +45,12 @@ describe(NodeDetailStrip.name, () => {
     expect(screen.getByRole('img', { name: /Health of 1st stage compressor, 7 d/ })).toBeInTheDocument();
   });
 
+  it('calls a sensor’s figure its value, since the name is already there', () => {
+    render(<NodeDetailStrip node={node('pt')} metrics={METRICS} />);
+
+    expect(screen.getByText('Value, 24 h')).toBeInTheDocument();
+  });
+
   it('says so when there is no trend', () => {
     render(<NodeDetailStrip node={node('sep')} metrics={METRICS} />);
 

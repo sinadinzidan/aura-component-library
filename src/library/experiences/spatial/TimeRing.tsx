@@ -1,5 +1,3 @@
-import { cn } from '../../../lib/utils';
-
 import { hourAngle, polarPoint, spoke } from './polar';
 
 export type TimeRingEvent = {
@@ -45,14 +43,14 @@ function pad(hour: number): string {
 
 /**
  * A 24-hour clock ring for the bezel of a dial: hour ticks, events as shaped marks at the time
- * they happened (diamond for a trip, triangle for an alarm, ring for a note), a marker for now
- * and a cursor for the hour being replayed. It is an SVG fragment. Pick it when the day's
+ * they happened (diamond for a trip, triangle for an alarm, ring for a note), the word Now in
+ * place of the hour it falls on, and a cursor for the hour being replayed. It is an SVG fragment. Pick it when the day's
  * events should frame a dial instead of taking a separate timeline.
  */
 export function TimeRing({ cx, cy, radius, events = [], cursorHour, nowHour, labelEvery = 3, className }: TimeRingProps) {
-  const cursor = cursorHour === undefined ? undefined : spoke(cx, cy, radius - 16, radius + 6, hourAngle(cursorHour));
+  const cursor = cursorHour === undefined ? undefined : spoke(cx, cy, radius - 12, radius + 5, hourAngle(cursorHour));
   const cursorKnob = cursorHour === undefined ? undefined : polarPoint(cx, cy, radius, hourAngle(cursorHour));
-  const now = nowHour === undefined ? undefined : polarPoint(cx, cy, radius - 14, hourAngle(nowHour));
+  const now = nowHour === undefined ? undefined : polarPoint(cx, cy, radius + 14, hourAngle(nowHour));
 
   return (
     <g data-slot="time-ring" className={className}>
@@ -60,11 +58,12 @@ export function TimeRing({ cx, cy, radius, events = [], cursorHour, nowHour, lab
       {HOURS.map((hour) => {
         const major = hour % labelEvery === 0;
         const tick = spoke(cx, cy, radius - (major ? 9 : 5), radius, hourAngle(hour));
-        const text = polarPoint(cx, cy, radius + 16, hourAngle(hour));
+        const text = polarPoint(cx, cy, radius + 14, hourAngle(hour));
+        const labelled = major && (nowHour === undefined || Math.round(nowHour) % 24 !== hour);
         return (
           <g key={hour} data-slot="time-ring-hour">
             <line {...tick} strokeWidth={major ? 1.5 : 1} className="stroke-[color-mix(in_oklab,var(--base-foreground)_60%,transparent)]" />
-            {major ? (
+            {labelled ? (
               <text x={text.x} y={text.y} textAnchor="middle" dominantBaseline="central" fontSize={12} className="fill-muted-foreground tabular-nums">
                 {pad(hour)}
               </text>
@@ -73,7 +72,7 @@ export function TimeRing({ cx, cy, radius, events = [], cursorHour, nowHour, lab
         );
       })}
       {events.map((event) => {
-        const at = polarPoint(cx, cy, radius - 16, hourAngle(event.hour));
+        const at = polarPoint(cx, cy, radius - 13, hourAngle(event.hour));
         return (
           <path
             key={event.id}
@@ -92,14 +91,14 @@ export function TimeRing({ cx, cy, radius, events = [], cursorHour, nowHour, lab
         );
       })}
       {now ? (
-        <text data-slot="time-ring-now" x={now.x} y={now.y} textAnchor="middle" dominantBaseline="central" fontSize={10} className="fill-medium-foreground font-semibold uppercase">
+        <text data-slot="time-ring-now" x={now.x} y={now.y} textAnchor="middle" dominantBaseline="central" fontSize={11} className="fill-base-foreground font-semibold uppercase">
           Now
         </text>
       ) : null}
       {cursor && cursorKnob ? (
         <g data-slot="time-ring-cursor" className="[filter:drop-shadow(0_0_6px_color-mix(in_oklab,var(--primary-background)_80%,transparent))]">
           <line {...cursor} strokeWidth={2.5} strokeLinecap="round" className="stroke-[color:var(--primary-background)]" />
-          <circle cx={cursorKnob.x} cy={cursorKnob.y} r={5} strokeWidth={2} className={cn('fill-card-background stroke-[color:var(--primary-background)]')} />
+          <circle cx={cursorKnob.x} cy={cursorKnob.y} r={5} strokeWidth={2} className="fill-card-background stroke-[color:var(--primary-background)]" />
         </g>
       ) : null}
     </g>

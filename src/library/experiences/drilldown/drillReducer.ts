@@ -26,7 +26,7 @@ export type DrillAction =
   /** Go to a depth along the trail: 0 is the root. */
   | { type: 'depth'; depth: number }
   | { type: 'focus'; id: string | null }
-  /** Move the keyboard focus to the next or previous child. Wraps. */
+  /** Move the keyboard focus to the next or previous child, and preview it like a hover. Wraps. */
   | { type: 'focus-step'; delta: 1 | -1 }
   | { type: 'hover'; id: string | null }
   | { type: 'lens'; lens: string }
@@ -99,7 +99,8 @@ export function createDrillReducer(tree: DrillTree): (state: DrillState, action:
         if (ids.length === 0) return state;
         const index = state.focusId === null ? -1 : ids.indexOf(state.focusId);
         const next = index === -1 ? (action.delta === 1 ? 0 : ids.length - 1) : (index + action.delta + ids.length) % ids.length;
-        return { ...state, focusId: ids[next] ?? null };
+        // The keyboard previews what it is on, the same way a pointer does by hovering.
+        return { ...state, focusId: ids[next] ?? null, hoverId: ids[next] ?? null };
       }
       case 'hover':
         return action.id === state.hoverId ? state : { ...state, hoverId: action.id };

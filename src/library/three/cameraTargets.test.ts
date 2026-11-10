@@ -6,12 +6,15 @@ import {
   distanceToFit,
   easeInOutCubic,
   frameBounds,
+  freeViewport,
   interpolateTarget,
   lengthVec3,
   lerpVec3,
   normalizeVec3,
   sameTarget,
+  scaleTargetDistance,
   unionBounds,
+  viewOffsetFor,
 } from './cameraTargets';
 import type { Bounds, CameraTarget } from './cameraTargets';
 
@@ -131,5 +134,38 @@ describe(frameBounds.name, () => {
     const target = frameBounds(BOX, { view: 'isometric' });
 
     expect(target.position[0]).toBeCloseTo(target.position[2]);
+  });
+});
+
+describe(scaleTargetDistance.name, () => {
+  it('moves the camera along its line of sight', () => {
+    const target: CameraTarget = { position: [10, 10, 0], lookAt: [0, 10, 0] };
+
+    expect(scaleTargetDistance(target, 2)).toEqual({ position: [20, 10, 0], lookAt: [0, 10, 0] });
+  });
+});
+
+describe(freeViewport.name, () => {
+  it('subtracts the insets from the canvas size', () => {
+    expect(freeViewport({ width: 1000, height: 600 }, { left: 280, right: 320, top: 50, bottom: 50 })).toEqual({ width: 400, height: 500 });
+  });
+
+  it('is the whole canvas without insets', () => {
+    expect(freeViewport({ width: 1000, height: 600 })).toEqual({ width: 1000, height: 600 });
+  });
+
+  it('never collapses below one pixel', () => {
+    expect(freeViewport({ width: 100, height: 100 }, { left: 80, right: 80 }).width).toBe(1);
+  });
+});
+
+describe(viewOffsetFor.name, () => {
+  it('shifts the view window away from the larger inset', () => {
+    expect(viewOffsetFor({ left: 280 })).toEqual({ x: -140, y: 0 });
+    expect(viewOffsetFor({ left: 280, right: 320, top: 60, bottom: 20 })).toEqual({ x: 20, y: -20 });
+  });
+
+  it('is zero without insets', () => {
+    expect(viewOffsetFor()).toEqual({ x: 0, y: 0 });
   });
 });

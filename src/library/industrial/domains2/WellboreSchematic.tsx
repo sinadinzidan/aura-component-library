@@ -2,6 +2,8 @@ import { cn } from '../../../lib/utils';
 import { toFraction } from '../geometry';
 import { SCALE_TEXT, formatValue } from '../status';
 
+import { spreadPositions } from './labelLayout';
+
 export type WellboreCasing = {
   /** Size and kind: "13⅜ in surface casing". */
   label: string;
@@ -36,6 +38,8 @@ export type WellboreSchematicProps = {
 const CASING_HALF_WIDTHS = [42, 32, 23, 15];
 const TUBING_HALF_WIDTH = 6;
 const CENTRE = 50;
+/** Smallest distance between two labels, in percent of the drawing height. */
+const LABEL_GAP = 6.5;
 
 const percent = (fraction: number): string => `${Math.round(fraction * 10000) / 100}%`;
 
@@ -70,6 +74,11 @@ export function WellboreSchematic({
       text: `Perforations ${formatValue(interval.top, 0)}–${formatValue(interval.bottom, 0)}`,
     })),
   ].sort((a, b) => a.depth - b.depth);
+  // Labels sit at their depth, moved apart just enough to stay readable where depths are close.
+  const noteTops = spreadPositions(
+    notes.map((note) => (note.depth / totalDepth) * 100),
+    LABEL_GAP
+  );
   const name = `Wellbore schematic of ${label}: ${drawn.length} casing strings, tubing to ${formatValue(tubingDepth, 0)} ${unit}, ${perforations.length} perforated ${
     perforations.length === 1 ? 'interval' : 'intervals'
   }, total depth ${formatValue(totalDepth, 0)} ${unit}`;
@@ -125,8 +134,8 @@ export function WellboreSchematic({
         </svg>
 
         <ul className="relative min-w-0">
-          {notes.map((note) => (
-            <li key={note.key} className="absolute left-0 flex -translate-y-1/2 items-baseline gap-2 whitespace-nowrap text-xs leading-none" style={{ top: percent(note.depth / totalDepth) }}>
+          {notes.map((note, index) => (
+            <li key={note.key} className="absolute left-0 flex -translate-y-1/2 items-baseline gap-2 whitespace-nowrap text-xs leading-none" style={{ top: percent(noteTops[index] / 100) }}>
               <span className="text-base-foreground">{note.text}</span>
               <span className="tabular-nums text-muted-foreground">{formatValue(note.depth, 0)} m</span>
             </li>

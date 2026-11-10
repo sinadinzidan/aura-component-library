@@ -108,6 +108,31 @@ export function arcPath(cx: number, cy: number, r0: number, r1: number, start: n
   ].join(' ');
 }
 
+/**
+ * An open arc at one radius, for a label to run along. In the lower half of the circle the arc is
+ * drawn backwards (counter-clockwise), so text on it still reads left to right. A full turn is
+ * cut down to the top half.
+ */
+export function arcLinePath(cx: number, cy: number, radius: number, start: number, end: number): string {
+  let from = start;
+  let to = end;
+  if (to - from >= FULL_CIRCLE - 1e-6) {
+    from = -Math.PI / 2;
+    to = Math.PI / 2;
+  }
+  const large = to - from > Math.PI ? 1 : 0;
+  const a = polar(cx, cy, radius, from);
+  const b = polar(cx, cy, radius, to);
+  if (isLowerHalf(from, to)) return `M ${fixed(b.x)} ${fixed(b.y)} A ${fixed(radius)} ${fixed(radius)} 0 ${large} 0 ${fixed(a.x)} ${fixed(a.y)}`;
+  return `M ${fixed(a.x)} ${fixed(a.y)} A ${fixed(radius)} ${fixed(radius)} 0 ${large} 1 ${fixed(b.x)} ${fixed(b.y)}`;
+}
+
+/** Whether the middle of an arc is below the centre of the circle. A full turn counts as upper. */
+export function isLowerHalf(start: number, end: number): boolean {
+  if (end - start >= FULL_CIRCLE - 1e-6) return false;
+  return Math.cos((start + end) / 2) < -1e-9;
+}
+
 /** An arc with its radii resolved: what is actually drawn, and what a tween interpolates. */
 export type ArcShape = { id: string; depth: number; start: number; end: number; r0: number; r1: number };
 
@@ -128,6 +153,37 @@ export function arcCentroid(cx: number, cy: number, shape: Pick<ArcShape, 'start
 /** Length of an arc along the middle of its ring: how much room a label has. */
 export function arcLength(shape: Pick<ArcShape, 'start' | 'end' | 'r0' | 'r1'>): number {
   return ((shape.r0 + shape.r1) / 2) * (shape.end - shape.start);
+}
+
+/**
+ * Whether a horizontal box of `width` × `height`, centred on the arc's centroid, lies entirely
+ * inside the arc — the test for printing an unrotated label on it.
+ */
+export function fitsInArc(shape: Pick<ArcShape, 'start' | 'end' | 'r0' | 'r1'>, width: number, height: number): boolean {
+  const span = shape.end - shape.start;
+  const centre = arcCentroid(0, 0, shape);
+  const middle = (shape.start + shape.end) / 2;
+  const corners = [
+    [-width / 2, -height / 2],
+    [width / 2, -height / 2],
+    [-width / 2, height / 2],
+    [width / 2, height / 2],
+    [0, -height / 2],
+    [0, height / 2],
+    [-width / 2, 0],
+    [width / 2, 0],
+  ];
+  return corners.every(([dx = 0, dy = 0]) => {
+    const x = centre.x + dx;
+    const y = centre.y + dy;
+    const radius = Math.hypot(x, y);
+    if (radius < shape.r0 || radius > shape.r1) return false;
+    if (span >= FULL_CIRCLE - 1e-6) return true;
+    // Angle of the point, measured from the middle of the arc, in (-π, π].
+    let offset = Math.atan2(x, -y) - middle;
+    offset = ((((offset + Math.PI) % FULL_CIRCLE) + FULL_CIRCLE) % FULL_CIRCLE) - Math.PI;
+    return Math.abs(offset) <= span / 2;
+  });
 }
 
 /** Ease in and out, 0–1. */

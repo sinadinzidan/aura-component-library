@@ -115,9 +115,10 @@ describe(createMillerReducer.name, () => {
   });
 
   it('moves only through rows that match the filter', () => {
-    const start = run([{ type: 'filter', column: 2, text: 'recomp' }], createMillerState(roots, ['site', 'area-b', 'comp-1']));
+    const start = run([{ type: 'filter', column: 1, text: 'gas' }], createMillerState(roots, ['site', 'area-b']));
 
-    expect(reduce(start, { type: 'move', delta: 1 }).path).toEqual(['site', 'area-b', 'comp-3']);
+    expect(reduce(start, { type: 'move', delta: -1 })).toBe(start);
+    expect(reduce(start, { type: 'move', delta: 1 })).toBe(start);
   });
 
   it('builds a type-ahead filter on the active column and erases it', () => {
@@ -129,6 +130,28 @@ describe(createMillerReducer.name, () => {
     expect(reduce(typed, { type: 'clear' }).filters[1]).toBe('');
     expect(reduce(start, { type: 'erase' })).toBe(start);
     expect(reduce(start, { type: 'clear' })).toBe(start);
+  });
+
+  it('moves the selection to the first match when the filter hides the selected row', () => {
+    const start = createMillerState(roots, ['site', 'area-b', 'comp-1', 'pt']);
+    const state = run([{ type: 'filter', column: 2, text: 'recomp' }], start);
+
+    expect(state.path).toEqual(['site', 'area-b', 'comp-3']);
+    expect(state.column).toBe(2);
+    expect(state.filters[2]).toBe('recomp');
+  });
+
+  it('keeps the selection when it still matches, or when nothing matches', () => {
+    const start = createMillerState(roots, ['site', 'area-b', 'comp-1', 'pt']);
+
+    expect(run([{ type: 'filter', column: 2, text: 'stage' }], start).path).toEqual(start.path);
+    expect(run([{ type: 'filter', column: 2, text: 'zzz' }], start).path).toEqual(start.path);
+  });
+
+  it('follows the type-ahead to the first match', () => {
+    const start = createMillerState(roots, ['site', 'area-a']);
+
+    expect(run([{ type: 'type', char: 'g' }, { type: 'type', char: 'a' }], start).path).toEqual(['site', 'area-b']);
   });
 
   it('clears filters to the right when the selection changes', () => {

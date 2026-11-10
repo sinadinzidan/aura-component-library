@@ -37,7 +37,7 @@ describe(MonthGrid.name, () => {
     const { container } = render(<MonthGrid label="March 2026" weeks={WEEKS} entries={ENTRIES} display="count" />);
 
     expect(container.querySelectorAll('[data-slot="month-grid-dot"]')).toHaveLength(0);
-    expect(screen.getByText('5')).toBeInTheDocument();
+    expect([...container.querySelectorAll('[data-slot="month-grid-count"]')].map((node) => node.textContent)).toEqual(['5', '1']);
   });
 
   it('selects a day of the month', async () => {
@@ -53,7 +53,7 @@ describe(MonthGrid.name, () => {
   it('does not make days of the neighbouring months selectable', () => {
     render(<MonthGrid label="March 2026" weeks={WEEKS} onSelect={vi.fn()} />);
 
-    expect(screen.queryByRole('button', { name: /^23,/ })).toBeInTheDocument();
+    // 23 February pads the first week and 23 March is in the month: only the latter is a button.
     expect(screen.getAllByRole('button', { name: /^23,/ })).toHaveLength(1);
   });
 });

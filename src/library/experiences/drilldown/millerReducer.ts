@@ -20,6 +20,7 @@ export type MillerAction =
   | { type: 'right' }
   /** Back to the previous column, dropping the selection in this one. */
   | { type: 'left' }
+  /** Sets a column's filter. If that hides the selected row, the first row left is selected. */
   | { type: 'filter'; column: number; text: string }
   /** Type-ahead on the active column. */
   | { type: 'type'; char: string }
@@ -113,6 +114,16 @@ export function createMillerReducer(roots: readonly DrillNode[]): (state: Miller
     return { path: [...state.path.slice(0, column), id], column, filters: clearRight(state.filters, column) };
   };
 
+  /** After a filter change: if it hid the selected row, move the selection to the first row left. */
+  const follow = (state: MillerState, column: number): MillerState => {
+    const selectedId = state.path[column];
+    if (selectedId === undefined) return state;
+    const items = visible(state, column);
+    const first = items[0];
+    if (!first || items.some((node) => node.id === selectedId)) return state;
+    return select(state, column, first.id);
+  };
+
   return (state, action) => {
     switch (action.type) {
       case 'select':
@@ -143,13 +154,13 @@ export function createMillerReducer(roots: readonly DrillNode[]): (state: Miller
       }
       case 'filter': {
         if (action.column < 0 || action.column >= MILLER_COLUMNS || state.filters[action.column] === action.text) return state;
-        return { ...state, filters: withFilter(state.filters, action.column, action.text) };
+        return follow({ ...state, filters: withFilter(state.filters, action.column, action.text) }, action.column);
       }
       case 'type':
-        return { ...state, filters: withFilter(state.filters, state.column, `${state.filters[state.column] ?? ''}${action.char}`) };
+        return follow({ ...state, filters: withFilter(state.filters, state.column, `${state.filters[state.column] ?? ''}${action.char}`) }, state.column);
       case 'erase': {
         const current = state.filters[state.column] ?? '';
-        return current === '' ? state : { ...state, filters: withFilter(state.filters, state.column, current.slice(0, -1)) };
+        return current === '' ? state : follow({ ...state, filters: withFilter(state.filters, state.column, current.slice(0, -1)) }, state.column);
       }
       case 'clear':
         return (state.filters[state.column] ?? '') === '' ? state : { ...state, filters: withFilter(state.filters, state.column, '') };

@@ -58,7 +58,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-function AlarmLines({ alarms, formatAge }: { alarms: readonly DrillAlarm[]; formatAge: (raisedAt: number) => string }) {
+function AlarmLines({ alarms, formatAge, showTag }: { alarms: readonly DrillAlarm[]; formatAge: (raisedAt: number) => string; showTag: boolean }) {
   if (alarms.length === 0) return <p className="text-sm text-muted-foreground">No alarms in the last 7 days</p>;
   return (
     <ul className="flex flex-col gap-2">
@@ -72,7 +72,15 @@ function AlarmLines({ alarms, formatAge }: { alarms: readonly DrillAlarm[]; form
             <div className="flex min-w-0 flex-1 flex-col">
               <span className={cn('text-sm leading-5', isOpen(alarm) ? 'text-base-foreground' : 'text-muted-foreground')}>{alarm.message}</span>
               <span className="text-xs text-muted-foreground">
-                {severity.label} · {ALARM_STATE[alarm.state]} · <span className="font-mono">{alarm.sensorTag}</span> · {alarm.value}
+                {severity.label} · {ALARM_STATE[alarm.state]}
+                {showTag ? (
+                  <>
+                    {' · '}
+                    <span className="font-mono">{alarm.sensorTag}</span>
+                  </>
+                ) : null}
+                {' · '}
+                {alarm.value}
               </span>
             </div>
             <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatAge(alarm.raisedAt)}</span>
@@ -119,7 +127,7 @@ export function NodePreview({ node, formatAge, onSelect, maxAlarms = 3, period =
     ) : null;
 
   return (
-    <article data-slot="node-preview" data-level={node.level} className={cn('flex min-w-0 flex-col gap-5', className)}>
+    <article data-slot="node-preview" data-level={node.level} className={cn('@container flex min-w-0 flex-col gap-5', className)}>
       <header className="flex flex-col gap-1">
         <span className={LABEL_TEXT}>
           {LEVEL_LABEL[node.level]} · <span className="font-mono">{node.tag}</span>
@@ -164,14 +172,14 @@ export function NodePreview({ node, formatAge, onSelect, maxAlarms = 3, period =
               <span className="capitalize">{node.kind}</span>
             </Fact>
             <Fact label="Open alarms">{node.metrics[OPEN_ALARMS_METRIC] ?? 0}</Fact>
-            <Fact label="Measurement points">{node.children.length}</Fact>
+            <Fact label="Sensors">{node.children.length}</Fact>
             <Fact label="Outside limits">{node.children.filter((child) => isAbnormal(child.status.tone)).length}</Fact>
           </dl>
         </div>
       ) : null}
 
       {node.level === 'site' || node.level === 'area' ? (
-        <dl className="grid grid-cols-4 gap-3">
+        <dl className="grid grid-cols-2 gap-3 @md:grid-cols-4">
           <div className="flex flex-col gap-0.5">
             <dt className={LABEL_TEXT}>Health</dt>
             <dd>
@@ -208,7 +216,7 @@ export function NodePreview({ node, formatAge, onSelect, maxAlarms = 3, period =
       {childRows}
 
       <Section title={node.level === 'sensor' ? 'Last alarms' : 'Latest alarms'}>
-        <AlarmLines alarms={alarms} formatAge={formatAge} />
+        <AlarmLines alarms={alarms} formatAge={formatAge} showTag={node.level !== 'sensor'} />
       </Section>
     </article>
   );

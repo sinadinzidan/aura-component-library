@@ -67,8 +67,10 @@ export function PumpingStationCard({ name, tag, pumps, readings, className }: Pu
       <ul aria-label="Pumps" className="flex flex-col">
         {pumps.map((pump) => (
           <li key={pump.id} data-slot="station-pump" className="flex items-center gap-3 border-t border-default py-2 text-xs last:pb-0">
-            <span className="font-mono text-base-foreground">{pump.tag}</span>
-            <span className="text-muted-foreground">{DUTY_LABEL[pump.duty]}</span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="whitespace-nowrap font-mono text-base-foreground">{pump.tag}</span>
+              <span className="text-muted-foreground">{DUTY_LABEL[pump.duty]}</span>
+            </span>
             <span className="ml-auto whitespace-nowrap tabular-nums text-muted-foreground">{pump.speed === undefined || pump.state !== 'running' ? '' : `${formatValue(pump.speed, 0)} %`}</span>
             <StatusIndicator size="sm" {...runStateStatus(pump.state)} className="w-24" />
           </li>

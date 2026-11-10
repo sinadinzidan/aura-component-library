@@ -33,8 +33,10 @@ function replaySeries(seed: number, noise: number, decimals: number, knots: read
     const [m1, v1] = knots[nextIndex === -1 ? knots.length - 1 : nextIndex] ?? [60, 0];
     const [m0, v0] = knots[Math.max(nextIndex - 1, 0)] ?? [0, v1];
     const base = m1 === m0 ? v1 : v0 + ((v1 - v0) * (minute - m0)) / (m1 - m0);
-    // A stopped machine reads a steady zero, so noise scales away near it.
-    const jitter = (random() - 0.5) * 2 * noise * Math.min(Math.abs(base) / (noise * 20 || 1), 1);
+    // A stopped machine reads a steady zero, so noise scales away near it; knots are exact, so
+    // the values quoted in the event log are the values on the chart.
+    const onKnot = knots.some(([at]) => at === minute);
+    const jitter = onKnot ? 0 : (random() - 0.5) * 2 * noise * Math.min(Math.abs(base) / (noise * 20 || 1), 1);
     return { t: replayMinute(minute), v: Math.round(Math.max(base + jitter, 0) * factor) / factor };
   });
 }
@@ -151,6 +153,7 @@ function IncidentReplayTrends({ t }: { t: number }) {
           cursor={t}
           domain={REPLAY_DOMAINS[signal.id] ?? [0, 1]}
           eventTimes={eventTimes}
+          className="flex-1"
         />
       ))}
       <div aria-hidden className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_minmax(0,6.5rem)] gap-3">
@@ -226,8 +229,8 @@ function IncidentReplayLog({ eventIndex, onJump }: { eventIndex: number; onJump?
           const reached = index <= eventIndex;
           const body = (
             <>
-              <span className={`w-10 shrink-0 font-mono text-xs tabular-nums ${reached ? 'text-medium-foreground' : 'text-muted-foreground'}`}>{formatTime(event.t)}</span>
-              <span className="mt-1 shrink-0">
+              <span className={`w-10 shrink-0 font-mono text-xs leading-5 tabular-nums ${reached ? 'text-medium-foreground' : 'text-muted-foreground'}`}>{formatTime(event.t)}</span>
+              <span className="flex h-5 shrink-0 items-center">
                 <StatusDot tone={reached ? event.tone : 'neutral'} shape={reached ? (event.tone === 'critical' ? 'diamond' : event.tone === 'warning' ? 'square' : 'dot') : 'ring'} size="sm" />
               </span>
               <span className="min-w-0 flex-1 text-left">

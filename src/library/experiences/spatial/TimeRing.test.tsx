@@ -49,7 +49,19 @@ describe(TimeRing.name, () => {
       </svg>
     );
 
-    expect(screen.getByRole('img', { name: 'Shift handover' })).toHaveAttribute('transform', 'translate(334 200)');
+    expect(screen.getByRole('img', { name: 'Shift handover' })).toHaveAttribute('transform', 'translate(337 200)');
+  });
+
+  it('prints Now in place of the hour it falls on', () => {
+    render(
+      <svg>
+        <TimeRing cx={200} cy={200} radius={150} nowHour={15} />
+      </svg>
+    );
+
+    expect(screen.getByText('Now')).toBeInTheDocument();
+    expect(screen.queryByText('15')).not.toBeInTheDocument();
+    expect(screen.getByText('12')).toBeInTheDocument();
   });
 
   it('draws the cursor and the now marker only when given', () => {

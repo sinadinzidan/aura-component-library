@@ -31,7 +31,7 @@ export function CausalChain({ links, revealed, label, pendingText = 'Not yet evi
 
   return (
     <div data-slot="causal-chain" className={cn('@container w-full min-w-0', className)}>
-      <ol aria-label={label} className="grid grid-cols-1 gap-x-5 gap-y-3 @md:grid-cols-2 @2xl:grid-cols-3 @5xl:grid-cols-6">
+      <ol aria-label={label} className="grid grid-cols-1 gap-x-5 gap-y-3 @md:grid-cols-2 @2xl:grid-cols-3 @4xl:grid-cols-6">
         {links.map((link, index) => {
           const isKnown = index < known;
           const isLatest = index === known - 1;

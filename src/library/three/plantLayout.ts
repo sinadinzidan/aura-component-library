@@ -46,6 +46,8 @@ export type PlantArea = {
   size: readonly [number, number];
   /** Height of the outlined volume. */
   height?: number;
+  /** Moves the area's label from its default place above the centre, to keep neighbours' labels apart. */
+  labelOffset?: Vec3;
   equipment: readonly PlantEquipment[];
 };
 
@@ -160,7 +162,7 @@ export type CameraTargetOptions = {
 
 const FRAMING: Record<PlantNode['type'], { padding: number; minDistance: number }> = {
   // A plot is flat, so its bounding sphere overstates what the camera must fit.
-  plant: { padding: 0.74, minDistance: 0 },
+  plant: { padding: 0.7, minDistance: 0 },
   area: { padding: 0.86, minDistance: 0 },
   equipment: { padding: 1.5, minDistance: 15 },
 };

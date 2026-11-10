@@ -46,7 +46,7 @@ export function LossWaterfall({ start, losses, endLabel, endId, unit, decimals =
           const selected = selectable && selectedId === step.id;
           const text = `${isLoss ? '−' : ''}${formatValue(step.value, decimals)}`;
           const bar = (
-            <span className="relative block h-44 w-full">
+            <span className="relative block h-56 w-full">
               {/* Connector to the next step at the level this one ends on. */}
               {index < steps.length - 1 ? (
                 <span

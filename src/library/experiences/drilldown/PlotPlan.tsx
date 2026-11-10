@@ -11,7 +11,7 @@ import { currentNode, drillKeyAction } from './drillReducer';
 import type { DrillAction, DrillState } from './drillReducer';
 import { LEVEL_LABEL, OPEN_ALARMS_METRIC, childSummary, descendantsAt, isAbnormal } from './hierarchy';
 import type { DrillNode, DrillTree } from './hierarchy';
-import { linkSegment, mixViewport, project, projectRect, reveal, viewportFor, viewportScale } from './planLayout';
+import { between, levelScales, linkSegment, mixViewport, project, projectRect, reveal, viewportFor, viewportScale } from './planLayout';
 import type { PlanLayout, PlanRect } from './planLayout';
 import { SvgStatusMark } from './SvgStatusMark';
 import { useTween } from './useTween';
@@ -48,7 +48,7 @@ const BLOCK_STROKE: Record<Tone, string> = {
 };
 
 const HIT =
-  'cursor-pointer fill-transparent outline-none hover:fill-[color-mix(in_oklab,var(--primary-background)_7%,transparent)]';
+  'cursor-pointer fill-transparent outline-none hover:fill-[color-mix(in_oklab,var(--primary-background)_6%,transparent)]';
 
 const GLYPH_WORLD = 30;
 const GLYPH_MAX = 128;
@@ -74,10 +74,12 @@ export function PlotPlan({ tree, layout, state, dispatch, links = [], symbols = 
   const onPath = new Set(state.path);
   const depth = state.path.length - 1;
 
-  const siteDetail = 1 - reveal(scale, 1.2, 1.6);
-  const areaHeader = reveal(scale, 1.5, 1.9);
-  const equipmentDetail = reveal(scale, 1.35, 1.85);
-  const sensorDetail = reveal(scale, 3.2, 4.4);
+  // Each layer fades in part of the way between the zoom of one level and the next.
+  const scales = levelScales(layout, tree);
+  const siteDetail = 1 - reveal(scale, between(1, scales.area, 0.2), between(1, scales.area, 0.6));
+  const areaHeader = reveal(scale, between(1, scales.area, 0.5), between(1, scales.area, 0.9));
+  const equipmentDetail = reveal(scale, between(1, scales.area, 0.35), between(1, scales.area, 0.85));
+  const sensorDetail = reveal(scale, between(scales.area, scales.equipment, 0.4), between(scales.area, scales.equipment, 0.8));
 
   const at = (x: number, y: number) => project(layout, viewport, x, y);
   const rectOf = (id: string): PlanRect | null => {
@@ -111,7 +113,7 @@ export function PlotPlan({ tree, layout, state, dispatch, links = [], symbols = 
       aria-label={label}
       aria-activedescendant={state.focusId ? elementId(state.focusId) : undefined}
       onKeyDown={onKeyDown}
-      onFocus={() => setHasFocus(true)}
+      onFocus={(event) => setHasFocus(event.currentTarget.matches(':focus-visible'))}
       onBlur={() => setHasFocus(false)}
       className={cn('relative size-full overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring-default', className)}
     >
@@ -315,7 +317,7 @@ export function PlotPlan({ tree, layout, state, dispatch, links = [], symbols = 
                 const direction = left ? -1 : 1;
                 const abnormal = isAbnormal(sensor.status.tone);
                 const selected = current.id === sensor.id;
-                const textX = point.x + direction * 15;
+                const textX = point.x + direction * 21;
                 const anchor = left ? 'end' : 'start';
                 const reading = sensor.reading;
                 return (
