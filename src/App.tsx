@@ -1,5 +1,3 @@
-import type { ComponentProps } from 'react';
-import { useEffect, useState } from 'react';
 import { connectToHostApp as connectToHostAppImpl } from '@cognite/app-sdk';
 import type { HostAppAPI } from '@cognite/app-sdk';
 import { CogniteSdkProvider, useCogniteSdk } from '@cognite/app-sdk/react';
@@ -23,6 +21,8 @@ import {
 import { Loader } from '@cognite/aura/components/loader';
 import { Separator } from '@cognite/aura/components/separator';
 import { IconCaretUpDown, IconRocket } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
+import type { ComponentProps } from 'react';
 
 import appConfig from '../app.json';
 
@@ -109,20 +109,20 @@ function AppContent({ api, initialState }: AppContentProps) {
   const orgLabel = deployment?.org ?? '';
   const projectLabel = deployment?.project ?? client.project ?? '';
 
-  const [openStep, setOpenStep] = useState<string | null>(CHECKLIST_STEPS[0].label);
-
   // initialState is restored from the ?customAppInternalState search param by the host.
-  useEffect(() => {
-    if (!initialState) return;
-    try {
-      const saved = JSON.parse(initialState) as AppInternalState;
-      if (typeof saved.openStep === 'string' || saved.openStep === null) {
-        setOpenStep(saved.openStep);
+  const [openStep, setOpenStep] = useState<string | null>(() => {
+    if (initialState) {
+      try {
+        const saved = JSON.parse(initialState) as AppInternalState;
+        if (typeof saved.openStep === 'string' || saved.openStep === null) {
+          return saved.openStep;
+        }
+      } catch {
+        // ignore malformed saved state
       }
-    } catch {
-      // ignore malformed saved state
     }
-  }, [initialState]);
+    return CHECKLIST_STEPS[0].label;
+  });
 
   function handleStepToggle(label: string, isOpen: boolean) {
     const next = isOpen ? label : null;
