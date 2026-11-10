@@ -17,22 +17,22 @@ export type DeviceFrameProps = {
   header?: ReactNode;
   /** Fixed area under the content: an action bar or a tab bar. */
   footer?: ReactNode;
-  /** The screen content. It scrolls when it is taller than the screen. */
+  /** `screen` keeps the height of the device; `content` crops the frame to its content, to show one component. */
+  height?: 'screen' | 'content';
+  /** The screen content. The frame grows with it instead of clipping. */
   children: ReactNode;
   className?: string;
 };
 
-const SIZE: Record<DeviceKind, string> = {
-  phone: 'w-80 min-h-144',
-  tablet: 'w-full max-w-2xl min-h-112',
-};
+const WIDTH: Record<DeviceKind, string> = { phone: 'w-full max-w-80', tablet: 'w-full max-w-3xl' };
+const SCREEN_HEIGHT: Record<DeviceKind, string> = { phone: 'min-h-144', tablet: 'min-h-112' };
 
 /**
  * A phone or tablet outline drawn from tokens, to show a field screen at the size it is used at:
  * bezel, status bar, a scrolling content area and fixed header and footer slots. It is a frame for
  * documentation and review, not a responsive container — the content inside must still work alone.
  */
-export function DeviceFrame({ label, device = 'phone', time = '14:00', connection = 'online', header, footer, children, className }: DeviceFrameProps) {
+export function DeviceFrame({ label, device = 'phone', time = '14:00', connection = 'online', height = 'screen', header, footer, children, className }: DeviceFrameProps) {
   const ConnectionIcon = connection === 'online' ? IconWifi : IconWifiOff;
 
   return (
@@ -40,7 +40,8 @@ export function DeviceFrame({ label, device = 'phone', time = '14:00', connectio
       data-slot="device-frame"
       data-device={device}
       aria-label={label}
-      className={cn('flex shrink-0 flex-col rounded-3xl border border-emphasized bg-medium-background p-2', SIZE[device], className)}
+      data-height={height}
+      className={cn('flex min-w-0 flex-col rounded-3xl border border-emphasized bg-medium-background p-2', WIDTH[device], height === 'screen' ? SCREEN_HEIGHT[device] : '', className)}
     >
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-base-background text-base-foreground">
         <div data-slot="device-status-bar" className="flex shrink-0 items-center justify-between gap-3 px-4 py-1.5 text-xs text-muted-foreground">

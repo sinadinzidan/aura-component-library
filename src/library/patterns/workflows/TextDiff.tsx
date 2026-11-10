@@ -3,8 +3,11 @@ import { wordDiff } from './wordDiff';
 export type TextDiffProps = {
   before: string;
   after: string;
-  /** `inline` shows one text with both sides marked; `after` hides the removed words. */
-  show?: 'inline' | 'after';
+  /**
+   * `inline` shows one text with both sides marked. `before` shows the old text with its removed
+   * words marked; `after` the new text with its added words marked. Use the pair side by side.
+   */
+  show?: 'inline' | 'before' | 'after';
   /** Accessible name: "Changes to step 4". */
   label?: string;
 };
@@ -15,7 +18,7 @@ export type TextDiffProps = {
  * tint alone.
  */
 export function TextDiff({ before, after, show = 'inline', label }: TextDiffProps) {
-  const segments = wordDiff(before, after).filter((segment) => show === 'inline' || segment.type !== 'removed');
+  const segments = wordDiff(before, after).filter((segment) => show === 'inline' || segment.type === 'same' || segment.type === (show === 'before' ? 'removed' : 'added'));
 
   return (
     <p data-slot="text-diff" aria-label={label} className="text-sm leading-6 text-base-foreground">

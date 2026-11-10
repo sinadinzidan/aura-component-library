@@ -313,19 +313,19 @@ function ExecSummaryChart({ month }: { month: ExecSummaryMonth }) {
             <ChartTooltip content={<ChartTooltipContent />} />
             <ReferenceLine
               y={EXEC_SUMMARY_PLAN}
-              stroke="var(--color-muted-foreground)"
+              stroke="var(--muted-foreground)"
               strokeDasharray="4 4"
-              label={{ value: `Plan ${formatValue(EXEC_SUMMARY_PLAN, 2)}`, position: 'insideBottomRight', fill: 'var(--color-muted-foreground)', fontSize: 12 }}
+              label={{ value: `Plan ${formatValue(EXEC_SUMMARY_PLAN, 2)}`, position: 'insideBottomRight', fill: 'var(--muted-foreground)', fontSize: 12 }}
             />
             <Area dataKey="export" type="monotone" stroke="var(--color-export)" fill="var(--color-export)" fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
             {month.notes.map((note) => (
               <ReferenceLine
                 key={note.id}
                 x={note.day}
-                stroke="var(--color-base-foreground)"
+                stroke="var(--base-foreground)"
                 strokeWidth={activeNote === note.id ? 2 : 1}
                 strokeDasharray={activeNote === note.id ? undefined : '2 3'}
-                label={{ value: note.id, position: 'top', fill: 'var(--color-base-foreground)', fontSize: 12, fontWeight: 600 }}
+                label={{ value: note.id, position: 'top', fill: 'var(--base-foreground)', fontSize: 12, fontWeight: 600 }}
               />
             ))}
           </AreaChart>

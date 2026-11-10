@@ -114,7 +114,7 @@ function OverviewExportPanel() {
             <XAxis dataKey="time" tickLine={false} axisLine={false} minTickGap={40} />
             <YAxis domain={[4, 4.6]} ticks={[4, 4.2, 4.4, 4.6]} tickLine={false} axisLine={false} width={32} />
             <ChartTooltip content={<ChartTooltipContent />} />
-            <ReferenceLine y={PLANT_KPIS.gasExport.target} stroke="var(--color-muted-foreground)" strokeDasharray="4 4" />
+            <ReferenceLine y={PLANT_KPIS.gasExport.target} stroke="var(--muted-foreground)" strokeDasharray="4 4" />
             <Area
               dataKey="export"
               type="monotone"

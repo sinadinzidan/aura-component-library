@@ -47,7 +47,7 @@ function FormatReadout({ label, value, unit, decimals }: { label: string; value:
   return (
     <div>
       <p className="text-xs text-muted-foreground">{label}</p>
-      <ValueReadout value={value} unit={unit} decimals={decimals} size="sm" />
+      <ValueReadout value={value} unit={value === null ? undefined : unit} decimals={decimals} size="sm" />
     </div>
   );
 }

@@ -77,6 +77,9 @@ const DAY_NAMES: Record<string, string> = {
   sat: 'Saturday 14 March',
 };
 
+/** Tags and permit numbers are set in monospace; places are not. */
+const isTag = (text: string | undefined): boolean => text !== undefined && /\d/.test(text);
+
 function eventsOn(dayId: string): PlanEvent[] {
   return WEEK_EVENTS.filter((event) => event.dayId === dayId).sort((a, b) => a.start - b.start);
 }
@@ -95,7 +98,7 @@ function agendaDay(dayId: string, note?: string): AgendaDay {
         title: event.title,
         detail: (
           <>
-            <span className="font-mono">{event.detail}</span> · {event.crew}
+            <span className={isTag(event.detail) ? 'font-mono' : undefined}>{event.detail}</span> · {event.crew}
           </>
         ),
         conflict: event.conflict,
@@ -155,7 +158,7 @@ function ScheduleCalUpcomingCard() {
             <li key={event.id} className="flex flex-col gap-0.5">
               <span className="text-xs tabular-nums text-muted-foreground">{event.when}</span>
               <span className="text-sm font-medium text-base-foreground">{event.title}</span>
-              <span className="font-mono text-xs text-muted-foreground">{event.detail}</span>
+              <span className={`text-xs text-muted-foreground ${isTag(event.detail) ? 'font-mono' : ''}`}>{event.detail}</span>
             </li>
           ))}
         </ul>
@@ -329,7 +332,7 @@ const CREW_ROWS: readonly { crew: string; people: number; load: number; bars: re
     bars: [
       { id: 'm1', start: 0, end: 1.5, text: 'Seal replacement' },
       { id: 'm2', start: 3, end: 4, text: 'Bearing' },
-      { id: 'm3', start: 4, end: 5, text: 'Cooler bundle' },
+      { id: 'm3', start: 4, end: 5, text: 'Cooler' },
     ],
   },
   {
@@ -966,7 +969,7 @@ export default definePage({
         {
           id: 'ScheduleCalMonthDots',
           title: 'Month with dots',
-          note: 'A glance at which days carry work; up to three dots, then a number.',
+          note: 'A glance at which days carry work: a dot per job up to three, then the number.',
           origin: 'custom',
           align: 'stretch',
           uses: ['patterns/workflows/MonthGrid.tsx', 'patterns/workflows/monthCells.ts'],

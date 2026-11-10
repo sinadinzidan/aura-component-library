@@ -69,6 +69,9 @@ const TAG_SUGGESTED = suggestMapping(
 
 const COUNTS = { valid: 1246, warnings: 26, errors: 12 };
 
+const formatLimit = (value: number, decimals: number): string =>
+  new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
+
 const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
 const TD = 'px-3 py-2 align-middle';
 
@@ -282,8 +285,8 @@ function ImportMappingPreview() {
               <td className={`${TD} font-mono text-xs text-base-foreground`}>{sensor.tag}</td>
               <td className={`${TD} text-base-foreground`}>{sensor.name}</td>
               <td className={`${TD} text-muted-foreground`}>{sensor.unit}</td>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{sensor.lowLimit.toFixed(1)}</td>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{sensor.highLimit.toFixed(1)}</td>
+              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{formatLimit(sensor.lowLimit, sensor.decimals)}</td>
+              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{formatLimit(sensor.highLimit, sensor.decimals)}</td>
             </tr>
           ))}
         </tbody>
@@ -679,10 +682,10 @@ const OUTCOME = {
 } as const;
 
 const RUN_COLUMNS: readonly DataTableColumn<ImportRun>[] = [
-  { id: 'id', header: 'Import', cell: (run) => <span className="font-mono text-xs">{run.id}</span>, width: 'w-24' },
+  { id: 'id', header: 'Import', cell: (run) => <span className="whitespace-nowrap font-mono text-xs">{run.id}</span> },
   { id: 'file', header: 'File', cell: (run) => <span className="font-mono text-xs">{run.file}</span>, sortValue: (run) => run.file },
-  { id: 'by', header: 'By', cell: (run) => run.by, sortValue: (run) => run.by },
-  { id: 'when', header: 'Finished', cell: (run) => <span className="tabular-nums">{run.when}</span> },
+  { id: 'by', header: 'By', cell: (run) => <span className="whitespace-nowrap">{run.by}</span>, sortValue: (run) => run.by },
+  { id: 'when', header: 'Finished', cell: (run) => <span className="whitespace-nowrap tabular-nums">{run.when}</span> },
   { id: 'rows', header: 'Rows', align: 'end', cell: (run) => NUMBER.format(run.rows), sortValue: (run) => run.rows },
   { id: 'outcome', header: 'Outcome', cell: (run) => <Badge variant={OUTCOME[run.outcome].variant}>{OUTCOME[run.outcome].label}</Badge> },
 ];
@@ -941,7 +944,7 @@ export default definePage({
         {
           id: 'ImportMappingValidationClean',
           title: 'Validation, all ready',
-          note: 'Nothing to fix: the same card stays neutral and offers the next step.',
+          note: 'Nothing to fix: the zero counts go quiet and the card offers the next step.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -1030,7 +1033,6 @@ export default definePage({
           title: 'Rollback notice',
           note: 'After a large import: how long it can be undone and exactly what undoing removes.',
           origin: 'custom',
-          size: 'md',
           align: 'stretch',
           Component: ImportMappingRollback,
         },
@@ -1039,7 +1041,7 @@ export default definePage({
           title: 'Recent imports',
           note: 'The log of earlier imports and how each ended, sortable by file, person and size.',
           origin: 'custom',
-          size: 'md',
+          size: 'lg',
           align: 'stretch',
           uses: ['patterns/collections/DataTable.tsx'],
           Component: ImportMappingHistory,

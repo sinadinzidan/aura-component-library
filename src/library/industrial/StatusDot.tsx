@@ -25,9 +25,10 @@ function shapeClass(shape: DotShape, tone: Tone): string {
     case 'ring':
       return cn('rounded-full border-2', TONE_BORDER[tone]);
     case 'square':
-      return cn('rounded-xs', TONE_DOT[tone]);
+      // No radius: a themed radius would round a small square into a circle and lose the shape cue.
+      return cn('rounded-none', TONE_DOT[tone]);
     case 'diamond':
-      return cn('rotate-45 rounded-xs', TONE_DOT[tone]);
+      return cn('rotate-45 rounded-none', TONE_DOT[tone]);
     case 'dot':
       return cn('rounded-full', TONE_DOT[tone]);
   }

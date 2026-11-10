@@ -413,7 +413,7 @@ function AuthTemplateSignUpSteps() {
   const last = step === AUTH_SIGN_UP_STEPS.length - 1;
 
   return (
-    <PageFrame title="Sign up, multi-step" address="nordkapp.example/sign-up" height="lg">
+    <PageFrame title="Sign up, multi-step" address="nordkapp.example/sign-up">
       <CenteredPage
         width="lg"
         align="top"
@@ -706,7 +706,7 @@ function AuthTemplateNoProjectAccess() {
   const [requested, setRequested] = useState(false);
 
   return (
-    <PageFrame title="No access to project" address="nordkapp.example/hammerfest-prod">
+    <PageFrame title="No access to project" address="nordkapp.example/hammerfest-prod" height="lg">
       <CenteredPage
         width="md"
         surface="base"
@@ -768,7 +768,7 @@ function AuthTemplateNoProjectAccess() {
 
 function AuthTemplateSignedOut() {
   return (
-    <PageFrame title="Signed out" device="phone">
+    <PageFrame title="Signed out" device="phone" height="lg">
       <CenteredPage header={<BrandMark name="Nordkapp" />} footer={<AuthLegal />}>
         <AuthCard
           as="h1"

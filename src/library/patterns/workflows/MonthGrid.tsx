@@ -21,7 +21,7 @@ export type MonthGridProps = {
   selectedKey?: string;
   /** Makes the days of the month buttons. */
   onSelect?: (key: string) => void;
-  /** `dots` shows up to three dots and a "+N"; `count` prints the number with its noun. */
+  /** `dots` shows one dot per event up to three, then the number; `count` always prints the number. */
   display?: 'dots' | 'count';
   noun?: { one: string; other: string };
 };
@@ -29,8 +29,8 @@ export type MonthGridProps = {
 const MAX_DOTS = 3;
 
 /**
- * A month as a grid of days with how busy each one is: dots for a glance, or a count when the
- * number matters. Today is a filled marker, the selected day an outlined one, and days of the
+ * A month as a grid of days with how busy each one is: dots for a glance (a number once
+ * a day holds more than three), or always a count when the number matters. Today is a filled marker, the selected day an outlined one, and days of the
  * neighbouring months are muted. Pair it with an agenda for the selected day.
  */
 export function MonthGrid({
@@ -78,10 +78,13 @@ export function MonthGrid({
                     {entry?.flagged ? <IconAlertTriangle className="size-3 shrink-0 text-warning-foreground-strong" /> : null}
                     {display === 'dots' ? (
                       <>
-                        {Array.from({ length: Math.min(count, MAX_DOTS) }, (_, index) => (
-                          <span key={index} data-slot="month-grid-dot" className="size-1.5 rounded-full bg-muted-foreground" />
-                        ))}
-                        {count > MAX_DOTS ? <span className="text-xs tabular-nums text-muted-foreground">+{count - MAX_DOTS}</span> : null}
+                        {count > MAX_DOTS ? (
+                          <span data-slot="month-grid-count" className="text-xs font-medium tabular-nums text-medium-foreground">
+                            {count}
+                          </span>
+                        ) : (
+                          Array.from({ length: count }, (_, index) => <span key={index} data-slot="month-grid-dot" className="size-1.5 rounded-full bg-muted-foreground" />)
+                        )}
                       </>
                     ) : count > 0 ? (
                       <span data-slot="month-grid-count" className="text-xs tabular-nums text-muted-foreground">

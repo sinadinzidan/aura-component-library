@@ -158,7 +158,7 @@ function WallDisplayTrendChart({ heightClassName = 'h-80' }: { heightClassName?:
   return (
     <div className={`w-full ${heightClassName}`}>
       <ChartContainer config={WALL_TREND_CONFIG} className="aspect-auto h-full w-full" aria-label="Discharge pressure over the last 24 hours, steady around 48 barg under the high limit of 52">
-        <LineChart data={WALL_PRESSURE} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
+        <LineChart data={WALL_PRESSURE} margin={{ top: 8, right: 36, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} />
           <XAxis dataKey="time" tickLine={false} axisLine={false} interval={11} tick={{ fontSize: '1.25rem' }} tickMargin={12} height={44} />
           <YAxis domain={[40, 56]} ticks={[40, 48, 56]} tickLine={false} axisLine={false} width={56} tick={{ fontSize: '1.25rem' }} />

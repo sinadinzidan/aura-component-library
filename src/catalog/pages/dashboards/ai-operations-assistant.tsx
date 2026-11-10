@@ -512,7 +512,7 @@ function AiOpsThreadPanel({ view, messages, streaming, onAsk, onSend, onStop }: 
   return (
     <DashboardPanel title="Assistant" description="Answers from Nordkapp time series, alarms and work orders">
       <AiOpsContextChips topicId={view} />
-      <div className="h-72 w-full">
+      <div className="h-72 w-full border-y border-default">
         <ChatThread messages={messages} label="Conversation with the operations assistant" pendingLabel="Reading plant data" />
       </div>
       <AiOpsComposer streaming={streaming} onAsk={onAsk} onSend={onSend} onStop={onStop} />

@@ -53,10 +53,10 @@ const PEOPLE_STAGES: readonly { id: PeopleStage; title: string; empty: string }[
   { id: 'certified', title: 'Certified', empty: 'Nobody on this crew is certified yet.' },
 ];
 
-const PEOPLE_CREWS: Record<PeopleCrew, { name: string; pattern: string }> = {
-  a: { name: 'Crew A', pattern: 'Day shift, 06:00 to 14:00' },
-  b: { name: 'Crew B', pattern: 'Night shift, 22:00 to 06:00' },
-  m: { name: 'Maintenance', pattern: 'Day work, 07:00 to 15:00' },
+const PEOPLE_CREWS: Record<PeopleCrew, { name: string; short: string; pattern: string }> = {
+  a: { name: 'Crew A', short: 'Crew A', pattern: 'Day shift, 06:00 to 14:00' },
+  b: { name: 'Crew B', short: 'Crew B', pattern: 'Night shift, 22:00 to 06:00' },
+  m: { name: 'Maintenance', short: 'Maint.', pattern: 'Day work, 07:00 to 15:00' },
 };
 
 const PEOPLE_CREW_FILTERS = [
@@ -226,7 +226,7 @@ function PeopleLane({ stage, people, selectedId, onSelect }: PeopleLaneProps) {
           title={person.name}
           description={person.role}
           progress={Math.round((person.modules / PEOPLE_MODULES.length) * 100)}
-          meta={PEOPLE_CREWS[person.crew].name}
+          meta={PEOPLE_CREWS[person.crew].short}
           assignee={{ id: person.id, name: person.name }}
           selected={person.id === selectedId}
           onOpen={() => onSelect(person.id)}

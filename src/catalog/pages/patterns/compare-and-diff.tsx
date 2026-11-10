@@ -321,7 +321,7 @@ function CompareDiffTextSideBySide() {
     <div className="grid w-full grid-cols-2 gap-4">
       <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-muted-foreground">Revision 6</span>
-        <TextDiff before={STEP_AFTER} after={STEP_BEFORE} show="after" label="Step 4, revision 6" />
+        <TextDiff before={STEP_BEFORE} after={STEP_AFTER} show="before" label="Step 4, revision 6" />
       </div>
       <div className="flex flex-col gap-1 border-l border-default pl-4">
         <span className="text-xs font-medium text-muted-foreground">Revision 7</span>
@@ -586,11 +586,11 @@ function CompareDiffPeriods() {
 }
 
 function CompareDiffDeltaColumn() {
-  const kpi = (id: string, label: string, previous: number, value: number, decimals: number, unit: string): CompareRow => ({
+  const kpi = (id: string, name: string, previous: number, value: number, decimals: number, unit: string): CompareRow => ({
     id,
-    label,
-    left: `${previous.toFixed(decimals)} ${unit}`.trim(),
-    right: `${value.toFixed(decimals)} ${unit}`.trim(),
+    label: unit ? `${name}, ${unit}` : name,
+    left: previous.toFixed(decimals),
+    right: value.toFixed(decimals),
     delta: numericDelta(previous, value, decimals),
   });
   return (
@@ -972,7 +972,7 @@ export default definePage({
         {
           id: 'CompareDiffTextSideBySide',
           title: 'Text side by side',
-          note: 'When both versions must stay readable as a whole; each side marks only its own words.',
+          note: 'When both versions must stay readable as a whole: the old side marks what went, the new side what came.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',

@@ -26,7 +26,15 @@ describe(DeviceFrame.name, () => {
   it('sizes the frame by device', () => {
     render(<DeviceFrame label="Tablet screen" device="tablet">content</DeviceFrame>);
 
-    expect(screen.getByRole('region', { name: 'Tablet screen' })).toHaveClass('max-w-2xl');
+    expect(screen.getByRole('region', { name: 'Tablet screen' })).toHaveClass('max-w-3xl');
+  });
+
+  it('keeps the device height unless cropped to its content', () => {
+    const { rerender } = render(<DeviceFrame label="Screen">content</DeviceFrame>);
+    expect(screen.getByRole('region', { name: 'Screen' })).toHaveClass('min-h-144');
+
+    rerender(<DeviceFrame label="Screen" height="content">content</DeviceFrame>);
+    expect(screen.getByRole('region', { name: 'Screen' })).not.toHaveClass('min-h-144');
   });
 
   it('renders header and footer slots around the content', () => {

@@ -1,5 +1,5 @@
-import { StatusDot } from '../industrial/StatusDot';
 import type { Tone } from '../industrial/status';
+import { StatusDot } from '../industrial/StatusDot';
 
 export type ShellStatusItem = {
   id: string;

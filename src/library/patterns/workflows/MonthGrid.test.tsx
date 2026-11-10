@@ -26,11 +26,11 @@ describe(MonthGrid.name, () => {
     expect(screen.getByRole('button', { name: '14, no jobs' })).toBeInTheDocument();
   });
 
-  it('caps the dots at three and prints the rest', () => {
-    const { container } = render(<MonthGrid label="March 2026" weeks={WEEKS} entries={ENTRIES} />);
+  it('shows a dot per event up to three, then the number', () => {
+    const { container } = render(<MonthGrid label="March 2026" weeks={WEEKS} entries={{ ...ENTRIES, '2026-03-16': { count: 3 } }} />);
 
     expect(container.querySelectorAll('[data-slot="month-grid-dot"]')).toHaveLength(4);
-    expect(screen.getByText('+2')).toBeInTheDocument();
+    expect([...container.querySelectorAll('[data-slot="month-grid-count"]')].map((node) => node.textContent)).toEqual(['5']);
   });
 
   it('prints the number in count display', () => {

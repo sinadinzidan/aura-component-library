@@ -1,4 +1,4 @@
-import { IconCheck } from '@cognite/aura/icons';
+import { IconCircle, IconCircleCheck } from '@cognite/aura/icons';
 
 export type MergeSide = 'left' | 'right';
 
@@ -20,7 +20,7 @@ export type MergeChoiceRowProps = {
 
 /**
  * One conflicting field of a merge: the two candidate values as a pair of buttons, one of which
- * is kept. The kept side gets a check mark and a stronger outline; the other is struck through,
+ * is kept. The kept side gets a checked circle and a stronger outline; the other is struck through,
  * so the outcome reads without colour. Stack rows under shared column headings.
  */
 export function MergeChoiceRow({ label, left, right, leftLabel, rightLabel, choice, onChoose, mono = false }: MergeChoiceRowProps) {
@@ -44,13 +44,17 @@ export function MergeChoiceRow({ label, left, right, leftLabel, rightLabel, choi
             type="button"
             aria-pressed={kept}
             aria-label={`Keep ${name}: ${value}`}
-            className={`flex min-h-9 min-w-0 cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-left text-sm outline-none hover:bg-base-background-hover focus-visible:shadow-focus-ring ${
+            className={`flex min-h-9 min-w-0 cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-left text-sm outline-none hover:bg-base-background-hover focus-visible:shadow-focus-ring ${
               kept ? 'border-emphasized font-medium text-base-foreground' : 'border-default'
-            } ${dropped ? 'text-muted-foreground line-through' : 'text-base-foreground'}`}
+            } ${dropped ? 'text-muted-foreground' : 'text-base-foreground'}`}
             onClick={() => onChoose(side)}
           >
-            <span className={`min-w-0 break-words tabular-nums ${mono ? 'font-mono text-xs' : ''}`}>{value}</span>
-            {kept ? <IconCheck aria-hidden="true" className="size-4 shrink-0" /> : null}
+            {kept ? (
+              <IconCircleCheck aria-hidden="true" data-slot="merge-kept" className="size-4 shrink-0" />
+            ) : (
+              <IconCircle aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+            )}
+            <span className={`min-w-0 break-words tabular-nums ${mono ? 'font-mono text-xs' : ''} ${dropped ? 'line-through' : ''}`}>{value}</span>
           </button>
         );
       })}

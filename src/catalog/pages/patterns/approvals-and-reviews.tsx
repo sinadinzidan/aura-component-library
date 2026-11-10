@@ -67,15 +67,16 @@ type PendingRequest = {
   requesterId: string;
   waited: string;
   due: string;
+  reason: string;
   late?: boolean;
 };
 
 const PENDING: readonly PendingRequest[] = [
-  { id: 'MOC-2231', title: 'Raise high alarm limit on 23-TT-92532', kind: 'Alarm limit change', requesterId: 'ak', waited: '4 h', due: '5 h 20 min left' },
-  { id: 'PTW-2291', title: 'Hot work on interstage cooler 23-HA-9114', kind: 'Permit to work', requesterId: 'tb', waited: '1 h', due: '40 min left' },
-  { id: 'MV-0013', title: 'Publish vibration model v13', kind: 'Model version', requesterId: 'ak', waited: '2 d', due: 'Overdue by 6 h', late: true },
-  { id: 'IMP-0418', title: 'Import 1,284 tags from nordkapp-tags.csv', kind: 'CSV import', requesterId: 'ms', waited: '20 min', due: '2 d left' },
-  { id: 'ACL-0077', title: 'Write access to data set Compressor telemetry', kind: 'Access request', requesterId: 'jn', waited: '3 h', due: '1 d left' },
+  { id: 'MOC-2231', title: 'Raise high alarm limit on 23-TT-92532', kind: 'Alarm limit change', requesterId: 'ak', waited: '4 h', due: '5 h 20 min left', reason: 'The alarm trips during warm restarts, four times this week.' },
+  { id: 'PTW-2291', title: 'Hot work on interstage cooler 23-HA-9114', kind: 'Permit to work', requesterId: 'tb', waited: '1 h', due: '40 min left', reason: 'Weld repair on the cooler support. Gas test and fire watch are arranged for 15:00.' },
+  { id: 'MV-0013', title: 'Publish vibration model v13', kind: 'Model version', requesterId: 'ak', waited: '2 d', due: 'Overdue by 6 h', reason: 'False alarms on 23-KA-9101 drop from 9 to 2 a week in back-testing.', late: true },
+  { id: 'IMP-0418', title: 'Import 1,284 tags from nordkapp-tags.csv', kind: 'CSV import', requesterId: 'ms', waited: '20 min', due: '2 d left', reason: 'Yearly update of the instrument tag list from the engineering register.' },
+  { id: 'ACL-0077', title: 'Write access to data set Compressor telemetry', kind: 'Access request', requesterId: 'jn', waited: '3 h', due: '1 d left', reason: 'Needed to correct calibration offsets after the transmitter replacement.' },
 ];
 
 function ApprovalReviewRequestCard() {
@@ -432,11 +433,11 @@ function ApprovalReviewHistory() {
       <EventTimeline
         label="Approval history for MOC-2198"
         events={[
-          { id: 'h1', time: '26 Feb, 08:20', title: 'Requested by Tomás Barros', detail: 'Raise high-high trip on 23-VT-92540 from 11.0 to 12.5 mm/s.' },
-          { id: 'h2', time: '26 Feb, 09:05', title: 'Approved by Liv Wold', detail: 'Shift supervisor. "Agree it trips too early on start-up."' },
-          { id: 'h3', time: '26 Feb, 11:30', title: 'Changes requested by Aisha Khan', detail: 'Asked for the vendor protection limit.', tone: 'warning', shape: 'diamond' },
-          { id: 'h4', time: '26 Feb, 12:10', title: 'Resubmitted by Tomás Barros', detail: 'Attached data sheet DS-23-9101.' },
-          { id: 'h5', time: '26 Feb, 13:45', title: 'Rejected by Aisha Khan', detail: '11.0 mm/s is the machine protection limit.', tone: 'critical', shape: 'square' },
+          { id: 'h1', group: '26 February', time: '08:20', title: 'Requested by Tomás Barros', detail: 'Raise high-high trip on 23-VT-92540 from 11.0 to 12.5 mm/s.' },
+          { id: 'h2', group: '26 February', time: '09:05', title: 'Approved by Liv Wold', detail: 'Shift supervisor. "Agree it trips too early on start-up."' },
+          { id: 'h3', group: '26 February', time: '11:30', title: 'Changes requested by Aisha Khan', detail: 'Asked for the vendor protection limit.', tone: 'warning', shape: 'diamond' },
+          { id: 'h4', group: '26 February', time: '12:10', title: 'Resubmitted by Tomás Barros', detail: 'Attached data sheet DS-23-9101.' },
+          { id: 'h5', group: '26 February', time: '13:45', title: 'Rejected by Aisha Khan', detail: '11.0 mm/s is the machine protection limit.', tone: 'critical', shape: 'square' },
         ]}
       />
     </div>
@@ -699,6 +700,7 @@ function ApprovalReviewInbox() {
           title={request.title}
           requester={requester}
           requestedAt={`${request.waited} ago`}
+          reason={request.reason}
           state={state}
           decision={state === 'approved' ? 'Approved by you · 12 Mar, 14:00' : 'Rejected by you · 12 Mar, 14:00'}
           footerNote={request.due}

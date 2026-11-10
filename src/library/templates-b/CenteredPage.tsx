@@ -47,14 +47,14 @@ export function CenteredPage({ header, footer, children, width = 'sm', align = '
       ) : null}
       <main
         data-slot="centered-page-main"
-        className={cn('flex flex-1 flex-col items-center px-4 py-8', align === 'center' ? 'justify-center' : 'justify-start')}
+        className={cn('flex flex-1 flex-col items-center px-4 py-6', align === 'center' ? 'justify-center' : 'justify-start')}
       >
         <div className={cn('flex w-full flex-col gap-4', WIDTH[width])}>{children}</div>
       </main>
       {footer ? (
         <footer
           data-slot="centered-page-footer"
-          className="flex shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-1 px-6 py-4 text-xs text-muted-foreground"
+          className="flex shrink-0 flex-wrap items-center justify-center gap-x-4 gap-y-1 px-6 py-3 text-xs text-muted-foreground"
         >
           {footer}
         </footer>
