@@ -10,7 +10,11 @@ import { SidebarNav } from './SidebarNav';
 import { ThemeRoot } from './ThemeRoot';
 import { TopNav } from './TopNav';
 
-type KeyTarget = Pick<Document, 'addEventListener' | 'removeEventListener' | 'documentElement'>;
+type KeyTarget = {
+  addEventListener: (type: 'keydown', listener: (event: KeyboardEvent) => void) => void;
+  removeEventListener: (type: 'keydown', listener: (event: KeyboardEvent) => void) => void;
+  documentElement: Pick<HTMLElement, 'classList' | 'setAttribute'>;
+};
 
 type CatalogAppProps = { doc: KeyTarget };
 

@@ -206,6 +206,29 @@ describe(CatalogApp.name, () => {
 
     expect(document.documentElement.classList.contains('dark')).toBe(true);
   });
+
+  it('applies a theme preset to the document root and syncs it', async () => {
+    renderApp(channel, deps);
+
+    await userEvent.click(screen.getByRole('button', { name: /Theme/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Control room' }));
+
+    expect(document.documentElement).toHaveAttribute('data-accent', 'nordic');
+    expect(document.documentElement).toHaveAttribute('data-shape', 'sharp');
+    expect(document.documentElement).toHaveAttribute('data-contrast', 'high');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+    expect(lastSynced(channel)).toMatchObject({ theme: { accent: 'nordic', shape: 'sharp', contrast: 'high' } });
+  });
+
+  it('changes a single theme option and keeps the rest', async () => {
+    renderApp(createChannel(JSON.stringify({ theme: { accent: 'fjord', shape: 'soft' } })), deps);
+
+    await userEvent.click(screen.getByRole('button', { name: /Theme/ }));
+    await userEvent.click(await screen.findByRole('radio', { name: 'Dusk' }));
+
+    expect(document.documentElement).toHaveAttribute('data-accent', 'dusk');
+    expect(document.documentElement).toHaveAttribute('data-shape', 'soft');
+  });
 });
 
 function createChannel(initialState: string | undefined): HostChannel {

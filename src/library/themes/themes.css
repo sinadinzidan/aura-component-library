@@ -1,0 +1,311 @@
+/*
+ * Aura theme options. Generated from themes.ts — do not edit by hand.
+ * Import after Aura's stylesheet, then set attributes on the root element:
+ *   data-accent="mountain|fjord|nordic|aurora|dusk|amber|pink"
+ *   data-surface="neutral|tinted"   data-shape="sharp|default|soft"   data-contrast="default|high"
+ * Light and dark come from Aura's own .dark class.
+ */
+
+[data-accent='fjord'] {
+  --primary-background: var(--fjord-700);
+  --primary-background-hover: var(--fjord-800);
+  --primary-foreground: var(--mountain-white);
+  --ring-default: var(--fjord-600);
+  --link-foreground: var(--fjord-700);
+  --link-foreground-hover: var(--fjord-800);
+}
+
+.dark[data-accent='fjord'],
+.dark [data-accent='fjord'],
+[data-accent='fjord'] .dark {
+  --primary-background: var(--fjord-300);
+  --primary-background-hover: var(--fjord-200);
+  --primary-foreground: var(--fjord-950);
+  --ring-default: var(--fjord-400);
+  --link-foreground: var(--fjord-300);
+  --link-foreground-hover: var(--fjord-200);
+}
+
+[data-accent='fjord'][data-surface='tinted'] {
+  --muted-background: var(--fjord-50);
+  --muted-background-hover: var(--fjord-100);
+  --card-background: var(--fjord-50);
+  --card-background-hover: var(--fjord-100);
+  --secondary-background: var(--fjord-100);
+  --secondary-background-hover: var(--fjord-200);
+  --secondary-foreground: var(--fjord-800);
+  --muted-foreground: var(--mountain-650);
+}
+
+.dark[data-accent='fjord'][data-surface='tinted'],
+.dark [data-accent='fjord'][data-surface='tinted'],
+[data-accent='fjord'][data-surface='tinted'] .dark {
+  --muted-background: var(--fjord-950);
+  --muted-background-hover: var(--fjord-900);
+  --card-background: var(--fjord-900);
+  --card-background-hover: var(--fjord-800);
+  --secondary-background: var(--fjord-800);
+  --secondary-background-hover: var(--fjord-700);
+  --secondary-foreground: var(--fjord-100);
+  --muted-foreground: var(--mountain-400);
+}
+
+[data-accent='nordic'] {
+  --primary-background: var(--nordic-700);
+  --primary-background-hover: var(--nordic-800);
+  --primary-foreground: var(--mountain-white);
+  --ring-default: var(--nordic-600);
+  --link-foreground: var(--nordic-700);
+  --link-foreground-hover: var(--nordic-800);
+}
+
+.dark[data-accent='nordic'],
+.dark [data-accent='nordic'],
+[data-accent='nordic'] .dark {
+  --primary-background: var(--nordic-300);
+  --primary-background-hover: var(--nordic-200);
+  --primary-foreground: var(--nordic-950);
+  --ring-default: var(--nordic-400);
+  --link-foreground: var(--nordic-300);
+  --link-foreground-hover: var(--nordic-200);
+}
+
+[data-accent='nordic'][data-surface='tinted'] {
+  --muted-background: var(--nordic-50);
+  --muted-background-hover: var(--nordic-100);
+  --card-background: var(--nordic-50);
+  --card-background-hover: var(--nordic-100);
+  --secondary-background: var(--nordic-100);
+  --secondary-background-hover: var(--nordic-200);
+  --secondary-foreground: var(--nordic-800);
+  --muted-foreground: var(--mountain-650);
+}
+
+.dark[data-accent='nordic'][data-surface='tinted'],
+.dark [data-accent='nordic'][data-surface='tinted'],
+[data-accent='nordic'][data-surface='tinted'] .dark {
+  --muted-background: var(--nordic-950);
+  --muted-background-hover: var(--nordic-900);
+  --card-background: var(--nordic-900);
+  --card-background-hover: var(--nordic-800);
+  --secondary-background: var(--nordic-800);
+  --secondary-background-hover: var(--nordic-700);
+  --secondary-foreground: var(--nordic-100);
+  --muted-foreground: var(--mountain-400);
+}
+
+[data-accent='aurora'] {
+  --primary-background: var(--aurora-700);
+  --primary-background-hover: var(--aurora-800);
+  --primary-foreground: var(--mountain-white);
+  --ring-default: var(--aurora-600);
+  --link-foreground: var(--aurora-700);
+  --link-foreground-hover: var(--aurora-800);
+}
+
+.dark[data-accent='aurora'],
+.dark [data-accent='aurora'],
+[data-accent='aurora'] .dark {
+  --primary-background: var(--aurora-300);
+  --primary-background-hover: var(--aurora-200);
+  --primary-foreground: var(--aurora-950);
+  --ring-default: var(--aurora-400);
+  --link-foreground: var(--aurora-300);
+  --link-foreground-hover: var(--aurora-200);
+}
+
+[data-accent='aurora'][data-surface='tinted'] {
+  --muted-background: var(--aurora-50);
+  --muted-background-hover: var(--aurora-100);
+  --card-background: var(--aurora-50);
+  --card-background-hover: var(--aurora-100);
+  --secondary-background: var(--aurora-100);
+  --secondary-background-hover: var(--aurora-200);
+  --secondary-foreground: var(--aurora-800);
+  --muted-foreground: var(--mountain-650);
+}
+
+.dark[data-accent='aurora'][data-surface='tinted'],
+.dark [data-accent='aurora'][data-surface='tinted'],
+[data-accent='aurora'][data-surface='tinted'] .dark {
+  --muted-background: var(--aurora-950);
+  --muted-background-hover: var(--aurora-900);
+  --card-background: var(--aurora-900);
+  --card-background-hover: var(--aurora-800);
+  --secondary-background: var(--aurora-800);
+  --secondary-background-hover: var(--aurora-700);
+  --secondary-foreground: var(--aurora-100);
+  --muted-foreground: var(--mountain-400);
+}
+
+[data-accent='dusk'] {
+  --primary-background: var(--dusk-700);
+  --primary-background-hover: var(--dusk-800);
+  --primary-foreground: var(--mountain-white);
+  --ring-default: var(--dusk-600);
+  --link-foreground: var(--dusk-700);
+  --link-foreground-hover: var(--dusk-800);
+}
+
+.dark[data-accent='dusk'],
+.dark [data-accent='dusk'],
+[data-accent='dusk'] .dark {
+  --primary-background: var(--dusk-300);
+  --primary-background-hover: var(--dusk-200);
+  --primary-foreground: var(--dusk-950);
+  --ring-default: var(--dusk-400);
+  --link-foreground: var(--dusk-300);
+  --link-foreground-hover: var(--dusk-200);
+}
+
+[data-accent='dusk'][data-surface='tinted'] {
+  --muted-background: var(--dusk-50);
+  --muted-background-hover: var(--dusk-100);
+  --card-background: var(--dusk-50);
+  --card-background-hover: var(--dusk-100);
+  --secondary-background: var(--dusk-100);
+  --secondary-background-hover: var(--dusk-200);
+  --secondary-foreground: var(--dusk-800);
+  --muted-foreground: var(--mountain-650);
+}
+
+.dark[data-accent='dusk'][data-surface='tinted'],
+.dark [data-accent='dusk'][data-surface='tinted'],
+[data-accent='dusk'][data-surface='tinted'] .dark {
+  --muted-background: var(--dusk-950);
+  --muted-background-hover: var(--dusk-900);
+  --card-background: var(--dusk-900);
+  --card-background-hover: var(--dusk-800);
+  --secondary-background: var(--dusk-800);
+  --secondary-background-hover: var(--dusk-700);
+  --secondary-foreground: var(--dusk-100);
+  --muted-foreground: var(--mountain-400);
+}
+
+[data-accent='amber'] {
+  --primary-background: var(--amber-700);
+  --primary-background-hover: var(--amber-800);
+  --primary-foreground: var(--mountain-white);
+  --ring-default: var(--amber-600);
+  --link-foreground: var(--amber-700);
+  --link-foreground-hover: var(--amber-800);
+}
+
+.dark[data-accent='amber'],
+.dark [data-accent='amber'],
+[data-accent='amber'] .dark {
+  --primary-background: var(--amber-300);
+  --primary-background-hover: var(--amber-200);
+  --primary-foreground: var(--amber-950);
+  --ring-default: var(--amber-400);
+  --link-foreground: var(--amber-300);
+  --link-foreground-hover: var(--amber-200);
+}
+
+[data-accent='amber'][data-surface='tinted'] {
+  --muted-background: var(--amber-50);
+  --muted-background-hover: var(--amber-100);
+  --card-background: var(--amber-50);
+  --card-background-hover: var(--amber-100);
+  --secondary-background: var(--amber-100);
+  --secondary-background-hover: var(--amber-200);
+  --secondary-foreground: var(--amber-800);
+  --muted-foreground: var(--mountain-650);
+}
+
+.dark[data-accent='amber'][data-surface='tinted'],
+.dark [data-accent='amber'][data-surface='tinted'],
+[data-accent='amber'][data-surface='tinted'] .dark {
+  --muted-background: var(--amber-950);
+  --muted-background-hover: var(--amber-900);
+  --card-background: var(--amber-900);
+  --card-background-hover: var(--amber-800);
+  --secondary-background: var(--amber-800);
+  --secondary-background-hover: var(--amber-700);
+  --secondary-foreground: var(--amber-100);
+  --muted-foreground: var(--mountain-400);
+}
+
+[data-accent='pink'] {
+  --primary-background: var(--pink-700);
+  --primary-background-hover: var(--pink-800);
+  --primary-foreground: var(--mountain-white);
+  --ring-default: var(--pink-600);
+  --link-foreground: var(--pink-700);
+  --link-foreground-hover: var(--pink-800);
+}
+
+.dark[data-accent='pink'],
+.dark [data-accent='pink'],
+[data-accent='pink'] .dark {
+  --primary-background: var(--pink-300);
+  --primary-background-hover: var(--pink-200);
+  --primary-foreground: var(--pink-950);
+  --ring-default: var(--pink-400);
+  --link-foreground: var(--pink-300);
+  --link-foreground-hover: var(--pink-200);
+}
+
+[data-accent='pink'][data-surface='tinted'] {
+  --muted-background: var(--pink-50);
+  --muted-background-hover: var(--pink-100);
+  --card-background: var(--pink-50);
+  --card-background-hover: var(--pink-100);
+  --secondary-background: var(--pink-100);
+  --secondary-background-hover: var(--pink-200);
+  --secondary-foreground: var(--pink-800);
+  --muted-foreground: var(--mountain-650);
+}
+
+.dark[data-accent='pink'][data-surface='tinted'],
+.dark [data-accent='pink'][data-surface='tinted'],
+[data-accent='pink'][data-surface='tinted'] .dark {
+  --muted-background: var(--pink-950);
+  --muted-background-hover: var(--pink-900);
+  --card-background: var(--pink-900);
+  --card-background-hover: var(--pink-800);
+  --secondary-background: var(--pink-800);
+  --secondary-background-hover: var(--pink-700);
+  --secondary-foreground: var(--pink-100);
+  --muted-foreground: var(--mountain-400);
+}
+
+[data-contrast='high'] {
+  --default: var(--mountain-300);
+  --emphasized: var(--mountain-500);
+  --muted-foreground: var(--mountain-700);
+  --medium-foreground: var(--mountain-900);
+  --secondary-foreground: var(--mountain-950);
+}
+
+.dark[data-contrast='high'],
+.dark [data-contrast='high'],
+[data-contrast='high'] .dark {
+  --default: var(--mountain-500);
+  --emphasized: var(--mountain-400);
+  --muted-foreground: var(--mountain-200);
+  --medium-foreground: var(--mountain-100);
+  --secondary-foreground: var(--mountain-white);
+}
+
+[data-shape='sharp'] {
+  --radius-xs: 0px;
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --radius-3xl: 8px;
+  --radius-4xl: 12px;
+}
+
+[data-shape='soft'] {
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
+  --radius-4xl: 40px;
+}

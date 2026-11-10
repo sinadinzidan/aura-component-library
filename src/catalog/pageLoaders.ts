@@ -12,7 +12,7 @@ const pageModules = import.meta.glob<CatalogPage>(['./pages/*/*.tsx', '!./pages/
 
 export const lookupPageLoader: PageLoaderLookup = (location) => pageModules[pageModulePath(location)] ?? null;
 
-const librarySources = import.meta.glob<string>(['../library/**/*.{ts,tsx}', '!../library/**/*.test.{ts,tsx}'], {
+const librarySources = import.meta.glob<string>(['../library/**/*.{ts,tsx,css}', '!../library/**/*.test.{ts,tsx}'], {
   query: '?raw',
   import: 'default',
 });

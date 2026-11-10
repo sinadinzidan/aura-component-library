@@ -1,8 +1,9 @@
 import { useCallback, useMemo } from 'react';
 
+import type { ThemeSettings } from '../../library/themes/themes';
 import { findArea, findPage, type ManifestArea, type PageLocation } from '../manifest';
 
-import { serializeCatalogState, type CatalogState, type Theme } from './catalogState';
+import { serializeCatalogState, type CatalogState } from './catalogState';
 import { useCatalogStorage } from './CatalogStateProvider';
 
 export type CatalogViewModel = {
@@ -16,7 +17,8 @@ export type CatalogViewModel = {
   openPage: (pageId: string) => void;
   openSpecimen: (pageId: string, specimenId: string) => void;
   closeSpecimen: () => void;
-  setTheme: (theme: Theme) => void;
+  /** Changes one or more theme options; the rest stay as they are. */
+  setTheme: (patch: Partial<ThemeSettings>) => void;
   setQuery: (query: string) => void;
   openExternal: (url: string) => void;
 };
@@ -63,7 +65,10 @@ export function useCatalogViewModel(): CatalogViewModel {
   );
 
   const closeSpecimen = useCallback(() => update({ specimen: null }), [update]);
-  const setTheme = useCallback((theme: Theme) => update({ theme }), [update]);
+  const setTheme = useCallback(
+    (patch: Partial<ThemeSettings>) => update({ theme: { ...state.theme, ...patch } }),
+    [update, state.theme]
+  );
   const setQuery = useCallback((query: string) => update({ query }), [update]);
   const openExternal = useCallback((url: string) => channel.openExternal(url), [channel]);
 

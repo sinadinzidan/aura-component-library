@@ -19,7 +19,7 @@ describe(useCatalogViewModel.name, () => {
 
     expect(result.current.location).toBeNull();
     expect(result.current.area).toBeNull();
-    expect(result.current.state.theme).toBe('light');
+    expect(result.current.state.theme.mode).toBe('light');
   });
 
   it('seeds page, area and theme from the host initial state', () => {
@@ -29,7 +29,7 @@ describe(useCatalogViewModel.name, () => {
 
     expect(result.current.location?.page.title).toBe('Button');
     expect(result.current.area?.id).toBe('primitives');
-    expect(result.current.state.theme).toBe('dark');
+    expect(result.current.state.theme.mode).toBe('dark');
   });
 
   it('opens a page and syncs the new state to the host', () => {
@@ -74,10 +74,14 @@ describe(useCatalogViewModel.name, () => {
   it('syncs theme and search query changes', () => {
     const { result } = renderHook(() => useCatalogViewModel(), { wrapper });
 
-    act(() => result.current.setTheme('dark'));
+    act(() => result.current.setTheme({ mode: 'dark' }));
+    act(() => result.current.setTheme({ accent: 'fjord', shape: 'soft' }));
     act(() => result.current.setQuery('gauge'));
 
-    expect(lastSynced(channel)).toMatchObject({ theme: 'dark', query: 'gauge' });
+    expect(lastSynced(channel)).toMatchObject({
+      theme: { mode: 'dark', accent: 'fjord', shape: 'soft', surface: 'neutral', contrast: 'default' },
+      query: 'gauge',
+    });
   });
 
   it('returns home from a page', () => {

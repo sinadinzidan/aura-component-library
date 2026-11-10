@@ -1,3 +1,5 @@
+import { DEFAULT_THEME } from '../../library/themes/themes';
+
 import { DEFAULT_STATE, parseCatalogState, serializeCatalogState } from './catalogState';
 
 describe(parseCatalogState.name, () => {
@@ -16,7 +18,13 @@ describe(parseCatalogState.name, () => {
   it('restores a known page and derives its area', () => {
     const state = parseCatalogState(JSON.stringify({ page: 'button', theme: 'dark', specimen: 'ButtonPrimary' }));
 
-    expect(state).toEqual({ area: 'primitives', page: 'button', theme: 'dark', query: '', specimen: 'ButtonPrimary' });
+    expect(state).toEqual({
+      area: 'primitives',
+      page: 'button',
+      theme: { ...DEFAULT_THEME, mode: 'dark' },
+      query: '',
+      specimen: 'ButtonPrimary',
+    });
   });
 
   it('drops an unknown page and its open specimen', () => {
@@ -34,12 +42,24 @@ describe(parseCatalogState.name, () => {
     expect(parseCatalogState(JSON.stringify({ area: 'nope' })).area).toBeNull();
   });
 
-  it('falls back to the light theme for an unknown theme', () => {
-    expect(parseCatalogState(JSON.stringify({ theme: 'sepia' })).theme).toBe('light');
+  it('falls back to the default theme for an unknown theme', () => {
+    expect(parseCatalogState(JSON.stringify({ theme: 'sepia' })).theme).toEqual(DEFAULT_THEME);
+  });
+
+  it('restores full theme settings and defaults invalid options', () => {
+    const state = parseCatalogState(JSON.stringify({ theme: { mode: 'dark', accent: 'fjord', shape: 'blobby' } }));
+
+    expect(state.theme).toEqual({ ...DEFAULT_THEME, mode: 'dark', accent: 'fjord' });
   });
 
   it('round-trips through serializeCatalogState', () => {
-    const state = { area: 'primitives', page: 'badge', theme: 'dark' as const, query: 'status', specimen: null };
+    const state = {
+      area: 'primitives',
+      page: 'badge',
+      theme: { ...DEFAULT_THEME, accent: 'nordic' as const, contrast: 'high' as const },
+      query: 'status',
+      specimen: null,
+    };
 
     expect(parseCatalogState(serializeCatalogState(state))).toEqual(state);
   });

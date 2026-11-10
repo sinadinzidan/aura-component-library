@@ -1,6 +1,5 @@
+import { DEFAULT_THEME, parseThemeSettings, type ThemeSettings } from '../../library/themes/themes';
 import { findArea, findPage } from '../manifest';
-
-export type Theme = 'light' | 'dark';
 
 /**
  * Everything a reload or a shared link must restore. `page` wins over `area`; both null is the
@@ -9,7 +8,7 @@ export type Theme = 'light' | 'dark';
 export type CatalogState = {
   area: string | null;
   page: string | null;
-  theme: Theme;
+  theme: ThemeSettings;
   query: string;
   /** Specimen whose code view is open. */
   specimen: string | null;
@@ -18,7 +17,7 @@ export type CatalogState = {
 export const DEFAULT_STATE: CatalogState = {
   area: null,
   page: null,
-  theme: 'light',
+  theme: DEFAULT_THEME,
   query: '',
   specimen: null,
 };
@@ -27,8 +26,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isTheme(value: unknown): value is Theme {
-  return value === 'light' || value === 'dark';
+/** Accepts full theme settings, or just a mode name as a short form (`"theme":"dark"`). */
+function parseTheme(value: unknown): ThemeSettings {
+  if (value === 'light' || value === 'dark') return { ...DEFAULT_THEME, mode: value };
+  return parseThemeSettings(value);
 }
 
 function stringOrNull(value: unknown): string | null {
@@ -54,7 +55,7 @@ export function parseCatalogState(raw: string | undefined): CatalogState {
   return {
     area,
     page: location ? location.page.id : null,
-    theme: isTheme(parsed.theme) ? parsed.theme : DEFAULT_STATE.theme,
+    theme: parseTheme(parsed.theme),
     query: typeof parsed.query === 'string' ? parsed.query : '',
     specimen: location ? stringOrNull(parsed.specimen) : null,
   };

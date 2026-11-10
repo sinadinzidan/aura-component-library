@@ -13,6 +13,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 3. As an app builder, I want patterns that mix primitives (forms, filter bars, page headers, list rows), so that I can assemble pages from proven blocks.
 4. As a builder of industrial apps, I want KPI tiles, gauges, trends, alarm lists, asset cards and dashboard blocks, so that operational screens share one visual language.
 5. As a reviewer, I want to see every variant in light and dark theme, so that I can trust it in both.
+7. As a product team, I want to pick a theme (accent, surface, shape, contrast) and see the whole library in it, so that different projects can look different while staying on Aura.
 6. As a teammate, I want to open a shared link and land on the same page, theme and variant, so that we can discuss one specific choice.
 
 ### Acceptance Scenarios
@@ -21,7 +22,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 - Given a primitive page, when it loads, then it shows at least 20 variants, each with a title and a one-line note on when to pick it.
 - Given a variant, when I select "View code", then I see the source of exactly that variant and can copy it.
 - Given a variant built on a reusable library component, when I view its code, then I can also open the source of that component.
-- Given any page, when I switch theme, then every variant re-renders in that theme and the choice survives a reload.
+- Given any page, when I switch mode or pick a theme preset or option, then every variant re-renders in that theme and the choice survives a reload.
 - Given the search, when I type a term, then I get matching pages and variants and can jump straight to one.
 - Given a link copied from the address bar, when someone else opens it, then they see the same page, theme and open variant.
 - Given the app runs outside Fusion, when it starts, then it still works and keeps state in the URL.
@@ -40,7 +41,8 @@ data components — all on Aura tokens so everything picked from it looks like o
 - FR-008: The Industrial area MUST be separate from the general primitives and cover metrics, charts, operations and dashboard blocks, using one shared mock plant data set.
 - FR-009: The Patterns area MUST show compositions that mix several primitives.
 - FR-010: The Templates area MUST show the page layouts described in Aura's design guide.
-- FR-011: Users MUST be able to switch between light and dark theme.
+- FR-011: Users MUST be able to switch between light and dark, and choose a theme: accent (7), surface (neutral or tinted), shape (sharp, default, soft) and contrast (default or high), or one of the named presets. Every variant MUST render in every theme.
+- FR-016: Themes MUST be implemented only as overrides of Aura tokens in one stylesheet, applied with attributes on the root or on a region, and MUST keep text contrast at WCAG AA or better.
 - FR-012: Users MUST be able to search pages and variants and jump to a result.
 - FR-013: Current page, theme, search text and open variant MUST be synced to the host so reload and shared links restore them; outside Fusion the same state MUST be kept in the URL.
 - FR-014: Pages MUST load on demand so opening the library does not load every page's code.

@@ -7,6 +7,8 @@ import { IconSearch } from '@cognite/aura/icons';
 import { MANIFEST } from '../manifest';
 import { useCatalogViewModel } from '../state/useCatalogViewModel';
 
+import { ThemeMenu } from './ThemeMenu';
+
 const HOME_TAB = 'home';
 
 type TopNavProps = { onSearch: () => void };
@@ -44,7 +46,8 @@ export function TopNav({ onSearch }: TopNavProps) {
         <Button variant="outline" size="sm" onClick={onSearch}>
           <IconSearch /> Search <Kbd>/</Kbd>
         </Button>
-        <TopbarThemeSwitcher theme={state.theme} onThemeChange={setTheme} />
+        <ThemeMenu />
+        <TopbarThemeSwitcher theme={state.theme.mode} onThemeChange={(mode) => setTheme({ mode })} />
       </TopbarRight>
     </Topbar>
   );

@@ -39,6 +39,7 @@ export const MANIFEST: readonly ManifestArea[] = [
           { id: 'spacing-and-shape', title: 'Spacing and shape', blurb: 'Spacing scale, radius and borders.' },
           { id: 'elevation', title: 'Elevation', blurb: 'Shadows, focus rings and surfaces.' },
           { id: 'icons', title: 'Icons', blurb: 'System icons, sizes and pairing rules.' },
+          { id: 'themes', title: 'Themes', blurb: 'Accent, surface, shape and contrast options.' },
         ],
       },
     ],
