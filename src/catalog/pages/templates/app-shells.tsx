@@ -58,7 +58,7 @@ import { ContentContainer } from '../../../library/templates/ContentContainer';
 import { ShellStatusBar } from '../../../library/templates/ShellStatusBar';
 import { TemplateFrame } from '../../../library/templates/TemplateFrame';
 import { ALARMS, ASSETS, PEOPLE, PLANT_KPIS, SENSORS, WORK_ORDERS, findAsset, findPerson, sensorsOf } from '../../data/plant';
-import type { Asset, Sensor, WorkOrder } from '../../data/plant';
+import type { Alarm, Asset, Sensor, WorkOrder } from '../../data/plant';
 import { formatAgo, formatDate, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
@@ -165,8 +165,12 @@ const SHELL_SENSOR_COLUMNS: readonly DataTableColumn<Sensor>[] = [
     id: 'limits',
     header: 'Limits',
     align: 'end',
-    cell: (sensor) => `${formatValue(sensor.lowLimit, sensor.decimals)} to ${formatValue(sensor.highLimit, sensor.decimals)}`,
-    width: 'w-36',
+    cell: (sensor) => (
+      <span className="whitespace-nowrap">
+        {formatValue(sensor.lowLimit, sensor.decimals)} to {formatValue(sensor.highLimit, sensor.decimals)}
+      </span>
+    ),
+    width: 'w-44',
   },
   { id: 'quality', header: 'Signal', cell: (sensor) => <StatusIndicator {...qualityStatus(sensor.quality)} size="sm" />, width: 'w-28' },
 ];
@@ -186,6 +190,28 @@ const SHELL_MOBILE_ITEMS: readonly BottomNavItem[] = [
   { id: 'assets', label: 'Assets', icon: <IconSitemap /> },
   { id: 'work-orders', label: 'Work', icon: <IconClipboardList /> },
 ];
+
+/** Readings of the two compressors the shared plant has no sensors for, in the same tag style. */
+const SHELL_STAGE_READINGS: Record<string, readonly Sensor[]> = {
+  '23-ka-9102': [
+    { id: 'pt-92631', tag: '23-PT-92631', name: 'Discharge pressure', assetId: '23-ka-9102', unit: 'barg', value: 118.2, lowLimit: 100, highLimit: 125, rangeMin: 0, rangeMax: 150, decimals: 1, quality: 'good', seed: 61 },
+    { id: 'pt-92630', tag: '23-PT-92630', name: 'Suction pressure', assetId: '23-ka-9102', unit: 'barg', value: 47.9, lowLimit: 40, highLimit: 52, rangeMin: 0, rangeMax: 60, decimals: 1, quality: 'good', seed: 62 },
+    { id: 'tt-92632', tag: '23-TT-92632', name: 'Discharge temperature', assetId: '23-ka-9102', unit: '°C', value: 132.6, lowLimit: 90, highLimit: 145, rangeMin: 0, rangeMax: 180, decimals: 1, quality: 'good', seed: 63 },
+    { id: 'vt-92640', tag: '23-VT-92640', name: 'Drive-end vibration', assetId: '23-ka-9102', unit: 'mm/s', value: 3.4, lowLimit: 0, highLimit: 7.1, rangeMin: 0, rangeMax: 15, decimals: 1, quality: 'good', seed: 64 },
+    { id: 'st-92601', tag: '23-ST-92601', name: 'Shaft speed', assetId: '23-ka-9102', unit: 'rpm', value: 9790, lowLimit: 7000, highLimit: 10500, rangeMin: 0, rangeMax: 12000, decimals: 0, quality: 'good', seed: 65 },
+    { id: 'ft-92610', tag: '23-FT-92610', name: 'Gas flow', assetId: '23-ka-9102', unit: 'Sm³/h', value: 181900, lowLimit: 120000, highLimit: 210000, rangeMin: 0, rangeMax: 250000, decimals: 0, quality: 'good', seed: 66 },
+  ],
+  '23-ka-9103': [
+    { id: 'pt-92731', tag: '23-PT-92731', name: 'Discharge pressure', assetId: '23-ka-9103', unit: 'barg', value: 2.1, lowLimit: 10, highLimit: 15, rangeMin: 0, rangeMax: 20, decimals: 1, quality: 'good', seed: 71 },
+    { id: 'pt-92730', tag: '23-PT-92730', name: 'Suction pressure', assetId: '23-ka-9103', unit: 'barg', value: 1.9, lowLimit: 1, highLimit: 4, rangeMin: 0, rangeMax: 10, decimals: 1, quality: 'good', seed: 72 },
+    { id: 'tt-92732', tag: '23-TT-92732', name: 'Discharge temperature', assetId: '23-ka-9103', unit: '°C', value: 64.3, lowLimit: 20, highLimit: 140, rangeMin: 0, rangeMax: 180, decimals: 1, quality: 'good', seed: 73 },
+    { id: 'vt-92740', tag: '23-VT-92740', name: 'Drive-end vibration', assetId: '23-ka-9103', unit: 'mm/s', value: 0.2, lowLimit: 0, highLimit: 7.1, rangeMin: 0, rangeMax: 15, decimals: 1, quality: 'good', seed: 74 },
+    { id: 'st-92701', tag: '23-ST-92701', name: 'Shaft speed', assetId: '23-ka-9103', unit: 'rpm', value: 0, lowLimit: 0, highLimit: 11000, rangeMin: 0, rangeMax: 12000, decimals: 0, quality: 'good', seed: 75 },
+    { id: 'ft-92710', tag: '23-FT-92710', name: 'Gas flow', assetId: '23-ka-9103', unit: 'Sm³/h', value: 0, lowLimit: 0, highLimit: 40000, rangeMin: 0, rangeMax: 50000, decimals: 0, quality: 'good', seed: 76 },
+  ],
+};
+
+const shellSensorsOf = (asset: Asset): readonly Sensor[] => SHELL_STAGE_READINGS[asset.id] ?? sensorsOf(asset.id);
 
 const shellAssetName = (alarm: { assetId: string }) => findAsset(alarm.assetId)?.name;
 
@@ -243,8 +269,29 @@ function ShellTopbarAction({ label, children, pressed, onClick }: { label: strin
   );
 }
 
+/** Alarms for a phone-width column: severity on its own line, so the message can wrap. */
+function ShellAlarmStack({ alarms }: { alarms: readonly Alarm[] }) {
+  return (
+    <ul aria-label="Alarms" className="flex flex-col">
+      {alarms.map((alarm) => (
+        <li key={alarm.id} className="flex flex-col gap-1.5 border-b border-default py-3 last:border-b-0">
+          <div className="flex items-center justify-between gap-3">
+            <SeverityBadge severity={alarm.severity} />
+            <span className="text-xs tabular-nums text-muted-foreground">{formatAgo(alarm.raisedAt)}</span>
+          </div>
+          <p className="text-sm text-base-foreground">{alarm.message}</p>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-mono">{alarm.sensorTag}</span> · {alarm.value}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** The body of one of the four views, without its header. */
 function ShellViewBody({ view, dense = false }: { view: string; dense?: boolean }) {
+  if (view === 'alarms' && dense) return <ShellAlarmStack alarms={SHELL_OPEN_ALARMS} />;
   if (view === 'alarms') {
     return <AlarmList alarms={SHELL_OPEN_ALARMS} label="Open alarms" formatAge={formatAgo} getAssetName={shellAssetName} density="compact" />;
   }
@@ -284,8 +331,23 @@ function ShellViewBody({ view, dense = false }: { view: string; dense?: boolean 
       />
       <div className="flex flex-col gap-3">
         <SectionHeader title="Needs attention" count={SHELL_OPEN_ALARMS.length} size="sm" as="h2" />
-        <AlarmList alarms={SHELL_OPEN_ALARMS.slice(0, 3)} label="Most severe alarms" formatAge={formatAgo} getAssetName={shellAssetName} density="compact" />
+        {dense ? (
+          <ShellAlarmStack alarms={SHELL_OPEN_ALARMS.slice(0, 3)} />
+        ) : (
+          <AlarmList alarms={SHELL_OPEN_ALARMS.slice(0, 3)} label="Most severe alarms" formatAge={formatAgo} getAssetName={shellAssetName} density="compact" />
+        )}
       </div>
+      {dense ? null : (
+        <div className="flex flex-col gap-3">
+          <SectionHeader title="Due next" count={3} size="sm" as="h2" />
+          <DataTable
+            label="Work orders due next"
+            columns={SHELL_ORDER_COLUMNS}
+            rows={[...SHELL_OPEN_ORDERS].sort((a, b) => a.dueAt - b.dueAt).slice(0, 3)}
+            getRowId={(order) => order.id}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -316,7 +378,7 @@ function ShellPage({ view, width = 'wide', heading = true }: { view: string; wid
 
 /** One asset as a pane: state, condition and its live readings with a trend each. */
 function ShellAssetPane({ asset }: { asset: Asset }) {
-  const sensors = sensorsOf(asset.id);
+  const sensors = shellSensorsOf(asset);
 
   return (
     <div className="flex flex-col gap-6">
@@ -336,7 +398,7 @@ function ShellAssetPane({ asset }: { asset: Asset }) {
               </div>
               <div className="w-20 shrink-0">
                 <Sparkline
-                  values={makeValues({ seed: sensor.seed, points: 24, base: sensor.value, amplitude: sensor.value * 0.02, noise: sensor.value * 0.01 })}
+                  values={makeValues({ seed: sensor.seed, points: 24, base: sensor.value, amplitude: sensor.value * 0.02, noise: sensor.value * 0.01, min: 0 })}
                   label={`${sensor.name}, last 24 hours`}
                   unit={sensor.unit}
                   decimals={sensor.decimals}
@@ -590,7 +652,7 @@ function ShellTemplateThreePanel() {
           />
         }
         sidebar={
-          <nav aria-label="Asset hierarchy" className="flex w-64 flex-col gap-2 overflow-y-auto border-r border-default p-3">
+          <nav aria-label="Asset hierarchy" className="flex w-72 flex-col gap-2 overflow-y-auto border-r border-default p-3">
             <p className="px-1 text-xs font-medium text-muted-foreground">Hierarchy</p>
             <AssetTree
               nodes={SHELL_TREE}
@@ -602,7 +664,7 @@ function ShellTemplateThreePanel() {
           </nav>
         }
         inspector={
-          <aside aria-label="Properties" className="flex w-64 flex-col gap-4 overflow-y-auto border-l border-default p-4">
+          <aside aria-label="Properties" className="flex w-56 flex-col gap-4 overflow-y-auto border-l border-default p-4">
             <h2 className="text-sm font-semibold text-base-foreground">Properties</h2>
             <PropertyList
               layout="stacked"
@@ -886,7 +948,7 @@ function ShellTemplateAssistant() {
             <div className="w-80">
               <AssistantPanel
                 title="Plant assistant"
-                context={`Reading ${SHELL_VIEWS[view].title.toLowerCase()}. It cannot change anything.`}
+                context={`Reads ${SHELL_VIEWS[view].title.toLowerCase()} only`}
                 icon={<IconSparkles />}
                 footer={
                   <form onSubmit={send} className="flex items-center gap-2">
