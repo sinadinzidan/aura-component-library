@@ -1,5 +1,5 @@
-import { pathTo } from './hierarchy';
-import type { DrillNode, DrillTree } from './hierarchy';
+import { DRILL_LEVELS, pathTo } from './hierarchy';
+import type { DrillLevel, DrillNode, DrillTree } from './hierarchy';
 
 /**
  * State of one drill-down journey: where you are (`path`), how deep you have been (`trail`, so a
@@ -136,4 +136,23 @@ export function drillKeyAction(key: string, state: Pick<DrillState, 'focusId' | 
     default:
       return null;
   }
+}
+
+export type LevelStep = {
+  level: DrillLevel;
+  depth: number;
+  /** The node on the path or the trail at this level; `null` when nothing has been picked yet. */
+  node: DrillNode | null;
+  current: boolean;
+  /** Whether the journey can go straight to this level. */
+  reachable: boolean;
+};
+
+/** The four levels as steps of a rail: what is selected at each, where you are, where you can go. */
+export function levelSteps(tree: DrillTree, state: Pick<DrillState, 'path' | 'trail'>): LevelStep[] {
+  return DRILL_LEVELS.map((level, depth) => {
+    const id = state.trail[depth];
+    const node = id === undefined ? null : (tree.byId.get(id) ?? null);
+    return { level, depth, node, current: depth === state.path.length - 1, reachable: node !== null };
+  });
 }

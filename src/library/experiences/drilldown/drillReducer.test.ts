@@ -1,5 +1,5 @@
 import { fixtureTree } from './drilldownFixture';
-import { createDrillReducer, createDrillState, currentNode, drillKeyAction, pathNodes } from './drillReducer';
+import { createDrillReducer, createDrillState, currentNode, drillKeyAction, levelSteps, pathNodes } from './drillReducer';
 import type { DrillAction, DrillState } from './drillReducer';
 
 const tree = fixtureTree();
@@ -169,5 +169,23 @@ describe(drillKeyAction.name, () => {
   it('returns to the top on Home and ignores other keys', () => {
     expect(drillKeyAction('Home', deep)).toEqual({ type: 'reset' });
     expect(drillKeyAction('a', deep)).toBeNull();
+  });
+});
+
+describe(levelSteps.name, () => {
+  it('lists the four levels with the current one marked', () => {
+    const steps = levelSteps(tree, run([{ type: 'drill', id: 'area-b' }]));
+
+    expect(steps.map((step) => step.level)).toEqual(['site', 'area', 'equipment', 'sensor']);
+    expect(steps.map((step) => step.current)).toEqual([false, true, false, false]);
+    expect(steps.map((step) => step.node?.id ?? null)).toEqual(['site', 'area-b', null, null]);
+  });
+
+  it('keeps deeper levels reachable along the trail after going up', () => {
+    const steps = levelSteps(tree, run([{ type: 'jump', id: 'tt' }, { type: 'depth', depth: 1 }]));
+
+    expect(steps.map((step) => step.reachable)).toEqual([true, true, true, true]);
+    expect(steps[3]?.node?.id).toBe('tt');
+    expect(steps[1]?.current).toBe(true);
   });
 });

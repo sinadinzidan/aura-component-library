@@ -15,6 +15,7 @@ import { DueLabel } from '../../../library/industrial/operations/DueLabel';
 import { HealthBreakdown } from '../../../library/industrial/operations/HealthBreakdown';
 import { PriorityBadge } from '../../../library/industrial/operations/PriorityBadge';
 import { workOrderStatusLabel } from '../../../library/industrial/operations/workOrders';
+import { ProgressRing } from '../../../library/industrial/ProgressRing';
 import { RadialGauge } from '../../../library/industrial/RadialGauge';
 import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
 import { formatLimit, formatReading, healthStatus, runStateStatus } from '../../../library/industrial/status';
@@ -262,7 +263,7 @@ const COMP_INDICATORS = [
 
 /** The operating point against the three edges of the compressor envelope. */
 const COMP_ENVELOPE = [
-  { id: 'flow', label: 'Inlet flow, surge to choke', value: 182, unit: 'kSm³/h', decimals: 0, min: 100, max: 240, low: 138, high: 221 },
+  { id: 'flow', label: 'Inlet flow', value: 182, unit: 'kSm³/h', decimals: 0, min: 100, max: 240, low: 138, high: 221 },
   { id: 'ratio', label: 'Pressure ratio', value: 3.7, unit: '', decimals: 1, min: 2, max: 5.5, low: 2.8, high: 4.6 },
   { id: 'speed', label: 'Shaft speed', value: 9840, unit: 'rpm', decimals: 0, min: 6000, max: 12000, low: 7000, high: 10500 },
 ];
@@ -521,6 +522,13 @@ function CompHealthPanel() {
       description="Score per indicator, 0 to 100"
       footnote="Watch below 80, poor below 60. Vibration and temperature pull the score down."
     >
+      <div className="flex items-center gap-4 border-b border-default pb-3">
+        <ProgressRing label="Overall health" value={COMP_ASSET.healthScore} unit="" decimals={0} size="md" tone="warning" showLabel={false} />
+        <div className="min-w-0 flex-1">
+          <StatusIndicator {...healthStatus(COMP_ASSET.health)} />
+          <p className="mt-1 text-xs text-muted-foreground">Down 7 points in a week</p>
+        </div>
+      </div>
       <HealthBreakdown indicators={COMP_INDICATORS} label="Compressor health by indicator" />
     </DashboardPanel>
   );
@@ -850,7 +858,7 @@ export default definePage({
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/HealthBreakdown.tsx'],
+          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/HealthBreakdown.tsx', 'industrial/ProgressRing.tsx'],
           Component: CompHealthDashBreakdown,
         },
         {

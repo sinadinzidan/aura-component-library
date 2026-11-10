@@ -49,7 +49,7 @@ const isSame = (a: RiskCell | null | undefined, b: RiskCell): boolean => a?.like
 /**
  * A 5 × 5 risk matrix that doubles as a picker: likelihood up the side, consequence along the
  * bottom, each cell showing its score on the tint of its risk level. Arrow keys move between
- * cells; the chosen cell is outlined and spelled out underneath.
+ * cells; the chosen cell is framed and spelled out underneath.
  */
 export function RiskMatrix({
   label,
@@ -106,10 +106,10 @@ export function RiskMatrix({
                     onClick={interactive ? () => onChange(cell) : undefined}
                     onKeyDown={(event) => moveFocus(event, cell)}
                     className={cn(
-                      'relative flex h-9 items-center justify-center rounded-md text-sm tabular-nums outline-none focus-visible:shadow-focus-ring',
+                      'relative flex h-9 items-center justify-center rounded-md border-2 text-sm tabular-nums outline-none focus-visible:shadow-focus-ring',
                       TONE_SURFACE[status.tone],
                       interactive ? 'cursor-pointer' : 'cursor-default',
-                      selected ? 'font-semibold outline-2 -outline-offset-2 outline-base-foreground' : undefined
+                      selected ? 'border-base-foreground font-semibold' : 'border-transparent'
                     )}
                   >
                     {riskScore(likelihood, consequence)}

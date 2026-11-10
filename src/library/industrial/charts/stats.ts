@@ -85,6 +85,14 @@ export function vitalFew(rows: readonly ParetoRow[], threshold = 80): number {
   return index === -1 ? rows.length : index + 1;
 }
 
+/** "3 of 7 causes account for 82 % of the total." */
+export function paretoSummary(rows: readonly ParetoInput[], threshold = 80): string {
+  const sorted = paretoRows(rows);
+  if (sorted.length === 0) return 'No data.';
+  const few = vitalFew(sorted, threshold);
+  return `${few} of ${sorted.length} causes account for ${Math.round(sorted[few - 1].cumulative)} % of the total; the largest is ${sorted[0].label}.`;
+}
+
 export type CumulativePoint = { value: number; share: number };
 
 /** Empirical cumulative distribution: for each sorted value, the percent of values at or below it. */

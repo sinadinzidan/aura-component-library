@@ -6,8 +6,9 @@ import { ChartPlaceholder } from '../../../library/industrial/charts/ChartPlaceh
 import { HeatMapGrid } from '../../../library/industrial/charts/HeatMapGrid';
 import { HeatScaleLegend } from '../../../library/industrial/charts/HeatScaleLegend';
 import { Histogram } from '../../../library/industrial/charts/Histogram';
-import { RiskMatrix, countByRiskLevel } from '../../../library/industrial/charts/RiskMatrix';
-import type { RiskItem } from '../../../library/industrial/charts/RiskMatrix';
+import { countByRiskLevel } from '../../../library/industrial/charts/risk';
+import type { RiskItem } from '../../../library/industrial/charts/risk';
+import { RiskMatrix } from '../../../library/industrial/charts/RiskMatrix';
 import { ScatterPlot } from '../../../library/industrial/charts/ScatterPlot';
 import { boxStats, bucketize, correlation, quantile } from '../../../library/industrial/charts/stats';
 import type { BoxStats } from '../../../library/industrial/charts/stats';
@@ -787,7 +788,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/charts/RiskMatrix.tsx'],
+          uses: ['industrial/charts/RiskMatrix.tsx', 'industrial/charts/risk.ts'],
           Component: DistributionRiskMatrix,
         },
         {

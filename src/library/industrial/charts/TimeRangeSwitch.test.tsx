@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { DEFAULT_TIME_RANGES, TimeRangeSwitch, findTimeRange } from './TimeRangeSwitch';
+import { TimeRangeSwitch } from './TimeRangeSwitch';
 
 describe(TimeRangeSwitch.name, () => {
   it('offers the default ranges under an accessible name', () => {
@@ -42,16 +42,5 @@ describe(TimeRangeSwitch.name, () => {
 
     expect(screen.getByRole('tablist', { name: 'Shift' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Night' })).toHaveAttribute('aria-disabled', 'true');
-  });
-});
-
-describe(findTimeRange.name, () => {
-  it('finds the option by value', () => {
-    expect(findTimeRange(DEFAULT_TIME_RANGES, '7d')?.label).toBe('7 d');
-  });
-
-  it('falls back to the first option', () => {
-    expect(findTimeRange(DEFAULT_TIME_RANGES, 'nope')?.value).toBe('1h');
-    expect(findTimeRange([], 'nope')).toBeUndefined();
   });
 });

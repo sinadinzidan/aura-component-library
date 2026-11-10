@@ -68,6 +68,8 @@ export function EventTicker({ items, label, secondsPerItem = 7, defaultPaused = 
       easing: 'linear',
     });
     animationRef.current = animation;
+    // Cancelling rejects `finished`; nobody waits for it.
+    animation.finished.catch(() => undefined);
     return () => {
       animation.cancel();
       animationRef.current = null;

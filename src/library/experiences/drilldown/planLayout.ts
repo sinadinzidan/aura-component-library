@@ -158,3 +158,24 @@ export function reveal(scale: number, from: number, to: number): number {
   if (to === from) return scale >= to ? 1 : 0;
   return Math.min(1, Math.max(0, (scale - from) / (to - from)));
 }
+
+const clipToRect = (rect: PlanRect, fromX: number, fromY: number, toX: number, toY: number): { x: number; y: number } => {
+  // Walk from the centre of `rect` towards the other point and stop at the edge.
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const tx = dx === 0 ? Infinity : rect.width / 2 / Math.abs(dx);
+  const ty = dy === 0 ? Infinity : rect.height / 2 / Math.abs(dy);
+  const t = Math.min(tx, ty, 1);
+  return { x: fromX + dx * t, y: fromY + dy * t };
+};
+
+/** The visible part of a straight link between two blocks: from the edge of one to the edge of the other. */
+export function linkSegment(from: PlanRect, to: PlanRect): { x1: number; y1: number; x2: number; y2: number } {
+  const ax = from.x + from.width / 2;
+  const ay = from.y + from.height / 2;
+  const bx = to.x + to.width / 2;
+  const by = to.y + to.height / 2;
+  const start = clipToRect(from, ax, ay, bx, by);
+  const end = clipToRect(to, bx, by, ax, ay);
+  return { x1: start.x, y1: start.y, x2: end.x, y2: end.y };
+}

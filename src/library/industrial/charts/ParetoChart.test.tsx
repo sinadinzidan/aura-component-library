@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { ParetoChart, paretoSummary } from './ParetoChart';
+import { ParetoChart } from './ParetoChart';
 
 const CAUSES = [
   { label: 'Seal leak', value: 6 },
@@ -33,19 +33,5 @@ describe(ParetoChart.name, () => {
 
     expect(screen.getByText('h')).toBeInTheDocument();
     expect(screen.getByText('%')).toBeInTheDocument();
-  });
-});
-
-describe(paretoSummary.name, () => {
-  it('counts the causes that reach the threshold', () => {
-    expect(paretoSummary(CAUSES)).toBe('3 of 4 causes account for 93 % of the total; the largest is Compressor trip.');
-  });
-
-  it('respects another threshold', () => {
-    expect(paretoSummary(CAUSES, 40)).toMatch(/^1 of 4 causes account for 47 %/);
-  });
-
-  it('handles no data', () => {
-    expect(paretoSummary([])).toBe('No data.');
   });
 });

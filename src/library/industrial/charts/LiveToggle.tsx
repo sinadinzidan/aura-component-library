@@ -4,7 +4,7 @@ import { IconPlayerPauseFilled, IconPlayerPlayFilled } from '@cognite/aura/icons
 import { cn } from '../../../lib/utils';
 import { StatusDot } from '../StatusDot';
 
-import { formatClock, formatSpan } from './timeAxis';
+import { liveStatusText } from './liveStatus';
 
 export type LiveToggleProps = {
   /** Whether the view follows new data. */
@@ -19,14 +19,6 @@ export type LiveToggleProps = {
   timeZone?: string;
   className?: string;
 };
-
-/** "Updated 14:00, every 5 s" while live; "Paused at 13:42, 18 min behind" while paused. */
-export function liveStatusText({ live, lastUpdated, now, interval, timeZone = 'UTC' }: Omit<LiveToggleProps, 'onLiveChange' | 'className'>): string {
-  const time = formatClock(lastUpdated, timeZone);
-  if (live) return `Updated ${time}${interval ? `, ${interval}` : ''}`;
-  const behind = now - lastUpdated;
-  return `Paused at ${time}${behind >= 60_000 ? `, ${formatSpan(behind)} behind` : ''}`;
-}
 
 /**
  * Live or paused, and how fresh the data is. While live the dot pulses and the view follows new

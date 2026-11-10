@@ -14,8 +14,9 @@ describe(EventTicker.name, () => {
     render(<EventTicker items={ITEMS} label="Recent events" animated />);
 
     const group = screen.getByRole('group', { name: 'Recent events' });
-    expect(within(group).getAllByRole('listitem')).toHaveLength(2);
-    expect(within(group).getByText('Recompressor tripped on high vibration')).toBeInTheDocument();
+    const rows = within(group).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('13:46AlarmRecompressor tripped on high vibration');
   });
 
   it('repeats the run, hidden, so the loop has no gap', () => {

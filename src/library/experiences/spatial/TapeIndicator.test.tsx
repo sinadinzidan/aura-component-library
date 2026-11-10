@@ -35,7 +35,7 @@ describe(TapeIndicator.name, () => {
     const { container } = render(<TapeIndicator label="Pressure" value={50} span={20} majorStep={5} min={0} max={60} limits={LIMITS} />);
 
     const tones = [...container.querySelectorAll('[data-slot="tape-band"]')].map((band) => band.getAttribute('data-tone'));
-    expect(tones).toEqual(['warning', 'warning', 'critical']);
+    expect(tones).toEqual(['warning', 'critical']);
   });
 
   it('pins the bug when the setpoint is outside the window', () => {

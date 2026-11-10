@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { ChartPlaceholder } from '../../../library/industrial/charts/ChartPlaceholder';
 import { SeriesLegend } from '../../../library/industrial/charts/SeriesLegend';
 import { summarize } from '../../../library/industrial/charts/stats';
-import { DEFAULT_TIME_RANGES, TimeRangeSwitch, findTimeRange } from '../../../library/industrial/charts/TimeRangeSwitch';
+import { DEFAULT_TIME_RANGES, findTimeRange } from '../../../library/industrial/charts/timeRanges';
+import { TimeRangeSwitch } from '../../../library/industrial/charts/TimeRangeSwitch';
 import { TrendCard } from '../../../library/industrial/charts/TrendCard';
 import { TrendChart } from '../../../library/industrial/charts/TrendChart';
 import type { TrendLimit, TrendSeries, TrendState } from '../../../library/industrial/charts/TrendChart';
@@ -824,7 +825,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/TimeRangeSwitch.tsx', 'industrial/charts/stats.ts'],
+          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/TimeRangeSwitch.tsx', 'industrial/charts/timeRanges.ts', 'industrial/charts/stats.ts'],
           Component: TimeSeriesRanges,
         },
         {

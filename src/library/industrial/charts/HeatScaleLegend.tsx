@@ -1,7 +1,6 @@
 import { cn } from '../../../lib/utils';
 
-/** Heat-map token classes from lowest to highest density. */
-export const HEAT_LEVEL_BG: readonly string[] = ['bg-heat-map-mild', 'bg-heat-map-moderate', 'bg-heat-map-strong', 'bg-heat-map-intense'];
+import { HEAT_LEVEL_BG } from './heatLevels';
 
 export type HeatScaleLegendProps = {
   /** Text at the low end: "0" or "Fewer". */

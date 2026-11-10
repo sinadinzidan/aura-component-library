@@ -76,6 +76,9 @@ export type DrillNode = {
   children: readonly DrillNode[];
 };
 
+/** A roll-up figure a journey can size or sort by. */
+export type DrillMetric = { key: string; label: string; unit?: string; decimals?: number };
+
 export type DrillTree = { root: DrillNode; byId: ReadonlyMap<string, DrillNode> };
 
 export type HierarchyAsset = {

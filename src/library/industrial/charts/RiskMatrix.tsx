@@ -1,16 +1,9 @@
 import { cn } from '../../../lib/utils';
 
-export type RiskLevel = 'low' | 'medium' | 'high';
+import { countByRiskLevel, riskLevel } from './risk';
+import type { RiskItem, RiskLevel } from './risk';
 
-export type RiskItem = {
-  id: string;
-  /** What is at risk: an asset, a work order, a finding. */
-  label: string;
-  /** 1 (least likely) to the number of likelihood steps. */
-  likelihood: number;
-  /** 1 (least severe) to the number of consequence steps. */
-  consequence: number;
-};
+export type { RiskItem, RiskLevel } from './risk';
 
 export type RiskMatrixProps = {
   /** What the matrix covers, with the key finding. Becomes the table's accessible name. */
@@ -38,21 +31,6 @@ const LEVEL_SURFACE: Record<RiskLevel, string> = {
 };
 
 const LEVEL_NAME: Record<RiskLevel, string> = { low: 'Low', medium: 'Medium', high: 'High' };
-
-/** Risk level of a cell from its score, likelihood × consequence. */
-export function riskLevel(likelihood: number, consequence: number, thresholds = { medium: 5, high: 15 }): RiskLevel {
-  const score = likelihood * consequence;
-  if (score >= thresholds.high) return 'high';
-  if (score >= thresholds.medium) return 'medium';
-  return 'low';
-}
-
-/** How many items fall on each risk level. */
-export function countByRiskLevel(items: readonly RiskItem[], thresholds = { medium: 5, high: 15 }): Record<RiskLevel, number> {
-  const counts: Record<RiskLevel, number> = { low: 0, medium: 0, high: 0 };
-  for (const item of items) counts[riskLevel(item.likelihood, item.consequence, thresholds)] += 1;
-  return counts;
-}
 
 /**
  * Likelihood × consequence matrix. Unlike other heat maps this one is status-coloured on purpose:

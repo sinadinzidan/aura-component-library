@@ -5,8 +5,8 @@ import { CartesianGrid, ReferenceArea, ReferenceLine, Scatter, ScatterChart, XAx
 import { cn } from '../../../lib/utils';
 import { formatValue } from '../status';
 
+import { axisScale } from './chartScale';
 import { SeriesLegend } from './SeriesLegend';
-import { axisScale } from './TrendChart';
 
 export type ScatterPoint = {
   x: number;

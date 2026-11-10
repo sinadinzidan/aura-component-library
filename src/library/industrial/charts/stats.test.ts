@@ -6,6 +6,7 @@ import {
   heatLevel,
   niceTicks,
   paretoRows,
+  paretoSummary,
   quantile,
   summarize,
   vitalFew,
@@ -186,5 +187,26 @@ describe(niceTicks.name, () => {
   it('returns one tick for a flat range and none for bad input', () => {
     expect(niceTicks(5, 5)).toEqual([5]);
     expect(niceTicks(Number.NaN, 1)).toEqual([]);
+  });
+});
+
+const CAUSES = [
+  { label: 'Seal leak', value: 6 },
+  { label: 'Compressor trip', value: 41 },
+  { label: 'Instrument fault', value: 14 },
+  { label: 'Planned stop', value: 26 },
+];
+
+describe(paretoSummary.name, () => {
+  it('counts the causes that reach the threshold', () => {
+    expect(paretoSummary(CAUSES)).toBe('3 of 4 causes account for 93 % of the total; the largest is Compressor trip.');
+  });
+
+  it('respects another threshold', () => {
+    expect(paretoSummary(CAUSES, 40)).toMatch(/^1 of 4 causes account for 47 %/);
+  });
+
+  it('handles no data', () => {
+    expect(paretoSummary([])).toBe('No data.');
   });
 });

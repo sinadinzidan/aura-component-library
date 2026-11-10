@@ -1,6 +1,6 @@
 import type { CategoryRow } from './CategoryChart';
 import { CategoryChart } from './CategoryChart';
-import { paretoRows, vitalFew } from './stats';
+import { paretoRows, paretoSummary, vitalFew } from './stats';
 import type { ParetoInput } from './stats';
 
 export type ParetoChartProps = {
@@ -24,14 +24,6 @@ export type ParetoChartProps = {
 };
 
 const round = (value: number): number => Math.round(value * 10) / 10;
-
-/** "3 of 7 causes account for 82 % of the total." */
-export function paretoSummary(rows: readonly ParetoInput[], threshold = 80): string {
-  const sorted = paretoRows(rows);
-  if (sorted.length === 0) return 'No data.';
-  const few = vitalFew(sorted, threshold);
-  return `${few} of ${sorted.length} causes account for ${Math.round(sorted[few - 1].cumulative)} % of the total; the largest is ${sorted[0].label}.`;
-}
 
 /**
  * Pareto chart: causes sorted largest first as bars, with the running share as a line against a

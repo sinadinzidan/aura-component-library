@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 
-import { RiskMatrix, countByRiskLevel, riskLevel } from './RiskMatrix';
+import { RiskMatrix } from './RiskMatrix';
 import type { RiskItem } from './RiskMatrix';
 
 const ITEMS: readonly RiskItem[] = [
@@ -54,23 +54,5 @@ describe(RiskMatrix.name, () => {
     const legend = screen.getByRole('list', { name: 'Risk levels' });
     expect(within(legend).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Low1', 'Medium2', 'High1']);
     expect(screen.getByText('One item is high risk.')).toBeInTheDocument();
-  });
-});
-
-describe(riskLevel.name, () => {
-  it('grades the score against the thresholds', () => {
-    expect(riskLevel(1, 4)).toBe('low');
-    expect(riskLevel(1, 5)).toBe('medium');
-    expect(riskLevel(3, 5)).toBe('high');
-  });
-
-  it('accepts other thresholds', () => {
-    expect(riskLevel(2, 2, { medium: 4, high: 9 })).toBe('medium');
-  });
-});
-
-describe(countByRiskLevel.name, () => {
-  it('counts items per level', () => {
-    expect(countByRiskLevel(ITEMS)).toEqual({ low: 1, medium: 2, high: 1 });
   });
 });

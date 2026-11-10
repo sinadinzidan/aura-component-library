@@ -6,9 +6,9 @@ import { cn } from '../../../lib/utils';
 import { TONE_ZONE_BG, formatValue } from '../status';
 import type { Tone } from '../status';
 
+import { AREA_OPACITY, axisScale, eventLabelPosition } from './chartScale';
 import { SeriesLegend } from './SeriesLegend';
 import type { SeriesLegendItem } from './SeriesLegend';
-import { niceTicks } from './stats';
 import { formatClock, formatDayTime, tickFormatter, timeStep, timeTicks } from './timeAxis';
 import { extent, mergeSeries, splitAtThreshold, timeFraction, valueAt } from './trendData';
 import type { RangePoint, TrendPoint } from './trendData';
@@ -150,40 +150,6 @@ const REGION_FILL: Record<TrendRegionTone, string> = {
 const GHOST = 'var(--color-chart-neutral-300)';
 const LABEL_CLASS = 'fill-muted-foreground';
 const MARGIN_RIGHT = 12;
-
-/** The lighter step of a `chart-*-450` token; other colours are returned unchanged. */
-export function softColor(color: string, step: 100 | 200 = 100): string {
-  return color.replace(/-450\)$/, `-${step})`);
-}
-
-/**
- * Where an event label goes: centred above its line, or tucked inside the plot beside the line
- * when the event is so close to an edge that a centred label would be cut off.
- */
-export function eventLabelPosition(label: string, percent: number): 'top' | 'insideTopLeft' | 'insideTopRight' {
-  const reach = Math.min(30, label.length * 1.2);
-  if (percent > 100 - reach) return 'insideTopRight';
-  if (percent < reach) return 'insideTopLeft';
-  return 'top';
-}
-
-type AxisScale = { domain: [number, number]; ticks: number[] };
-
-/** A padded, round y scale for the given values, or the explicit domain when one is set. */
-export function axisScale(
-  values: readonly (number | null | undefined)[],
-  explicit?: readonly [number, number],
-  explicitTicks?: readonly number[]
-): AxisScale {
-  if (explicit) {
-    const ticks = explicitTicks ?? niceTicks(explicit[0], explicit[1]).filter((tick) => tick >= explicit[0] && tick <= explicit[1]);
-    return { domain: [explicit[0], explicit[1]], ticks: [...ticks] };
-  }
-  const range = extent(values) ?? [0, 1];
-  const padding = (range[1] - range[0]) * 0.08 || Math.abs(range[1]) * 0.05 || 1;
-  const ticks = niceTicks(range[0] - padding, range[1] + padding);
-  return { domain: [ticks[0], ticks[ticks.length - 1]], ticks };
-}
 
 function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -419,7 +385,7 @@ export function TrendChart({
                 isAnimationActive: false,
               };
               return entry.variant === 'area' ? (
-                <Area key={entry.key} {...shared} fill={softColor(entry.color)} fillOpacity={1} />
+                <Area key={entry.key} {...shared} fill={entry.color} fillOpacity={AREA_OPACITY} />
               ) : (
                 <Line key={entry.key} {...shared} dot={false} />
               );

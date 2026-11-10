@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { LiveToggle, liveStatusText } from './LiveToggle';
+import { LiveToggle } from './LiveToggle';
 
 const MINUTE = 60_000;
 const NOW = Date.UTC(2026, 2, 12, 14, 0, 0);
@@ -40,15 +40,5 @@ describe(LiveToggle.name, () => {
 
     rerender(<LiveToggle live={false} onLiveChange={vi.fn()} lastUpdated={NOW} now={NOW} />);
     expect(container.querySelector('[data-slot="status-dot-pulse"]')).not.toBeInTheDocument();
-  });
-});
-
-describe(liveStatusText.name, () => {
-  it('describes a live view', () => {
-    expect(liveStatusText({ live: true, lastUpdated: NOW, now: NOW })).toBe('Updated 14:00');
-  });
-
-  it('leaves out the lag when a paused view is less than a minute behind', () => {
-    expect(liveStatusText({ live: false, lastUpdated: NOW - 5000, now: NOW })).toBe('Paused at 13:59');
   });
 });

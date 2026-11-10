@@ -1,6 +1,6 @@
 import { FIXTURE_INPUT, fixtureTree } from './drilldownFixture';
 import { buildHierarchy } from './hierarchy';
-import { PLAN_ZOOM, SENSOR_ANCHOR_X, layoutPlan, mixViewport, project, projectRect, reveal, viewportFor, viewportScale } from './planLayout';
+import { PLAN_ZOOM, SENSOR_ANCHOR_X, layoutPlan, linkSegment, mixViewport, project, projectRect, reveal, viewportFor, viewportScale } from './planLayout';
 import type { PlanRect } from './planLayout';
 
 const tree = fixtureTree();
@@ -155,5 +155,19 @@ describe(reveal.name, () => {
   it('is a step when both ends are the same', () => {
     expect(reveal(1.9, 2, 2)).toBe(0);
     expect(reveal(2, 2, 2)).toBe(1);
+  });
+});
+
+describe(linkSegment.name, () => {
+  it('runs between the facing edges of two blocks side by side', () => {
+    const segment = linkSegment({ x: 0, y: 0, width: 100, height: 60 }, { x: 140, y: 0, width: 100, height: 60 });
+
+    expect(segment).toEqual({ x1: 100, y1: 30, x2: 140, y2: 30 });
+  });
+
+  it('runs between the facing edges of two stacked blocks', () => {
+    const segment = linkSegment({ x: 0, y: 0, width: 100, height: 60 }, { x: 0, y: 100, width: 100, height: 60 });
+
+    expect(segment).toEqual({ x1: 50, y1: 60, x2: 50, y2: 100 });
   });
 });

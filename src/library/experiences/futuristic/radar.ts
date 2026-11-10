@@ -1,5 +1,6 @@
 import { clamp, polarToCartesian, round2 } from '../../industrial/geometry';
 import type { Point } from '../../industrial/geometry';
+
 import type { Segment } from './perspective';
 
 /** Pure layout for a radar scope. Angles are degrees, 0 at 12 o'clock, clockwise. */

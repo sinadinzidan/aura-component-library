@@ -539,17 +539,17 @@ function PlanDashboard() {
           </DashboardCell>
         </DashboardGrid>
         <DashboardGrid>
-          <DashboardCell span={3}>
-            <PlanFiguresPanel />
-          </DashboardCell>
-          <DashboardCell span={3}>
-            <PlanBacklogPanel />
-          </DashboardCell>
           <DashboardCell span={6}>
             <PlanOverduePanel />
           </DashboardCell>
           <DashboardCell span={6}>
             <PlanMaterialsPanel />
+          </DashboardCell>
+          <DashboardCell span={3}>
+            <PlanFiguresPanel />
+          </DashboardCell>
+          <DashboardCell span={3}>
+            <PlanBacklogPanel />
           </DashboardCell>
           <DashboardCell span={3}>
             <PlanTypesPanel />

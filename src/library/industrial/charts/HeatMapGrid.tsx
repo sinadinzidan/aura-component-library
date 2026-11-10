@@ -1,7 +1,8 @@
 import { cn } from '../../../lib/utils';
 import { formatReading, formatValue } from '../status';
 
-import { HEAT_LEVEL_BG, HeatScaleLegend } from './HeatScaleLegend';
+import { HEAT_LEVEL_BG, HEAT_LEVEL_TEXT } from './heatLevels';
+import { HeatScaleLegend } from './HeatScaleLegend';
 import { heatLevel } from './stats';
 import { extent } from './trendData';
 
@@ -34,9 +35,6 @@ export type HeatMapGridProps = {
   summary?: string;
   className?: string;
 };
-
-/** Text colour that stays readable on each heat step in light and dark themes. */
-const HEAT_LEVEL_TEXT: readonly string[] = ['text-base-foreground', 'text-base-foreground', 'text-base-background', 'text-base-background'];
 
 /**
  * A heat map as a plain table on the `heat-map-*` tokens: no chart library, real row and column
