@@ -168,7 +168,7 @@ function HoloAssetReadout({ scan, mode, onPick }: { scan: number; mode: HoloAsse
                   ›
                 </span>
                 <span className={`min-w-0 flex-1 text-xs ${active ? 'font-medium text-base-foreground' : 'text-medium-foreground'}`}>{component.name}</span>
-                <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{map ? formatReading(map.read(component), map.unit, map.decimals) : component.kind}</span>
+                {map ? <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatReading(map.read(component), map.unit, map.decimals)}</span> : null}
                 <span
                   className={`w-7 shrink-0 text-right font-mono text-xs tabular-nums ${tone === 'critical' ? 'text-critical-foreground-strong' : tone === 'warning' ? 'text-warning-foreground-strong' : 'text-base-foreground'}`}
                 >
@@ -212,9 +212,9 @@ function HoloAssetDiagnosis({ onLocate }: { onLocate?: () => void }) {
   return (
     <BracketFrame title="Diagnosis" meta="Fault located" tone="critical" className="w-full" bodyClassName="gap-3">
       <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <p className="text-sm font-medium text-base-foreground">{HOLOASSET_DIAGNOSIS.finding}</p>
-          <StatusIndicator tone="critical" shape="diamond" label="Critical" detail="tripped on high vibration" size="sm" className="mt-1" />
+          <StatusIndicator tone="critical" shape="diamond" label="Critical" size="sm" />
         </div>
         <ArcReadout value={HOLOASSET_DIAGNOSIS.confidence} label="Confidence" unit="%" tone="critical" className="w-20" />
       </div>
@@ -397,7 +397,7 @@ function HoloAssetScan({ initial = {}, still = false }: { initial?: HoloAssetIni
               onScanChange={setScan}
               rotate={canMove && !engaged}
               insets={{ top: 40, bottom: 96, left: 250, right: 280 }}
-              padding={0.92}
+              padding={0.98}
             />
           ) : null}
         </StillScene>

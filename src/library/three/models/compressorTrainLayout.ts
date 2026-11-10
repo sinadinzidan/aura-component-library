@@ -46,8 +46,8 @@ export const COMPRESSOR_TRAIN_TREE: AssemblyNode = {
       id: 'drive-train',
       name: 'Drive train',
       children: [
-        { id: 'turbine', name: 'Gas turbine driver', detail: 'Intake, gas generator, exhaust' },
-        { id: 'gearbox', name: 'Speed-increasing gearbox', detail: 'Ratio 1 : 1.6' },
+        { id: 'turbine', name: 'Gas turbine driver', detail: 'Intake to exhaust stack' },
+        { id: 'gearbox', name: 'Gearbox', detail: 'Speed increasing, 1 : 1.6' },
         { id: 'coupling', name: 'Coupling and guard', detail: 'High-speed side' },
       ],
     },
@@ -55,7 +55,7 @@ export const COMPRESSOR_TRAIN_TREE: AssemblyNode = {
       id: 'compressor',
       name: 'Compressor',
       children: [
-        { id: 'casing', name: 'Barrel casing', detail: 'Suction and discharge nozzles' },
+        { id: 'casing', name: 'Barrel casing', detail: 'Two nozzles' },
         { id: 'rotor', name: 'Rotor and impellers', detail: '5 stages' },
         { id: 'bearing-de', name: 'Drive-end bearing', detail: 'Journal and thrust' },
         { id: 'bearing-nde', name: 'Non-drive-end bearing', detail: 'Journal' },
@@ -65,12 +65,12 @@ export const COMPRESSOR_TRAIN_TREE: AssemblyNode = {
       id: 'auxiliaries',
       name: 'Auxiliaries',
       children: [
-        { id: 'seal-gas', name: 'Seal gas panel', detail: 'Filters and control valve' },
-        { id: 'lube-oil', name: 'Lube oil skid', detail: 'Reservoir, pumps, cooler' },
+        { id: 'seal-gas', name: 'Seal gas panel', detail: 'Filters and valve' },
+        { id: 'lube-oil', name: 'Lube oil skid', detail: 'Pumps and cooler' },
         { id: 'instruments', name: 'Instrument stands', detail: '3 stands' },
       ],
     },
-    { id: 'structure', name: 'Structure', children: [{ id: 'base-frame', name: 'Base frame', detail: 'Three-point mounted' }] },
+    { id: 'structure', name: 'Structure', children: [{ id: 'base-frame', name: 'Base frame', detail: 'Three-point mount' }] },
   ],
 };
 

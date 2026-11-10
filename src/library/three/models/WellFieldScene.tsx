@@ -62,6 +62,11 @@ export type WellFieldSceneProps = {
   insets?: ViewInsetsValue;
   /** Multiplier on the camera distance. */
   padding?: number;
+  /** Width of the template on the seabed and size of the wellhead markers, in scene units. Drawn larger than life so they read. */
+  templateSize?: number;
+  wellheadSize?: number;
+  /** Radius of the wellbore tubes. */
+  wellRadius?: number;
 };
 
 const ALL_LAYERS: WellFieldLayers = { horizons: true, wellbores: true, reservoir: true, labels: true };
@@ -89,6 +94,9 @@ export function WellFieldScene({
   colors = null,
   insets,
   padding = 1,
+  templateSize = 7.4,
+  wellheadSize = 1.6,
+  wellRadius = 0.15,
 }: WellFieldSceneProps) {
   const { palette } = useSceneEnvironment();
   const half = halfExtent * scale;
@@ -112,13 +120,13 @@ export function WellFieldScene({
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]}>
         <planeGeometry args={[half * 2, half * 2, 8, 8]} />
-        <meshBasicMaterial color={palette.frame.color} wireframe transparent opacity={0.5} depthWrite={false} />
+        <meshBasicMaterial color={palette.frame.color} wireframe transparent opacity={0.35} depthWrite={false} />
       </mesh>
-      <SubseaTemplate size={[4.2, 4.2]} dimmed={selectedId !== null} />
+      <SubseaTemplate size={[templateSize, templateSize]} height={templateSize * 0.3} dimmed={selectedId !== null} />
 
       {layers.horizons
         ? horizons.map((horizon, index) => (
-            <HorizonSurface key={horizon.id} horizon={horizon} halfExtent={halfExtent} scale={scale} color={horizonColor(index)} opacity={selectedId ? 0.1 : 0.18} />
+            <HorizonSurface key={horizon.id} horizon={horizon} halfExtent={halfExtent} scale={scale} color={horizonColor(index)} opacity={selectedId ? 0.08 : 0.14} />
           ))
         : null}
       {layers.reservoir && top && base ? (
@@ -132,9 +140,9 @@ export function WellFieldScene({
         const toe = well.points[well.points.length - 1];
         return (
           <group key={well.id}>
-            <Wellhead position={well.points[0]} kind={well.kind} color={color} selected={selected} dimmed={dimmed} size={0.9} />
+            <Wellhead position={well.points[0]} kind={well.kind} color={color} selected={selected} dimmed={dimmed} size={wellheadSize} />
             {layers.wellbores ? (
-              <WellTube id={well.id} points={well.points} color={color} selected={selected} dimmed={dimmed} onSelect={onSelect} onHoverChange={onHoverChange} />
+              <WellTube id={well.id} points={well.points} color={color} radius={wellRadius} selected={selected} dimmed={dimmed} onSelect={onSelect} onHoverChange={onHoverChange} />
             ) : null}
             {layers.labels && layers.wellbores && toe && (!dimmed || selectedId === null) ? (
               <SceneLabel
@@ -160,6 +168,7 @@ export function WellFieldScene({
         y={-depth * scale}
         halfExtent={half}
         marks={crossings.map((crossing) => ({ id: crossing.id, position: crossing.position, emphasized: crossing.id === selectedId }))}
+        markRadius={wellRadius * 3}
       />
     </>
   );

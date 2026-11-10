@@ -112,7 +112,7 @@ const COMPTWIN3D_HOTSPOTS: readonly CompressorTrainHotspot[] = COMPTWIN3D_READIN
 
 const COMPTWIN3D_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
 
-const COMPTWIN3D_ROW = `flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${COMPTWIN3D_FOCUS}`;
+const COMPTWIN3D_ROW = `flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${COMPTWIN3D_FOCUS}`;
 
 /** Last 24 hours for a tag, ending exactly on its current value. */
 function compTwin3dTrend(sensor: Sensor): SeriesPoint[] {
@@ -223,7 +223,7 @@ function CompTwin3dTree({
   );
 
   return (
-    <ul aria-label="Assemblies of the compressor train" className="flex flex-col gap-2">
+    <ul aria-label="Assemblies of the compressor train" className="flex flex-col gap-1.5">
       {(COMPRESSOR_TRAIN_TREE.children ?? []).map((group) => (
         <li key={group.id} className="flex flex-col">
           {row(group, false)}
@@ -403,7 +403,7 @@ function CompTwin3dTwin({ initial = {}, still = false }: { initial?: CompTwin3dI
   const hoveredIds = hoveredId ? assemblyLeafIds(COMPRESSOR_TRAIN_TREE, hoveredId) : [];
   // Two framings, not one per slider step: the camera flies once when the train starts to come apart.
   const bounds = explodedBounds(COMPRESSOR_TRAIN_BOUNDS, COMPRESSOR_TRAIN_EXPLODE, explode > 4 ? 1 : 0);
-  const target = bounds ? frameBounds(bounds, { aspect: 1.25, padding: explode > 4 ? 0.62 : 0.74 }) : null;
+  const target = bounds ? frameBounds(bounds, { aspect: 0.95, padding: explode > 4 ? 0.7 : 0.78 }) : null;
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape') return;

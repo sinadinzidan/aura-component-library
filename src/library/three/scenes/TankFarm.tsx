@@ -71,7 +71,7 @@ export type TankFarmProps = {
  * transferring. Selecting a tank dims the others. Everything shown is a prop, so a time scrubber
  * can drive levels and flows from `levelsAt`. Render it inside `SceneCanvas`.
  */
-export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, selectedId = null, onSelect, view = 'perspective', showLabels = true, labelStagger = 6, insets, children }: TankFarmProps) {
+export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, selectedId = null, onSelect, view = 'perspective', showLabels = true, labelStagger = 8, insets, children }: TankFarmProps) {
   const { palette } = useSceneEnvironment();
   const size = useThree((state) => state.size);
   const fov = useThree((state) => ('fov' in state.camera && typeof state.camera.fov === 'number' ? state.camera.fov : 40));

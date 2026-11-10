@@ -5,7 +5,7 @@ export type WellFieldView = 'perspective' | 'section' | 'plan';
 
 /** Direction from the subsurface block towards the camera, per view. */
 export const WELL_FIELD_VIEW_DIRECTIONS: Record<WellFieldView, Vec3> = {
-  perspective: [0.5, 0.42, 0.78],
+  perspective: [0.5, 0.27, 0.82],
   // Almost level, looking north: a cross-section with depth straight down.
   section: [0, 0.04, 1],
   // Not exactly vertical, so orbit controls keep north up.

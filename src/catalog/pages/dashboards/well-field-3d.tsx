@@ -41,8 +41,8 @@ const WELLFIELD3D_SCALE = 0.01;
 const WELLFIELD3D_HALF_EXTENT = 3000;
 const WELLFIELD3D_BLOCK_DEPTH = 3100;
 const WELLFIELD3D_MAX_DEPTH = 3000;
-/** Slots on the template are drawn 1.3 units apart, wider than in reality, so the wellheads read. */
-const WELLFIELD3D_SLOT_PITCH = 1.3;
+/** Slots on the template are drawn 2.3 units apart, far wider than in reality, so the wellheads read. */
+const WELLFIELD3D_SLOT_PITCH = 2.3;
 
 /** Horizons of the Nordkapp Vest licence, shallowest first. Depths in metres below the seabed. */
 const WELLFIELD3D_HORIZONS: readonly Horizon[] = [
@@ -310,6 +310,9 @@ function WellField3dDepthList({ depth, selectedId, onSelect }: { depth: number; 
             {at.reached ? (
               <span className="flex flex-wrap gap-x-1.5 pl-[1.125rem] text-xs">
                 <span className="text-medium-foreground">{at.formation}</span>
+                <span aria-hidden="true" className="text-muted-foreground">
+                  ·
+                </span>
                 <span className={at.atShoe ? 'font-medium text-base-foreground' : 'text-muted-foreground'}>
                   {at.lining}
                   {at.atShoe ? ' shoe' : ''}
@@ -470,7 +473,7 @@ function WellField3dField({ initial = {}, still = false }: { initial?: WellField
                 selectedId={selectedId}
                 onSelect={(id) => setSelectedId(id === selectedId ? null : id)}
                 colors={colors}
-                padding={view === 'perspective' ? 0.82 : 0.9}
+                padding={view === 'perspective' ? 0.9 : 0.86}
               />
             </StillScene>
           </SceneCanvas>

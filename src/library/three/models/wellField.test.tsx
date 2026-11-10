@@ -4,9 +4,9 @@ import type { Mesh, Object3D } from 'three';
 import { geometryParameter, renderScene } from '../renderScene.fixture';
 
 import { DepthPlane } from './DepthPlane';
+import { horizonGeometry } from './horizonGeometry';
 import { horizonDepthAt } from './horizonHeight';
 import type { Horizon } from './horizonHeight';
-import { horizonGeometry } from './horizonGeometry';
 import { HorizonSurface } from './HorizonSurface';
 import { ReservoirZone } from './ReservoirZone';
 import { SubseaTemplate } from './SubseaTemplate';
