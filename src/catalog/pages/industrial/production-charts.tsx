@@ -338,6 +338,7 @@ function ProductionChartOeeBridge() {
   return (
     <CategoryChart
       valueLabels
+      wrapLabels
       label="OEE loss breakdown: from 100 percent planned time, availability losses take 3.6, performance losses 9.4 and quality losses 4.3 points, leaving an OEE of 82.7 percent"
       rows={OEE_BRIDGE}
       series={[{ key: 'span', label: 'Share of planned time' }]}

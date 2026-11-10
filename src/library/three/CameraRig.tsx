@@ -49,9 +49,11 @@ export function CameraRig({
   const invalidate = useThree((state) => state.invalidate);
   const { reducedMotion } = useSceneEnvironment();
   const targetRef = useRef(target);
-  targetRef.current = target;
   const onArriveRef = useRef(onArrive);
-  onArriveRef.current = onArrive;
+  useEffect(() => {
+    targetRef.current = target;
+    onArriveRef.current = onArrive;
+  });
   const targetKey = [...target.position, ...target.lookAt].join(',');
 
   const apply = (pose: CameraTarget) => {

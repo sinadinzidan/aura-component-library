@@ -1,6 +1,7 @@
-import { cn } from '../../../lib/utils';
 import { arcPath, toFraction } from '../../industrial/geometry';
 import { formatValue } from '../../industrial/status';
+
+import { RING_STROKE } from './ringStyle';
 
 export type ConcentricRing = {
   id: string;
@@ -26,10 +27,6 @@ export type ConcentricRingsProps = {
   caption: string;
   className?: string;
 };
-
-/** Series colour per ring, outermost first. Shared with the legend that names the rings. */
-export const RING_STROKE: readonly string[] = ['stroke-chart-1-450', 'stroke-chart-2-450', 'stroke-chart-3-450', 'stroke-chart-4-450', 'stroke-chart-5-450'];
-export const RING_SWATCH: readonly string[] = ['bg-chart-1-450', 'bg-chart-2-450', 'bg-chart-3-450', 'bg-chart-4-450', 'bg-chart-5-450'];
 
 /**
  * A headline figure inside nested rings, one ring per factor that makes it up — OEE inside
@@ -59,7 +56,7 @@ export function ConcentricRings({ cx, cy, radius, rings, thickness = 12, gap = 6
                 fill="none"
                 strokeWidth={thickness}
                 strokeLinecap="round"
-                className={cn(RING_STROKE[index % RING_STROKE.length], '[filter:drop-shadow(0_0_4px_color-mix(in_oklab,currentColor_40%,transparent))]')}
+                className={RING_STROKE[index % RING_STROKE.length]}
               />
             ) : null}
           </g>

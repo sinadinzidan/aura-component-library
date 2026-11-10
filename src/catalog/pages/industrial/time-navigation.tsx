@@ -182,7 +182,7 @@ function TimeNavCustomRange() {
   return (
     <div className="flex w-full flex-col gap-3">
       <div role="group" aria-label="Custom time range" className="w-full max-w-md">
-        <DateTimeRangePicker value={range} onChange={setRange} format="D MMM YYYY" />
+        <DateTimeRangePicker value={range} onChange={setRange} format="D MMM YYYY HH:mm" />
       </div>
       {valid ? <TimeNavTrend from={from} to={to} /> : <ChartPlaceholder state="empty" heightClassName="h-36" title="Choose a start and an end" />}
       <p className="text-xs text-muted-foreground tabular-nums">{valid ? `${formatSpan(to - from)} selected, ending ${formatSpan(NOW - to)} ago` : 'No range selected'}</p>

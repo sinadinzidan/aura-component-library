@@ -1,6 +1,9 @@
 import { validateFile } from './validateFile';
 
-const RULE = { extensions: ['pdf', 'dwg', 'csv'], maxBytes: 100_000_000 } as const;
+const RULE = {
+  extensions: ['pdf', 'dwg', 'csv'],
+  maxBytes: 100_000_000,
+} as const;
 
 describe(validateFile.name, () => {
   it('accepts a file of an allowed type within the limit', () => {
@@ -15,9 +18,7 @@ describe(validateFile.name, () => {
   });
 
   it('names a single allowed type without a list', () => {
-    expect(validateFile({ name: 'a.txt', size: 10 }, { extensions: ['csv'] })?.message).toBe(
-      'This file type is not supported. Use CSV.'
-    );
+    expect(validateFile({ name: 'a.txt', size: 10 }, { extensions: ['csv'] })?.message).toBe('This file type is not supported. Use CSV.');
   });
 
   it('rejects a file over the limit with both sizes', () => {

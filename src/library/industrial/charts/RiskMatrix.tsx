@@ -61,7 +61,7 @@ export function RiskMatrix({
             <tbody>
               {rowsTopDown.map((row) => (
                 <tr key={row.name}>
-                  <th scope="row" className="w-20 truncate pr-2 text-right text-xs font-normal text-muted-foreground">
+                  <th scope="row" className="w-16 pr-2 text-right text-xs leading-tight font-normal text-muted-foreground">
                     {row.name}
                   </th>
                   {consequences.map((consequence, index) => {
@@ -73,11 +73,11 @@ export function RiskMatrix({
                         data-slot="risk-cell"
                         data-level={level}
                         title={`${row.name} × ${consequence}: ${LEVEL_NAME[level]} risk, ${inCell.length} ${inCell.length === 1 ? 'item' : 'items'}${inCell.length > 0 ? ` (${inCell.map((item) => item.label).join(', ')})` : ''}`}
-                        className={cn('rounded-xs px-0.5 text-center text-xs', showLabels ? 'h-14' : 'h-10', LEVEL_SURFACE[level])}
+                        className={cn('rounded-xs p-0 text-center text-xs', showLabels ? 'h-14' : 'h-10', LEVEL_SURFACE[level])}
                       >
                         <span className="sr-only">{LEVEL_NAME[level]} risk: </span>
                         {showLabels ? (
-                          <span className="line-clamp-3 leading-tight wrap-anywhere">{inCell.map((item) => item.label).join(', ')}</span>
+                          <span className="line-clamp-3 leading-tight tracking-tight wrap-break-word">{inCell.map((item) => item.label).join(', ')}</span>
                         ) : inCell.length > 0 ? (
                           <span className="text-sm font-semibold tabular-nums">{inCell.length}</span>
                         ) : (
@@ -91,7 +91,7 @@ export function RiskMatrix({
             </tbody>
             <tfoot>
               <tr>
-                <td className="w-20" />
+                <td className="w-16" />
                 {consequences.map((consequence) => (
                   <th key={consequence} scope="col" className="truncate pt-1 text-center text-xs font-normal text-muted-foreground">
                     {consequence}
@@ -100,7 +100,7 @@ export function RiskMatrix({
               </tr>
             </tfoot>
           </table>
-          <span aria-hidden="true" className="pl-20 text-center text-xs text-muted-foreground">
+          <span aria-hidden="true" className="pl-16 text-center text-xs text-muted-foreground">
             Consequence
           </span>
         </div>

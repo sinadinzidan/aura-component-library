@@ -45,7 +45,7 @@ describe(ReplayTrend.name, () => {
   it('shows a normal value quietly', () => {
     const { container } = renderTrend(FROM + 5 * MINUTE);
 
-    expect(screen.getByText('5.0 mm/s')).toBeInTheDocument();
+    expect(screen.getByText(/5\.0\smm\/s/)).toBeInTheDocument();
     expect(screen.getByText('Normal')).toBeInTheDocument();
     expect(container.querySelector('[data-slot="replay-trend"]')).toHaveAttribute('data-alarm', 'normal');
   });

@@ -14,7 +14,7 @@ export function quaternionFromY(direction: Vec3): Quaternion {
   if (y < -0.999999) return [1, 0, 0, 0];
   const w = 1 + y;
   const length = Math.hypot(z, -x, w);
-  return [z / length, 0, -x / length, w / length];
+  return [z / length + 0, 0, -x / length + 0, w / length];
 }
 
 export function segmentTransform(from: Vec3, to: Vec3): SegmentTransform {

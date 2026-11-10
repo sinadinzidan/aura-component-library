@@ -3,6 +3,7 @@ import type { ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useState } from 'react';
 import { BoxGeometry, EdgesGeometry } from 'three';
 
+import { setSceneCursor } from './sceneCursor';
 import { useSceneEnvironment } from './sceneEnvironment';
 
 export type AreaVolumeProps = {
@@ -38,12 +39,12 @@ export function AreaVolume({ id, center, size, height = 7, active = false, dimme
   const enter = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
     setHovered(true);
-    gl.domElement.style.cursor = 'pointer';
+    setSceneCursor(gl.domElement, 'pointer');
     invalidate();
   };
   const leave = () => {
     setHovered(false);
-    gl.domElement.style.cursor = '';
+    setSceneCursor(gl.domElement, '');
     invalidate();
   };
 

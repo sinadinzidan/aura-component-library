@@ -13,7 +13,10 @@ export type GlassPanelProps = {
   focused?: boolean;
   /** Pushed back because another panel is focused. */
   receded?: boolean;
-  /** Adds a focus toggle to the header. Called with the state the user asked for. */
+  /**
+   * Adds a focus toggle to the header, and lets a click anywhere on a panel at rest bring it
+   * forward. Called with the state the user asked for.
+   */
   onFocusChange?: (focused: boolean) => void;
   /** Extra header content before the focus toggle. */
   actions?: ReactNode;
@@ -22,7 +25,7 @@ export type GlassPanelProps = {
 };
 
 const SURFACE =
-  'bg-[color-mix(in_oklab,var(--card-background)_68%,transparent)] backdrop-blur-md shadow-[inset_0_1px_0_color-mix(in_oklab,var(--base-foreground)_10%,transparent)]';
+  'bg-[color-mix(in_oklab,var(--card-background)_58%,transparent)] backdrop-blur-md shadow-[inset_0_1px_0_color-mix(in_oklab,var(--base-foreground)_10%,transparent)]';
 const BORDER_REST = 'border-[color-mix(in_oklab,var(--primary-background)_30%,transparent)]';
 const BORDER_FOCUS =
   'border-[color-mix(in_oklab,var(--primary-background)_80%,transparent)] shadow-[0_0_32px_color-mix(in_oklab,var(--primary-background)_28%,transparent),inset_0_1px_0_color-mix(in_oklab,var(--base-foreground)_14%,transparent)]';
@@ -40,11 +43,13 @@ export function GlassPanel({ title, caption, focused = false, receded = false, o
       data-focused={focused}
       data-receded={receded}
       aria-label={title}
+      onClick={onFocusChange && !focused ? () => onFocusChange(true) : undefined}
       className={cn(
         'relative flex min-h-0 min-w-0 flex-col rounded-xl border transition-[transform,opacity,box-shadow,border-color] duration-300 motion-reduce:transition-none',
         SURFACE,
         focused ? cn(BORDER_FOCUS, 'z-10') : BORDER_REST,
         receded && 'scale-[0.97] opacity-60',
+        onFocusChange && !focused && 'cursor-pointer',
         className
       )}
     >

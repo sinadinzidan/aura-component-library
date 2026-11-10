@@ -18,6 +18,12 @@ describe(PerspectiveGrid.name, () => {
     expect(container.querySelector('[data-slot="horizon"]')).toHaveAttribute('y1', '140');
   });
 
+  it('draws half rings behind the horizon on request', () => {
+    const { container } = render(<PerspectiveGrid view={VIEW} label="Plant floor" horizonRings={3} />);
+
+    expect(container.querySelectorAll('[data-slot="horizon-ring"]')).toHaveLength(3);
+  });
+
   it('renders children on the floor', () => {
     render(
       <PerspectiveGrid view={VIEW} label="Plant floor">

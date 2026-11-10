@@ -20,6 +20,8 @@ export type PerspectiveGridProps = {
   xMin?: number;
   xMax?: number;
   zMax?: number;
+  /** Concentric half rings rising behind the horizon at the vanishing point. */
+  horizonRings?: number;
   tone?: NeonTone;
   /** SVG content drawn on the floor, in the same user units as `view`. */
   children?: ReactNode;
@@ -39,6 +41,7 @@ export function PerspectiveGrid({
   xMin = -2,
   xMax = 2,
   zMax = 6,
+  horizonRings = 0,
   tone = 'accent',
   children,
   className,
@@ -52,8 +55,8 @@ export function PerspectiveGrid({
       role="group"
       aria-label={label}
       viewBox={`0 0 ${view.width} ${view.height}`}
-      preserveAspectRatio="xMidYMid meet"
-      className={cn(NEON_TONE[tone], 'block size-full', className)}
+      preserveAspectRatio="xMidYMax meet"
+      className={cn(NEON_TONE[tone], 'block size-full overflow-visible', className)}
     >
       <defs>
         <linearGradient id={glowId} x1="0" y1="0" x2="0" y2="1">
@@ -62,9 +65,22 @@ export function PerspectiveGrid({
         </linearGradient>
       </defs>
 
-      <rect data-slot="horizon-glow" x={0} y={view.horizonY - 70} width={view.width} height={70} fill={`url(#${glowId})`} />
+      {/* The haze and the horizon run past the drawing, so a wider container shows no seam. */}
+      <rect data-slot="horizon-glow" x={-view.width} y={view.horizonY - 90} width={view.width * 3} height={90} fill={`url(#${glowId})`} />
 
       <g aria-hidden="true" fill="none" strokeWidth={1} className={NEON_STROKE}>
+        {Array.from({ length: Math.max(horizonRings, 0) }, (_, index) => {
+          const radius = 36 + index * 22;
+          const cx = view.vanishX ?? view.width / 2;
+          return (
+            <path
+              key={`r${index}`}
+              data-slot="horizon-ring"
+              d={`M ${cx - radius} ${view.horizonY} A ${radius} ${radius} 0 0 1 ${cx + radius} ${view.horizonY}`}
+              opacity={0.55 / (index + 1)}
+            />
+          );
+        })}
         {converging.map((line, index) => (
           <line key={`c${index}`} data-slot="grid-line" {...line} opacity={0.3} />
         ))}
@@ -78,8 +94,8 @@ export function PerspectiveGrid({
         ))}
         <line
           data-slot="horizon"
-          x1={0}
-          x2={view.width}
+          x1={-view.width}
+          x2={view.width * 2}
           y1={view.horizonY}
           y2={view.horizonY}
           strokeWidth={1.5}

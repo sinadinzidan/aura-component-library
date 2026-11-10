@@ -1,6 +1,6 @@
 import { IconCube } from '@cognite/aura/icons';
 import { Canvas } from '@react-three/fiber';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { cn } from '../../lib/utils';
@@ -59,6 +59,16 @@ export function SceneCanvas({
   const reducedMotion = usePrefersReducedMotion();
   const environment = useMemo(() => (palette ? { palette, reducedMotion } : null), [palette, reducedMotion]);
   const showScene = supported && !forceFallback;
+  const [onScreen, setOnScreen] = useState(true);
+
+  // Scenes that have scrolled out of view stop rendering, so a page can hold several of them.
+  useEffect(() => {
+    const element = scopeRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') return undefined;
+    const observer = new IntersectionObserver(([entry]) => setOnScreen(entry.isIntersecting), { rootMargin: '200px' });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <div ref={scopeRef} data-slot="scene-canvas" className={cn('relative h-full min-h-0 w-full overflow-hidden', className)}>
@@ -68,7 +78,7 @@ export function SceneCanvas({
             <Canvas
               flat
               dpr={[1, 2]}
-              frameloop={frameloop}
+              frameloop={onScreen ? frameloop : 'never'}
               shadows={shadows}
               gl={{ antialias: true, alpha: true }}
               camera={{ ...DEFAULT_CAMERA, ...camera }}

@@ -22,7 +22,9 @@ describe(FilePickerButton.name, () => {
     render(<FilePickerButton onFiles={onFiles}>Upload file</FilePickerButton>);
     const file = pdf();
 
-    fireEvent.change(screen.getByLabelText('Choose files'), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText('Choose files'), {
+      target: { files: [file] },
+    });
 
     expect(onFiles).toHaveBeenCalledWith([file]);
   });
@@ -31,7 +33,9 @@ describe(FilePickerButton.name, () => {
     const onFiles = vi.fn();
     render(<FilePickerButton onFiles={onFiles}>Upload file</FilePickerButton>);
 
-    fireEvent.change(screen.getByLabelText('Choose files'), { target: { files: [] } });
+    fireEvent.change(screen.getByLabelText('Choose files'), {
+      target: { files: [] },
+    });
 
     expect(onFiles).not.toHaveBeenCalled();
   });

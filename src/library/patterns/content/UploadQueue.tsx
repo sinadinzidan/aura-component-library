@@ -48,12 +48,7 @@ export function UploadQueue({ label, items, onCancel, onRetry, onRemove }: Uploa
                 {active ? <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{percent}%</span> : null}
               </div>
               {active ? (
-                <Progress
-                  value={percent}
-                  size="sm"
-                  aria-label={`Uploading ${item.name}`}
-                  aria-valuetext={`${percent}%, ${sent}`}
-                />
+                <Progress value={percent} size="sm" aria-label={`Uploading ${item.name}`} aria-valuetext={`${percent}%, ${sent}`} />
               ) : null}
               <p className="flex min-w-0 items-center gap-1.5 text-xs tabular-nums text-muted-foreground">
                 {item.status === 'queued' ? `Waiting · ${formatBytes(item.size)}` : null}

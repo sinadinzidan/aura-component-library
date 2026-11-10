@@ -50,6 +50,32 @@ describe(GlassPanel.name, () => {
     expect(onFocusChange).toHaveBeenCalledWith(false);
   });
 
+  it('comes forward when a panel at rest is clicked anywhere', async () => {
+    const onFocusChange = vi.fn();
+    render(
+      <GlassPanel title="Train A" onFocusChange={onFocusChange}>
+        <p>Running</p>
+      </GlassPanel>
+    );
+
+    await userEvent.click(screen.getByText('Running'));
+
+    expect(onFocusChange).toHaveBeenCalledWith(true);
+  });
+
+  it('ignores clicks on its content once focused', async () => {
+    const onFocusChange = vi.fn();
+    render(
+      <GlassPanel title="Train A" focused onFocusChange={onFocusChange}>
+        <p>Running</p>
+      </GlassPanel>
+    );
+
+    await userEvent.click(screen.getByText('Running'));
+
+    expect(onFocusChange).not.toHaveBeenCalled();
+  });
+
   it('marks focused and receded states', () => {
     render(
       <GlassPanel title="Train A" receded>

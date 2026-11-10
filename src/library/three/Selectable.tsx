@@ -1,10 +1,11 @@
 import { useThree } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Box3, BoxGeometry, EdgesGeometry, Vector3 } from 'three';
-import type { Group } from 'three';
+import type { Group, LineSegments } from 'three';
 
+import { setSceneCursor } from './sceneCursor';
 import { useSceneEnvironment } from './sceneEnvironment';
 
 export type SelectableState = { hovered: boolean; selected: boolean };
@@ -24,9 +25,9 @@ export type SelectableProps = {
   children: ReactNode | ((state: SelectableState) => ReactNode);
 };
 
-type OutlineBox = { center: [number, number, number]; size: [number, number, number] };
-
 const OUTLINE_MARGIN = 0.5;
+/** One unit cube outline, scaled to each selectable's bounds. */
+const UNIT_EDGES = new EdgesGeometry(new BoxGeometry(1, 1, 1));
 
 /**
  * Makes the meshes inside it hoverable and clickable: pointer cursor, an outline box in the accent
@@ -42,45 +43,35 @@ export function Selectable({ id, onSelect, onHoverChange, selected = false, disa
   const invalidate = useThree((state) => state.invalidate);
   const root = useRef<Group>(null);
   const content = useRef<Group>(null);
-  const [hovered, setHovered] = useState(false);
-  const [box, setBox] = useState<OutlineBox | null>(null);
-  const active = !disabled && (hovered || selected);
+  const box = useRef<LineSegments>(null);
+  const [pointerOver, setPointerOver] = useState(false);
+  const hovered = pointerOver && !disabled;
+  const active = outline && !disabled && (hovered || selected);
 
   useLayoutEffect(() => {
-    if (!active || !outline || !root.current || !content.current) return;
+    if (!active || !root.current || !content.current || !box.current) return;
     root.current.updateWorldMatrix(true, true);
     const bounds = new Box3().setFromObject(content.current);
     if (bounds.isEmpty()) return;
     bounds.applyMatrix4(root.current.matrixWorld.clone().invert());
-    const center = bounds.getCenter(new Vector3());
+    bounds.getCenter(box.current.position);
     const size = bounds.getSize(new Vector3());
-    setBox({ center: [center.x, center.y, center.z], size: [size.x + OUTLINE_MARGIN, size.y + OUTLINE_MARGIN, size.z + OUTLINE_MARGIN] });
-  }, [active, outline]);
+    box.current.scale.set(size.x + OUTLINE_MARGIN, size.y + OUTLINE_MARGIN, size.z + OUTLINE_MARGIN);
+    invalidate();
+  }, [active, invalidate]);
 
-  const edges = useMemo(() => (box ? new EdgesGeometry(new BoxGeometry(box.size[0], box.size[1], box.size[2])) : null), [box]);
-  useEffect(() => () => edges?.dispose(), [edges]);
-
-  useEffect(() => {
-    if (disabled && hovered) setHovered(false);
-  }, [disabled, hovered]);
-
-  useEffect(
-    () => () => {
-      gl.domElement.style.cursor = '';
-    },
-    [gl]
-  );
+  useEffect(() => () => setSceneCursor(gl.domElement, ''), [gl]);
 
   const enter = (event: ThreeEvent<PointerEvent>) => {
     event.stopPropagation();
-    setHovered(true);
-    gl.domElement.style.cursor = 'pointer';
+    setPointerOver(true);
+    setSceneCursor(gl.domElement, 'pointer');
     onHoverChange?.(id);
     invalidate();
   };
   const leave = () => {
-    setHovered(false);
-    gl.domElement.style.cursor = '';
+    setPointerOver(false);
+    setSceneCursor(gl.domElement, '');
     onHoverChange?.(null);
     invalidate();
   };
@@ -89,7 +80,7 @@ export function Selectable({ id, onSelect, onHoverChange, selected = false, disa
     onSelect?.(id);
   };
 
-  const state: SelectableState = { hovered: hovered && !disabled, selected };
+  const state: SelectableState = { hovered, selected };
 
   return (
     <group ref={root}>
@@ -101,11 +92,9 @@ export function Selectable({ id, onSelect, onHoverChange, selected = false, disa
       >
         {typeof children === 'function' ? children(state) : children}
       </group>
-      {active && outline && box && edges ? (
-        <lineSegments geometry={edges} position={box.center}>
-          <lineBasicMaterial color={palette.accent.color} transparent opacity={selected ? 1 : 0.7} />
-        </lineSegments>
-      ) : null}
+      <lineSegments ref={box} geometry={UNIT_EDGES} visible={active}>
+        <lineBasicMaterial color={palette.accent.color} transparent opacity={selected ? 1 : 0.7} />
+      </lineSegments>
     </group>
   );
 }

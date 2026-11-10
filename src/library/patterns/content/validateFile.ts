@@ -9,7 +9,10 @@ export type FileRule = {
   maxBytes?: number;
 };
 
-export type FileProblem = { reason: 'type' | 'size' | 'empty'; message: string };
+export type FileProblem = {
+  reason: 'type' | 'size' | 'empty';
+  message: string;
+};
 
 function listExtensions(extensions: readonly string[]): string {
   const upper = extensions.map((extension) => extension.toUpperCase());
@@ -25,10 +28,16 @@ function listExtensions(extensions: readonly string[]): string {
 export function validateFile(file: { name: string; size: number }, rule: FileRule): FileProblem | null {
   const { extensions, maxBytes } = rule;
   if (extensions !== undefined && !extensions.includes(extensionOf(file.name))) {
-    return { reason: 'type', message: `This file type is not supported. Use ${listExtensions(extensions)}.` };
+    return {
+      reason: 'type',
+      message: `This file type is not supported. Use ${listExtensions(extensions)}.`,
+    };
   }
   if (file.size === 0) {
-    return { reason: 'empty', message: 'This file is empty. Export it again and retry.' };
+    return {
+      reason: 'empty',
+      message: 'This file is empty. Export it again and retry.',
+    };
   }
   if (maxBytes !== undefined && file.size > maxBytes) {
     return {

@@ -12,7 +12,10 @@ const item = (id: string, patch: Partial<UploadItem> = {}): UploadItem => ({
 
 describe(uploadReducer.name, () => {
   it('adds files as queued with nothing sent', () => {
-    const next = uploadReducer([], { type: 'add', files: [{ id: 'a', name: 'a.pdf', size: 1000 }] });
+    const next = uploadReducer([], {
+      type: 'add',
+      files: [{ id: 'a', name: 'a.pdf', size: 1000 }],
+    });
 
     expect(next).toEqual([item('a')]);
   });
@@ -20,13 +23,20 @@ describe(uploadReducer.name, () => {
   it('ignores a file whose id is already in the queue', () => {
     const state = [item('a', { loaded: 400, status: 'uploading' })];
 
-    const next = uploadReducer(state, { type: 'add', files: [{ id: 'a', name: 'a.pdf', size: 1000 }] });
+    const next = uploadReducer(state, {
+      type: 'add',
+      files: [{ id: 'a', name: 'a.pdf', size: 1000 }],
+    });
 
     expect(next).toEqual(state);
   });
 
   it('moves a queued file to uploading when bytes arrive', () => {
-    const next = uploadReducer([item('a')], { type: 'progress', id: 'a', bytes: 250 });
+    const next = uploadReducer([item('a')], {
+      type: 'progress',
+      id: 'a',
+      bytes: 250,
+    });
 
     expect(next[0]).toMatchObject({ loaded: 250, status: 'uploading' });
   });
@@ -112,13 +122,24 @@ describe(summarizeUploads.name, () => {
       item('e'),
     ]);
 
-    expect(summary).toMatchObject({ total: 5, active: 2, done: 1, failed: 1, cancelled: 1, settled: false });
+    expect(summary).toMatchObject({
+      total: 5,
+      active: 2,
+      done: 1,
+      failed: 1,
+      cancelled: 1,
+      settled: false,
+    });
   });
 
   it('leaves cancelled files out of the byte totals', () => {
     const summary = summarizeUploads([item('a', { status: 'uploading', loaded: 500 }), item('d', { status: 'cancelled', loaded: 900 })]);
 
-    expect(summary).toMatchObject({ loadedBytes: 500, totalBytes: 1000, percent: 50 });
+    expect(summary).toMatchObject({
+      loadedBytes: 500,
+      totalBytes: 1000,
+      percent: 50,
+    });
   });
 
   it('rounds the percentage down so 100 means everything is sent', () => {
@@ -128,6 +149,10 @@ describe(summarizeUploads.name, () => {
   });
 
   it('is settled and at zero for an empty queue', () => {
-    expect(summarizeUploads([])).toMatchObject({ total: 0, percent: 0, settled: true });
+    expect(summarizeUploads([])).toMatchObject({
+      total: 0,
+      percent: 0,
+      settled: true,
+    });
   });
 });

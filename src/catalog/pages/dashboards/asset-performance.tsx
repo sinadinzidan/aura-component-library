@@ -163,7 +163,7 @@ function PerfBadActorsPanel({ sortKey, onSort, cell, onClearCell }: PerfTablePro
     <DashboardPanel
       title="Bad actors"
       description="Main units over the last 12 months, worst first. Select a column to rank by it."
-      footnote={`Showing ${rows.length} of ${matching.length} units. Cost is an index where the most expensive unit is 100.`}
+      footnote={`Showing ${rows.length} of ${matching.length} ${matching.length === 1 ? 'unit' : 'units'}. Cost is an index where the most expensive unit is 100.`}
     >
       <div className="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <span className="text-muted-foreground">Filter</span>

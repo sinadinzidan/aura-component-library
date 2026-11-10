@@ -4,11 +4,10 @@ import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
 import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
 import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
 import { CategoryChart } from '../../../library/industrial/charts/CategoryChart';
-import { AlarmList } from '../../../library/industrial/operations/AlarmList';
 import { DistributionBar } from '../../../library/industrial/operations/DistributionBar';
 import { SeverityBadge } from '../../../library/industrial/operations/SeverityBadge';
 import { Sparkline } from '../../../library/industrial/Sparkline';
-import { formatValue } from '../../../library/industrial/status';
+import { formatValue, severityStatus } from '../../../library/industrial/status';
 import type { Severity, Tone } from '../../../library/industrial/status';
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { ValueReadout } from '../../../library/industrial/ValueReadout';
@@ -439,13 +438,20 @@ function AlarmChatteringPanel({ selectedTag, onSelect }: { selectedTag: string; 
 function AlarmOpenPanel() {
   return (
     <DashboardPanel title="Open alarms" description={`${ALARM_OPEN.length} standing now, most severe first`}>
-      <AlarmList
-        label="Open alarms"
-        alarms={ALARM_OPEN}
-        density="compact"
-        formatAge={formatAgo}
-        getAssetName={(alarm) => findAsset(alarm.assetId)?.name}
-      />
+      <ul className="flex w-full flex-col gap-4">
+        {ALARM_OPEN.map((alarm) => (
+          <li key={alarm.id} className="flex min-w-0 flex-col gap-1">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <StatusIndicator {...severityStatus(alarm.severity)} size="sm" detail={alarm.state === 'active' ? 'unacknowledged' : 'acknowledged'} />
+              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatAgo(alarm.raisedAt)}</span>
+            </div>
+            <p className="text-sm text-base-foreground">{alarm.message}</p>
+            <p className="text-xs text-muted-foreground">
+              <span className="font-mono">{alarm.sensorTag}</span> · {findAsset(alarm.assetId)?.name} · <span className="tabular-nums">{alarm.value}</span>
+            </p>
+          </li>
+        ))}
+      </ul>
     </DashboardPanel>
   );
 }
@@ -604,7 +610,6 @@ export default definePage({
             'dashboards/DashboardGrid.tsx',
             'dashboards/DashboardPanel.tsx',
             'industrial/charts/CategoryChart.tsx',
-            'industrial/operations/AlarmList.tsx',
             'industrial/operations/DistributionBar.tsx',
             'industrial/operations/SeverityBadge.tsx',
             'industrial/Sparkline.tsx',
@@ -728,7 +733,7 @@ export default definePage({
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/AlarmList.tsx'],
+          uses: ['dashboards/DashboardPanel.tsx', 'industrial/StatusIndicator.tsx'],
           Component: AlarmMgmtOpen,
         },
       ],

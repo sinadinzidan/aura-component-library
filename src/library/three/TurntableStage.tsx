@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import { CameraRig } from './CameraRig';
 import { boundsFromFootprint, frameBounds } from './cameraTargets';
 import type { CameraView, Vec3 } from './cameraTargets';
-import { SceneLights } from './SceneLights';
 import { useSceneEnvironment } from './sceneEnvironment';
+import { SceneLights } from './SceneLights';
 
 export type TurntableStageProps = {
   /** Bounding size (x, y, z) of what stands on the stage; the camera frames it. See `EQUIPMENT_SIZES`. */

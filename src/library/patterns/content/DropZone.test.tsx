@@ -38,7 +38,7 @@ describe(DropZone.name, () => {
     fireEvent.dragEnter(zone, { dataTransfer: { files: [] } });
     expect(screen.getByText('Release to upload')).toBeInTheDocument();
 
-    fireEvent.dragLeave(zone, { relatedTarget: document.body });
+    fireEvent.dragLeave(zone);
     expect(screen.getByText('Drop files here')).toBeInTheDocument();
   });
 
@@ -47,7 +47,10 @@ describe(DropZone.name, () => {
     const zone = screen.getByRole('group');
     fireEvent.dragEnter(zone, { dataTransfer: { files: [] } });
 
-    fireEvent.dragLeave(zone, { relatedTarget: screen.getByRole('button', { name: 'Browse files' }) });
+    fireEvent.dragEnter(screen.getByRole('button', { name: 'Browse files' }), {
+      dataTransfer: { files: [] },
+    });
+    fireEvent.dragLeave(zone);
 
     expect(screen.getByText('Release to upload')).toBeInTheDocument();
   });

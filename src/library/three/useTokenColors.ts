@@ -19,7 +19,9 @@ import type { TokenColors, TokenMap } from './tokenColors';
 export function useTokenColors<T extends TokenMap>(tokens: T, scopeRef: RefObject<HTMLElement | null>): TokenColors<T> | null {
   const [colors, setColors] = useState<TokenColors<T> | null>(null);
   const tokensRef = useRef(tokens);
-  tokensRef.current = tokens;
+  useEffect(() => {
+    tokensRef.current = tokens;
+  });
   const signature = JSON.stringify(tokens);
 
   useEffect(() => {

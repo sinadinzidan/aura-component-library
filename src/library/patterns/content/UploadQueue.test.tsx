@@ -7,11 +7,36 @@ import { UploadQueue } from './UploadQueue';
 import type { UploadItem } from './uploadReducer';
 
 const ITEMS: readonly UploadItem[] = [
-  { id: 'a', name: 'P&ID rev C.pdf', size: 2_400_000, loaded: 1_200_000, status: 'uploading' },
+  {
+    id: 'a',
+    name: 'P&ID rev C.pdf',
+    size: 2_400_000,
+    loaded: 1_200_000,
+    status: 'uploading',
+  },
   { id: 'b', name: 'Layout.dwg', size: 8_000_000, loaded: 0, status: 'queued' },
-  { id: 'c', name: 'Survey.xlsx', size: 318_000, loaded: 318_000, status: 'done' },
-  { id: 'd', name: 'Scan.pdf', size: 5_000_000, loaded: 1_000_000, status: 'failed', error: 'Connection lost' },
-  { id: 'e', name: 'Photo.jpg', size: 5_100_000, loaded: 2_000_000, status: 'cancelled' },
+  {
+    id: 'c',
+    name: 'Survey.xlsx',
+    size: 318_000,
+    loaded: 318_000,
+    status: 'done',
+  },
+  {
+    id: 'd',
+    name: 'Scan.pdf',
+    size: 5_000_000,
+    loaded: 1_000_000,
+    status: 'failed',
+    error: 'Connection lost',
+  },
+  {
+    id: 'e',
+    name: 'Photo.jpg',
+    size: 5_100_000,
+    loaded: 2_000_000,
+    status: 'cancelled',
+  },
 ];
 
 function renderQueue(props: Partial<ComponentProps<typeof UploadQueue>> = {}) {
@@ -38,10 +63,11 @@ describe(UploadQueue.name, () => {
   it('shows progress with bytes sent for a running upload', () => {
     renderQueue();
 
-    expect(row('P&ID rev C.pdf').getByRole('progressbar', { name: 'Uploading P&ID rev C.pdf' })).toHaveAttribute(
-      'aria-valuetext',
-      '50%, 1.2 MB of 2.4 MB'
-    );
+    expect(
+      row('P&ID rev C.pdf').getByRole('progressbar', {
+        name: 'Uploading P&ID rev C.pdf',
+      })
+    ).toHaveAttribute('aria-valuetext', '50%, 1.2 MB of 2.4 MB');
     expect(row('P&ID rev C.pdf').getByText('50%')).toBeInTheDocument();
   });
 
@@ -90,7 +116,11 @@ describe(UploadQueue.name, () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove Survey.xlsx from the list' }));
 
     expect(onRemove).toHaveBeenCalledWith('c');
-    expect(screen.queryByRole('button', { name: 'Remove P&ID rev C.pdf from the list' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Remove P&ID rev C.pdf from the list',
+      })
+    ).not.toBeInTheDocument();
   });
 
   it('renders no action it has no handler for', () => {

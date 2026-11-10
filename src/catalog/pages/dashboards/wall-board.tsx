@@ -281,7 +281,6 @@ function WallAreasPanel({ index }: { index: number }) {
               </p>
               <p className="text-xl tabular-nums text-muted-foreground">
                 {alarms === 0 ? 'No alarms' : `${alarms} ${alarms === 1 ? 'alarm' : 'alarms'}`}
-                {inFocus ? ' · in focus' : ''}
               </p>
             </li>
           );
@@ -355,7 +354,7 @@ function WallDashboard() {
             <WallClockBlock />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <div className="flex min-w-0 flex-col [&>*]:flex-1">
             <WallAreasPanel index={index} />
           </div>

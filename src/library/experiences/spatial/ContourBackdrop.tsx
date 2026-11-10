@@ -17,9 +17,9 @@ const WIDTH = 1200;
 const HEIGHT = 720;
 
 const GLOW_A =
-  'bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--primary-background)_38%,transparent),transparent)]';
-const GLOW_B = 'bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--chart-2-450)_26%,transparent),transparent)]';
-const LINE = 'stroke-[color-mix(in_oklab,var(--primary-background)_34%,transparent)]';
+  'bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--primary-background)_60%,transparent),transparent)]';
+const GLOW_B = 'bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--chart-2-450)_42%,transparent),transparent)]';
+const LINE = 'stroke-[color-mix(in_oklab,var(--primary-background)_55%,transparent)]';
 const STREAM = 'stroke-[color-mix(in_oklab,var(--primary-background)_90%,var(--base-foreground))]';
 
 /**
@@ -28,10 +28,10 @@ const STREAM = 'stroke-[color-mix(in_oklab,var(--primary-background)_90%,var(--b
  * assistive technology, and fills its nearest positioned ancestor. Pick it behind glass panels,
  * where the blur needs something to work on.
  */
-export function ContourBackdrop({ lines = 16, streamEvery = 4, animated = true, className }: ContourBackdropProps) {
+export function ContourBackdrop({ lines = 22, streamEvery = 3, animated = true, className }: ContourBackdropProps) {
   const reducedMotion = usePrefersReducedMotion();
   const moving = animated && !reducedMotion;
-  const paths = contourPaths({ width: WIDTH, height: HEIGHT, count: lines });
+  const paths = contourPaths({ width: WIDTH, height: HEIGHT, count: lines, step: 16, amplitude: 1.8 });
 
   return (
     <div
@@ -40,8 +40,8 @@ export function ContourBackdrop({ lines = 16, streamEvery = 4, animated = true, 
       aria-hidden="true"
       className={cn('pointer-events-none absolute inset-0 overflow-hidden bg-base-background', className)}
     >
-      <div className={cn('absolute -top-1/4 -left-1/4 h-full w-3/4', GLOW_A)} />
-      <div className={cn('absolute -right-1/4 -bottom-1/3 h-full w-3/4', GLOW_B)} />
+      <div className={cn('absolute -top-1/3 -left-1/4 h-[120%] w-3/4', GLOW_A)} />
+      <div className={cn('absolute -right-1/4 -bottom-1/3 h-[120%] w-3/4', GLOW_B)} />
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" fill="none" className="absolute inset-0 h-full w-full">
         {paths.map((path, index) => (
           <path key={path} data-slot="contour-line" d={path} strokeWidth={index % 4 === 0 ? 1.5 : 1} vectorEffect="non-scaling-stroke" className={LINE} />
@@ -56,7 +56,7 @@ export function ContourBackdrop({ lines = 16, streamEvery = 4, animated = true, 
                   d={path}
                   strokeWidth={2}
                   strokeLinecap="round"
-                  strokeDasharray="4 132"
+                  strokeDasharray="14 122"
                   vectorEffect="non-scaling-stroke"
                   className={STREAM}
                 >

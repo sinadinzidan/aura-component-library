@@ -125,13 +125,13 @@ type PidCanvasProps = { zoom?: number; selected?: string; showTags?: boolean; sh
  */
 function PidCanvas({ zoom = 100, selected, showTags = true, showAnnotations = true }: PidCanvasProps) {
   return (
-    <div className="flex size-full items-center justify-center overflow-hidden bg-muted-background">
+    <div className="size-full min-h-0 overflow-hidden bg-muted-background p-3">
       <svg
         role="img"
         aria-label={`P&ID ${PID.id}, ${PID.title}, at ${zoom} percent. ${showTags ? `${HOTSPOTS.length} detected tags highlighted${selected ? `, ${selected} selected` : ''}.` : 'Tag highlights hidden.'}`}
         viewBox="0 0 600 340"
         fill="none"
-        className="h-auto w-full max-w-3xl origin-center text-muted-foreground transition-transform"
+        className="size-full origin-center text-muted-foreground transition-transform"
         style={{ transform: `scale(${zoom / 100})` }}
       >
         <rect x={6} y={6} width={588} height={328} className="fill-base-background stroke-emphasized" strokeWidth={1} />

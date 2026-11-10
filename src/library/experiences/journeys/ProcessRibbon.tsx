@@ -47,7 +47,9 @@ export function ProcessRibbon({ stations, activeIndex, onSelect, label, markerLa
     const container = scroller.current;
     const station = container?.querySelector<HTMLElement>(`[data-station-index="${active}"]`);
     if (!container || !station || typeof container.scrollTo !== 'function') return;
-    const left = station.offsetLeft + station.offsetWidth / 2 - container.clientWidth / 2;
+    // Measured against the scroller itself; `offsetLeft` would be relative to the station's own list item.
+    const stationBox = station.getBoundingClientRect();
+    const left = stationBox.left - container.getBoundingClientRect().left + container.scrollLeft + stationBox.width / 2 - container.clientWidth / 2;
     container.scrollTo({ left: Math.max(left, 0), behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
   }, [active]);
 

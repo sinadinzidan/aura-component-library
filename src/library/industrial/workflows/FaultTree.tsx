@@ -48,11 +48,7 @@ function FaultTreeBranch({ node, depth }: { node: FaultTreeNode; depth: number }
             <span className="sr-only">: caused by {GATE_WORD[node.gate]} the events below</span>
           </span>
         ) : null}
-        {node.state ? (
-          <span className="w-24 shrink-0">
-            <StatusIndicator size="sm" {...causeStatus(node.state)} />
-          </span>
-        ) : null}
+        <span className="w-24 shrink-0">{node.state ? <StatusIndicator size="sm" {...causeStatus(node.state)} /> : null}</span>
       </div>
       {children.length > 0 ? (
         <ul className="ml-2 flex flex-col border-l border-emphasized pl-4">

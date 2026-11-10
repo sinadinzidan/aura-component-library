@@ -328,9 +328,9 @@ function ShiftSignOffPanel({ ready, accepted, onAccept }: { ready: boolean; acce
       <SignOffBlock
         label="Sign-off, day shift to evening shift"
         signers={[
-          { id: 'outgoing', role: 'Outgoing shift supervisor', name: 'Liv Wold', state: 'signed', at: '13:58' },
-          { id: 'incoming', role: 'Incoming shift supervisor', name: 'Sigrid Aune', state: accepted ? 'signed' : 'pending', at: '14:00' },
-          { id: 'operator', role: 'Incoming control room operator', name: 'Henrik Dahl', state: 'pending' },
+          { id: 'outgoing', role: 'Outgoing supervisor', name: 'Liv Wold', state: 'signed', at: '13:58' },
+          { id: 'incoming', role: 'Incoming supervisor', name: 'Sigrid Aune', state: accepted ? 'signed' : 'pending', at: '14:00' },
+          { id: 'operator', role: 'Incoming operator', name: 'Henrik Dahl', state: 'pending' },
         ]}
         currentSignerId="incoming"
         onSign={ready ? onAccept : undefined}

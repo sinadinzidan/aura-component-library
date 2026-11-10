@@ -1,5 +1,5 @@
 import { IconUpload } from '@cognite/aura/icons';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { DragEvent, ReactNode } from 'react';
 
 import { FilePickerButton } from './FilePickerButton';
@@ -26,11 +26,6 @@ type DropZoneProps = {
   density?: 'default' | 'compact';
 };
 
-function leavesZone(event: DragEvent<HTMLDivElement>): boolean {
-  const next = event.relatedTarget;
-  return !(next instanceof Node) || !event.currentTarget.contains(next);
-}
-
 /**
  * A drop target for files with a button that does the same job, so uploading never depends on
  * drag and drop. It shows when a drag is over it, and when it is off it says why. It only hands
@@ -50,18 +45,27 @@ export function DropZone({
   density = 'default',
 }: DropZoneProps) {
   const [over, setOver] = useState(false);
+  // Enter and leave also fire for every child the pointer crosses; the zone is left at depth 0.
+  const depth = useRef(0);
   const hintId = useId();
   const active = !disabled && (dragging ?? over);
   const compact = density === 'compact';
   const helper = disabled && disabledReason ? disabledReason : hint;
 
-  const hold = (event: DragEvent<HTMLDivElement>) => {
+  const enter = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    depth.current += 1;
     if (!disabled) setOver(true);
+  };
+
+  const leave = () => {
+    depth.current = Math.max(0, depth.current - 1);
+    if (depth.current === 0) setOver(false);
   };
 
   const drop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    depth.current = 0;
     setOver(false);
     if (disabled) return;
     const files = Array.from(event.dataTransfer.files);
@@ -83,11 +87,9 @@ export function DropZone({
       aria-disabled={disabled || undefined}
       data-slot="drop-zone"
       data-dragging={active || undefined}
-      onDragEnter={hold}
-      onDragOver={hold}
-      onDragLeave={(event) => {
-        if (leavesZone(event)) setOver(false);
-      }}
+      onDragEnter={enter}
+      onDragOver={(event) => event.preventDefault()}
+      onDragLeave={leave}
       onDrop={drop}
       className={`flex w-full min-w-0 rounded-xl border transition-colors ${surface} ${
         compact ? 'flex-wrap items-center gap-3 px-4 py-3' : 'flex-col items-center gap-3 px-6 py-8 text-center'

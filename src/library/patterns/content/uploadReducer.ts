@@ -13,7 +13,10 @@ export type UploadItem = {
 };
 
 export type UploadAction =
-  | { type: 'add'; files: readonly { id: string; name: string; size: number }[] }
+  | {
+      type: 'add';
+      files: readonly { id: string; name: string; size: number }[];
+    }
   /** Bytes arrived for one file. Completes the file when everything is sent. */
   | { type: 'progress'; id: string; bytes: number }
   /** Moves every waiting or running file forward by a share of its size, 0 to 1. */
@@ -33,7 +36,11 @@ function isActive(item: UploadItem): boolean {
 function withProgress(item: UploadItem, bytes: number): UploadItem {
   if (!isActive(item) || bytes <= 0) return item;
   const loaded = Math.min(item.size, item.loaded + bytes);
-  return { ...item, loaded, status: loaded >= item.size ? 'done' : 'uploading' };
+  return {
+    ...item,
+    loaded,
+    status: loaded >= item.size ? 'done' : 'uploading',
+  };
 }
 
 /**
@@ -55,13 +62,17 @@ export function uploadReducer(state: readonly UploadItem[], action: UploadAction
     case 'advance':
       return state.map((item) => withProgress(item, Math.ceil(item.size * action.fraction)));
     case 'fail':
-      return state.map((item) =>
-        item.id === action.id && isActive(item) ? { ...item, status: 'failed', error: action.error } : item
-      );
+      return state.map((item) => (item.id === action.id && isActive(item) ? { ...item, status: 'failed', error: action.error } : item));
     case 'retry':
       return state.map((item) =>
         item.id === action.id && (item.status === 'failed' || item.status === 'cancelled')
-          ? { id: item.id, name: item.name, size: item.size, loaded: item.loaded, status: 'queued' }
+          ? {
+              id: item.id,
+              name: item.name,
+              size: item.size,
+              loaded: item.loaded,
+              status: 'queued',
+            }
           : item
       );
     case 'cancel':

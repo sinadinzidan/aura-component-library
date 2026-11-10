@@ -1,3 +1,5 @@
+import { Button } from '@cognite/aura/components/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@cognite/aura/components/tooltip';
 import { IconArrowUp, IconChevronRight } from '@cognite/aura/icons';
 
 import { cn } from '../../lib/utils';
@@ -39,15 +41,16 @@ export function DrillBreadcrumb({ crumbs, onNavigate, onUp, label = 'Drill-down 
       )}
     >
       {canGoUp ? (
-        <button
-          type="button"
-          onClick={onUp}
-          aria-label="Go up one level"
-          title="Go up one level (Esc)"
-          className="flex size-7 shrink-0 items-center justify-center rounded-md text-medium-foreground hover:bg-secondary-background focus-visible:outline-2 focus-visible:outline-[var(--ring-default)]"
-        >
-          <IconArrowUp aria-hidden="true" className="size-4" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button variant="ghost" size="icon-sm" aria-label="Go up one level" onClick={onUp}>
+                <IconArrowUp />
+              </Button>
+            }
+          />
+          <TooltipContent side="bottom">Up one level (Esc)</TooltipContent>
+        </Tooltip>
       ) : null}
       <ol className="flex min-w-0 items-center gap-0.5">
         {crumbs.map((crumb, index) => {
