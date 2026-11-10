@@ -509,7 +509,7 @@ function Plant3dAreaHud({ areaId, selectedId, onSelectAsset }: { areaId: string;
                   >
                     <span className="flex min-w-0 flex-col">
                       <span className="font-mono text-xs text-base-foreground">{unit.tag}</span>
-                      <span className="truncate text-xs text-muted-foreground">{unit.name}</span>
+                      <span className="text-xs text-muted-foreground">{unit.name}</span>
                     </span>
                     <StatusIndicator {...runStateStatus(unit.state)} size="sm" className="shrink-0" />
                   </button>
@@ -819,6 +819,10 @@ function Plant3dExplorer({ initial = INITIAL_EXPLORER_STATE }: { initial?: Explo
     <div
       tabIndex={-1}
       onKeyDown={onKeyDown}
+      onPointerDownCapture={(event) => {
+        // Orbit controls swallow the pointer event, so take focus by hand to keep Escape working.
+        if (event.target instanceof HTMLCanvasElement) event.currentTarget.focus({ preventScroll: true });
+      }}
       data-level={level}
       className="relative h-[46rem] w-full overflow-hidden rounded-xl border border-default bg-base-background outline-none"
     >

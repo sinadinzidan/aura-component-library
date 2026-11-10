@@ -318,7 +318,7 @@ function AiOpsComposer({ streaming, onAsk, onSend, onStop }: AiOpsComposerProps)
     <div className="flex w-full flex-col gap-3">
       <PromptSuggestions
         label="Suggested questions"
-        layout="stack"
+        layout="wrap"
         disabled={streaming}
         suggestions={AI_OPS_TOPICS.map((topic) => ({ id: topic.id, label: topic.question }))}
         onSelect={(_prompt, suggestion) => {
@@ -366,7 +366,7 @@ function AiOpsTripEvidence() {
         unit="mm/s"
         decimals={1}
         maxTicks={6}
-        heightClassName="h-72"
+        heightClassName="h-80"
       />
       <ol aria-label="Sequence of events" className="grid w-full grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2">
         {AI_OPS_SEQUENCE.map((step) => (
@@ -398,7 +398,7 @@ function AiOpsCompareEvidence() {
         decimals={1}
         maxTicks={6}
         legend
-        heightClassName="h-64"
+        heightClassName="h-72"
       />
       <table className="w-full table-fixed text-left text-sm">
         <thead>
@@ -510,7 +510,7 @@ function AiOpsThreadPanel({ view, messages, streaming, onAsk, onSend, onStop }: 
   return (
     <DashboardPanel title="Assistant" description="Answers from Nordkapp time series, alarms and work orders">
       <AiOpsContextChips topicId={view} />
-      <div className="h-96 w-full">
+      <div className="h-80 w-full">
         <ChatThread messages={messages} label="Conversation with the operations assistant" pendingLabel="Reading plant data" />
       </div>
       <AiOpsComposer streaming={streaming} onAsk={onAsk} onSend={onSend} onStop={onStop} />

@@ -492,7 +492,7 @@ function RadialMissionDetailFan() {
         <OrbitNode cx={504} cy={320} label={node.name} code={node.code} value={78} tone="warning" shape="square" stateLabel="Watch" selected />
         <RadialMissionFan node={node} step={RADIAL_MISSION_STEPS} />
       </svg>
-      <div className="w-64 min-w-0">
+      <div className="w-80 min-w-0">
         <RadialMissionReadout node={node} step={RADIAL_MISSION_STEPS} />
       </div>
     </div>

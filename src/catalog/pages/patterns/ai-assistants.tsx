@@ -703,7 +703,7 @@ function AiAssistantFloatingPanel() {
   const send = (prompt: string) => setMessages((current) => [...current, ...aiReply(prompt, current.length)]);
 
   return (
-    <div className="h-128 w-full">
+    <div className="h-144 w-full">
       <AssistantPanel
         variant="floating"
         title="Plant assistant"
@@ -724,7 +724,7 @@ function AiAssistantFloatingPanel() {
 
 function AiAssistantTranscript() {
   return (
-    <div className="h-128 w-full">
+    <div className="h-144 w-full">
       <AssistantPanel variant="floating" title="Conversation from 12 March, 13:58" context="Attached to WO-104482 by Aisha Khan · read-only">
         <ChatThread messages={AI_THREAD} hideActions label="Saved conversation" />
       </AssistantPanel>
@@ -737,8 +737,8 @@ function AiAssistantDockedPanel() {
   const send = (prompt: string) => setMessages((current) => [...current, ...aiReply(prompt, current.length)]);
 
   return (
-    <div className="flex h-144 w-full overflow-hidden rounded-xl border border-default">
-      <div className="flex min-w-0 flex-1 flex-col gap-4 bg-muted-background p-4">
+    <div className="flex h-160 w-full overflow-hidden rounded-xl border border-default">
+      <div className="flex min-w-0 flex-1 flex-col gap-4 p-4">
         <AiTrendCard />
         <Card className="w-full">
           <CardHeader>

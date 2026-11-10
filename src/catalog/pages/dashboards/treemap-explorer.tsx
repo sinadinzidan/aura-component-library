@@ -8,11 +8,6 @@ import {
 import { IconAlertOctagon, IconAlertTriangle, IconArrowUp } from '@cognite/aura/icons';
 import { useReducer, useState } from 'react';
 
-import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
-import { TONE_TEXT, severityStatus } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import {
   createDrillReducer,
   createDrillState,
@@ -26,6 +21,11 @@ import { PathBar } from '../../../library/experiences/drilldown/PathBar';
 import { SensorTrend } from '../../../library/experiences/drilldown/SensorTrend';
 import { TreemapCanvas } from '../../../library/experiences/drilldown/TreemapCanvas';
 import { aspectRatio, squarify } from '../../../library/experiences/drilldown/treemapLayout';
+import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
+import { TONE_TEXT, severityStatus } from '../../../library/industrial/status';
+import { StatusDot } from '../../../library/industrial/StatusDot';
+import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
+import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import { ThemeScope } from '../../../library/themes/ThemeScope';
 import { ALARMS, ASSETS, SENSORS } from '../../data/plant';
 import type { Asset, Sensor } from '../../data/plant';
@@ -439,16 +439,18 @@ function TreemapExplorerLayout() {
         {rects.map((rect) => (
           <g key={rect.id}>
             <rect x={rect.x + 1} y={rect.y + 1} width={rect.width - 2} height={rect.height - 2} rx={4} strokeWidth={1} className="fill-card-background stroke-emphasized" />
-            <text x={rect.x + 10} y={rect.y + 20} fontSize={11} className="fill-base-foreground font-mono">
-              {TREEMAP_TREE.byId.get(rect.id)?.tag}
-            </text>
-            <text x={rect.x + 10} y={rect.y + 36} fontSize={11} className="fill-muted-foreground tabular-nums">
-              {Math.round(rect.share * 100)}% · ratio {aspectRatio(rect).toFixed(1)}
+            {rect.width >= 84 ? (
+              <text x={rect.x + 10} y={rect.y + 20} fontSize={11} className="fill-base-foreground font-mono">
+                {TREEMAP_TREE.byId.get(rect.id)?.tag}
+              </text>
+            ) : null}
+            <text x={rect.x + 10} y={rect.y + (rect.width >= 84 ? 36 : 20)} fontSize={11} className="fill-muted-foreground tabular-nums">
+              {Math.round(rect.share * 100)}%{rect.width >= 110 ? ` · ratio ${aspectRatio(rect).toFixed(1)}` : ''}
             </text>
           </g>
         ))}
       </svg>
-      <p className="text-xs text-muted-foreground">Each rectangle shows its share of the area and its aspect ratio; the layout keeps ratios close to 1.</p>
+      <p className="text-xs text-muted-foreground">Each rectangle shows its share of the area and, where there is room, its tag and aspect ratio. The layout keeps ratios close to 1.</p>
     </div>
   );
 }
@@ -491,6 +493,7 @@ export default definePage({
           uses: [
             'experiences/drilldown/TreemapCanvas.tsx',
             'experiences/drilldown/treemapLayout.ts',
+            'experiences/drilldown/treemapZoom.ts',
             'experiences/drilldown/drillReducer.ts',
             'experiences/drilldown/hierarchy.ts',
             'experiences/drilldown/NodeDetailStrip.tsx',

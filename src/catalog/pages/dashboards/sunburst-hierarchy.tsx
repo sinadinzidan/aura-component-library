@@ -1,9 +1,6 @@
 import { Kbd } from '@cognite/aura/components/kbd';
 import { useReducer } from 'react';
 
-import { TONE_TEXT } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import {
   createDrillReducer,
   createDrillState,
@@ -19,6 +16,9 @@ import { PathBar } from '../../../library/experiences/drilldown/PathBar';
 import { SunburstChart } from '../../../library/experiences/drilldown/SunburstChart';
 import { FULL_CIRCLE, arcCentroid, arcPath, partition, shapeArcs } from '../../../library/experiences/drilldown/sunburstLayout';
 import { SvgStatusMark } from '../../../library/experiences/drilldown/SvgStatusMark';
+import { TONE_TEXT } from '../../../library/industrial/status';
+import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
+import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import { ThemeScope } from '../../../library/themes/ThemeScope';
 import { ALARMS, ASSETS, SENSORS } from '../../data/plant';
 import type { Sensor } from '../../data/plant';

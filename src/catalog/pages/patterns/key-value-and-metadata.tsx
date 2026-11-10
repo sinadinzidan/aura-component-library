@@ -1,9 +1,9 @@
 import { Badge } from '@cognite/aura/components/badge';
 import { Button } from '@cognite/aura/components/button';
 import { CodeBlock, CodeBlockCopyButton } from '@cognite/aura/components/code-block';
-import { Input } from '@cognite/aura/components/input';
+import { Search } from '@cognite/aura/components/search';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@cognite/aura/components/tooltip';
-import { IconArrowRight, IconDatabase, IconPlus, IconSearch, IconTimeline } from '@cognite/aura/icons';
+import { IconArrowRight, IconDatabase, IconPlus, IconTimeline } from '@cognite/aura/icons';
 import { useState } from 'react';
 
 import { CopyButton } from '../../../library/actions/CopyButton';
@@ -529,16 +529,13 @@ function KeyValueMetaSearchable() {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-3">
-      <div className="relative">
-        <IconSearch aria-hidden="true" className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          aria-label="Filter properties"
-          placeholder="Filter properties"
-          className="pl-8"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-      </div>
+      <Search
+        aria-label="Filter properties"
+        placeholder="Filter properties"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        onClear={() => setQuery('')}
+      />
       <p className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
         {shown.length} of {KEY_VALUE_TECHNICAL.length} properties
       </p>

@@ -151,8 +151,8 @@ export function SunburstChart({ tree, state, dispatch, label, animate = true, cl
               const tag = abnormal ? `${node.status.tone === 'critical' ? '◆' : '■'} ${node.tag}` : node.tag;
               const figure = `${formatValue(node.figure.value, node.figure.decimals)}${node.figure.unit && node.figure.value !== null ? ` ${node.figure.unit}` : ''}`;
               const showTag = thickness >= 18 && room >= tag.length * 6.5;
-              const showName = showTag && thickness >= 42 && room >= node.name.length * 6.6;
-              const showFigure = showName && thickness >= 62 && room >= figure.length * 6.6;
+              const showName = showTag && thickness >= 46 && room >= node.name.length * 6.6;
+              const showFigure = showName && thickness >= 66 && room >= figure.length * 6.6;
               if (!showTag) {
                 const centroid = arcCentroid(CENTRE, CENTRE, shape);
                 return abnormal && fitsInArc(shape, 11, 11) ? (
@@ -170,7 +170,7 @@ export function SunburstChart({ tree, state, dispatch, label, animate = true, cl
               return (
                 <g key={shape.id} data-slot="sunburst-label" opacity={dimmed ? 0.4 : 1} className="pointer-events-none">
                   {texts.map((text, index) => {
-                    const radius = middle + direction * (index - (texts.length - 1) / 2) * 15;
+                    const radius = middle + direction * (index - (texts.length - 1) / 2) * 17;
                     const pathId = `${baseId}-label-${node.id}-${text.key}`;
                     return (
                       <g key={text.key}>

@@ -32,9 +32,13 @@ export function MilestoneTrack({ label, milestones, markers = 'numbered' }: Mile
         const numbered = markers === 'numbered';
         const marker =
           milestone.state === 'done'
-            ? 'bg-medium-background text-base-foreground'
+            ? numbered
+              ? 'bg-medium-background text-base-foreground'
+              : 'bg-neutral-foreground-strong'
             : milestone.state === 'current'
-              ? 'bg-primary-background text-primary-foreground'
+              ? numbered
+                ? 'bg-primary-background text-primary-foreground'
+                : 'bg-primary-background outline-2 outline-offset-2 outline-primary-background'
               : 'border border-emphasized text-muted-foreground';
 
         return (

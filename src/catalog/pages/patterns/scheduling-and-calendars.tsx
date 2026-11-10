@@ -408,9 +408,9 @@ function ScheduleCalResourceRows() {
 }
 
 const SHIFTS = [
-  { id: 'day', name: 'Day', hours: '07:00–15:00', Icon: IconSun, lead: 'lw' },
-  { id: 'evening', name: 'Evening', hours: '15:00–23:00', Icon: IconSunset, lead: 'ih' },
-  { id: 'night', name: 'Night', hours: '23:00–07:00', Icon: IconMoon, lead: 'ms' },
+  { id: 'day', code: 'D', name: 'Day', hours: '07:00–15:00', Icon: IconSun, lead: 'lw' },
+  { id: 'evening', code: 'E', name: 'Evening', hours: '15:00–23:00', Icon: IconSunset, lead: 'ih' },
+  { id: 'night', code: 'N', name: 'Night', hours: '23:00–07:00', Icon: IconMoon, lead: 'ms' },
 ] as const;
 
 function ScheduleCalShiftPattern() {
@@ -506,9 +506,9 @@ function ScheduleCalShiftRoster() {
         </tbody>
       </table>
       <ul aria-label="Legend" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {SHIFTS.map(({ id, name, hours }, index) => (
+        {SHIFTS.map(({ id, code, name, hours }) => (
           <li key={id} className="flex items-center gap-1.5 tabular-nums">
-            <Badge variant={SHIFT_BADGE[(['D', 'E', 'N'] as const)[index]].variant}>{(['D', 'E', 'N'] as const)[index]}</Badge>
+            <Badge variant={SHIFT_BADGE[code].variant}>{code}</Badge>
             {name} {hours}
           </li>
         ))}

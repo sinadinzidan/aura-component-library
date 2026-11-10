@@ -8,9 +8,6 @@ import {
 import { IconArrowUp } from '@cognite/aura/icons';
 import { useReducer, useState } from 'react';
 
-import type { SymbolKind } from '../../../library/industrial/diagrams/symbolPaths';
-import { formatLimit, formatReading } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import {
   createDrillReducer,
   createDrillState,
@@ -27,6 +24,9 @@ import { layoutPlan, viewportFor } from '../../../library/experiences/drilldown/
 import { PlotPlan } from '../../../library/experiences/drilldown/PlotPlan';
 import { SvgStatusMark } from '../../../library/experiences/drilldown/SvgStatusMark';
 import { ZoomRail } from '../../../library/experiences/drilldown/ZoomRail';
+import type { SymbolKind } from '../../../library/industrial/diagrams/symbolPaths';
+import { formatLimit, formatReading } from '../../../library/industrial/status';
+import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { ThemeScope } from '../../../library/themes/ThemeScope';
 import { ALARMS, ASSETS, SENSORS } from '../../data/plant';
 import type { Sensor } from '../../data/plant';
@@ -79,6 +79,9 @@ const PLAN_TREE = buildHierarchy({
 });
 
 const PLAN_LAYOUT = layoutPlan(PLAN_TREE, { height: 700 });
+
+/** The same plan in a wide, low world, for a banner-shaped frame. */
+const PLAN_WIDE_LAYOUT = layoutPlan(PLAN_TREE, { height: 460 });
 
 const PLAN_REDUCER = createDrillReducer(PLAN_TREE);
 
@@ -344,10 +347,10 @@ function PlantToSensorMachineView() {
   const [state, dispatch] = useReducer(PLAN_REDUCER, PLAN_TREE, (tree) => createDrillState(tree, { startId: '23-ka-9101' }));
 
   return (
-    <div className="h-96 w-full overflow-hidden rounded-xl border border-default bg-muted-background">
+    <div className="h-[30rem] w-full overflow-hidden rounded-xl border border-default bg-muted-background">
       <PlotPlan
         tree={PLAN_TREE}
-        layout={PLAN_LAYOUT}
+        layout={PLAN_WIDE_LAYOUT}
         state={state}
         dispatch={dispatch}
         symbols={PLAN_SYMBOLS}
@@ -524,18 +527,10 @@ export default definePage({
           title: 'Plan opened on a machine',
           note: 'Pick it to embed the plan in an equipment page, already zoomed to that machine.',
           origin: 'custom',
-          size: 'lg',
+          size: 'full',
           align: 'stretch',
           uses: ['experiences/drilldown/PlotPlan.tsx', 'experiences/drilldown/planLayout.ts', 'experiences/drilldown/drillReducer.ts'],
           Component: PlantToSensorMachineView,
-        },
-        {
-          id: 'PlantToSensorKeyboard',
-          title: 'Keyboard map',
-          note: 'Pick it for a help popover, so the journey is discoverable without a pointer.',
-          origin: 'custom',
-          size: 'sm',
-          Component: PlantToSensorKeyboard,
         },
         {
           id: 'PlantToSensorSensorCard',
@@ -548,16 +543,6 @@ export default definePage({
           Component: PlantToSensorSensorCard,
         },
         {
-          id: 'PlantToSensorPathBar',
-          title: 'Trail',
-          note: 'Pick it to show the full path with every ancestor one click away.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['experiences/drilldown/PathBar.tsx', 'experiences/drilldown/drillReducer.ts'],
-          Component: PlantToSensorPathBar,
-        },
-        {
           id: 'PlantToSensorLevelSummary',
           title: 'Summary per level',
           note: 'Pick it to decide what one line says at each altitude before drawing anything.',
@@ -565,6 +550,24 @@ export default definePage({
           size: 'md',
           align: 'stretch',
           Component: PlantToSensorLevelSummary,
+        },
+        {
+          id: 'PlantToSensorKeyboard',
+          title: 'Keyboard map',
+          note: 'Pick it for a help popover, so the journey is discoverable without a pointer.',
+          origin: 'custom',
+          size: 'sm',
+          Component: PlantToSensorKeyboard,
+        },
+        {
+          id: 'PlantToSensorPathBar',
+          title: 'Trail',
+          note: 'Pick it to show the full path with every ancestor one click away.',
+          origin: 'custom',
+          size: 'lg',
+          align: 'stretch',
+          uses: ['experiences/drilldown/PathBar.tsx', 'experiences/drilldown/drillReducer.ts'],
+          Component: PlantToSensorPathBar,
         },
       ],
     },

@@ -593,10 +593,14 @@ function IsoPlantLayerSwitch() {
   const [deck, setDeck] = useState<IsoPlantDeck>('ground');
 
   return (
-    <div className="flex flex-col gap-4">
-      <LayerSwitch label="Layer" value={layer} options={ISO_PLANT_LAYERS} onValueChange={setLayer} />
-      <LayerSwitch label="Level" value={deck} options={ISO_PLANT_DECKS} onValueChange={setDeck} />
-      <IsoPlantLegend layer={layer} />
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-medium text-muted-foreground">Layer</span>
+      <LayerSwitch label="Layer" hideLabel value={layer} options={ISO_PLANT_LAYERS} onValueChange={setLayer} />
+      <span className="pt-2 text-xs font-medium text-muted-foreground">Level</span>
+      <LayerSwitch label="Level" hideLabel value={deck} options={ISO_PLANT_DECKS} onValueChange={setDeck} />
+      <div className="flex min-h-6 items-center pt-2">
+        <IsoPlantLegend layer={layer} />
+      </div>
     </div>
   );
 }
@@ -615,7 +619,8 @@ function IsoPlantHeatTiles() {
       <svg role="img" aria-label="Four areas coloured by temperature from 19 to 58 degrees" viewBox="0 0 300 170" className="w-full">
         {tiles.map((tile) => {
           const corner = (dx: number, dy: number) => iso(tile.x + dx, tile.y + dy, 0, view);
-          const label = corner(0.3, 2.75);
+          const code = corner(0.3, 1.5);
+          const value = corner(0.3, 2.6);
           return (
             <g key={tile.code}>
               <polygon
@@ -623,8 +628,11 @@ function IsoPlantHeatTiles() {
                 strokeWidth={1}
                 className={`${ISO_PLANT_HEAT_FILL[isoPlantHeatLevel(tile.temperature)]} stroke-[color:var(--card-background)]`}
               />
-              <text transform={`matrix(0.866 0.5 -0.866 0.5 ${label.x} ${label.y})`} fontSize={11} strokeWidth={3} className={`${ISO_PLANT_GROUND_TEXT} fill-base-foreground font-semibold`}>
-                {tile.code} {tile.temperature} °C
+              <text transform={`matrix(0.866 0.5 -0.866 0.5 ${code.x} ${code.y})`} fontSize={11} strokeWidth={3} className={`${ISO_PLANT_GROUND_TEXT} fill-base-foreground`}>
+                {tile.code}
+              </text>
+              <text transform={`matrix(0.866 0.5 -0.866 0.5 ${value.x} ${value.y})`} fontSize={12} strokeWidth={3} className={`${ISO_PLANT_GROUND_TEXT} fill-base-foreground font-semibold`}>
+                {tile.temperature} °C
               </text>
             </g>
           );
