@@ -40,7 +40,7 @@ export function ToolCallList({ calls, collapsible = false, defaultOpen = false, 
 
   return (
     <Collapsible open={open} onOpenChange={setUserOpen}>
-      <CollapsibleTrigger className="w-fit gap-2">
+      <CollapsibleTrigger className="-ml-3 w-fit gap-2">
         <IconTool aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <span>{summarizeToolCalls(calls)}</span>
         <IconChevronDown
@@ -49,7 +49,7 @@ export function ToolCallList({ calls, collapsible = false, defaultOpen = false, 
         />
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="pt-1 pl-2">{list}</div>
+        <div className="pt-1">{list}</div>
       </CollapsibleContent>
     </Collapsible>
   );

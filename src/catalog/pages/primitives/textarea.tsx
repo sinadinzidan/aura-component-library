@@ -391,7 +391,7 @@ function TextareaHandoverForm() {
 
   return (
     <form
-      className="flex w-full max-w-md flex-col gap-4 self-start rounded-xl bg-card-background p-4"
+      className="flex w-full max-w-md flex-col gap-4 self-start"
       onSubmit={(event) => event.preventDefault()}
     >
       <h3 className="text-base font-semibold text-base-foreground">Shift handover</h3>
@@ -432,7 +432,7 @@ function TextareaConfirmWithReason() {
 
   return (
     <form
-      className="flex w-full max-w-md flex-col gap-4 self-start rounded-xl bg-card-background p-4"
+      className="flex w-full max-w-md flex-col gap-4 self-start"
       onSubmit={(event) => event.preventDefault()}
     >
       <div>

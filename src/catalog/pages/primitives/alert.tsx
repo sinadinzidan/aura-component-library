@@ -441,7 +441,7 @@ function AlertPermission() {
 
 function AlertDestructiveConsequence() {
   return (
-    <div className="flex w-full max-w-md flex-col gap-4 rounded-xl bg-muted-background p-4">
+    <div className="flex w-full max-w-md flex-col gap-4 rounded-xl bg-base-background p-4">
       <div className="flex flex-col gap-1">
         <h4 className="text-base font-medium text-base-foreground">Delete pipeline &quot;Historian sync&quot;?</h4>
         <p className="text-sm text-muted-foreground">Its run history and schedule are removed. This cannot be undone.</p>

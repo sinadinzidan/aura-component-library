@@ -209,7 +209,7 @@ function SpacingLabelAndField() {
 
 function SpacingCardPadding() {
   return (
-    <div className="grid w-full grid-cols-2 gap-4">
+    <div className="grid w-full grid-cols-2 items-start gap-4">
       <div className="flex flex-col gap-2">
         <div className="rounded-xl bg-info-background p-4">
           <div className="rounded-md bg-card-background p-3">
@@ -378,19 +378,19 @@ function SpacingBorderEveryRow() {
 
 function SpacingComponentHeights() {
   return (
-    <div className="flex w-full flex-col gap-4">
-      <div className="flex items-end gap-6">
-        {HEIGHTS.map((item) => (
-          <div key={item.px} className="flex flex-1 flex-col items-start gap-2">
-            <div className={`w-full rounded-md bg-info-background ${item.box}`} />
-            <p className="text-xs text-muted-foreground">
-              <span className="font-mono text-base-foreground">{item.classes}</span> · {item.px}
-              <br />
-              {item.use}
-            </p>
-          </div>
-        ))}
-      </div>
+    <div className="grid w-full grid-cols-4 content-start gap-x-6 gap-y-2">
+      {HEIGHTS.map((item) => (
+        <div key={item.px} className="flex h-10 items-end">
+          <div className={`w-full rounded-md bg-info-background ${item.box}`} />
+        </div>
+      ))}
+      {HEIGHTS.map((item) => (
+        <p key={item.px} className="text-xs text-muted-foreground">
+          <span className="font-mono text-base-foreground">{item.classes}</span> · {item.px}
+          <br />
+          {item.use}
+        </p>
+      ))}
     </div>
   );
 }

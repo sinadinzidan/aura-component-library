@@ -136,7 +136,7 @@ export const TONE_AREA_FILL: Record<Tone, string> = {
 
 /** Zone strips on gauges and bars. */
 export const TONE_ZONE_BG: Record<Tone, string> = {
-  neutral: 'bg-chart-neutral-200',
+  neutral: 'bg-chart-neutral-300',
   success: 'bg-chart-success-400',
   warning: 'bg-chart-warning-400',
   critical: 'bg-chart-critical-400',
@@ -144,7 +144,7 @@ export const TONE_ZONE_BG: Record<Tone, string> = {
 };
 
 export const TONE_ZONE_STROKE: Record<Tone, string> = {
-  neutral: 'stroke-chart-neutral-200',
+  neutral: 'stroke-chart-neutral-300',
   success: 'stroke-chart-success-400',
   warning: 'stroke-chart-warning-400',
   critical: 'stroke-chart-critical-400',
@@ -190,6 +190,17 @@ export function zonesFromLimits(min: number, max: number, limits: Limits): Zone[
   return zones;
 }
 
+/**
+ * The zones worth drawing on a scale derived from limits: the operating band stays as a neutral
+ * band, warning and critical zones keep their colour, and an open-ended low warning zone (from
+ * the start of the scale up to the low limit) is left blank — the end of the band already marks
+ * it, and painting half a gauge orange would shout about a state nobody is in.
+ */
+export function drawableZones(zones: readonly Zone[]): Zone[] {
+  if (zones.length <= 1) return [];
+  return zones.filter((zone, index) => !(index === 0 && zone.tone === 'warning'));
+}
+
 /** Tone of the zone a value falls in; neutral when it is in none. */
 export function toneFromZones(value: number, zones: readonly Zone[]): Tone {
   const last = zones[zones.length - 1];
@@ -219,6 +230,11 @@ export function formatDelta(delta: number | null | undefined, decimals = 0): str
   if (!isNumber(delta)) return NO_VALUE;
   const text = formatValue(delta, decimals);
   return delta > 0 && Number(text.replace(/,/g, '')) !== 0 ? `+${text}` : text;
+}
+
+/** A limit or scale value: whole numbers stay whole, others take the reading's decimals. */
+export function formatLimit(value: number, decimals = 0): string {
+  return formatValue(value, Number.isInteger(value) ? 0 : decimals);
 }
 
 /** Value and unit joined by a non-breaking space: "48.6 barg". */

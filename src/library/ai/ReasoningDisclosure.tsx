@@ -42,7 +42,7 @@ export function ReasoningDisclosure({
   return (
     <Collapsible open={open} onOpenChange={setUserOpen}>
       <Reasoning>
-        <CollapsibleTrigger className="w-fit gap-2">
+        <CollapsibleTrigger className="-ml-3 w-fit gap-2">
           <ReasoningHeader>
             {streaming ? <Shimmer as="span">{streamingLabel}</Shimmer> : <span>{label ?? doneLabel(durationSeconds, steps.length)}</span>}
           </ReasoningHeader>
@@ -52,15 +52,13 @@ export function ReasoningDisclosure({
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="pl-3">
-            <ReasoningContent>
+          <ReasoningContent>
               {steps.map((step) => (
                 <ReasoningItem key={step}>
                   <p className="py-2.5 text-sm leading-5 text-medium-foreground">{step}</p>
                 </ReasoningItem>
               ))}
-            </ReasoningContent>
-          </div>
+          </ReasoningContent>
         </CollapsibleContent>
       </Reasoning>
     </Collapsible>

@@ -26,6 +26,8 @@ import { definePage } from '../../types';
 
 import source from './banner.tsx?raw';
 
+// BannerTitle sets a fixed dark text colour that is unreadable on the dark-theme tints, so each
+// title wraps its text in a span that carries the themed foreground token (and truncates).
 const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 const QUEUED_MESSAGES = [
@@ -39,7 +41,9 @@ function BannerDefault() {
     <div className="w-full">
       <Banner inset>
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>This workspace is in preview mode</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">This workspace is in preview mode</span>
+        </BannerTitle>
       </Banner>
     </div>
   );
@@ -50,7 +54,9 @@ function BannerInfo() {
     <div className="w-full">
       <Banner variant="info" inset>
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>New data is available for this dashboard</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">New data is available for this dashboard</span>
+        </BannerTitle>
       </Banner>
     </div>
   );
@@ -61,7 +67,9 @@ function BannerWarning() {
     <div className="w-full">
       <Banner variant="warning" inset>
         <BannerIcon icon={IconAlertTriangleFilled} />
-        <BannerTitle>Your trial ends in 5 days</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Your trial ends in 5 days</span>
+        </BannerTitle>
       </Banner>
     </div>
   );
@@ -72,7 +80,9 @@ function BannerDestructive() {
     <div className="w-full">
       <Banner variant="destructive" inset>
         <BannerIcon icon={IconAlertCircleFilled} />
-        <BannerTitle>Couldn&apos;t save the dashboard layout</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Couldn&apos;t save the dashboard layout</span>
+        </BannerTitle>
       </Banner>
     </div>
   );
@@ -83,7 +93,9 @@ function BannerWithAction() {
     <div className="w-full">
       <Banner variant="info" inset>
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>A newer model version is published</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">A newer model version is published</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction>View changes</BannerAction>
         </BannerActions>
@@ -97,7 +109,9 @@ function BannerWithTwoActions() {
     <div className="w-full">
       <Banner variant="warning" inset>
         <BannerIcon icon={IconAlertTriangleFilled} />
-        <BannerTitle>API key expires on 20 March</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">API key expires on 20 March</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction>Rotate key</BannerAction>
           <BannerClose>Dismiss</BannerClose>
@@ -112,7 +126,9 @@ function BannerWithStatus() {
     <div className="w-full">
       <Banner variant="destructive" inset>
         <BannerIcon icon={IconAlertCircleFilled} />
-        <BannerTitle>Historian sync is failing</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Historian sync is failing</span>
+        </BannerTitle>
         <BannerStatus>3 runs failed</BannerStatus>
       </Banner>
     </div>
@@ -132,7 +148,9 @@ function BannerDismissible() {
     <div className="flex w-full flex-col items-start gap-3">
       <Banner key={version} variant="info" inset onClose={() => setClosed(true)}>
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>Scheduled maintenance finished</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Scheduled maintenance finished</span>
+        </BannerTitle>
         <BannerActions>
           <BannerClose>Dismiss</BannerClose>
         </BannerActions>
@@ -159,7 +177,9 @@ function BannerIconClose() {
     <div className="flex w-full flex-col items-start gap-3">
       <Banner key={version} inset onClose={() => setClosed(true)}>
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>Keyboard shortcuts have changed</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Keyboard shortcuts have changed</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction>See shortcuts</BannerAction>
           <BannerClose aria-label="Dismiss">
@@ -184,7 +204,7 @@ function BannerLongTitle() {
       <Banner variant="warning" inset>
         <BannerIcon icon={IconAlertTriangleFilled} />
         <BannerTitle title={title}>
-          <span className="truncate">{title}</span>
+          <span className="truncate text-base-foreground">{title}</span>
         </BannerTitle>
         <BannerActions>
           <BannerAction>View status</BannerAction>
@@ -199,7 +219,9 @@ function BannerInset() {
     <div className="flex w-full flex-col gap-4 rounded-xl bg-muted-background p-4">
       <Banner variant="info" inset>
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>Results are limited to the last 30 days</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Results are limited to the last 30 days</span>
+        </BannerTitle>
       </Banner>
       <p className="text-sm text-muted-foreground">Padded content: the banner follows the content edge and rounds its corners.</p>
     </div>
@@ -211,7 +233,9 @@ function BannerEdgeToEdge() {
     <div className="w-full overflow-hidden rounded-xl bg-muted-background">
       <Banner variant="info">
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>Results are limited to the last 30 days</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Results are limited to the last 30 days</span>
+        </BannerTitle>
       </Banner>
       <p className="p-4 text-sm text-muted-foreground">Page or panel top: the banner spans the full width with square corners.</p>
     </div>
@@ -225,7 +249,9 @@ function BannerControlled() {
     <div className="flex w-full flex-col items-start gap-3">
       <Banner variant="warning" inset visible={visible} onClose={() => setVisible(false)}>
         <BannerIcon icon={IconAlertTriangleFilled} />
-        <BannerTitle>You have unpublished changes</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">You have unpublished changes</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction onClick={() => setVisible(false)}>Publish</BannerAction>
           <BannerClose>Dismiss</BannerClose>
@@ -245,7 +271,9 @@ function BannerPersistent() {
     <div className="w-full">
       <Banner variant="warning" inset>
         <BannerIcon icon={IconAlertTriangleFilled} />
-        <BannerTitle>Maintenance in progress. Writes are paused.</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Maintenance in progress. Writes are paused.</span>
+        </BannerTitle>
         <BannerStatus>Until 04:00 UTC</BannerStatus>
       </Banner>
     </div>
@@ -275,7 +303,9 @@ function BannerResolving() {
     <div className="w-full">
       <Banner variant="destructive" inset>
         <BannerIcon icon={IconAlertCircleFilled} />
-        <BannerTitle>Couldn&apos;t save the dashboard layout</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Couldn&apos;t save the dashboard layout</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction aria-busy={state === 'working' || undefined} onClick={state === 'working' ? undefined : retry}>
             {state === 'working' ? <Loader size={16} aria-hidden /> : null}
@@ -296,10 +326,10 @@ function BannerPrioritised() {
       <Banner variant={message.variant} inset>
         <BannerIcon icon={message.icon} />
         <BannerTitle>
-          <span className="truncate">{message.title}</span>
+          <span className="truncate text-base-foreground">{message.title}</span>
         </BannerTitle>
         <BannerActions>
-          <span className="text-sm tabular-nums">
+          <span className="text-sm text-base-foreground tabular-nums">
             {index + 1} of {QUEUED_MESSAGES.length}
           </span>
           <BannerAction onClick={() => setIndex((index + 1) % QUEUED_MESSAGES.length)}>Next</BannerAction>
@@ -322,7 +352,9 @@ function BannerAppShell() {
       </div>
       <Banner variant="destructive">
         <BannerIcon icon={IconAlertCircleFilled} />
-        <BannerTitle>Extractor disconnected. Live values are paused.</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Extractor disconnected. Live values are paused.</span>
+        </BannerTitle>
         <BannerStatus>Since 13:42</BannerStatus>
         <BannerActions>
           <BannerAction>Reconnect</BannerAction>
@@ -364,7 +396,9 @@ function BannerReadOnly() {
     <div className="w-full overflow-hidden rounded-xl border border-default">
       <Banner>
         <BannerIcon icon={IconLockFilled} />
-        <BannerTitle>{requested ? 'Edit access requested' : 'This data model is read-only for you'}</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">{requested ? 'Edit access requested' : 'This data model is read-only for you'}</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction disabled={requested} onClick={() => setRequested(true)}>
             {requested ? 'Request sent' : 'Request edit access'}
@@ -384,7 +418,9 @@ function BannerTrial() {
     <div className="w-full overflow-hidden rounded-xl border border-default">
       <Banner variant="warning">
         <BannerIcon icon={IconAlertTriangleFilled} />
-        <BannerTitle>Your trial ends in 5 days</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Your trial ends in 5 days</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction>Compare plans</BannerAction>
           <BannerClose>Dismiss</BannerClose>
@@ -405,7 +441,9 @@ function BannerNewData() {
     <div className="w-full overflow-hidden rounded-xl border border-default">
       <Banner variant="info" visible={pending > 0}>
         <BannerIcon icon={IconInfoCircleFilled} />
-        <BannerTitle>{pending} new data points available</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">{pending} new data points available</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction onClick={() => setPending(0)}>Refresh chart</BannerAction>
         </BannerActions>
@@ -430,7 +468,9 @@ function BannerEnvironment() {
     <div className="w-full overflow-hidden rounded-xl border border-default">
       <Banner>
         <BannerIcon icon={IconFlask} />
-        <BannerTitle>Changes here do not affect production</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Changes here do not affect production</span>
+        </BannerTitle>
         <BannerStatus>Staging</BannerStatus>
       </Banner>
       <div className="flex flex-col gap-1 p-4">
@@ -446,7 +486,9 @@ function BannerInSection() {
     <section className="flex w-full flex-col gap-4 rounded-xl border border-default p-4">
       <Banner inset>
         <BannerIcon icon={IconEyeFilled} />
-        <BannerTitle>Anomaly detection is in preview</BannerTitle>
+        <BannerTitle>
+          <span className="truncate text-base-foreground">Anomaly detection is in preview</span>
+        </BannerTitle>
         <BannerActions>
           <BannerAction>Give feedback</BannerAction>
         </BannerActions>
@@ -467,7 +509,7 @@ function BannerViewingAs() {
       <Banner variant="info" visible={viewing}>
         <BannerIcon icon={IconEyeFilled} />
         <BannerTitle>
-          <span className="truncate">You are viewing this dashboard as a control room operator</span>
+          <span className="truncate text-base-foreground">You are viewing this dashboard as a control room operator</span>
         </BannerTitle>
         <BannerActions>
           <BannerAction onClick={() => setViewing(false)}>Exit view</BannerAction>

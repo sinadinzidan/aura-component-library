@@ -8,7 +8,7 @@ describe(LinearGauge.name, () => {
   it('names the reading with value, unit and range', () => {
     render(<LinearGauge label="Motor current" value={86.2} max={120} unit="A" decimals={1} limits={limits} />);
 
-    expect(screen.getByRole('img', { name: 'Motor current: 86.2\u00a0A, range 0.0 to 120.0' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Motor current: 86.2\u00a0A, range 0 to 120' })).toBeInTheDocument();
   });
 
   it('fills the bar to the value’s share of the range', () => {
@@ -21,9 +21,10 @@ describe(LinearGauge.name, () => {
     const { container } = render(<LinearGauge label="Motor current" value={86.2} max={120} limits={limits} />);
 
     const zones = container.querySelectorAll('[data-slot="gauge-zone"]');
-    expect(zones).toHaveLength(2);
-    expect(zones[0]).toHaveStyle({ left: '79.17%', width: '8.33%' });
-    expect(zones[1]).toHaveAttribute('data-tone', 'critical');
+    expect(zones).toHaveLength(3);
+    expect(zones[0]).toHaveAttribute('data-tone', 'neutral');
+    expect(zones[1]).toHaveStyle({ left: '79.17%', width: '8.33%' });
+    expect(zones[2]).toHaveAttribute('data-tone', 'critical');
   });
 
   it('takes the tone of the zone the value is in', () => {

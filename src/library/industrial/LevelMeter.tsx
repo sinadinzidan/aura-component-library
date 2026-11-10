@@ -1,7 +1,7 @@
 import { cn } from '../../lib/utils';
 
 import { toFraction } from './geometry';
-import { LABEL_TEXT, SCALE_TEXT, TONE_MARK_BG, TONE_MARK_BG_SOFT, describeReading, formatValue, toneFromLimits } from './status';
+import { LABEL_TEXT, SCALE_TEXT, TONE_MARK_BG, TONE_MARK_BG_SOFT, describeReading, formatLimit, formatValue, toneFromLimits } from './status';
 import type { Limits, Tone } from './status';
 import { ValueReadout } from './ValueReadout';
 
@@ -65,7 +65,7 @@ export function LevelMeter({
       <div className="flex gap-2" style={{ height }}>
         <div
           role="img"
-          aria-label={`${describeReading(label, value, unit, decimals, resolvedTone)}, range ${formatValue(min, decimals)} to ${formatValue(max, decimals)}`}
+          aria-label={`${describeReading(label, value, unit, decimals, resolvedTone)}, range ${formatLimit(min, decimals)} to ${formatLimit(max, decimals)}`}
           className="relative h-full w-12 overflow-hidden rounded-md bg-chart-neutral-100"
         >
           <div data-slot="level-fill" className={cn('absolute inset-x-0 bottom-0', TONE_MARK_BG_SOFT[resolvedTone])} style={{ height: percent(fraction) }}>

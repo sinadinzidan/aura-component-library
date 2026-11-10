@@ -595,7 +595,7 @@ function CalendarInFormCard() {
   const [month, setMonth] = useState<Dayjs>(TODAY);
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl bg-card-background p-4">
+    <div className="flex flex-col gap-4 rounded-xl bg-base-background p-4">
       <div>
         <h4 className="text-sm font-medium text-base-foreground">Schedule vibration survey</h4>
         <p className="text-sm text-muted-foreground">WO-104466 · 23-KA-9101</p>

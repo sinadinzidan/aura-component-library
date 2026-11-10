@@ -222,9 +222,9 @@ function ProgressWaiting() {
         <span className="text-muted-foreground">Queued</span>
       </div>
       <Progress value={0} aria-label="Exporting 12 charts" aria-valuetext="Queued" />
-      <p className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Loader size={12} aria-hidden /> Waiting for 2 exports ahead of yours
-      </p>
+      </div>
     </div>
   );
 }
@@ -404,19 +404,19 @@ function ProgressFileList() {
 
 function ProgressTableColumn() {
   return (
-    <table className="w-full text-left text-sm">
+    <table className="w-full table-fixed text-left text-sm">
       <thead>
         <tr className="border-b border-default text-xs text-muted-foreground">
-          <th className="py-2 pr-4 font-medium">Work order</th>
+          <th className="w-32 py-2 pr-4 font-medium">Work order</th>
           <th className="py-2 pr-4 font-medium">Title</th>
-          <th className="w-48 py-2 font-medium">Progress</th>
+          <th className="w-56 py-2 font-medium">Progress</th>
         </tr>
       </thead>
       <tbody className="text-base-foreground">
         {ACTIVE_WORK_ORDERS.map((order) => (
           <tr key={order.id}>
             <td className="py-2 pr-4 whitespace-nowrap tabular-nums">{order.id}</td>
-            <td className="max-w-0 truncate py-2 pr-4">{order.title}</td>
+            <td className="truncate py-2 pr-4">{order.title}</td>
             <td className="py-2">
               <div className="flex items-center gap-3">
                 <Progress value={order.progress} size="sm" aria-label={`Progress of ${order.id}`} />
@@ -432,7 +432,7 @@ function ProgressTableColumn() {
 
 function ProgressBlockingExport() {
   return (
-    <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-muted-background p-4">
+    <div className="flex w-full max-w-sm flex-col gap-4 rounded-xl bg-base-background p-4">
       <div className="flex flex-col gap-1">
         <h4 className="text-base font-medium text-base-foreground">Exporting report</h4>
         <p className="text-sm text-muted-foreground">Keep this window open until the export finishes.</p>

@@ -28,6 +28,14 @@ describe(SelectionActionBar.name, () => {
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument();
   });
 
+  it('keeps wording the last selection while the bar leaves', () => {
+    const { rerender } = render(<SelectionActionBar count={2} noun={NOUN} actions={[]} onClear={vi.fn()} />);
+
+    rerender(<SelectionActionBar count={0} noun={NOUN} actions={[]} onClear={vi.fn()} />);
+
+    expect(screen.getByRole('toolbar')).toHaveTextContent('2 work orders selected');
+  });
+
   it('clears the selection from the clear button', async () => {
     const onClear = vi.fn();
     render(<SelectionActionBar count={2} noun={NOUN} actions={[]} onClear={onClear} />);

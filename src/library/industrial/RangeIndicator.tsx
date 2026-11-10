@@ -1,7 +1,7 @@
 import { cn } from '../../lib/utils';
 
 import { toFraction } from './geometry';
-import { LABEL_TEXT, SCALE_TEXT, TONE_MARK_BG, describeReading, formatValue, toneFromLimits } from './status';
+import { LABEL_TEXT, SCALE_TEXT, TONE_MARK_BG, describeReading, formatLimit, toneFromLimits } from './status';
 import type { Limits, Tone } from './status';
 import { ValueReadout } from './ValueReadout';
 
@@ -48,9 +48,13 @@ export function RangeIndicator({
   const resolvedTone = tone ?? (hasValue ? toneFromLimits(value, limits) : 'neutral');
   const bandStart = toFraction(limits.low ?? min, min, max);
   const bandEnd = toFraction(limits.high ?? max, min, max);
+  // Labels of a narrow band would collide when centred on its edges, so they move outwards.
+  const narrow = bandEnd - bandStart < 0.3;
+  const lowAnchor = narrow && bandStart > 0.15 ? '-translate-x-full' : '-translate-x-1/2';
+  const highAnchor = narrow && bandEnd < 0.85 ? 'translate-x-0' : '-translate-x-1/2';
   const limitText =
     limits.low !== undefined && limits.high !== undefined
-      ? `, operating band ${formatValue(limits.low, decimals)} to ${formatValue(limits.high, decimals)}`
+      ? `, operating band ${formatLimit(limits.low, decimals)} to ${formatLimit(limits.high, decimals)}`
       : '';
 
   return (
@@ -81,13 +85,13 @@ export function RangeIndicator({
       {showLimits ? (
         <div aria-hidden className={cn(SCALE_TEXT, 'relative h-3 leading-none')}>
           {limits.low !== undefined ? (
-            <span className="absolute -translate-x-1/2" style={{ left: percent(bandStart) }}>
-              {formatValue(limits.low, decimals)}
+            <span data-slot="range-low" className={cn('absolute', lowAnchor)} style={{ left: percent(bandStart) }}>
+              {formatLimit(limits.low, decimals)}
             </span>
           ) : null}
           {limits.high !== undefined ? (
-            <span className="absolute -translate-x-1/2" style={{ left: percent(bandEnd) }}>
-              {formatValue(limits.high, decimals)}
+            <span data-slot="range-high" className={cn('absolute', highAnchor)} style={{ left: percent(bandEnd) }}>
+              {formatLimit(limits.high, decimals)}
             </span>
           ) : null}
         </div>

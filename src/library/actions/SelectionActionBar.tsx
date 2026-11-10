@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@cognite/aura/components/dropdown-menu';
 import { IconDots } from '@cognite/aura/icons';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 export type SelectionAction = {
@@ -55,13 +56,21 @@ export function SelectionActionBar({
   clearLabel = 'Clear',
   width = 'full',
 }: SelectionActionBarProps) {
+  // The bar animates out after the count drops to 0; keep wording the last real selection meanwhile.
+  const [shownCount, setShownCount] = useState(count);
+  if (count > 0 && count !== shownCount) setShownCount(count);
+
   const visible = actions.slice(0, maxVisible);
   const overflow = actions.slice(maxVisible);
 
   return (
     <ActionToolbar selectedCount={count} width={width} aria-label={`Actions for selected ${noun.other}`}>
       <ActionToolbarSelection>
-        <ActionToolbarSelectionSummary label={`${count === 1 ? noun.one : noun.other} selected`} />
+        <ActionToolbarSelectionSummary>
+          <span className="truncate text-sm font-medium tabular-nums">
+            {shownCount} {shownCount === 1 ? noun.one : noun.other} selected
+          </span>
+        </ActionToolbarSelectionSummary>
         <ActionToolbarActionClear label={clearLabel} onClick={onClear} />
       </ActionToolbarSelection>
       <ActionToolbarActions>

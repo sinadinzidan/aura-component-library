@@ -8,7 +8,7 @@ describe(RadialGauge.name, () => {
   it('names the reading with value, unit and range', () => {
     render(<RadialGauge label="Discharge pressure" value={48.6} max={60} unit="barg" decimals={1} limits={limits} />);
 
-    expect(screen.getByRole('img', { name: 'Discharge pressure: 48.6\u00a0barg, range 0.0 to 60.0' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Discharge pressure: 48.6\u00a0barg, range 0 to 60' })).toBeInTheDocument();
   });
 
   it('prints value, unit, range ends and label', () => {
@@ -40,11 +40,11 @@ describe(RadialGauge.name, () => {
     expect(container.firstChild).toHaveAttribute('data-tone', 'critical');
   });
 
-  it('draws only the warning and critical zones', () => {
+  it('draws the operating band and the zones above it, not the open low side', () => {
     const { container } = render(<RadialGauge label="Pressure" value={48} max={60} limits={limits} />);
 
     const tones = [...container.querySelectorAll('[data-slot="gauge-zone"]')].map((zone) => zone.getAttribute('data-tone'));
-    expect(tones).toEqual(['warning', 'warning', 'critical']);
+    expect(tones).toEqual(['neutral', 'warning', 'critical']);
   });
 
   it('draws a target tick when given a target', () => {

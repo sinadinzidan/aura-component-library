@@ -1,5 +1,6 @@
 import { Card } from '@cognite/aura/components/card';
 import { Skeleton } from '@cognite/aura/components/skeleton';
+import type { ReactNode } from 'react';
 
 import { cn } from '../../lib/utils';
 
@@ -47,6 +48,8 @@ export type KpiTileProps = {
   target?: { value: number; label?: string };
   trend?: KpiTileTrend;
   footnote?: string;
+  /** Extra content between the value and the delta row, e.g. a `LinearGauge` towards the target. */
+  children?: ReactNode;
   /** Skeleton in the tile's own layout while the figure loads. */
   loading?: boolean;
   /** Shown instead of delta and target when `value` is `null`. */
@@ -78,6 +81,7 @@ export function KpiTile({
   target,
   trend,
   footnote,
+  children,
   loading = false,
   emptyText = 'No data',
   className,
@@ -134,6 +138,8 @@ export function KpiTile({
 
       {size === 'large' ? sparkline : null}
 
+      {hasValue ? children : null}
+
       {hasMeta ? (
         <div className="flex min-h-4 flex-wrap items-center gap-x-3 gap-y-1">
           {hasValue && delta ? (
@@ -142,7 +148,6 @@ export function KpiTile({
               reference={delta.reference}
               format={delta.format}
               decimals={delta.decimals ?? Math.max(decimals, 1)}
-              unit={delta.format === 'percent' ? undefined : unit}
               goodDirection={delta.goodDirection}
               caption={delta.caption}
             />

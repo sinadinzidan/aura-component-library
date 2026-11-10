@@ -1,5 +1,7 @@
 import {
   computeDelta,
+  drawableZones,
+  formatLimit,
   deltaTone,
   describeReading,
   formatDelta,
@@ -71,6 +73,31 @@ describe(zonesFromLimits.name, () => {
       { from: 0, to: 7.1, tone: 'neutral' },
       { from: 7.1, to: 15, tone: 'warning' },
     ]);
+  });
+});
+
+describe(drawableZones.name, () => {
+  it('keeps the operating band and the zones above it', () => {
+    const zones = zonesFromLimits(0, 60, { low: 40, high: 52, highHigh: 55 });
+
+    expect(drawableZones(zones).map((zone) => zone.tone)).toEqual(['neutral', 'warning', 'critical']);
+  });
+
+  it('keeps a low warning zone that is bounded by a trip limit', () => {
+    const zones = zonesFromLimits(0, 100, { lowLow: 10, low: 30, high: 70 });
+
+    expect(drawableZones(zones).map((zone) => zone.tone)).toEqual(['critical', 'warning', 'neutral', 'warning']);
+  });
+
+  it('draws nothing for a scale without limits', () => {
+    expect(drawableZones(zonesFromLimits(0, 100, {}))).toEqual([]);
+  });
+});
+
+describe(formatLimit.name, () => {
+  it('keeps whole numbers whole and gives others the reading’s decimals', () => {
+    expect(formatLimit(52, 1)).toBe('52');
+    expect(formatLimit(7.1, 1)).toBe('7.1');
   });
 });
 

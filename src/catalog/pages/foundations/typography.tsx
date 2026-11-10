@@ -94,6 +94,12 @@ const EXTRA_SIZES = [
   { classes: 'text-2xs', metrics: '10 / 12', sample: 'Axis ticks and dense chart annotations' },
 ] as const;
 
+const TRACKING = [
+  { classes: 'tracking-tight', value: '-0.04px', use: 'Body, labels and h3 to h4' },
+  { classes: 'tracking-tighter', value: '-0.08px', use: 'Display, h1 and h2' },
+  { classes: 'tracking-tightest', value: '-0.1px', use: 'Reserved for larger custom display sizes' },
+] as const;
+
 const WEIGHTS = [
   { classes: 'font-normal', value: '400', use: 'Body copy and values' },
   { classes: 'font-medium', value: '500', use: 'Labels, group headings, emphasis in a row' },
@@ -151,6 +157,21 @@ function TypographyExtraSizes() {
           <p className={`text-base-foreground ${item.classes}`}>{item.sample}</p>
           <p className="text-xs text-muted-foreground">
             <span className="font-mono">{item.classes}</span> · {item.metrics}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TypographyTracking() {
+  return (
+    <div className="flex w-full flex-col gap-4">
+      {TRACKING.map((item) => (
+        <div key={item.classes} className="flex flex-col gap-1">
+          <p className={`text-2xl font-semibold text-base-foreground ${item.classes}`}>Gas compression</p>
+          <p className="text-xs text-muted-foreground">
+            <span className="font-mono">{item.classes}</span> · {item.value} · {item.use}
           </p>
         </div>
       ))}
@@ -376,7 +397,7 @@ function TypographyHeadingHierarchy() {
 
 function TypographyLabelValueStacked() {
   return (
-    <dl className="grid w-full grid-cols-2 gap-4">
+    <dl className="grid w-full grid-cols-2 content-start gap-4">
       {ASSET_FIELDS.map((field) => (
         <div key={field.label} className="flex min-w-0 flex-col gap-1">
           <dt className="text-xs font-medium text-muted-foreground">{field.label}</dt>
@@ -397,6 +418,22 @@ function TypographyLabelValueInline() {
         </div>
       ))}
     </dl>
+  );
+}
+
+function TypographyCardText() {
+  return (
+    <div className="flex w-full max-w-sm flex-col gap-3 rounded-xl bg-card-background p-4">
+      <div className="flex flex-col gap-1">
+        <p className="text-xs font-medium text-muted-foreground">WO-104482 · Corrective</p>
+        <p className="text-base font-medium text-card-foreground">Inspect recompressor drive-end bearing</p>
+      </div>
+      <p className="line-clamp-2 text-sm text-muted-foreground">
+        The recompressor tripped on high vibration. Inspect the drive-end bearing and record clearances before the
+        restart is approved.
+      </p>
+      <p className="text-xs text-muted-foreground tabular-nums">Due in 6 hours · 8 h estimated</p>
+    </div>
   );
 }
 
@@ -444,6 +481,15 @@ export default definePage({
           size: 'full',
           align: 'stretch',
           Component: TypographyScale,
+        },
+        {
+          id: 'TypographyTracking',
+          title: 'Letter spacing',
+          note: 'The scale already includes tracking; these are the three theme steps if you compose a custom style.',
+          origin: 'aura',
+          size: 'md',
+          align: 'stretch',
+          Component: TypographyTracking,
         },
         {
           id: 'TypographyExtraSizes',
@@ -624,6 +670,14 @@ export default definePage({
           size: 'md',
           align: 'stretch',
           Component: TypographyLabelValueInline,
+        },
+        {
+          id: 'TypographyCardText',
+          title: 'Text in a card',
+          note: 'Metadata, title, clamped description and a footer line: four roles from two sizes.',
+          origin: 'aura',
+          size: 'md',
+          Component: TypographyCardText,
         },
       ],
     },

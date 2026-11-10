@@ -7,7 +7,9 @@ import {
   TONE_MARK_STROKE,
   TONE_ZONE_STROKE,
   describeReading,
+  formatLimit,
   formatValue,
+  drawableZones,
   toneFromZones,
   zonesFromLimits,
 } from './status';
@@ -78,6 +80,7 @@ export function RadialGauge({
   const height = gaugeHeight(center, zoneRadius, dimensions.zone);
   const hasValue = value !== null && Number.isFinite(value);
   const resolvedZones = zones ?? (limits ? zonesFromLimits(min, max, limits) : []);
+  const drawnZones = zones ?? drawableZones(resolvedZones);
   const resolvedTone = tone ?? (hasValue ? toneFromZones(value, resolvedZones) : 'neutral');
   const angle = (amount: number) => fractionToAngle(toFraction(amount, min, max));
   const tickAt = (offset: number) =>
@@ -91,7 +94,7 @@ export function RadialGauge({
     <div data-slot="radial-gauge" data-tone={resolvedTone} className={cn('inline-flex flex-col items-center gap-1', className)}>
       <div
         role="img"
-        aria-label={`${describeReading(label, value, unit, decimals, resolvedTone)}, range ${formatValue(min, decimals)} to ${formatValue(max, decimals)}`}
+        aria-label={`${describeReading(label, value, unit, decimals, resolvedTone)}, range ${formatLimit(min, decimals)} to ${formatLimit(max, decimals)}`}
         className="relative"
         style={{ width: dimensions.size, height: showRange ? height + RANGE_LABEL_HEIGHT : height }}
       >
@@ -103,18 +106,16 @@ export function RadialGauge({
             strokeLinecap="round"
             className="stroke-chart-neutral-100"
           />
-          {resolvedZones
-            .filter((zone) => zone.tone !== 'neutral')
-            .map((zone) => (
-              <path
-                key={`${zone.from}-${zone.to}`}
-                data-slot="gauge-zone"
-                data-tone={zone.tone}
-                d={arcPath(center, center, zoneRadius, angle(zone.from), angle(zone.to))}
-                strokeWidth={dimensions.zone}
-                className={TONE_ZONE_STROKE[zone.tone]}
-              />
-            ))}
+          {drawnZones.map((zone) => (
+            <path
+              key={`${zone.from}-${zone.to}`}
+              data-slot="gauge-zone"
+              data-tone={zone.tone}
+              d={arcPath(center, center, zoneRadius, angle(zone.from), angle(zone.to))}
+              strokeWidth={dimensions.zone}
+              className={TONE_ZONE_STROKE[zone.tone]}
+            />
+          ))}
           {hasValue && toFraction(value, min, max) > 0 ? (
             <path
               data-slot="gauge-value"

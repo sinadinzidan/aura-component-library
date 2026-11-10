@@ -69,7 +69,7 @@ export function CollapsingBreadcrumb({
 
   const renderLabel = (item: BreadcrumbTrailItem) => {
     const long = item.label.length > maxLabelLength;
-    const text = long ? <span className="block max-w-40 truncate">{item.label}</span> : item.label;
+    const text = long ? <span className="block max-w-36 truncate">{item.label}</span> : item.label;
     const content = (
       <>
         {item.icon}
@@ -102,7 +102,7 @@ export function CollapsingBreadcrumb({
       <BreadcrumbList className="flex-nowrap">
         {head.map((item) => (
           <Fragment key={item.id}>
-            <BreadcrumbItem>{renderLabel(item)}</BreadcrumbItem>
+            <BreadcrumbItem className="whitespace-nowrap">{renderLabel(item)}</BreadcrumbItem>
             <BreadcrumbSeparator />
           </Fragment>
         ))}
@@ -130,7 +130,7 @@ export function CollapsingBreadcrumb({
         {tail.map((item, index) => (
           <Fragment key={item.id}>
             {index > 0 ? <BreadcrumbSeparator /> : null}
-            <BreadcrumbItem>{renderLabel(item)}</BreadcrumbItem>
+            <BreadcrumbItem className="whitespace-nowrap">{renderLabel(item)}</BreadcrumbItem>
           </Fragment>
         ))}
       </BreadcrumbList>

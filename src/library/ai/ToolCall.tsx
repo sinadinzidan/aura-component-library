@@ -70,7 +70,7 @@ export function ToolCall({ call, defaultOpen = false, onApprove, onDeny }: ToolC
         <span className="sr-only">{STATUS_LABEL[status]}</span>
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
-        <Tool defaultOpen={defaultOpen} disabled={!hasDetails}>
+        <Tool defaultOpen={defaultOpen}>
           <ToolHeader type={`tool-${toolName}`} title={title} hasError={status === 'error'} />
           {hasDetails ? (
             <ToolContent>

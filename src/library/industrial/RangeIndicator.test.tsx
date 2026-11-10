@@ -8,7 +8,7 @@ describe(RangeIndicator.name, () => {
   it('names the reading and its operating band', () => {
     render(<RangeIndicator label="Suction pressure" value={12.4} min={0} max={20} limits={limits} unit="barg" decimals={1} />);
 
-    expect(screen.getByRole('img', { name: 'Suction pressure: 12.4\u00a0barg, operating band 10.0 to 15.0' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Suction pressure: 12.4\u00a0barg, operating band 10 to 15' })).toBeInTheDocument();
   });
 
   it('shades the band between low and high', () => {
@@ -39,6 +39,20 @@ describe(RangeIndicator.name, () => {
     rerender(<RangeIndicator label="Pressure" value={12} min={0} max={20} limits={limits} showLimits={false} />);
 
     expect(screen.queryByText('15')).not.toBeInTheDocument();
+  });
+
+  it('moves the limit labels outwards when the band is narrow', () => {
+    const { container } = render(<RangeIndicator label="Pressure" value={12} min={0} max={20} limits={limits} />);
+
+    expect(container.querySelector('[data-slot="range-low"]')).toHaveClass('-translate-x-full');
+    expect(container.querySelector('[data-slot="range-high"]')).toHaveClass('translate-x-0');
+  });
+
+  it('centres the limit labels on the edges of a wide band', () => {
+    const { container } = render(<RangeIndicator label="Level" value={50} min={0} max={100} limits={{ low: 30, high: 70 }} />);
+
+    expect(container.querySelector('[data-slot="range-low"]')).toHaveClass('-translate-x-1/2');
+    expect(container.querySelector('[data-slot="range-high"]')).toHaveClass('-translate-x-1/2');
   });
 
   it('has no marker without a value', () => {

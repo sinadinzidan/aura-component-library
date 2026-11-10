@@ -50,7 +50,8 @@ describe('catalog pages', () => {
         seen.set(specimen.id, page.id);
       }
     }
-  });
+    // Imports every page module, so it needs more than the default five seconds.
+  }, 120_000);
 
   describe.each(built.map((modulePath) => ({ modulePath, ...parsePath(modulePath) })))(
     '$id',

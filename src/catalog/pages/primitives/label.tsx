@@ -306,7 +306,7 @@ function LabelStackedForm() {
 
 function LabelTwoColumnForm() {
   return (
-    <div className="grid w-full max-w-md grid-cols-2 gap-4">
+    <div className="grid w-full max-w-md grid-cols-2 gap-4 self-start">
       <div className="col-span-2 flex flex-col">
         <Label htmlFor="label-two-column-title">Title</Label>
         <Input id="label-two-column-title" defaultValue="Vibration survey, 1st stage compressor" />
@@ -326,7 +326,7 @@ function LabelTwoColumnForm() {
 function LabelRequiredLegend() {
   return (
     <form
-      className="flex w-full max-w-md flex-col gap-4 self-start rounded-xl bg-card-background p-4"
+      className="flex w-full max-w-md flex-col gap-4 self-start"
       onSubmit={(event) => event.preventDefault()}
     >
       <div>

@@ -868,7 +868,7 @@ function ColorsFixedDarkSurfaces() {
     <div className="grid w-full grid-cols-2 gap-4 md:grid-cols-3">
       {FIXED_DARK_SURFACES.map((item) => (
         <div key={item.token} className="flex min-w-0 flex-col gap-2">
-          <div className={`h-14 rounded-lg border border-emphasized ${item.swatch}`} />
+          <div className={`h-14 rounded-lg border border-secondary-background-hover-fixed-dark ${item.swatch}`} />
           <div className="min-w-0">
             <p className="font-mono text-xs break-words text-popover-foreground-fixed-dark">{item.token}</p>
             <p className="mt-1 text-xs text-muted-foreground-fixed-dark">{item.step} in both themes</p>

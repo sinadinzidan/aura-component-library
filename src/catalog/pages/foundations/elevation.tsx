@@ -153,7 +153,7 @@ function ElevationFocusRingCritical() {
   return (
     <div className="flex w-full max-w-xs flex-col gap-3">
       <div className="flex h-9 items-center rounded-lg bg-base-background px-3 shadow-focus-ring-destructive">
-        <p className="text-sm text-base-foreground">nordkapp historian!</p>
+        <p className="text-sm text-base-foreground">Nordkapp historian / v2</p>
       </div>
       <p className="text-xs text-critical-foreground-strong">Use letters, numbers and hyphens only.</p>
       <p className="font-mono text-xs text-muted-foreground">shadow-focus-ring-destructive</p>
@@ -332,7 +332,7 @@ function ElevationWhenToElevate() {
 
 function ElevationSurfaceStates() {
   return (
-    <div className="grid w-full grid-cols-2 gap-4 md:grid-cols-5">
+    <div className="grid w-full grid-cols-2 content-start gap-4 md:grid-cols-5">
       {SURFACE_STATES.map((item) => (
         <div key={item.state} className="flex min-w-0 flex-col gap-2">
           <div className={`flex h-20 items-center justify-between gap-2 rounded-xl px-4 ${item.tile}`}>
@@ -468,6 +468,7 @@ export default definePage({
           title: 'Default ring',
           note: 'Every interactive control you build yourself, on keyboard focus.',
           origin: 'aura',
+          size: 'md',
           Component: ElevationFocusRing,
         },
         {
@@ -475,7 +476,17 @@ export default definePage({
           title: 'Critical ring',
           note: 'A focused field that is invalid, or a focused destructive action.',
           origin: 'aura',
+          size: 'md',
           Component: ElevationFocusRingCritical,
+        },
+        {
+          id: 'ElevationFocusAnatomy',
+          title: 'Ring anatomy',
+          note: 'Two stacked shadows: a 1px line and a soft 3px halo behind it.',
+          origin: 'aura',
+          size: 'lg',
+          align: 'stretch',
+          Component: ElevationFocusAnatomy,
         },
         {
           id: 'ElevationFocusOnButton',
@@ -483,15 +494,6 @@ export default definePage({
           note: 'The ring does not change with the fill, so focus looks the same everywhere.',
           origin: 'aura',
           Component: ElevationFocusOnButton,
-        },
-        {
-          id: 'ElevationFocusAnatomy',
-          title: 'Ring anatomy',
-          note: 'Two stacked shadows: a 1px line and a soft 3px halo behind it.',
-          origin: 'aura',
-          size: 'md',
-          align: 'stretch',
-          Component: ElevationFocusAnatomy,
         },
       ],
     },
@@ -570,7 +572,7 @@ export default definePage({
           title: 'States of a surface',
           note: 'A clickable card or tile: each state is one token step, never a new colour.',
           origin: 'aura',
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
           Component: ElevationSurfaceStates,
         },
@@ -579,7 +581,7 @@ export default definePage({
           title: 'States of a row',
           note: 'List and menu rows on the base surface, with a check for the selected one.',
           origin: 'aura',
-          size: 'md',
+          size: 'sm',
           Component: ElevationRowStates,
         },
       ],

@@ -7,7 +7,9 @@ import {
   TONE_MARK_BG,
   TONE_ZONE_BG,
   describeReading,
+  formatLimit,
   formatValue,
+  drawableZones,
   toneFromZones,
   zonesFromLimits,
 } from './status';
@@ -61,7 +63,7 @@ export function LinearGauge({
 }: LinearGaugeProps) {
   const hasValue = value !== null && Number.isFinite(value);
   const resolvedZones = zones ?? (limits ? zonesFromLimits(min, max, limits) : []);
-  const statusZones = resolvedZones.filter((zone) => zone.tone !== 'neutral');
+  const drawnZones = zones ?? drawableZones(resolvedZones);
   const resolvedTone = tone ?? (hasValue ? toneFromZones(value, resolvedZones) : 'neutral');
   const fraction = hasValue ? toFraction(value, min, max) : 0;
 
@@ -76,15 +78,15 @@ export function LinearGauge({
 
       <div
         role="img"
-        aria-label={`${describeReading(label, value, unit, decimals, resolvedTone)}, range ${formatValue(min, decimals)} to ${formatValue(max, decimals)}`}
+        aria-label={`${describeReading(label, value, unit, decimals, resolvedTone)}, range ${formatLimit(min, decimals)} to ${formatLimit(max, decimals)}`}
         className="relative flex flex-col gap-0.5"
       >
         <div data-slot="gauge-track" className={cn('overflow-hidden rounded-full bg-chart-neutral-100', size === 'sm' ? 'h-1.5' : 'h-2')}>
           <div data-slot="gauge-value" className={cn('h-full rounded-full', TONE_MARK_BG[resolvedTone])} style={{ width: percent(fraction) }} />
         </div>
-        {statusZones.length > 0 ? (
+        {drawnZones.length > 0 ? (
           <div className="relative h-0.5">
-            {statusZones.map((zone) => (
+            {drawnZones.map((zone) => (
               <span
                 key={`${zone.from}-${zone.to}`}
                 data-slot="gauge-zone"

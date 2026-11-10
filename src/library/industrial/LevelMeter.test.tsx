@@ -8,7 +8,7 @@ describe(LevelMeter.name, () => {
   it('names the level with value and range', () => {
     render(<LevelMeter label="Separator level" value={54.3} decimals={1} limits={limits} />);
 
-    expect(screen.getByRole('img', { name: 'Separator level: 54.3\u00a0%, range 0.0 to 100.0' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Separator level: 54.3\u00a0%, range 0 to 100' })).toBeInTheDocument();
   });
 
   it('fills the vessel to the value', () => {

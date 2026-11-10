@@ -521,7 +521,7 @@ function InputGroupRange() {
 function InputGroupLimitsForm() {
   return (
     <form
-      className="flex w-full max-w-md flex-col gap-4 self-start rounded-xl bg-card-background p-4"
+      className="flex w-full max-w-md flex-col gap-4 self-start"
       onSubmit={(event) => event.preventDefault()}
     >
       <div>

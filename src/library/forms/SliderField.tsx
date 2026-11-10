@@ -11,6 +11,8 @@ type SliderFieldProps = {
   min?: number;
   max?: number;
   step?: number;
+  /** For a range: the fewest steps the two thumbs must stay apart. */
+  minStepsBetweenValues?: number;
   /** Shown after the value in the readout, e.g. `barg`. */
   unit?: string;
   /** Formats one thumb value for the readout and the scale ends. */
@@ -34,6 +36,7 @@ export function SliderField({
   min = 0,
   max = 100,
   step = 1,
+  minStepsBetweenValues,
   unit,
   formatValue = defaultFormatValue,
   showScale = false,
@@ -66,6 +69,7 @@ export function SliderField({
         min={min}
         max={max}
         step={step}
+        minStepsBetweenValues={minStepsBetweenValues}
         disabled={disabled}
         aria-labelledby={labelId}
         aria-describedby={helperText ? helperId : undefined}

@@ -281,7 +281,7 @@ function DialogWithForm() {
             <div>
               <Label htmlFor="dialog-form-asset">Asset</Label>
               <Select defaultValue="23-KA-9101">
-                <SelectTrigger id="dialog-form-asset">
+                <SelectTrigger id="dialog-form-asset" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

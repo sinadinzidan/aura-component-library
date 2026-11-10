@@ -24,7 +24,8 @@ const MIN_HEIGHT: Record<SpecimenSize, string> = {
 const ALIGN: Record<SpecimenAlign, string> = {
   center: 'items-center justify-center',
   start: 'items-start justify-start',
-  stretch: 'items-stretch justify-stretch [&>*]:min-w-0 [&>*]:flex-1',
+  // Full width, vertically centred: a lone field should not sit pinned to the top of its frame.
+  stretch: 'items-center justify-center [&>*]:min-w-0 [&>*]:w-full',
 };
 
 const SURFACE: Record<SpecimenSurface, string> = {
