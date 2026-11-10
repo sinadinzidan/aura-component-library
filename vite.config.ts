@@ -9,11 +9,13 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+import { catalogIndexPlugin } from './scripts/catalogIndexPlugin';
+
 export default defineConfig({
   base: './',
   // manifestCspPlugin() must stay first — its middleware sets the
   // Content-Security-Policy header before any HTML response is sent.
-  plugins: [manifestCspPlugin(), react(), mkcertPlugin(), fusionOpenPlugin(), tailwindcss()],
+  plugins: [manifestCspPlugin(), react(), mkcertPlugin(), fusionOpenPlugin(), tailwindcss(), catalogIndexPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

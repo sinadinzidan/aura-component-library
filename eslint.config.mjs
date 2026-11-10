@@ -92,5 +92,12 @@ export default tseslint.config(
       'no-unused-vars': 'off',
       'react-refresh/only-export-components': ['error', { allowConstantExport: true }],
     },
+  },
+  {
+    // Catalog pages export a page definition next to the specimen components it lists.
+    files: ['src/catalog/pages/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
   }
 );
