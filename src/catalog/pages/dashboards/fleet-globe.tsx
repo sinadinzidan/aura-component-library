@@ -565,11 +565,11 @@ function FleetGlobePartGlobe() {
 
 function FleetGlobePartMarkers() {
   const sites: GlobeSite[] = [
-    { id: 'a', name: 'Producing', lat: 63, lon: -3, size: 0.13, tone: 'success' },
-    { id: 'b', name: 'Selected', lat: 63, lon: 5, size: 0.1, tone: 'warning', status: 'Reduced', dot: 'square' },
-    { id: 'c', name: 'Shut in', lat: 63, lon: 13, size: 0.08, tone: 'critical' },
-    { id: 'd', name: 'Start-up', lat: 58.5, lon: 1, size: 0.06, tone: 'info' },
-    { id: 'e', name: 'Terminal', lat: 58.5, lon: 9, size: 0.09, tone: 'neutral', shape: 'diamond' },
+    { id: 'a', name: 'Producing', lat: 63, lon: -3, size: 0.2, tone: 'success' },
+    { id: 'b', name: 'Selected', lat: 63, lon: 5, size: 0.16, tone: 'warning', status: 'Reduced', dot: 'square' },
+    { id: 'c', name: 'Shut in', lat: 63, lon: 13, size: 0.12, tone: 'critical' },
+    { id: 'd', name: 'Start-up', lat: 58.5, lon: 1, size: 0.09, tone: 'info' },
+    { id: 'e', name: 'Terminal', lat: 58.5, lon: 9, size: 0.14, tone: 'neutral', shape: 'diamond' },
   ];
 
   return (

@@ -732,7 +732,7 @@ function TankFarm3dPartManifold() {
 
   return (
     <TankFarm3dStage label="Manifold with a tank-to-tank transfer shown by flow chevrons">
-      <TurntableStage subjectSize={[74, 12, 44]} padding={0.5}>
+      <TurntableStage subjectSize={[74, 12, 44]} padding={0.74}>
         <StorageTank position={[north.center[0], 0, north.center[1]]} diameter={north.diameter} height={north.height} fill={0.7} />
         <StorageTank position={[south.center[0], 0, south.center[1]]} diameter={south.diameter} height={south.height} fill={0.3} />
         <PipeRun points={[[-36, 1, 0], [36, 1, 0]]} radius={0.32} />
