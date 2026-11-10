@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 
-import type { OperationsAlarm } from './alarms';
 import { AlarmRow } from './AlarmRow';
+import type { OperationsAlarm } from './alarms';
 
 describe(AlarmRow.name, () => {
   it('shows severity in words, the message, the tag and the age', () => {

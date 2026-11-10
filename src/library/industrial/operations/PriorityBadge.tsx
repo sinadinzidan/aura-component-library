@@ -1,6 +1,7 @@
 import { Badge } from '@cognite/aura/components/badge';
 
-export type WorkPriority = 'P1' | 'P2' | 'P3' | 'P4';
+import { priorityMeaning } from './workOrders';
+import type { WorkPriority } from './workOrders';
 
 export type PriorityBadgeProps = {
   priority: WorkPriority;
@@ -9,16 +10,6 @@ export type PriorityBadgeProps = {
 };
 
 const VARIANT = { P1: 'error', P2: 'warning', P3: 'archived', P4: 'archived' } as const;
-
-const MEANING: Record<WorkPriority, string> = {
-  P1: 'Immediate',
-  P2: 'Urgent',
-  P3: 'Normal',
-  P4: 'Low',
-};
-
-/** What a priority code stands for, for labels and tooltips. */
-export const priorityMeaning = (priority: WorkPriority): string => MEANING[priority];
 
 /**
  * Work order priority P1–P4. Only the two priorities that demand action carry colour; P3 and P4
@@ -32,9 +23,9 @@ export function PriorityBadge({ priority, showMeaning = false }: PriorityBadgePr
       variant={VARIANT[priority]}
       outline={priority === 'P4'}
       background={priority !== 'P4'}
-      aria-label={`Priority ${priority}, ${MEANING[priority].toLowerCase()}`}
+      aria-label={`Priority ${priority}, ${priorityMeaning(priority).toLowerCase()}`}
     >
-      {showMeaning ? `${priority} · ${MEANING[priority]}` : priority}
+      {showMeaning ? `${priority} · ${priorityMeaning(priority)}` : priority}
     </Badge>
   );
 }

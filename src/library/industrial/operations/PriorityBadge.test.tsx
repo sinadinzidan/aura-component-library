@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { PriorityBadge, priorityMeaning } from './PriorityBadge';
+import { PriorityBadge } from './PriorityBadge';
 
 describe(PriorityBadge.name, () => {
   it('shows the priority code', () => {
@@ -19,9 +19,5 @@ describe(PriorityBadge.name, () => {
     render(<PriorityBadge priority="P3" showMeaning />);
 
     expect(screen.getByText('P3 · Normal')).toBeInTheDocument();
-  });
-
-  it('exposes the meaning of each code', () => {
-    expect(priorityMeaning('P4')).toBe('Low');
   });
 });

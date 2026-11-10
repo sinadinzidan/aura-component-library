@@ -111,7 +111,7 @@ export function DataTable<Row>({
   const hasFooter = columns.some((column) => column.footer !== undefined);
   const columnCount = columns.length + (selection ? 1 : 0) + (renderExpanded ? 1 : 0) + (rowActions ? 1 : 0);
   const pinned = (index: number) =>
-    pinFirstColumn && index === 0 ? 'sticky left-0 z-10 bg-inherit shadow-[1px_0_0_0_var(--color-border-default)]' : '';
+    pinFirstColumn && index === 0 ? 'sticky left-0 z-10 bg-inherit after:absolute after:inset-y-0 after:right-0 after:border-r after:border-default' : '';
   const alignOf = (column: DataTableColumn<Row>) => (column.align === 'end' ? 'text-right tabular-nums' : 'text-left');
 
   return (

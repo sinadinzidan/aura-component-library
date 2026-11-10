@@ -138,7 +138,9 @@ function SparklineSharedDomain() {
       {[SUCTION_PRESSURE, DISCHARGE_PRESSURE].map((sensor) => (
         <div key={sensor.id} className="flex items-center gap-3">
           <span className="w-32 shrink-0 text-xs text-muted-foreground">{sensor.name}</span>
-          <Sparkline height={28} values={sensorTrend(sensor)} domain={[0, 60]} label={`${sensor.name} on a shared 0 to 60 barg scale`} unit={sensor.unit} />
+          <div className="min-w-0 flex-1">
+            <Sparkline height={28} values={sensorTrend(sensor)} domain={[0, 60]} label={`${sensor.name} on a shared 0 to 60 barg scale`} unit={sensor.unit} />
+          </div>
         </div>
       ))}
     </div>

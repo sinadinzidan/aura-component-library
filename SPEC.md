@@ -55,6 +55,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 - SC-003: Copied variant code compiles unchanged in a Flows app that has `@cognite/aura` installed (plus the listed library files for Custom variants).
 - SC-004: No variant uses raw hex, rgb or hsl colour values.
 - SC-005: Every page renders without errors in both themes.
+- SC-006: The layout audit (`scripts/audit-layout.cjs`) reports no variant that is cut off, overflows its frame or crashes, in the default theme and in a dense dark theme.
 
 ## Clarifications
 

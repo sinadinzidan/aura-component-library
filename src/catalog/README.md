@@ -191,7 +191,14 @@ npx vitest run src/catalog/pages.test.tsx -t "<page id>:"   # contract for one p
 npx vitest run src/library/<domain>                          # your components
 npx eslint src/catalog/pages/<area>/<page id>.tsx src/library/<domain>   # 0 errors, 0 warnings
 npx tsc --noEmit
+npm run dev                                                  # in another terminal
+node scripts/audit-layout.cjs <page id>                      # nothing cut, overflowing or crashed
+node scripts/audit-layout.cjs <page id> --dark --theme control-room
 ```
+
+The audit must report 0 findings for your page in the default theme and in at least one dense
+dark theme. It catches specimens that crash, content wider than its frame, text cut without an
+ellipsis, elements sticking out of the card, and console errors.
 
 Then look at it: open the page in both themes and check that nothing overflows its frame, nothing
 is clipped, every specimen has the room it needs, and the page looks like the Button page's sibling.

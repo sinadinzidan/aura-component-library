@@ -48,7 +48,10 @@ export function SpecimenCard({ specimen, onViewCode }: SpecimenCardProps) {
       data-specimen={id}
       className={`${SPAN[size]} flex min-w-0 flex-col overflow-hidden rounded-xl border border-default bg-base-background`}
     >
-      <div className={`flex flex-1 p-6 ${MIN_HEIGHT[size]} ${ALIGN[align]} ${SURFACE[surface]}`}>
+      <div
+        data-specimen-preview
+        className={`flex flex-1 overflow-x-auto p-6 ${MIN_HEIGHT[size]} ${ALIGN[align]} ${SURFACE[surface]}`}
+      >
         <SpecimenBoundary>
           <Component />
         </SpecimenBoundary>

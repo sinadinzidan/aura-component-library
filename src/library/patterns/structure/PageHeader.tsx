@@ -55,16 +55,16 @@ export function PageHeader({
     >
       {breadcrumb}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className={`flex min-w-0 flex-1 gap-3 ${compact ? 'items-center' : 'items-start'}`}>
+        <div className={`flex min-w-0 flex-1 basis-64 gap-3 ${compact ? 'items-center' : 'items-start'}`}>
           {leading ? <div className="flex shrink-0 items-center">{leading}</div> : null}
           <div className="flex min-w-0 flex-col gap-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex min-w-0 items-center gap-3">
               <Heading
                 className={`min-w-0 truncate font-semibold text-base-foreground ${compact ? 'text-base' : 'text-2xl tracking-tight'}`}
               >
                 {title}
               </Heading>
-              {status}
+              {status ? <div className="flex shrink-0 items-center gap-2">{status}</div> : null}
             </div>
             {description ? <p className="max-w-prose text-sm text-muted-foreground">{description}</p> : null}
             {meta ? <div className={compact ? '' : 'pt-1'}>{meta}</div> : null}

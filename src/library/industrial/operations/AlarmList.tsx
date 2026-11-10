@@ -2,9 +2,9 @@ import type { ReactNode } from 'react';
 
 import { cn } from '../../../lib/utils';
 
+import { AlarmRow } from './AlarmRow';
 import { sortAlarmsBySeverity } from './alarms';
 import type { OperationsAlarm } from './alarms';
-import { AlarmRow } from './AlarmRow';
 
 export type AlarmListProps<T extends OperationsAlarm> = {
   alarms: readonly T[];

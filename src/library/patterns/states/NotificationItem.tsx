@@ -58,14 +58,14 @@ export function NotificationItem({
       data-unread={unread || undefined}
       className="group/notification flex items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-accent-background"
     >
-      <span className="flex w-2 shrink-0 justify-center self-stretch pt-3">
+      <span className={`flex w-2 shrink-0 justify-center ${media ? 'pt-3.5' : 'pt-1.5'}`}>
         {unread ? (
           <span className="size-2 rounded-full bg-primary-background">
             <span className="sr-only">Unread</span>
           </span>
         ) : null}
       </span>
-      {media ? <span className="flex shrink-0 pt-0.5">{media}</span> : null}
+      {media ? <span className="flex size-9 shrink-0 items-center justify-center">{media}</span> : null}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {onOpen ? (
           <button
