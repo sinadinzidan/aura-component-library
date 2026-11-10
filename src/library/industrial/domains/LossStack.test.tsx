@@ -18,7 +18,7 @@ describe(LossStack.name, () => {
     render(<LossStack {...PROPS} />);
 
     expect(screen.getByRole('img')).toHaveAccessibleName(
-      'OEE losses: OEE 81.0 % of 100.0 %; Availability loss 10.0 %, Performance loss 9.0 %'
+      'OEE losses: OEE 81.0\u00a0% of 100.0\u00a0%; Availability loss 10.0\u00a0%, Performance loss 9.0\u00a0%'
     );
   });
 
@@ -56,6 +56,6 @@ describe(LossStack.name, () => {
     render(<LossStack {...PROPS} variant="stack" />);
 
     expect(screen.getByText('Availability loss')).toBeInTheDocument();
-    expect(screen.getByText('81.0 %')).toBeInTheDocument();
+    expect(screen.getByText(/^81\.0\s%$/)).toBeInTheDocument();
   });
 });

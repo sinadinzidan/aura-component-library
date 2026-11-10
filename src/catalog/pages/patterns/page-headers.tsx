@@ -350,7 +350,7 @@ function PageHeaderSearchAndFilters() {
       }
     >
       <div className="flex flex-wrap items-center gap-3">
-        <Search aria-label="Search work orders" placeholder="Search by title, ID or asset" className="w-full max-w-sm" />
+        <Search aria-label="Search work orders" placeholder="Search by title, ID or asset" className="w-full max-w-xs" />
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -420,7 +420,7 @@ function PageHeaderAsset() {
             items={[
               { label: 'Tag', value: COMPRESSOR.tag },
               { label: 'Criticality', value: COMPRESSOR.criticality },
-              { label: 'Health', value: <StatusIndicator {...healthStatus(COMPRESSOR.health)} size="sm" detail={`${COMPRESSOR.healthScore} / 100`} /> },
+              { label: 'Health', value: <StatusIndicator {...healthStatus(COMPRESSOR.health)} detail={`${COMPRESSOR.healthScore} / 100`} /> },
               { label: 'Last inspection', value: formatDate(REFERENCE_NOW - 41 * 24 * HOUR) },
             ]}
           />
@@ -502,7 +502,7 @@ function PageHeaderPipeline() {
           <IconRoute />
         </PageHeaderRecordIcon>
       }
-      title="SAP work order sync"
+      title="Work order sync"
       status={<Badge variant="success">Healthy</Badge>}
       meta={
         <MetadataList
@@ -579,11 +579,11 @@ function PageHeaderAlarm() {
   return (
     <PageHeader
       title={ALARM.message}
-      status={<StatusIndicator {...severityStatus(ALARM.severity)} variant="badge" />}
       meta={
         <MetadataList
           layout="inline"
           items={[
+            { label: 'Severity', value: <StatusIndicator {...severityStatus(ALARM.severity)} /> },
             { label: 'Tag', value: ALARM.sensorTag },
             { label: 'Value', value: <span className="tabular-nums">{ALARM.value}</span> },
             { label: 'Limit', value: <span className="tabular-nums">{ALARM.limit}</span> },
@@ -591,7 +591,7 @@ function PageHeaderAlarm() {
           ]}
         />
       }
-      actions={<Button>Acknowledge alarm</Button>}
+      actions={<Button>Acknowledge</Button>}
     />
   );
 }
@@ -630,13 +630,13 @@ function PageHeaderEditing() {
 function PageHeaderReadOnly() {
   return (
     <PageHeader
-      title="Alarm limits, gas compression"
+      title="Alarm limits"
       status={
         <Badge variant="archived">
           <IconLock aria-hidden="true" /> Read-only
         </Badge>
       }
-      description="Limits are managed in the safety system. Ask a shift supervisor to request a change."
+      description="Gas compression limits are managed in the safety system. Ask a shift supervisor to request a change."
       actions={
         <Tooltip>
           <TooltipTrigger
@@ -763,11 +763,11 @@ function PageHeaderKpiStrip() {
         </PageHeaderStat>
         <PageHeaderStat label="Active alarms">
           <ValueReadout value={kpi.activeAlarms.value} />
-          <TrendDelta value={kpi.activeAlarms.value} reference={kpi.activeAlarms.previous} goodDirection="down" caption="vs yesterday" size="sm" />
+          <TrendDelta value={kpi.activeAlarms.value} reference={kpi.activeAlarms.previous} goodDirection="down" decimals={0} caption="vs yesterday" size="sm" />
         </PageHeaderStat>
         <PageHeaderStat label="Open work orders">
           <ValueReadout value={kpi.openWorkOrders.value} />
-          <TrendDelta value={kpi.openWorkOrders.value} reference={kpi.openWorkOrders.previous} goodDirection="down" caption="vs last week" size="sm" />
+          <TrendDelta value={kpi.openWorkOrders.value} reference={kpi.openWorkOrders.previous} goodDirection="down" decimals={0} caption="vs last week" size="sm" />
         </PageHeaderStat>
       </div>
     </PageHeader>

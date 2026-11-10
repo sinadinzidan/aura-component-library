@@ -47,7 +47,7 @@ export function InstrumentBubble({ letters, loop, mounting = 'field', label, siz
       className={cn('shrink-0', sizeClass, SYMBOL_TONE_TEXT[tone], className)}
       {...frame}
     >
-      <path d={circlePath(16, 16, 14)} vectorEffect="non-scaling-stroke" className="fill-base-background" />
+      <path d={circlePath(16, 16, 14)} vectorEffect="non-scaling-stroke" />
       {mounting === 'panel' ? <path data-slot="instrument-panel-line" d="M 2 16 H 30" vectorEffect="non-scaling-stroke" /> : null}
       <text x={16} y={loop ? 11.5 : 16} fontSize={loop ? 9 : 11} textAnchor="middle" dominantBaseline="central" stroke="none" fill="currentColor" className="font-medium">
         {letters}

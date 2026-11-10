@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { cn } from '../../../lib/utils';
 
 import { LogCategoryBadge } from './LogCategoryBadge';
-import type { LogCategory } from './LogCategoryBadge';
+import type { LogCategory } from './workflow';
 
 export type LogLinkKind = 'asset' | 'alarm' | 'work-order';
 

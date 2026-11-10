@@ -2,7 +2,7 @@ import { IconCircleCheck, IconCircleMinus, IconCircleX } from '@cognite/aura/ico
 
 import { cn } from '../../../lib/utils';
 
-export type ConditionState = 'met' | 'unmet' | 'bypassed';
+import type { ConditionState } from './workflow';
 
 export type Condition = {
   id: string;
@@ -30,11 +30,6 @@ const ICON_TONE: Record<ConditionState, string> = {
   unmet: 'text-critical-foreground-strong',
   bypassed: 'text-warning-foreground-strong',
 };
-
-/** True when every condition is met. A bypassed condition does not count as met. */
-export function allConditionsMet(conditions: readonly Pick<Condition, 'state'>[]): boolean {
-  return conditions.every((condition) => condition.state === 'met');
-}
 
 /**
  * Conditions that must all hold before something may happen: start permissives, interlocks,

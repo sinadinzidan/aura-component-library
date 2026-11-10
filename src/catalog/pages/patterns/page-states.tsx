@@ -223,9 +223,9 @@ function PageStateDelayedLoader() {
         {phase === 'idle' ? 'Pick a response time.' : null}
         {phase === 'loading' ? (
           <Delayed delayMs={300}>
-            <span role="status" className="flex items-center gap-2">
+            <div role="status" className="flex items-center gap-2">
               <Loader variant="inline" /> Loading alarms…
-            </span>
+            </div>
           </Delayed>
         ) : null}
         {phase === 'done' ? `8 alarms loaded in ${duration} ms.` : null}
@@ -259,9 +259,9 @@ function PageStateRefreshing() {
       <header className="flex h-7 items-center justify-between gap-4">
         <h4 className="text-sm font-medium text-base-foreground">1st stage compressor</h4>
         {refreshing ? (
-          <span role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader variant="inline" size={14} /> Updating…
-          </span>
+          </div>
         ) : (
           <Button variant="ghost" size="sm" onClick={refresh}>
             <IconRefresh /> Refresh

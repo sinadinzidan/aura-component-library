@@ -24,7 +24,7 @@ export function WhyChain({ steps, label, rootLabel = 'Root cause', className }: 
         const isLast = index === steps.length - 1;
         return (
           <li key={step.id} className="relative flex gap-3 pb-4 last:pb-0">
-            {isLast ? null : <span aria-hidden className="absolute top-7 bottom-1 left-3 border-l border-emphasized" />}
+            {isLast ? null : <span aria-hidden className="absolute top-6 bottom-0 left-3 border-l border-emphasized" />}
             <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-muted-background text-xs font-medium text-base-foreground tabular-nums">
               {index + 1}
             </span>

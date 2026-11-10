@@ -34,7 +34,7 @@ export function HorizontalField({ label, helper, error, required = false, childr
   return (
     <div className="@container w-full">
       <div className="grid w-full gap-x-4 @md:grid-cols-3">
-        <div className="flex min-h-9 items-center @max-md:min-h-0 @max-md:pb-2">
+        <div className="flex h-9 items-center self-start @max-md:h-auto @max-md:pb-2">
           <Label htmlFor={id} required={required} className="pb-0">
             {label}
           </Label>

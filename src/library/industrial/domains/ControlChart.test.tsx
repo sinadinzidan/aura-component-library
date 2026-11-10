@@ -9,7 +9,7 @@ describe(ControlChart.name, () => {
     render(<ControlChart label="Wobbe index" values={[10, 11, 9, 10]} limits={LIMITS} unit="MJ/Sm³" />);
 
     expect(screen.getByRole('img')).toHaveAccessibleName(
-      'Wobbe index: 4 points, centre line 10.0 MJ/Sm³, control limits 7.0 to 13.0 MJ/Sm³, no run-rule violations'
+      'Wobbe index: 4 points, centre line 10.0\u00a0MJ/Sm³, control limits 7.0 to 13.0\u00a0MJ/Sm³, no run-rule violations'
     );
   });
 

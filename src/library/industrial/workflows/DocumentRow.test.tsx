@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
-import { DocumentRow, documentKindLabel } from './DocumentRow';
+import { DocumentRow } from './DocumentRow';
+import { documentKindLabel } from './workflow';
 
 describe(DocumentRow.name, () => {
   it('shows title, kind, number, revision and date', () => {

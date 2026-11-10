@@ -53,9 +53,10 @@ export function PageHeader({
       data-slot="page-header"
       className={`flex w-full min-w-0 flex-col ${compact ? 'gap-2' : 'gap-4'} ${divider ? 'border-b border-default pb-4' : ''}`}
     >
-      {breadcrumb}
+      {/* Pulls the trail left by the padding of its first link, so its text lines up with the title. */}
+      {breadcrumb ? <div className="-ml-1.5">{breadcrumb}</div> : null}
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className={`flex min-w-0 flex-1 basis-64 gap-3 ${compact ? 'items-center' : 'items-start'}`}>
+        <div className={`flex min-w-0 flex-1 gap-3 ${compact ? 'basis-40 items-center' : 'basis-64 items-start'}`}>
           {leading ? <div className="flex shrink-0 items-center">{leading}</div> : null}
           <div className="flex min-w-0 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-3">

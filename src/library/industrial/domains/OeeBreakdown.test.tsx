@@ -14,7 +14,7 @@ describe(OeeBreakdown.name, () => {
   it('names the whole equation for assistive technology', () => {
     render(<OeeBreakdown availability={96.4} performance={87.4} quality={98.2} />);
 
-    expect(screen.getByRole('group')).toHaveAccessibleName(/^OEE 82\.7 %: availability 96\.4 % × performance 87\.4 % × quality 98\.2 %$/);
+    expect(screen.getByRole('group')).toHaveAccessibleName(/^OEE 82\.7\u00a0%: availability 96\.4\u00a0% × performance 87\.4\u00a0% × quality 98\.2\u00a0%$/);
   });
 
   it('prints the target when given', () => {

@@ -1,4 +1,4 @@
-export type AreaId = 'foundations' | 'primitives' | 'patterns' | 'industrial' | 'templates';
+export type AreaId = 'foundations' | 'primitives' | 'patterns' | 'industrial' | 'dashboards' | 'templates';
 
 export type ManifestPage = {
   id: string;
@@ -351,10 +351,60 @@ export const MANIFEST: readonly ManifestArea[] = [
         title: 'Dashboards',
         pages: [
           { id: 'dashboard-blocks', title: 'Dashboard blocks', blurb: 'Ready-made rows for a dashboard.' },
-          { id: 'dashboards', title: 'Full dashboards', blurb: 'Complete operational screens.' },
           { id: 'wall-displays', title: 'Wall displays', blurb: 'Large-format screens read from a distance.' },
           { id: 'field-screens', title: 'Field screens', blurb: 'Tablet and phone screens for work on site.' },
           { id: 'reports', title: 'Reports', blurb: 'Daily, shift and monthly report layouts.' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'dashboards',
+    title: 'Dashboards',
+    blurb: 'Complete dashboards, each built on one grid and shown in its own theme.',
+    groups: [
+      {
+        id: 'operations-dashboards',
+        title: 'Operations',
+        pages: [
+          { id: 'plant-overview', title: 'Plant overview', blurb: 'The whole plant at a glance. Theme: Aura.' },
+          { id: 'control-room-console', title: 'Control room console', blurb: 'Dense operator console. Theme: Control room.' },
+          { id: 'alarm-management', title: 'Alarm management', blurb: 'Alarm load and standing alarms. Theme: Nordic night.' },
+          { id: 'shift-handover', title: 'Shift handover', blurb: 'What the next shift must know. Theme: Amber shift.' },
+          { id: 'wall-board', title: 'Wall board', blurb: 'Read from across the room. Theme: Wall display.' },
+          { id: 'field-operator', title: 'Field operator', blurb: 'Rounds and tasks on a tablet. Theme: Field.' },
+        ],
+      },
+      {
+        id: 'reliability-dashboards',
+        title: 'Reliability and maintenance',
+        pages: [
+          { id: 'compressor-health', title: 'Compressor health', blurb: 'One machine in depth. Theme: Blueprint.' },
+          { id: 'maintenance-planning', title: 'Maintenance planning', blurb: 'Backlog, schedule and crews. Theme: Fjord.' },
+          { id: 'asset-performance', title: 'Asset performance', blurb: 'Fleet health and bad actors. Theme: Dense data.' },
+          { id: 'safety-and-barriers', title: 'Safety and barriers', blurb: 'Permits, barriers and incidents. Theme: Accessible.' },
+        ],
+      },
+      {
+        id: 'performance-dashboards',
+        title: 'Production and energy',
+        pages: [
+          { id: 'production-performance', title: 'Production performance', blurb: 'Output, OEE and losses. Theme: Nordic.' },
+          { id: 'energy-and-emissions-dashboard', title: 'Energy and emissions', blurb: 'Energy use and CO₂. Theme: Aurora.' },
+          { id: 'quality-lab', title: 'Quality lab', blurb: 'Samples, SPC and compliance. Theme: Sky.' },
+          { id: 'tank-farm-logistics', title: 'Tank farm and logistics', blurb: 'Inventory and shipments. Theme: Sandstone.' },
+          { id: 'wind-farm', title: 'Wind farm', blurb: 'Turbines, output and availability. Theme: Fjord dark.' },
+        ],
+      },
+      {
+        id: 'data-dashboards',
+        title: 'Data, AI and business',
+        pages: [
+          { id: 'data-operations', title: 'Data operations', blurb: 'Pipelines, freshness and quality. Theme: Terminal.' },
+          { id: 'engineering-config', title: 'Engineering configuration', blurb: 'Tags, limits and changes. Theme: Schematic.' },
+          { id: 'ai-operations-assistant', title: 'AI operations assistant', blurb: 'An assistant beside live data. Theme: Dusk night.' },
+          { id: 'executive-summary', title: 'Executive summary', blurb: 'The month in one page. Theme: Editorial.' },
+          { id: 'people-and-onboarding', title: 'People and onboarding', blurb: 'Crews, training and adoption. Theme: Pink soft.' },
         ],
       },
     ],

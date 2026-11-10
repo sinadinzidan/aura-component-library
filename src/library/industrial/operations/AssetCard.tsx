@@ -86,7 +86,7 @@ function Identity({ tag, name, icon, criticality }: Pick<AssetCardProps, 'tag' |
             </Badge>
           ) : null}
         </span>
-        <span className="truncate text-sm font-medium text-base-foreground">{name}</span>
+        <span className="line-clamp-2 text-sm font-medium text-base-foreground">{name}</span>
       </div>
     </div>
   );
@@ -167,19 +167,23 @@ export function AssetCard({
 
   const body =
     layout === 'row' ? (
-      <Card data-slot="asset-card" data-layout="row" data-state={state} className={cn('w-full min-w-0 flex-row flex-wrap items-center gap-x-6 gap-y-3', className)}>
+      <Card data-slot="asset-card" data-layout="row" data-state={state} className={cn('w-full min-w-0 flex-row flex-wrap items-center gap-x-4 gap-y-3', className)}>
         <div className="min-w-0 flex-1 basis-48">
           <Identity tag={tag} name={name} icon={icon} criticality={criticality} />
         </div>
         <div className="w-28 shrink-0">{stateIndicator}</div>
         {readings?.map((reading) => (
-          <div key={reading.label} className="flex w-24 shrink-0 flex-col gap-1.5">
+          <div key={reading.label} className="flex w-32 shrink-0 flex-col gap-1.5">
             <span className={cn(LABEL_TEXT, 'truncate')}>{reading.label}</span>
             <ValueReadout value={reading.value} unit={reading.value === null ? undefined : reading.unit} decimals={reading.decimals} size="xs" tone={reading.tone} />
           </div>
         ))}
         {ring ? <div className="flex w-16 shrink-0 flex-col gap-1.5"><span className={LABEL_TEXT}>Health</span>{ring}</div> : null}
-        <Counts alarms={alarms} workOrders={workOrders} />
+        {alarms !== undefined || workOrders !== undefined ? (
+          <div className="w-28 shrink-0">
+            <Counts alarms={alarms} workOrders={workOrders} />
+          </div>
+        ) : null}
         {children}
       </Card>
     ) : (

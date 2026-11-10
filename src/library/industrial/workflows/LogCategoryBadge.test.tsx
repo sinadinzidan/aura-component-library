@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
-import { LogCategoryBadge, logCategoryLabel } from './LogCategoryBadge';
+import { LogCategoryBadge } from './LogCategoryBadge';
+import { logCategoryLabel } from './workflow';
 
 describe(LogCategoryBadge.name, () => {
   it('names the category in words', () => {

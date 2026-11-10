@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 
 import { cn } from '../../../lib/utils';
 
-export type DocumentKind = 'pid' | 'drawing' | 'datasheet' | 'procedure' | 'report' | 'certificate';
+import { documentKindLabel } from './workflow';
+import type { DocumentKind } from './workflow';
 
 export type DocumentRowProps = {
   kind: DocumentKind;
@@ -30,18 +31,6 @@ const KIND_ICON = {
   certificate: IconCertificate,
 } as const;
 
-const KIND_LABEL: Record<DocumentKind, string> = {
-  pid: 'P&ID',
-  drawing: 'Drawing',
-  datasheet: 'Data sheet',
-  procedure: 'Procedure',
-  report: 'Report',
-  certificate: 'Certificate',
-};
-
-/** The word for a document kind, for filters and legends. */
-export const documentKindLabel = (kind: DocumentKind): string => KIND_LABEL[kind];
-
 /**
  * A document or drawing on one line: kind icon, title and number, revision, issue date. Revision
  * and date sit in fixed columns so a list of rows scans like a register.
@@ -56,7 +45,7 @@ export function DocumentRow({ kind, title, number, revision, date, status, trail
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm text-base-foreground">{title}</span>
         <span className="truncate text-xs text-muted-foreground">
-          {KIND_LABEL[kind]}
+          {documentKindLabel(kind)}
           {number ? (
             <>
               {' · '}

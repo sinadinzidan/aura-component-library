@@ -31,7 +31,8 @@ data components — all on Aura tokens so everything picked from it looks like o
 
 ### Functional Requirements
 
-- FR-001: The library MUST organise content into five areas: Foundations, Primitives, Patterns, Industrial and Templates.
+- FR-001: The library MUST organise content into six areas: Foundations, Primitives, Patterns, Industrial, Dashboards and Templates.
+- FR-017: The Dashboards area MUST contain at least ten complete dashboards. Each MUST use the shared dashboard frame, 12-column grid and panel, be shown in its own named theme and in other themes, and list its panels as separately copyable variants.
 - FR-002: Every Aura primitive exported by `@cognite/aura` MUST have its own page with at least 20 variants.
 - FR-003: Every variant MUST have a unique id, a title, and a note saying when to use it; it MUST be marked as either Aura (plain component API) or Custom (a composition or customisation).
 - FR-004: Variants MUST be rendered live, at a size that fits their content (small, medium, large or full width), on a neutral preview surface.

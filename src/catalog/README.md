@@ -143,6 +143,11 @@ its Overview, Colors, Layout, Do's and Don'ts and the section for your primitive
 - **Themes change everything at once.** Accent, tinted surfaces, radius, spacing unit and typeface
   can all differ (see Foundations → Themes), so never hard-code a pixel size, a radius or a ramp
   step where a token or a spacing utility exists, and never assume the primary action is dark grey.
+- **`CardContent` aligns children to the start.** A list, table or chart placed in it stays at its
+  content width unless you give it `w-full`. Title and description go in `CardHeaderCenter`
+  (`CardHeaderStart` is for a leading icon or avatar, `CardHeaderEnd` for actions).
+- **Do not let an ellipsis eat a label.** `truncate` is for the rare long value, not a way to make a
+  layout fit. If the audit reports `squeezed`, give the column or card more room.
 - **Fill the row.** Aim for sections whose specimens fill whole rows (three `sm`, or `sm` + `lg`,
   or two `md`), so a section does not end on a lone card.
 

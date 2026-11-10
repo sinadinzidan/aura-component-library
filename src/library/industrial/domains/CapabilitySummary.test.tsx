@@ -48,6 +48,6 @@ describe(CapabilitySummary.name, () => {
   it('describes the result in the histogram name', () => {
     render(<CapabilitySummary label="Wobbe index" values={[9, 10, 11, 14]} lsl={8} usl={12} unit="MJ/Sm³" />);
 
-    expect(screen.getByRole('img')).toHaveAccessibleName(/^Wobbe index capability: Cp .*not capable; mean 11\.0 MJ\/Sm³, 1 of 4 outside 8\.0 to 12\.0 MJ\/Sm³$/);
+    expect(screen.getByRole('img')).toHaveAccessibleName(/^Wobbe index capability: Cp .*not capable; mean 11\.0\u00a0MJ\/Sm³, 1 of 4 outside 8\.0 to 12\.0\u00a0MJ\/Sm³$/);
   });
 });

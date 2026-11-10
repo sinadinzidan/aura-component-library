@@ -10,6 +10,7 @@
 //   crashed      the specimen threw and the error boundary rendered
 //   overflow-x   content is wider than its preview frame (it scrolls instead of fitting)
 //   clipped      an element's content is cut by `overflow: hidden` without an ellipsis
+//   squeezed     an ellipsis hides more than half of a label
 //   offscreen    an element sticks out of the specimen card
 //   tiny-text    text rendered under 10px
 const fs = require('node:fs');
@@ -101,6 +102,18 @@ async function auditPage(page, pageId, theme) {
             if (!seen.has(key)) {
               seen.add(key);
               add('clipped', describe(element));
+            }
+          }
+        }
+        // An ellipsis that hides more than half of a label usually means the layout is too tight.
+        // Specimens whose point is truncation say so in their id (…LongLabels, …Truncated).
+        const truncationDemo = /Long|Truncat|Overflow|Ellipsis|Collaps/i.test(id ?? '');
+        if (!srOnly && !truncationDemo && ellipsis && style.webkitLineClamp === 'none' && element.children.length === 0 && element.clientWidth > 0) {
+          if (element.scrollWidth > element.clientWidth * 2) {
+            const key = `squeezed:${describe(element)}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              add('squeezed', `${element.clientWidth}px of ${element.scrollWidth}px ${describe(element)}`);
             }
           }
         }

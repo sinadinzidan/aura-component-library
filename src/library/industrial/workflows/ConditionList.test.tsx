@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
 
-import { ConditionList, allConditionsMet } from './ConditionList';
+import { ConditionList } from './ConditionList';
 import type { Condition } from './ConditionList';
+import { allConditionsMet } from './workflow';
 
 const CONDITIONS: readonly Condition[] = [
   { id: 'lube', label: 'Lube oil pressure above 1.8 barg', detail: '23-PT-92570 · 2.4 barg', state: 'met' },

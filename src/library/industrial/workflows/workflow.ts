@@ -202,3 +202,36 @@ const CAUSE_STATUS: Record<CauseState, StatusDescriptor> = {
 
 /** How a suspected cause stands in an investigation, as a descriptor for `StatusIndicator`. */
 export const causeStatus = (state: CauseState): StatusDescriptor => CAUSE_STATUS[state];
+
+export type ConditionState = 'met' | 'unmet' | 'bypassed';
+
+/** True when every condition is met. A bypassed condition does not count as met. */
+export function allConditionsMet(conditions: readonly { state: ConditionState }[]): boolean {
+  return conditions.every((condition) => condition.state === 'met');
+}
+
+export type DocumentKind = 'pid' | 'drawing' | 'datasheet' | 'procedure' | 'report' | 'certificate';
+
+const DOCUMENT_KIND_LABEL: Record<DocumentKind, string> = {
+  pid: 'P&ID',
+  drawing: 'Drawing',
+  datasheet: 'Data sheet',
+  procedure: 'Procedure',
+  report: 'Report',
+  certificate: 'Certificate',
+};
+
+/** The word for a document kind, for rows, filters and legends. */
+export const documentKindLabel = (kind: DocumentKind): string => DOCUMENT_KIND_LABEL[kind];
+
+export type LogCategory = 'operations' | 'safety' | 'maintenance' | 'environment';
+
+const LOG_CATEGORY_LABEL: Record<LogCategory, string> = {
+  operations: 'Operations',
+  safety: 'Safety',
+  maintenance: 'Maintenance',
+  environment: 'Environment',
+};
+
+/** The word for a shift log category, for badges, filters and headings. */
+export const logCategoryLabel = (category: LogCategory): string => LOG_CATEGORY_LABEL[category];

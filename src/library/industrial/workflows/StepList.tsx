@@ -113,7 +113,7 @@ export function StepList({ steps, label, orientation = 'vertical', showState = f
           aria-current={index === currentIndex ? 'step' : undefined}
           className="relative flex gap-3 pb-4 last:pb-0"
         >
-          {index < steps.length - 1 ? <span aria-hidden className="absolute top-7 bottom-1 left-3 border-l border-emphasized" /> : null}
+          {index < steps.length - 1 ? <span aria-hidden className="absolute top-6 bottom-0 left-3 border-l border-emphasized" /> : null}
           <StepMarker state={step.state} number={index + 1} />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5 pt-0.5">
             <span className={cn('text-sm', LABEL[step.state])}>{step.label}</span>

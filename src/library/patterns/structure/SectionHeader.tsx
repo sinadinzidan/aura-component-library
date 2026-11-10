@@ -46,7 +46,7 @@ export function SectionHeader({
   return (
     <div
       data-slot="section-header"
-      className={`flex w-full min-w-0 items-end justify-between gap-4 ${divider ? 'border-b border-default pb-3' : ''}`}
+      className={`flex w-full min-w-0 justify-between gap-4 ${description || overline ? 'items-end' : 'items-center'} ${divider ? 'border-b border-default pb-3' : ''}`}
     >
       <div className="flex min-w-0 flex-col gap-1">
         {overline ? <p className="text-xs font-medium text-muted-foreground">{overline}</p> : null}
