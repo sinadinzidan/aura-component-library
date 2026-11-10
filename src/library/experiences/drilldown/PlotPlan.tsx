@@ -81,6 +81,9 @@ export function PlotPlan({ tree, layout, state, dispatch, links = [], symbols = 
   const equipmentDetail = reveal(scale, between(1, scales.area, 0.35), between(1, scales.area, 0.85));
   const sensorDetail = reveal(scale, between(scales.area, scales.equipment, 0.4), between(scales.area, scales.equipment, 0.8));
 
+  // Machine labels would be cut by the frame once the view closes in on one of its points.
+  const machineLabels = 1 - reveal(scale, between(scales.equipment, scales.sensor, 0.25), between(scales.equipment, scales.sensor, 0.7));
+
   const at = (x: number, y: number) => project(layout, viewport, x, y);
   const rectOf = (id: string): PlanRect | null => {
     const place = layout.places.get(id);
@@ -270,7 +273,7 @@ export function PlotPlan({ tree, layout, state, dispatch, links = [], symbols = 
                       dashed={machine.runState === 'maintenance' || machine.runState === 'stopped'}
                     />
                   </g>
-                  <g className="pointer-events-none">
+                  <g opacity={machineLabels} className="pointer-events-none">
                     <text x={centre.x} y={labelTop} fontSize={12} textAnchor="middle" className="fill-muted-foreground font-mono">
                       {machine.tag}
                     </text>
@@ -307,7 +310,8 @@ export function PlotPlan({ tree, layout, state, dispatch, links = [], symbols = 
               const slot = rectOf(machine.id);
               if (!machinePlace || !slot || !visible(slot)) return [];
               const machineCentre = at(machinePlace.cx, machinePlace.cy);
-              const dimmed = !onPath.has(machine.id);
+              // Only the machine you are on shows its points; a neighbour's would be cut by the frame.
+              if (!onPath.has(machine.id)) return [];
               return machine.children.map((sensor) => {
                 const place = layout.places.get(sensor.id);
                 const hit = rectOf(sensor.id);
@@ -321,7 +325,7 @@ export function PlotPlan({ tree, layout, state, dispatch, links = [], symbols = 
                 const anchor = left ? 'end' : 'start';
                 const reading = sensor.reading;
                 return (
-                  <g key={sensor.id} data-slot="plot-plan-sensor" data-tone={sensor.status.tone} opacity={sensorDetail * (dimmed ? 0.3 : 1)}>
+                  <g key={sensor.id} data-slot="plot-plan-sensor" data-tone={sensor.status.tone} opacity={sensorDetail}>
                     <line
                       x1={machineCentre.x + direction * (glyph / 2 + 4)}
                       y1={point.y}

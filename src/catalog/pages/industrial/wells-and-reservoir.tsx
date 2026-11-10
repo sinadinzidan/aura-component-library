@@ -103,7 +103,7 @@ const MONTHS_LEFT = (monthsToLimit(DECLINE_FIT, ECONOMIC_LIMIT) ?? 0) - (HISTORY
 /** Datum reservoir pressure in bar, monthly for three years. Injection started in month 14. */
 const RESERVOIR_PRESSURE = makeSeries({ seed: 52, points: 36, base: 312, drift: -34, noise: 0.8, stepMs: MONTH, decimals: 1 }).map((point, index) => ({
   t: point.t,
-  v: index < 14 ? point.v : Math.round((point.v + (index - 14) * 0.9) * 10) / 10,
+  v: index < 14 ? point.v : Math.round((point.v + (index - 14) * 0.6) * 10) / 10,
 }));
 const RESERVOIR_PRESSURE_NOW = RESERVOIR_PRESSURE[RESERVOIR_PRESSURE.length - 1].v;
 const BUBBLE_POINT = 268;
@@ -474,7 +474,7 @@ function WellsReservoirAllocationTable() {
               <td className={`${TD} pr-0`}>
                 <div className="flex items-center gap-3">
                   <LinearGauge showHeader={false} size="sm" label={`${row.well} share of export`} value={row.share} max={40} unit="%" decimals={1} />
-                  <span className="w-12 shrink-0 text-right tabular-nums text-base-foreground">{formatValue(row.share, 1)} %</span>
+                  <span className="w-14 shrink-0 whitespace-nowrap text-right tabular-nums text-base-foreground">{formatValue(row.share, 1)} %</span>
                 </div>
               </td>
             </tr>
@@ -524,14 +524,14 @@ function WellsReservoirVoidageTile() {
   return (
     <div className="w-full max-w-72">
       <KpiTile
-        label="Voidage replacement, March"
+        label="Voidage replacement"
         value={ratio}
         decimals={2}
         status={{ tone: 'warning', label: 'Below target', shape: 'square' }}
-        delta={{ reference: VOIDAGE[VOIDAGE.length - 2].ratio, goodDirection: 'up', caption: 'vs February', decimals: 2 }}
+        delta={{ reference: VOIDAGE[VOIDAGE.length - 2].ratio, goodDirection: 'up', caption: 'vs Feb', decimals: 2 }}
         target={{ value: 1 }}
         trend={{ values: VOIDAGE.map((row) => row.ratio), variant: 'bar', label: 'Voidage replacement ratio, last 6 months' }}
-        footnote={`${formatValue(FIELD_INJECTION)} m³/d injected today`}
+        footnote={`March to date · ${formatValue(FIELD_INJECTION)} m³/d injected today`}
       />
     </div>
   );
@@ -576,7 +576,7 @@ function WellsReservoirPressureTrend() {
   return (
     <Panel title="Reservoir pressure" meta="At datum, 3,050 m TVD · monthly">
       <TrendChart
-        label="Reservoir pressure at datum over three years, falling from 312 bar and flattening after water injection started, still above the bubble point of 268 bar"
+        label="Reservoir pressure at datum over three years, falling more slowly after water injection started, still above the bubble point of 268 bar"
         series={[{ key: 'pressure', label: 'Reservoir pressure', points: RESERVOIR_PRESSURE }]}
         limits={[{ value: BUBBLE_POINT, label: `Bubble point ${BUBBLE_POINT}`, tone: 'warning', align: 'left' }]}
         events={[{ t: RESERVOIR_PRESSURE[14].t, label: 'Injection starts' }]}
@@ -586,7 +586,7 @@ function WellsReservoirPressureTrend() {
         maxTicks={6}
         formatTick={(timestamp) => new Intl.DateTimeFormat('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(timestamp)}
         heightClassName="h-56"
-        summary="Decline slowed from 1.6 to 0.3 bar per month once C-01 and C-03 came on injection."
+        summary="Decline slowed from about 1.0 to 0.4 bar per month once C-01 and C-03 came on injection."
       />
     </Panel>
   );
@@ -740,7 +740,7 @@ function WellsReservoirDrillingTile() {
 }
 
 function WellsReservoirFieldOverview() {
-  const shown = ['a-04', 'a-07', 'a-15', 'c-01'].map(wellsReservoirWell);
+  const shown = ['a-04', 'a-07', 'a-15', 'b-05'].map(wellsReservoirWell);
   return (
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -764,7 +764,7 @@ function WellsReservoirFieldOverview() {
             state={well.state}
             rates={well.state === 'producing' ? { oil: well.oil, gas: well.gas, water: well.water } : undefined}
             choke={well.choke}
-            tubingHeadPressure={well.tubingHeadPressure}
+            tubingHeadPressure={well.state === 'workover' ? undefined : well.tubingHeadPressure}
           />
         ))}
       </div>

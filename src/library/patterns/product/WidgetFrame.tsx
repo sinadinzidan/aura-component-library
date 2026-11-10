@@ -129,15 +129,18 @@ export function WidgetFrame({
       <CardContent className="min-h-0 flex-1">
         {/* CardContent aligns children to the start; this wrapper makes the body span the card. */}
         <div className="flex h-full w-full min-w-0 flex-1 flex-col gap-3">
-          {status === 'loading'
-            ? (loading ?? (
-                <div data-slot="widget-skeleton" className="flex w-full flex-1 flex-col gap-3">
+          {status === 'loading' ? (
+            // Skeletons vanish on the card surface in dark themes, so they sit on a base-surface inset.
+            <div data-slot="widget-skeleton" className="flex w-full flex-1 flex-col gap-3 rounded-lg bg-base-background p-3">
+              {loading ?? (
+                <>
                   <Skeleton className="h-8 w-28" />
                   <Skeleton className="h-3 w-full" />
                   <Skeleton className="h-3 w-2/3" />
-                </div>
-              ))
-            : null}
+                </>
+              )}
+            </div>
+          ) : null}
           {status === 'empty' ? <Message {...empty} /> : null}
           {status === 'error' ? (
             <Message

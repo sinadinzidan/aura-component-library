@@ -250,7 +250,7 @@ function PowerRenewCapacityFactor() {
         value={factor}
         unit="%"
         decimals={1}
-        delta={{ reference: 47.9, goodDirection: 'up', caption: 'vs 30-day mean', decimals: 1 }}
+        delta={{ reference: 64.2, goodDirection: 'up', caption: 'vs 30-day mean', decimals: 1 }}
         trend={{ values: ACTUAL.map((point) => point.v), variant: 'area', label: 'Farm output, last 24 hours' }}
         footnote={`${formatValue(ENERGY_24H)} MWh of ${formatValue(FARM_RATED * 24)} MWh at rated power`}
       />
@@ -600,7 +600,7 @@ function PowerRenewFarmOverview() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiTile size="compact" label="Output" value={FARM_POWER} unit="MW" decimals={1} delta={{ reference: FORECAST[24].v, caption: 'vs forecast', decimals: 1 }} />
         <KpiTile size="compact" label="Mean wind speed" value={10.9} unit="m/s" decimals={1} delta={{ reference: 9.6, caption: 'vs 1 h ago', decimals: 1 }} />
-        <KpiTile size="compact" label="Capacity factor, 24 h" value={capacityFactor(ENERGY_24H, FARM_RATED, 24)} unit="%" decimals={1} delta={{ reference: 47.9, goodDirection: 'up', caption: 'vs 30-day mean', decimals: 1 }} />
+        <KpiTile size="compact" label="Capacity factor, 24 h" value={capacityFactor(ENERGY_24H, FARM_RATED, 24)} unit="%" decimals={1} delta={{ reference: 64.2, goodDirection: 'up', caption: 'vs 30-day mean', decimals: 1 }} />
         <KpiTile size="compact" label="Energy availability" value={93.2} unit="%" decimals={1} status={{ tone: 'warning', label: 'Below contract', shape: 'square' }} target={{ value: 97 }} />
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

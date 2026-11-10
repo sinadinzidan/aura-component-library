@@ -29,7 +29,8 @@ describe(MappingTable.name, () => {
     render(<MappingTable label="Column mapping" columns={COLUMNS} fields={FIELDS} mapping={SUGGESTED} suggested={SUGGESTED} onChange={vi.fn()} />);
 
     expect(screen.getByRole('table', { name: 'Column mapping' })).toBeInTheDocument();
-    expect(within(row('TAG_NO')).getByText('23-PT-92531, 23-TT-92532')).toBeInTheDocument();
+    expect(within(row('TAG_NO')).getByText('23-PT-92531')).toBeInTheDocument();
+    expect(within(row('TAG_NO')).getByText('23-TT-92532')).toBeInTheDocument();
   });
 
   it('labels a suggested match as auto-mapped', () => {

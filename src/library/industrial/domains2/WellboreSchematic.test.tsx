@@ -49,8 +49,8 @@ describe(WellboreSchematic.name, () => {
     renderSchematic();
 
     const top = (text: string) => parseFloat(screen.getByText(text).parentElement?.style.top ?? '');
-    expect(top('Production packer')).toBeCloseTo(81.43, 2);
-    expect(top('Tubing end') - top('Production packer')).toBeGreaterThanOrEqual(6.5);
+    const tops = ['Production packer', 'Tubing end', 'Perforations 3,050–3,150', '9⅝ in production casing'].map(top);
+    expect(tops).toEqual([80.5, 87, 93.5, 100]);
   });
 
   it('prints a depth tick at every interval', () => {

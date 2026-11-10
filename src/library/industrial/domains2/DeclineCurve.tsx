@@ -56,7 +56,7 @@ export function DeclineCurve({
       decimals={decimals}
       yDomain={yDomain}
       formatTick={(timestamp) => monthYear.format(timestamp)}
-      maxTicks={7}
+      maxTicks={6}
       legend
       summary={summary}
       heightClassName={heightClassName}

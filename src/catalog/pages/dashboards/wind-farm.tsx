@@ -181,7 +181,7 @@ function WindFarmFloatCard({ title, description, dimmed = false, children }: Win
   return (
     <section
       aria-label={title}
-      className={`flex w-full min-w-0 flex-col gap-3 rounded-xl border border-default bg-card-background/85 p-4 backdrop-blur-sm transition-opacity ${dimmed ? 'opacity-40' : ''}`}
+      className={`flex w-full min-w-0 flex-col gap-3 rounded-xl border border-default bg-card-background/85 p-3 backdrop-blur-sm transition-opacity ${dimmed ? 'opacity-30' : ''}`}
     >
       <header className="flex flex-col gap-0.5">
         <h4 className="text-sm font-semibold text-base-foreground">{title}</h4>
@@ -199,10 +199,10 @@ function WindFarmOutputCard({ hour, dimmed }: { hour: number; dimmed?: boolean }
   const line = (pick: (entry: WindFarmSnapshot) => number): string => WIND_FARM_DAY.map((entry, index) => `${windFarmRound(x(index))},${windFarmRound(y(pick(entry)))}`).join(' ');
 
   return (
-    <WindFarmFloatCard title="Farm output" description={`${windFarmClock(hour)} · ${WIND_FARM_CAPACITY} MW installed`} dimmed={dimmed}>
+    <WindFarmFloatCard title="Farm output" description={`${windFarmClock(hour)} · forecast ${formatValue(snapshot.forecast, 1)} MW`} dimmed={dimmed}>
       <div className="flex flex-col gap-1.5">
         <ValueReadout size="lg" value={snapshot.output} unit="MW" decimals={1} />
-        <TrendDelta value={snapshot.output} reference={snapshot.forecast} format="percent" decimals={0} goodDirection="up" caption={`vs ${formatValue(snapshot.forecast, 1)} MW forecast`} />
+        <TrendDelta value={snapshot.output} reference={snapshot.forecast} format="percent" decimals={0} goodDirection="up" caption="vs forecast" />
       </div>
       <div
         role="img"
@@ -499,19 +499,19 @@ function WindFarmMap({ hour, selectedId, onSelect, onClose }: WindFarmMapProps) 
       className="relative aspect-[5/3] min-h-[40rem] w-full overflow-hidden rounded-xl border border-default bg-muted-background"
     >
       <WindFarmField hour={hour} selectedId={selectedId} onSelect={onSelect} />
-      <div className={`absolute left-[3%] top-1/2 z-10 w-36 -translate-y-1/2 transition-opacity ${dimmed ? 'opacity-40' : ''}`}>
+      <div className={`absolute left-[3%] top-[55%] z-10 w-[20%] -translate-y-1/2 transition-opacity ${dimmed ? 'opacity-40' : ''}`}>
         <WindFarmMastMarker hour={hour} />
       </div>
-      <div className="absolute left-3 top-3 z-20 w-60">
+      <div className="absolute left-[1.5%] top-[2.5%] z-20 w-[23%]">
         <WindFarmOutputCard hour={hour} dimmed={dimmed} />
       </div>
-      <div className="absolute right-3 top-3 z-20 w-60">
+      <div className="absolute right-[1.5%] top-[2.5%] z-20 w-[23%]">
         <WindFarmWindCard hour={hour} dimmed={dimmed} />
       </div>
-      <div className="absolute bottom-3 left-3 z-20 w-60">
+      <div className="absolute bottom-[2.5%] left-[1.5%] z-20 w-[23%]">
         <WindFarmAvailabilityCard hour={hour} dimmed={dimmed} />
       </div>
-      <div className="absolute bottom-3 right-3 z-20 w-60">
+      <div className="absolute bottom-[2.5%] right-[1.5%] z-20 w-[23%]">
         <WindFarmAlarmsCard hour={hour} dimmed={dimmed} onSelect={onSelect} />
       </div>
       {selected ? (

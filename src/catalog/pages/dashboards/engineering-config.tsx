@@ -235,7 +235,7 @@ function EngConfigTablePanel({ edits, setField }: EngConfigTablePanelProps) {
       (area === 'all' || tag.area === area) &&
       (needle === '' || tag.tag.toLowerCase().includes(needle) || tag.name.toLowerCase().includes(needle))
   );
-  const rows = matches.slice(0, 6);
+  const rows = matches.slice(0, 8);
 
   return (
     <DashboardPanel

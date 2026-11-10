@@ -249,10 +249,10 @@ function KeyValueMetaLongValues() {
                   render={
                     <a
                       href={url}
-                      className="rounded-sm font-mono text-xs text-link-foreground underline outline-none hover:text-link-foreground-hover focus-visible:shadow-focus-ring"
+                      className="whitespace-nowrap rounded-sm font-mono text-xs text-link-foreground underline outline-none hover:text-link-foreground-hover focus-visible:shadow-focus-ring"
                       onClick={(event) => event.preventDefault()}
                     >
-                      {keyValueMetaMiddle(url, 18, 20)}
+                      {keyValueMetaMiddle(url, 16, 14)}
                     </a>
                   }
                 />
@@ -502,12 +502,12 @@ function KeyValueMetaCollapsibleGroups() {
           <PropertyList dense items={KEY_VALUE_ASSET.slice(0, 3)} />
         </div>
       </CollapsibleSection>
-      <CollapsibleSection title="Design data" count={KEY_VALUE_TECHNICAL.length} as="h3">
+      <CollapsibleSection title="Design data" count={KEY_VALUE_TECHNICAL.length} defaultOpen={false} as="h3">
         <div className="pb-3 pt-1">
           <PropertyList dense items={KEY_VALUE_TECHNICAL} />
         </div>
       </CollapsibleSection>
-      <CollapsibleSection title="Maintenance" count={2} as="h3">
+      <CollapsibleSection title="Maintenance" count={2} defaultOpen={false} as="h3">
         <div className="pb-3 pt-1">
           <PropertyList
             dense

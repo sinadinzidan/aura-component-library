@@ -18,7 +18,7 @@ type FileRowProps = {
   modified?: string;
   /** Who owns or last changed it. */
   owner?: string;
-  /** Name of the person who has the file checked out. Shows a lock beside the name. */
+  /** Name of the person who has the file checked out. Shows a lock with their name under the file name. */
   lockedBy?: string;
   /** Tints the type icon. Leave off in lists that also show status colour. */
   tinted?: boolean;
@@ -64,6 +64,12 @@ export function FileRow({
     (fact): fact is string => fact !== null
   );
   const dense = density === 'dense';
+  const lock = lockedBy ? (
+    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground">
+      <IconLock aria-hidden="true" className="size-3.5" />
+      Checked out by {lockedBy}
+    </span>
+  ) : null;
 
   return (
     <EntityRow
@@ -73,19 +79,23 @@ export function FileRow({
       selection={selection}
       leading={<FileTypeIcon kind={resolved} size={dense ? 'sm' : 'md'} tinted={tinted} />}
       title={
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 truncate" title={name}>
-            {name}
+        dense && lock ? (
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="min-w-0 truncate">{name}</span>
+            {lock}
           </span>
-          {lockedBy ? (
-            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-normal text-muted-foreground">
-              <IconLock aria-hidden="true" className="size-3.5" />
-              Checked out by {lockedBy}
-            </span>
-          ) : null}
-        </span>
+        ) : (
+          name
+        )
       }
-      description={dense ? undefined : <span className="tabular-nums">{facts.join(' · ')}</span>}
+      description={
+        dense ? undefined : (
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 tabular-nums">
+            <span>{facts.join(' · ')}</span>
+            {lock}
+          </span>
+        )
+      }
       meta={
         meta || modified || dense ? (
           <>

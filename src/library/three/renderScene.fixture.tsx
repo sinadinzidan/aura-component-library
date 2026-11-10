@@ -78,3 +78,14 @@ export async function renderScene(children: ReactNode, options: { reducedMotion?
     },
   };
 }
+
+/** A construction parameter of an object's geometry, e.g. `height` of a cylinder; `undefined` when absent. */
+export function geometryParameter(object: Object3D, name: string): unknown {
+  if (!('geometry' in object)) return undefined;
+  const geometry = object.geometry;
+  if (typeof geometry !== 'object' || geometry === null || !('parameters' in geometry)) return undefined;
+  const parameters = geometry.parameters;
+  if (typeof parameters !== 'object' || parameters === null) return undefined;
+  const record: Record<string, unknown> = { ...parameters };
+  return record[name];
+}

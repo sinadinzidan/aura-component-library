@@ -187,7 +187,6 @@ function FormatGuideUnits() {
           code: "formatReading(48.6, 'barg', 1)",
           output: formatReading(48.6, 'barg', 1),
           avoid: '48.6barg',
-          note: 'Non-breaking space',
         },
         {
           id: 'f',
@@ -195,7 +194,6 @@ function FormatGuideUnits() {
           code: "formatReading(412, 'm³/h')",
           output: formatReading(412, 'm³/h'),
           avoid: '412 m3/h',
-          note: 'Real superscript',
         },
         {
           id: 't',
@@ -203,7 +201,6 @@ function FormatGuideUnits() {
           code: "formatReading(141.2, '°C', 1)",
           output: formatReading(141.2, '°C', 1),
           avoid: '141.2 C',
-          note: 'Degree sign with the unit',
         },
         {
           id: 'v',
@@ -211,7 +208,6 @@ function FormatGuideUnits() {
           code: "formatReading(6.8, 'mm/s', 1)",
           output: formatReading(6.8, 'mm/s', 1),
           avoid: '6.8 MM/S',
-          note: 'Unit case as in SI',
         },
       ]}
     />
@@ -657,7 +653,7 @@ export default definePage({
         {
           id: 'FormatGuideUnits',
           title: 'Units',
-          note: 'Every reading: number, non-breaking space, unit in its proper case and symbols.',
+          note: 'Every reading: number, non-breaking space, then the unit with its real symbols and SI case.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',

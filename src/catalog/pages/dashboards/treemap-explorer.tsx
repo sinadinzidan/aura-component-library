@@ -250,7 +250,6 @@ function TreemapJourney({ startId, lens = 'openAlarms' }: { startId?: string; le
           </Button>
         ) : null}
         <PathBar nodes={nodes} onSelect={(id) => dispatch({ type: 'jump', id })} className="flex-1" />
-        <TreemapKeys />
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-default px-3 py-2">
@@ -275,6 +274,7 @@ function TreemapJourney({ startId, lens = 'openAlarms' }: { startId?: string; le
 
       <footer className="flex items-center gap-6 border-t border-default px-4 py-3">
         <NodeDetailStrip node={shown} metrics={TREEMAP_METRICS} activeMetric={metric.key} className="flex-1" />
+        <TreemapKeys />
       </footer>
     </div>
   );

@@ -366,7 +366,7 @@ function AiOpsTripEvidence() {
         unit="mm/s"
         decimals={1}
         maxTicks={6}
-        heightClassName="h-80"
+        heightClassName="h-96"
       />
       <ol aria-label="Sequence of events" className="grid w-full grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2">
         {AI_OPS_SEQUENCE.map((step) => (
@@ -398,7 +398,7 @@ function AiOpsCompareEvidence() {
         decimals={1}
         maxTicks={6}
         legend
-        heightClassName="h-72"
+        heightClassName="h-64"
       />
       <table className="w-full table-fixed text-left text-sm">
         <thead>
@@ -444,7 +444,8 @@ type AiOpsWatchProps = { confirmed: readonly string[]; onToggle: (id: string, ch
 function AiOpsWatchEvidence({ confirmed, onToggle }: AiOpsWatchProps) {
   return (
     <div className="flex w-full flex-col gap-4">
-      <ul aria-label="Watch list" className="flex w-full flex-col gap-1">
+      <p className="text-xs font-medium text-muted-foreground">Confirm with the incoming shift</p>
+      <ul aria-label="Watch list" className="flex w-full flex-col gap-3">
         {AI_OPS_WATCH.map((item) => (
           <li key={item.id}>
             <CheckboxItem>
@@ -461,9 +462,10 @@ function AiOpsWatchEvidence({ confirmed, onToggle }: AiOpsWatchProps) {
       <p aria-live="polite" className="text-sm tabular-nums text-medium-foreground">
         {confirmed.length} of {AI_OPS_WATCH.length} confirmed by the incoming shift
       </p>
+      <p className="text-xs font-medium text-muted-foreground">Readings behind the list, 1st stage compressor and cooler</p>
       <div className="grid w-full grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-3">
-        <RangeIndicator label="Discharge temperature" value={141.2} min={80} max={160} limits={{ low: 90, high: 145 }} unit="°C" decimals={1} />
-        <RangeIndicator label="Drive-end vibration" value={6.8} min={0} max={12} limits={{ low: 0, high: 7.1 }} unit="mm/s" decimals={1} />
+        <RangeIndicator label="Discharge" value={141.2} min={80} max={160} limits={{ low: 90, high: 145 }} unit="°C" decimals={1} />
+        <RangeIndicator label="Vibration" value={6.8} min={0} max={12} limits={{ low: 0, high: 7.1 }} unit="mm/s" decimals={1} />
         <RangeIndicator label="Cooler outlet" value={38.9} min={10} max={50} limits={{ low: 20, high: 40 }} unit="°C" decimals={1} />
       </div>
     </div>
@@ -510,7 +512,7 @@ function AiOpsThreadPanel({ view, messages, streaming, onAsk, onSend, onStop }: 
   return (
     <DashboardPanel title="Assistant" description="Answers from Nordkapp time series, alarms and work orders">
       <AiOpsContextChips topicId={view} />
-      <div className="h-80 w-full">
+      <div className="h-72 w-full">
         <ChatThread messages={messages} label="Conversation with the operations assistant" pendingLabel="Reading plant data" />
       </div>
       <AiOpsComposer streaming={streaming} onAsk={onAsk} onSend={onSend} onStop={onStop} />

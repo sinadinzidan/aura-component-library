@@ -174,7 +174,7 @@ function PeopleAdoptionPanel({ crew }: { crew: string }) {
             </div>
           ))}
         </dl>
-        <div className="h-28 min-w-0 flex-1">
+        <div className="h-28 w-full min-w-0 @3xl:w-auto @3xl:flex-1">
           <ChartContainer
             config={PEOPLE_CHART_CONFIG}
             className="aspect-auto h-full w-full"

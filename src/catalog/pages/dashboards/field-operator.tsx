@@ -27,7 +27,7 @@ import { definePage } from '../../types';
 
 import source from './field-operator.tsx?raw';
 
-type FieldOpReadingSpec = { unit: string; low: number; high: number; decimals: number; step: number };
+type FieldOpReadingSpec = { unit: string; low: number; high: number; decimals: number; step: number; last: string };
 
 type FieldOpCheckpoint = {
   id: string;
@@ -36,7 +36,7 @@ type FieldOpCheckpoint = {
   /** Where to stand and what to look at. */
   instruction: string;
   reading?: FieldOpReadingSpec;
-  /** Position on the route map, in the map's own 320 by 150 grid. */
+  /** Position on the route map, in the map's own 320 by 170 grid. */
   x: number;
   y: number;
 };
@@ -48,18 +48,18 @@ type FieldOpResults = Readonly<Record<string, FieldOpAnswer>>;
 type FieldOpReadings = Readonly<Record<string, string>>;
 
 const FIELD_OP_CHECKPOINTS: readonly FieldOpCheckpoint[] = [
-  { id: 'lube', name: 'Lube oil pressure', tag: '23-KA-9101', instruction: '1st stage compressor. Read the local gauge on the lube oil skid.', reading: { unit: 'barg', low: 1.8, high: 2.6, decimals: 1, step: 0.1 }, x: 44, y: 44 },
-  { id: 'bearing', name: 'Bearing temperature', tag: '23-KA-9101', instruction: '1st stage compressor. Measure the drive-end bearing housing with the handheld probe.', reading: { unit: '°C', low: 40, high: 85, decimals: 0, step: 1 }, x: 104, y: 44 },
-  { id: 'flanges', name: 'Cooler flanges', tag: '23-HA-9114', instruction: 'Interstage cooler. Look for leaks or frost at the inlet and outlet flanges.', x: 160, y: 104 },
-  { id: 'isolation', name: 'Isolation tag', tag: '23-KA-9103', instruction: 'Recompressor. Confirm the lock and tag from WO-104482 are in place.', x: 104, y: 104 },
-  { id: 'seal', name: 'Seal pot level', tag: '27-PA-2001A', instruction: 'Export pump A. Read the level in the seal pot sight glass.', reading: { unit: '%', low: 40, high: 80, decimals: 0, step: 5 }, x: 232, y: 44 },
-  { id: 'barrier', name: 'Area barrier', tag: '40-PA-4001', instruction: 'Cooling water pump. Check the barrier and sign around the pump under maintenance.', x: 276, y: 104 },
+  { id: 'lube', name: 'Lube oil pressure', tag: '23-KA-9101', instruction: '1st stage compressor. Read the local gauge on the lube oil skid.', reading: { unit: 'barg', low: 1.8, high: 2.6, decimals: 1, step: 0.1, last: '2.3 barg on the night round' }, x: 36, y: 66 },
+  { id: 'bearing', name: 'Bearing temperature', tag: '23-KA-9101', instruction: '1st stage compressor. Measure the drive-end bearing housing with the handheld probe.', reading: { unit: '°C', low: 40, high: 85, decimals: 0, step: 1, last: '76 °C on the night round' }, x: 100, y: 66 },
+  { id: 'flanges', name: 'Cooler flanges', tag: '23-HA-9114', instruction: 'Interstage cooler. Look for leaks or frost at the inlet and outlet flanges.', x: 164, y: 66 },
+  { id: 'isolation', name: 'Isolation tag', tag: '23-KA-9103', instruction: 'Recompressor. Confirm the lock and tag from WO-104482 are in place.', x: 164, y: 122 },
+  { id: 'seal', name: 'Seal pot level', tag: '27-PA-2001A', instruction: 'Export pump A. Read the level in the seal pot sight glass.', reading: { unit: '%', low: 40, high: 80, decimals: 0, step: 5, last: '65 % on the night round' }, x: 290, y: 58 },
+  { id: 'barrier', name: 'Area barrier', tag: '40-PA-4001', instruction: 'Cooling water pump. Check the barrier and sign around the pump under maintenance.', x: 290, y: 118 },
 ];
 
 const FIELD_OP_AREAS = [
-  { id: 'nk-23', label: 'NK-23 Gas compression', x: 12, y: 16, width: 180, height: 118 },
-  { id: 'nk-27', label: 'NK-27 Export', x: 202, y: 16, width: 106, height: 56 },
-  { id: 'nk-40', label: 'NK-40 Cooling', x: 202, y: 80, width: 106, height: 54 },
+  { id: 'nk-23', label: 'NK-23 Gas compression', x: 4, y: 12, width: 190, height: 146, labelAt: 'top' },
+  { id: 'nk-27', label: 'NK-27 Export', x: 202, y: 12, width: 114, height: 68, labelAt: 'top' },
+  { id: 'nk-40', label: 'NK-40 Cooling', x: 202, y: 88, width: 114, height: 70, labelAt: 'bottom' },
 ] as const;
 
 const FIELD_OP_ANSWERS: readonly { id: FieldOpAnswer; label: string; variant: 'default' | 'destructive' | 'secondary' }[] = [
@@ -94,7 +94,7 @@ function FieldOpDevice({ label, children }: FieldOpDeviceProps) {
     <div
       role="group"
       aria-label={label}
-      className="flex aspect-[3/5] w-full max-w-sm flex-col overflow-hidden rounded-3xl border-4 border-emphasized bg-base-background"
+      className="flex aspect-[3/5] min-w-72 max-w-md flex-1 flex-col overflow-hidden rounded-3xl border-8 border-emphasized bg-base-background"
     >
       {children}
     </div>
@@ -103,7 +103,7 @@ function FieldOpDevice({ label, children }: FieldOpDeviceProps) {
 
 function FieldOpOfflineBar({ saved }: { saved: number }) {
   return (
-    <div className="flex shrink-0 items-center justify-between gap-3 bg-muted-background px-4 py-2 text-xs text-medium-foreground">
+    <div className="flex shrink-0 items-center justify-between gap-3 bg-medium-background px-4 py-2 text-xs text-medium-foreground">
       <span className="font-medium">Nordkapp</span>
       <span className="flex items-center gap-1.5">
         <IconCloudOff aria-hidden="true" className="size-4 shrink-0" />
@@ -150,7 +150,10 @@ function FieldOpReadingEntry({ checkpoint, spec, text, onChange }: FieldOpReadin
 
   return (
     <div className="flex w-full flex-col gap-2">
-      <span className="text-sm font-medium text-base-foreground">Reading in {spec.unit}</span>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <span className="text-sm font-medium text-base-foreground">Reading in {spec.unit}</span>
+        <span className="text-xs text-muted-foreground">Last: {spec.last}</span>
+      </div>
       <div className="flex w-full items-center gap-2">
         <Button variant="outline" size="icon-lg" className="size-12 shrink-0" aria-label={`Lower reading by ${spec.step} ${spec.unit}`} onClick={() => nudge(-1)}>
           <IconMinus />
@@ -305,9 +308,11 @@ function FieldOpSummary({ results, readings, submitted }: FieldOpSummaryProps) {
                 name={checkpoint.name}
                 tag={checkpoint.tag}
                 result={fieldOpResult(results, checkpoint.id)}
-                reading={
+                note={
                   checkpoint.reading && value !== null
-                    ? { value, unit: checkpoint.reading.unit, decimals: checkpoint.reading.decimals }
+                    ? `${value.toFixed(checkpoint.reading.decimals)} ${checkpoint.reading.unit}, ${
+                        isWithinLimits(value, checkpoint.reading.low, checkpoint.reading.high) ? 'within' : 'outside'
+                      } ${fieldOpLimits(checkpoint.reading)}`
                     : undefined
                 }
               />
@@ -330,7 +335,7 @@ function FieldOpRouteMap({ index, results }: { index: number; results: FieldOpRe
   const current = FIELD_OP_CHECKPOINTS[index];
   return (
     <svg
-      viewBox="0 0 320 150"
+      viewBox="0 0 320 170"
       role="img"
       aria-label={`Route map of the morning round: six stops across gas compression, export and cooling water. ${current ? `You are at stop ${index + 1}, ${current.name}.` : 'All stops visited.'}`}
       className="h-auto w-full"
@@ -338,7 +343,7 @@ function FieldOpRouteMap({ index, results }: { index: number; results: FieldOpRe
       {FIELD_OP_AREAS.map((area) => (
         <g key={area.id}>
           <rect x={area.x} y={area.y} width={area.width} height={area.height} rx="8" className="fill-muted-background stroke-emphasized" strokeWidth="1" />
-          <text x={area.x + 8} y={area.y + area.height - 8} className="fill-muted-foreground text-xs">
+          <text x={area.x + 8} y={area.labelAt === 'top' ? area.y + 18 : area.y + area.height - 8} className="fill-muted-foreground text-xs">
             {area.label}
           </text>
         </g>
@@ -372,6 +377,56 @@ function FieldOpRouteMap({ index, results }: { index: number; results: FieldOpRe
   );
 }
 
+const FIELD_OP_RESULT_WORD: Record<CheckpointResult, string> = { pass: 'Pass', fail: 'Fail', skip: 'Skipped', pending: 'Not checked' };
+
+const FIELD_OP_MARKER: Record<CheckpointResult, string> = {
+  pass: 'bg-success-background text-success-foreground',
+  fail: 'bg-critical-background text-critical-foreground',
+  skip: 'border border-dashed border-emphasized text-muted-foreground',
+  pending: 'border border-emphasized text-muted-foreground',
+};
+
+type FieldOpRouteRowProps = {
+  checkpoint: FieldOpCheckpoint;
+  position: number;
+  result: CheckpointResult;
+  here: boolean;
+  onOpen: () => void;
+};
+
+/** One stop in the task list. The whole row is the touch target and opens that checkpoint. */
+function FieldOpRouteRow({ checkpoint, position, result, here, onOpen }: FieldOpRouteRowProps) {
+  return (
+    <button
+      type="button"
+      aria-current={here ? 'step' : undefined}
+      aria-label={`Open checkpoint ${position}, ${checkpoint.name}, ${FIELD_OP_RESULT_WORD[result]}`}
+      className={`flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left outline-none hover:bg-muted-background focus-visible:shadow-focus-ring ${
+        here ? 'bg-medium-background' : ''
+      }`}
+      onClick={onOpen}
+    >
+      <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ${FIELD_OP_MARKER[result]}`}>
+        {result === 'pass' ? <IconCheck aria-hidden="true" className="size-4" /> : null}
+        {result === 'fail' ? <IconX aria-hidden="true" className="size-4" /> : null}
+        {result === 'skip' ? <IconMinus aria-hidden="true" className="size-4" /> : null}
+        {result === 'pending' ? position : null}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-sm font-medium text-base-foreground">{checkpoint.name}</span>
+        <span className="font-mono text-xs text-muted-foreground">
+          {checkpoint.tag}
+          {here ? <span className="font-sans"> · you are here</span> : null}
+        </span>
+      </span>
+      <span className={`shrink-0 text-xs ${result === 'fail' ? 'font-medium text-critical-foreground-strong' : 'text-medium-foreground'}`}>
+        {FIELD_OP_RESULT_WORD[result]}
+      </span>
+      <IconChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+    </button>
+  );
+}
+
 type FieldOpRouteScreenProps = { index: number; results: FieldOpResults; onOpen: (index: number) => void };
 
 /** The second screen: where the round goes and how far it is, with a way to jump to any stop. */
@@ -385,19 +440,13 @@ function FieldOpRouteScreen({ index, results, onOpen }: FieldOpRouteScreenProps)
       <FieldOpRouteMap index={index} results={results} />
       <ol aria-label="Checkpoints on the route" className="flex w-full flex-col">
         {FIELD_OP_CHECKPOINTS.map((checkpoint, position) => (
-          <li key={checkpoint.id} className={`rounded-lg px-2 ${position === index ? 'bg-medium-background' : ''}`}>
-            <CheckpointRow
-              className="items-center"
-              index={position + 1}
-              name={checkpoint.name}
-              tag={checkpoint.tag}
+          <li key={checkpoint.id}>
+            <FieldOpRouteRow
+              checkpoint={checkpoint}
+              position={position + 1}
               result={fieldOpResult(results, checkpoint.id)}
-              note={position === index ? 'You are here' : undefined}
-              trailing={
-                <Button variant="ghost" className="h-11 shrink-0" aria-label={`Open checkpoint ${position + 1}, ${checkpoint.name}`} onClick={() => onOpen(position)}>
-                  Open
-                </Button>
-              }
+              here={position === index}
+              onOpen={() => onOpen(position)}
             />
           </li>
         ))}
@@ -582,7 +631,7 @@ function FieldOperatorDashSummary() {
 function FieldOperatorDashCheckpoint() {
   const [result, setResult] = useState<CheckpointResult>('pending');
   return (
-    <div className="w-full max-w-sm">
+    <div className="w-full max-w-md">
       <FieldOpCheckpointCard
         checkpoint={FIELD_OP_CHECKPOINTS[3]}
         position={4}

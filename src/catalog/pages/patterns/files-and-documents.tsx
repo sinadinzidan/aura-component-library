@@ -800,13 +800,10 @@ function FileDocWorkspace() {
   return (
     <div className="grid h-[34rem] w-full grid-cols-[minmax(0,5fr)_minmax(0,8fr)] gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(0,7fr)_minmax(0,4fr)]">
       <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
-        <CollapsingBreadcrumb
-          items={[
-            { id: 'root', label: 'Engineering documents' },
-            { id: 'nk-23', label: 'NK-23 Gas compression' },
-          ]}
-          onNavigate={() => undefined}
-        />
+        <div className="flex flex-col px-2 pb-1">
+          <span className="text-xs text-muted-foreground">Engineering documents</span>
+          <h3 className="text-sm font-medium text-base-foreground">NK-23 Gas compression</h3>
+        </div>
         <ItemGroup aria-label="Files in NK-23 Gas compression">
           {files.map((entry) => (
             <FileRow
@@ -1199,7 +1196,6 @@ export default definePage({
             'patterns/content/PagePreview.tsx',
             'patterns/structure/SidePanel.tsx',
             'patterns/structure/PropertyList.tsx',
-            'navigation/CollapsingBreadcrumb.tsx',
           ],
           Component: FileDocWorkspace,
         },

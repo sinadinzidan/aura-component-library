@@ -32,19 +32,17 @@ export function SkipLink({
     target.focus();
   };
 
-  const shape =
-    'rounded-lg bg-primary-background px-3 py-1.5 text-sm font-medium text-primary-foreground outline-none focus-visible:shadow-focus-ring';
+  const className =
+    variant === 'overlay'
+      ? 'sr-only outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:z-10 focus-visible:rounded-lg focus-visible:bg-primary-background focus-visible:px-3 focus-visible:py-1.5 focus-visible:text-sm focus-visible:font-medium focus-visible:text-primary-foreground focus-visible:shadow-focus-ring'
+      : 'inline-flex rounded-lg bg-primary-background px-3 py-1.5 text-sm font-medium text-primary-foreground outline-none focus-visible:shadow-focus-ring';
 
   return (
     <a
       data-slot="skip-link"
       href={`#${targetId}`}
       onClick={skip}
-      className={
-        variant === 'overlay'
-          ? `sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:z-10 ${shape}`
-          : `inline-flex ${shape}`
-      }
+      className={className}
     >
       {label}
     </a>

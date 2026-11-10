@@ -217,11 +217,6 @@ function PlanJourney({ startId }: { startId?: string }) {
                 </Button>
               </div>
             ) : null}
-            {current.level === 'sensor' ? null : (
-              <p className="pointer-events-none absolute right-3 top-3 rounded-md bg-card-background px-2 py-1 text-xs text-muted-foreground">
-                {PLAN_HINT[current.level]}
-              </p>
-            )}
             {parent ? (
               <MiniMap
                 world={PLAN_LAYOUT.world}
@@ -243,7 +238,10 @@ function PlanJourney({ startId }: { startId?: string }) {
             <span key={part}>· {part}</span>
           ))}
         </p>
-        <PlanKeys />
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <span className="text-muted-foreground">{PLAN_HINT[current.level]}</span>
+          <PlanKeys />
+        </div>
       </footer>
     </div>
   );

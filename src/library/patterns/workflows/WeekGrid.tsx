@@ -17,7 +17,7 @@ export type WeekGridEvent = {
   start: number;
   end: number;
   title: string;
-  /** Second line, shown when the block is tall enough: a place, a crew, a tag. */
+  /** Extra line, shown when the block is tall enough: a place, a crew, a tag. Always part of the name. */
   detail?: string;
   /** `window` draws a dashed, unfilled block for a reserved period such as a maintenance window. */
   kind?: 'event' | 'window';
@@ -42,6 +42,8 @@ export type WeekGridProps = {
   onSelect?: (eventId: string) => void;
   selectedId?: string;
 };
+
+const TITLE_CLAMP: Record<number, string> = { 1: 'truncate', 2: 'line-clamp-2 break-words', 3: 'line-clamp-3 break-words' };
 
 /**
  * A day or week as a time grid: hours down the side, one column per day, and events as blocks
@@ -93,24 +95,25 @@ export function WeekGrid({ label, days, events, startHour = 8, endHour = 18, now
                 const event = dayEvents.find((candidate) => candidate.id === placement.id);
                 if (!event) return null;
                 const isWindow = event.kind === 'window';
-                const tall = event.end - event.start >= 60;
+                // Lines of small text the block can hold: 4px per spacing unit, 16px per line, minus the padding.
+                const lines = Math.max(1, Math.floor((((event.end - event.start) / 60) * hourUnits * 4 - 6) / 16));
+                const showTime = lines >= 2;
+                const showConflict = event.conflict === true && lines >= 3;
+                const showDetail = event.detail !== undefined && lines >= 4 + (showConflict ? 1 : 0);
+                const titleLines = Math.min(3, lines - (showTime ? 1 : 0) - (showConflict ? 1 : 0) - (showDetail ? 1 : 0));
                 const time = `${formatMinutes(event.start)}–${formatMinutes(event.end)}`;
                 const className = `flex h-full w-full min-w-0 flex-col overflow-hidden rounded-md px-2 py-0.5 text-left ${
                   isWindow ? 'border border-dashed border-emphasized bg-base-background' : 'bg-chart-1-200'
                 } ${selectedId === event.id ? 'shadow-focus-ring' : ''}`;
                 const content = (
                   <>
-                    <span className="flex min-w-0 items-center gap-1">
-                      {event.conflict ? <IconAlertTriangle aria-hidden="true" className="size-3.5 shrink-0 text-warning-foreground-strong" /> : null}
-                      <span className="truncate text-xs font-medium text-base-foreground">{event.title}</span>
+                    <span className="flex min-w-0 items-start gap-1">
+                      {event.conflict ? <IconAlertTriangle aria-hidden="true" className="mt-px size-3.5 shrink-0 text-warning-foreground-strong" /> : null}
+                      <span className={`min-w-0 text-xs font-medium leading-4 text-base-foreground ${TITLE_CLAMP[titleLines] ?? 'truncate'}`}>{event.title}</span>
                     </span>
-                    {tall ? (
-                      <span className="truncate text-xs tabular-nums text-medium-foreground">
-                        {time}
-                        {event.detail ? ` · ${event.detail}` : ''}
-                      </span>
-                    ) : null}
-                    {event.conflict && event.end - event.start >= 90 ? <span className="truncate text-xs font-medium text-warning-foreground-strong">Conflict</span> : null}
+                    {showTime ? <span className="shrink-0 whitespace-nowrap text-xs leading-4 tabular-nums text-medium-foreground">{time}</span> : null}
+                    {showDetail ? <span className="shrink-0 truncate text-xs leading-4 text-medium-foreground">{event.detail}</span> : null}
+                    {showConflict ? <span className="shrink-0 text-xs font-medium leading-4 text-warning-foreground-strong">Conflict</span> : null}
                   </>
                 );
                 const name = `${event.title}, ${time}${event.detail ? `, ${event.detail}` : ''}${isWindow ? ', reserved window' : ''}${event.conflict ? ', conflict' : ''}`;

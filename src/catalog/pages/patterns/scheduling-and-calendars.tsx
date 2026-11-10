@@ -25,7 +25,6 @@ import { IconAction } from '../../../library/patterns/collections/IconAction';
 import { FormActions } from '../../../library/patterns/data-entry/FormActions';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
-import { SidePanel } from '../../../library/patterns/structure/SidePanel';
 import { AgendaList } from '../../../library/patterns/workflows/AgendaList';
 import type { AgendaDay } from '../../../library/patterns/workflows/AgendaList';
 import { conflictingIds, formatMinutes } from '../../../library/patterns/workflows/layoutEvents';
@@ -62,7 +61,7 @@ const WEEK_EVENTS: readonly PlanEvent[] = [
   { id: 'e4', dayId: 'tue', start: h(13), end: h(15), title: 'Calibrate level transmitter', detail: '20-LT-10012', crew: 'Instrument', ownerId: 'jn', reference: 'WO-104440' },
   { id: 'e5', dayId: 'wed', start: h(8), end: h(16), title: 'Cooling water outage', detail: 'NK-40', kind: 'window', crew: 'Operations', ownerId: 'lw' },
   { id: 'e6', dayId: 'wed', start: h(9), end: h(12), title: 'Replace temperature transmitter', detail: '40-TT-40015', crew: 'Instrument', ownerId: 'jn', reference: 'WO-104479' },
-  { id: 'e7', dayId: 'thu', start: h(8), end: h(14), title: 'Inspect drive-end bearing', detail: '23-KA-9103', crew: 'Mechanical', ownerId: 'tb', reference: 'WO-104482' },
+  { id: 'e7', dayId: 'thu', start: h(8), end: h(14), title: 'Inspect drive-end bearing', detail: '23-KA-9103', crew: 'Mechanical', ownerId: 'tb', reference: 'WO-104482', conflict: true },
   { id: 'e8', dayId: 'thu', start: h(12, 30), end: h(15), title: 'Vibration survey', detail: '23-KA-9101', crew: 'Mechanical', ownerId: 'tb', reference: 'WO-104466', conflict: true },
   { id: 'e9', dayId: 'thu', start: h(15, 30), end: h(16, 30), title: 'Shift handover', detail: 'Control room', crew: 'Operations', ownerId: 'lw' },
   { id: 'e10', dayId: 'fri', start: h(9), end: h(10, 30), title: 'Permit review', detail: 'PTW-2291', crew: 'Operations', ownerId: 'lw' },
@@ -217,7 +216,7 @@ function ScheduleCalDayView() {
     <WeekGrid
       label="Thursday 12 March"
       days={WEEK_DAYS.slice(3, 4)}
-      events={WEEK_EVENTS.filter((event) => event.id !== 'e8')}
+      events={WEEK_EVENTS.filter((event) => event.id !== 'e8').map((event) => ({ ...event, conflict: false }))}
       startHour={7}
       endHour={17}
       now={NOW}
@@ -329,7 +328,7 @@ const CREW_ROWS: readonly { crew: string; people: number; load: number; bars: re
     load: 92,
     bars: [
       { id: 'm1', start: 0, end: 1.5, text: 'Seal replacement' },
-      { id: 'm2', start: 3, end: 3.8, text: 'Bearing' },
+      { id: 'm2', start: 3, end: 4, text: 'Bearing' },
       { id: 'm3', start: 4, end: 5, text: 'Cooler bundle' },
     ],
   },
@@ -338,8 +337,8 @@ const CREW_ROWS: readonly { crew: string; people: number; load: number; bars: re
     people: 2,
     load: 55,
     bars: [
-      { id: 'i1', start: 1.5, end: 2, text: 'LT cal.' },
-      { id: 'i2', start: 2, end: 2.6, text: 'TT swap' },
+      { id: 'i1', start: 1, end: 2, text: 'LT cal.' },
+      { id: 'i2', start: 2, end: 3, text: 'TT swap' },
       { id: 'i3', start: 5, end: 7, text: 'Firmware prep', tentative: true },
     ],
   },
@@ -348,9 +347,9 @@ const CREW_ROWS: readonly { crew: string; people: number; load: number; bars: re
     people: 4,
     load: 70,
     bars: [
-      { id: 'o1', start: 0.3, end: 0.7, text: 'Start test' },
-      { id: 'o2', start: 1, end: 1.5, text: 'PST' },
-      { id: 'o3', start: 2, end: 3, text: 'CW outage' },
+      { id: 'o1', start: 0, end: 1, text: 'Start test' },
+      { id: 'o2', start: 1, end: 2, text: 'Stroke test' },
+      { id: 'o3', start: 2, end: 3, text: 'Outage' },
     ],
   },
 ];
@@ -739,55 +738,56 @@ function ScheduleCalWeekPlanner() {
         </div>
         <Button size="sm">Schedule job</Button>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_18rem] items-start gap-4">
-        <WeekGrid
-          label="Maintenance plan, week 11. Select a job for details."
-          days={WEEK_DAYS}
-          events={WEEK_EVENTS}
-          startHour={7}
-          endHour={17}
-          now={NOW}
-          onSelect={setSelectedId}
-          selectedId={selectedId}
-        />
-        <div className="h-96">
-          {event ? (
-            <SidePanel
-              title={event.title}
-              description={`${DAY_NAMES[event.dayId]}, ${formatMinutes(event.start)}–${formatMinutes(event.end)}`}
-              onClose={() => setSelectedId(undefined)}
-              footer={
+      <WeekGrid
+        label="Maintenance plan, week 11. Select a job for details."
+        days={WEEK_DAYS}
+        events={WEEK_EVENTS}
+        startHour={7}
+        endHour={17}
+        now={NOW}
+        onSelect={setSelectedId}
+        selectedId={selectedId}
+      />
+      <div aria-live="polite" className="rounded-xl border border-default p-4">
+        {event ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <h4 className="text-sm font-semibold text-base-foreground">{event.title}</h4>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {DAY_NAMES[event.dayId]}, {formatMinutes(event.start)}–{formatMinutes(event.end)}
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setSelectedId(undefined)}>
+                  Close
+                </Button>
                 <Button variant="secondary" size="sm">
                   Reschedule
                 </Button>
-              }
-            >
-              <div className="flex flex-col gap-4">
-                {event.conflict ? (
-                  <p className="flex items-start gap-1.5 text-sm text-warning-foreground-strong">
-                    <IconAlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-                    <span>
-                      <span className="font-medium">Conflict.</span> Overlaps the bearing inspection for the same technician.
-                    </span>
-                  </p>
-                ) : null}
-                <PropertyList
-                  layout="stacked"
-                  items={[
-                    { label: 'Work order', value: event.reference ? <span className="font-mono">{event.reference}</span> : undefined },
-                    { label: event.kind === 'window' ? 'System' : 'Where', value: <span className="font-mono">{event.detail}</span> },
-                    { label: 'Crew', value: event.crew },
-                    { label: 'Lead', value: owner?.name },
-                  ]}
-                />
               </div>
-            </SidePanel>
-          ) : (
-            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-default p-6 text-center text-sm text-muted-foreground">
-              Select a job in the grid to see its details.
             </div>
-          )}
-        </div>
+            {event.conflict ? (
+              <p className="flex items-start gap-1.5 text-sm text-warning-foreground-strong">
+                <IconAlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  <span className="font-medium">Conflict.</span> {owner?.name} is booked on two jobs between 12:30 and 14:00.
+                </span>
+              </p>
+            ) : null}
+            <PropertyList
+              layout="stacked"
+              columns={3}
+              items={[
+                { label: 'Work order', value: event.reference ? <span className="font-mono">{event.reference}</span> : undefined },
+                { label: event.kind === 'window' ? 'System' : 'Where', value: <span className="font-mono">{event.detail}</span> },
+                { label: 'Crew and lead', value: `${event.crew} · ${owner?.name}` },
+              ]}
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Select a job in the grid to see its details.</p>
+        )}
       </div>
     </div>
   );
@@ -1092,11 +1092,11 @@ export default definePage({
         {
           id: 'ScheduleCalWeekPlanner',
           title: 'Week planner',
-          note: 'The planner view: select a job in the grid and read or reschedule it beside the week.',
+          note: 'The planner view: select a job in the grid and read or reschedule it under the week.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/workflows/WeekGrid.tsx', 'patterns/structure/SidePanel.tsx', 'patterns/structure/PropertyList.tsx'],
+          uses: ['patterns/workflows/WeekGrid.tsx', 'patterns/structure/PropertyList.tsx'],
           Component: ScheduleCalWeekPlanner,
         },
         {

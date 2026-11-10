@@ -84,8 +84,14 @@ export function MappingTable({ label, columns, fields, mapping, suggested, onCha
                 <th scope="row" className={`${TD} text-left font-mono text-xs font-normal text-base-foreground`}>
                   {column.name}
                 </th>
-                <td className={`${TD} max-w-48 text-xs text-muted-foreground`}>
-                  <span className="block truncate font-mono">{column.samples.join(', ')}</span>
+                <td className={`${TD} text-xs text-muted-foreground`}>
+                  <span data-slot="mapping-samples" className="flex flex-wrap gap-x-3 gap-y-0.5 font-mono">
+                    {column.samples
+                      .filter((sample) => sample !== '')
+                      .map((sample, index) => (
+                        <span key={`${sample}-${index}`}>{sample}</span>
+                      ))}
+                  </span>
                 </td>
                 <td className={TD}>
                   <IconArrowRight aria-hidden="true" className="size-4 text-muted-foreground" />
