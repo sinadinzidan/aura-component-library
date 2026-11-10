@@ -64,7 +64,7 @@ export function Globe({ radius = 10, outlines = [], graticuleStep = 15, halo = t
         <lineBasicMaterial color={palette.frame.color} transparent opacity={0.55} />
       </lineSegments>
       <lineSegments geometry={coasts} name="coastlines">
-        <lineBasicMaterial color={palette.accent.color} transparent opacity={0.9} />
+        <lineBasicMaterial color={palette.accent.color} transparent opacity={0.7} />
       </lineSegments>
     </group>
   );

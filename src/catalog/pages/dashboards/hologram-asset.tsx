@@ -2,7 +2,7 @@ import { Button } from '@cognite/aura/components/button';
 import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import { Slider } from '@cognite/aura/components/slider';
 import { Switch } from '@cognite/aura/components/switch';
-import { useRef, useState } from 'react';
+import { useReducer, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { ArcReadout } from '../../../library/experiences/futuristic/ArcReadout';
@@ -20,7 +20,7 @@ import { FaultCallout } from '../../../library/three/models/FaultCallout';
 import { HologramScene } from '../../../library/three/models/HologramScene';
 import { ProjectorBase } from '../../../library/three/models/ProjectorBase';
 import { ScanPlane } from '../../../library/three/models/ScanPlane';
-import { partSlice, scanHeight, scanRange, sectionRadiusAt, slicesAt } from '../../../library/three/models/scanSweep';
+import { partSlice, scanHeight, scanRange, scanReducer, sectionRadiusAt, slicesAt } from '../../../library/three/models/scanSweep';
 import type { WireframePart } from '../../../library/three/models/scanSweep';
 import { StillScene } from '../../../library/three/models/StillScene';
 import { WireframeModel } from '../../../library/three/models/WireframeModel';
@@ -124,12 +124,12 @@ const HOLOASSET_DIAGNOSIS = {
   finding: 'Outer race defect, drive-end bearing',
   confidence: 94,
   evidence: [
-    'Velocity rose from 4.2 to 11.6 mm/s in 110 minutes; trip at 11.0.',
-    'Spectrum peak at 3.1 × running speed, the outer race pass frequency.',
-    'Bearing metal temperature 118 °C, 46 °C above the non-drive end.',
-    'Seal and coupling next to it are heating; the rest of the train is normal.',
+    'Velocity 4.2 to 11.6 mm/s in 110 minutes; trip at 11.0.',
+    'Spectrum peak at 3.1 × running speed: the outer race.',
+    'Bearing metal 118 °C, 46 °C above the non-drive end.',
+    'Seal and coupling next to it are heating.',
   ],
-  action: 'Keep the recompressor isolated. Replace the drive-end bearing and inspect the seal before restart.',
+  action: 'Keep the machine isolated. Replace the drive-end bearing and inspect the seal before restart.',
 } as const;
 
 const HOLOASSET_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
@@ -153,9 +153,7 @@ function HoloAssetReadout({ scan, mode, onPick }: { scan: number; mode: HoloAsse
 
   return (
     <BracketFrame title="Scan readout" meta={`${Math.round(scan * 100)}%`} className="w-full" bodyClassName="gap-2">
-      <p className="text-xs text-muted-foreground">
-        {passing.length === 0 ? 'Plane between components.' : 'Plane passing the marked components. Pick one to move the plane to it.'}
-      </p>
+      <p className="text-xs text-muted-foreground">{onPick ? 'Pick a component to park the plane on it.' : 'Marked components are in the plane.'}</p>
       <ul aria-label="Components along the scan axis, top first" className="flex min-h-0 flex-col overflow-y-auto">
         {rows.map((component) => {
           const active = passing.includes(component.part.id);
@@ -168,15 +166,15 @@ function HoloAssetReadout({ scan, mode, onPick }: { scan: number; mode: HoloAsse
                   ›
                 </span>
                 <span className={`min-w-0 flex-1 text-xs ${active ? 'font-medium text-base-foreground' : 'text-medium-foreground'}`}>{component.name}</span>
-                {map ? <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{formatReading(map.read(component), map.unit, map.decimals)}</span> : null}
                 <span
-                  className={`w-7 shrink-0 text-right font-mono text-xs tabular-nums ${tone === 'critical' ? 'text-critical-foreground-strong' : tone === 'warning' ? 'text-warning-foreground-strong' : 'text-base-foreground'}`}
+                  className={`shrink-0 text-right font-mono text-xs tabular-nums ${tone === 'critical' ? 'text-critical-foreground-strong' : tone === 'warning' ? 'text-warning-foreground-strong' : 'text-base-foreground'}`}
                 >
                   {component.health}
                 </span>
               </span>
-              <span className="block pl-4">
+              <span className="flex items-center gap-2 pl-4">
                 <HoloAssetHealthBar health={component.health} />
+                {map ? <span className="w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted-foreground">{formatReading(map.read(component), map.unit, map.decimals)}</span> : null}
               </span>
             </>
           );
@@ -188,20 +186,18 @@ function HoloAssetReadout({ scan, mode, onPick }: { scan: number; mode: HoloAsse
                   aria-label={`${component.name}, health ${component.health}${active ? ', in the scan plane' : ''}`}
                   aria-pressed={active}
                   onClick={() => onPick(component)}
-                  className={`flex w-full flex-col gap-1 px-1 py-1.5 text-left hover:bg-[color-mix(in_oklab,var(--primary-background)_10%,transparent)] ${HOLOASSET_FOCUS}`}
+                  className={`flex w-full flex-col gap-0.5 px-1 py-1 text-left hover:bg-[color-mix(in_oklab,var(--primary-background)_10%,transparent)] ${HOLOASSET_FOCUS}`}
                 >
                   {body}
                 </button>
               ) : (
-                <div className="flex flex-col gap-1 px-1 py-1.5">{body}</div>
+                <div className="flex flex-col gap-0.5 px-1 py-1">{body}</div>
               )}
             </li>
           );
         })}
       </ul>
-      <p className="flex justify-end gap-1 text-xs text-muted-foreground">
-        <span>Right column: health, 0 to 100</span>
-      </p>
+      <p className="shrink-0 text-right text-xs text-muted-foreground">Figure and bar: health, 0 to 100</p>
     </BracketFrame>
   );
 }
@@ -210,7 +206,7 @@ function HoloAssetDiagnosis({ onLocate }: { onLocate?: () => void }) {
   const order = WORK_ORDERS.find((candidate) => candidate.assetId === HOLOASSET_ASSET_ID);
 
   return (
-    <BracketFrame title="Diagnosis" meta="Fault located" tone="critical" className="w-full" bodyClassName="gap-3">
+    <BracketFrame title="Diagnosis" meta="Fault located" tone="critical" className="max-h-full w-full" bodyClassName="gap-3 overflow-y-auto">
       <div className="flex items-start gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <p className="text-sm font-medium text-base-foreground">{HOLOASSET_DIAGNOSIS.finding}</p>
@@ -218,8 +214,8 @@ function HoloAssetDiagnosis({ onLocate }: { onLocate?: () => void }) {
         </div>
         <ArcReadout value={HOLOASSET_DIAGNOSIS.confidence} label="Confidence" unit="%" tone="critical" className="w-20" />
       </div>
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">Drive-end vibration, 6 hours to the trip</span>
+      <div className="flex shrink-0 flex-col gap-1">
+        <span className="text-xs text-muted-foreground">Vibration, 6 hours to the trip</span>
         <NeonSparkline values={HOLOASSET_VIBRATION_TREND} label="Drive-end vibration, 6 hours to the trip" tone="critical" limit={11} unit="mm/s" height={44} />
       </div>
       <div className="flex flex-col gap-1">
@@ -346,8 +342,7 @@ type HoloAssetInitial = { mode?: HoloAssetMode; scan?: number };
 
 function HoloAssetScan({ initial = {}, still = false }: { initial?: HoloAssetInitial; still?: boolean }) {
   const [mode, setMode] = useState<HoloAssetMode>(initial.mode ?? 'structure');
-  const [scan, setScan] = useState(initial.scan ?? 0.2);
-  const [auto, setAuto] = useState(!still);
+  const [{ scan, auto }, dispatch] = useReducer(scanReducer, { scan: initial.scan ?? 0.2, auto: !still });
   const [engaged, setEngaged] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const { scope, colors, ready } = useHoloAssetColors(mode);
@@ -357,10 +352,7 @@ function HoloAssetScan({ initial = {}, still = false }: { initial?: HoloAssetIni
   // Sweep and turn pause while someone is on the screen, so what they read holds still.
   const sweeping = auto && canMove && !engaged;
 
-  const moveTo = (fraction: number) => {
-    setAuto(false);
-    setScan(Math.min(1, Math.max(0, fraction)));
-  };
+  const moveTo = (fraction: number) => dispatch({ type: 'moveTo', fraction });
 
   if (!asset) return null;
 
@@ -391,12 +383,12 @@ function HoloAssetScan({ initial = {}, still = false }: { initial?: HoloAssetIni
               parts={HOLOASSET_PARTS}
               colors={colors}
               faultId={HOLOASSET_FAULT_ID}
-              fault={{ title: 'Drive-end bearing', detail: `Fault · ${HOLOASSET_DIAGNOSIS.confidence}% confidence`, onClick: fault ? () => moveTo(holoAssetScanFor(fault)) : undefined }}
+              fault={{ title: 'Drive-end bearing', detail: `Fault · ${HOLOASSET_DIAGNOSIS.confidence}%`, reach: 64, onClick: fault ? () => moveTo(holoAssetScanFor(fault)) : undefined }}
               scan={scan}
               autoScan={sweeping}
-              onScanChange={setScan}
+              onScanChange={(fraction) => dispatch({ type: 'sweep', fraction })}
               rotate={canMove && !engaged}
-              insets={{ top: 40, bottom: 96, left: 250, right: 280 }}
+              insets={{ top: 40, bottom: 96, left: 270, right: 300 }}
               padding={0.98}
             />
           ) : null}
@@ -418,10 +410,10 @@ function HoloAssetScan({ initial = {}, still = false }: { initial?: HoloAssetIni
         </div>
 
         <div className="flex min-h-0 flex-1 items-start justify-between gap-3">
-          <div className="pointer-events-auto flex max-h-full min-h-0 w-60 shrink-0">
+          <div className="pointer-events-auto flex max-h-full min-h-0 w-64 shrink-0">
             <HoloAssetReadout scan={scan} mode={mode} onPick={(component) => moveTo(holoAssetScanFor(component))} />
           </div>
-          <div className="pointer-events-auto flex max-h-full min-h-0 w-64 shrink-0 overflow-y-auto">
+          <div className="pointer-events-auto flex max-h-full min-h-0 w-72 shrink-0">
             <HoloAssetDiagnosis onLocate={fault ? () => moveTo(holoAssetScanFor(fault)) : undefined} />
           </div>
         </div>
@@ -433,7 +425,7 @@ function HoloAssetScan({ initial = {}, still = false }: { initial?: HoloAssetIni
             <span className="shrink-0 text-xs uppercase tracking-wider text-muted-foreground">Scan</span>
             <Slider aria-label="Scan plane position, bottom to top" value={[Math.round(scan * 100)]} min={0} max={100} step={1} onValueChange={(value) => moveTo((value[0] ?? 0) / 100)} />
             {canMove ? (
-              <Switch label="Auto" checked={auto} onCheckedChange={(checked) => setAuto(checked)} />
+              <Switch label="Auto" checked={auto} onCheckedChange={(checked) => dispatch({ type: 'setAuto', auto: checked })} />
             ) : (
               <span className="shrink-0 text-xs text-muted-foreground">{still ? 'Manual' : 'Manual: reduced motion'}</span>
             )}
@@ -507,9 +499,9 @@ function HoloAssetPartCallout() {
         <SceneCanvas label="Drive-end bearing between seal and coupling, with a fault callout on a leader line">
           <StillScene>
             <SceneLights intensity={0.8} />
-            <CameraRig target={frameBounds({ min: [-2.6, 6.4, -1], max: [1, 8.8, 1] }, { padding: 1.1, aspect: 1 })} minDistance={3} maxDistance={40} enablePan={false} />
+            <CameraRig target={frameBounds({ min: [-1, 6.4, -1], max: [3.4, 8.8, 1] }, { padding: 1.1, aspect: 1 })} minDistance={3} maxDistance={40} enablePan={false} />
             {ready ? <WireframeModel parts={bearing} colors={colors} faultId={HOLOASSET_FAULT_ID} /> : null}
-            <FaultCallout position={[0, 7.4, 0]} title="Drive-end bearing" detail="Fault · 94% confidence" side="left" reach={56} />
+            <FaultCallout position={[0, 7.4, 0]} title="Drive-end bearing" detail="Fault · 94%" reach={40} />
           </StillScene>
         </SceneCanvas>
       </div>

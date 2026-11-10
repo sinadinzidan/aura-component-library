@@ -13,6 +13,8 @@ import type { GlobeView } from './geo';
 export type GlobeControlsProps = {
   /** The place the camera looks straight down on, and its distance from the centre. Change it and the camera swings there. */
   view: GlobeView;
+  /** Change it to fly to `view` again after the user has dragged away from it. */
+  viewKey?: number | string;
   /** Turn slowly around the axis while idle. Never under reduced motion. */
   spinning?: boolean;
   /** Seconds per full turn while spinning. */
@@ -32,7 +34,7 @@ type Flight = { from: Vec3; to: Vec3; startedAt: number | null };
  * fly-to that swings around the globe along a great circle instead of cutting through it. The
  * camera always looks at the centre. Grabbing the globe cancels a flight and reports `onInteract`.
  */
-export function GlobeControls({ view, spinning = false, spinPeriod = 180, duration = 1.4, minDistance = 12, maxDistance = 60, onInteract }: GlobeControlsProps) {
+export function GlobeControls({ view, viewKey, spinning = false, spinPeriod = 180, duration = 1.4, minDistance = 12, maxDistance = 60, onInteract }: GlobeControlsProps) {
   const controls = useRef<OrbitControlsImpl>(null);
   const flight = useRef<Flight | null>(null);
   const lastSpin = useRef<number | null>(null);
@@ -70,7 +72,7 @@ export function GlobeControls({ view, spinning = false, spinPeriod = 180, durati
     invalidate();
     // `place` only touches refs and the camera; the view's values carry the change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lat, lon, distance, reducedMotion, duration, camera, invalidate]);
+  }, [lat, lon, distance, viewKey, reducedMotion, duration, camera, invalidate]);
 
   useEffect(() => {
     lastSpin.current = null;

@@ -1,4 +1,4 @@
-import { partRadius, partSlice, quantizeFraction, scanHeight, scanRange, sectionRadiusAt, slicesAt, sweepFraction } from './scanSweep';
+import { partRadius, partSlice, quantizeFraction, scanHeight, scanRange, scanReducer, sectionRadiusAt, slicesAt, sweepFraction } from './scanSweep';
 import type { WireframePart } from './scanSweep';
 
 const MOTOR: WireframePart = { id: 'motor', shape: 'cylinder', center: [0, 2, 0], height: 2, radius: 1.2 };
@@ -99,5 +99,30 @@ describe(quantizeFraction.name, () => {
   it('clamps to 0–1', () => {
     expect(quantizeFraction(1.4)).toBe(1);
     expect(quantizeFraction(-0.2)).toBe(0);
+  });
+});
+
+describe(scanReducer.name, () => {
+  it('follows the sweep while it runs', () => {
+    expect(scanReducer({ scan: 0.2, auto: true }, { type: 'sweep', fraction: 0.31 })).toEqual({ scan: 0.31, auto: true });
+  });
+
+  it('stops the sweep when the plane is moved by hand', () => {
+    expect(scanReducer({ scan: 0.2, auto: true }, { type: 'moveTo', fraction: 0.57 })).toEqual({ scan: 0.57, auto: false });
+  });
+
+  it('ignores a late sweep report after a manual move', () => {
+    const moved = scanReducer({ scan: 0.2, auto: true }, { type: 'moveTo', fraction: 0.57 });
+
+    expect(scanReducer(moved, { type: 'sweep', fraction: 0.21 })).toBe(moved);
+  });
+
+  it('clamps positions to the model', () => {
+    expect(scanReducer({ scan: 0.2, auto: false }, { type: 'moveTo', fraction: 1.4 }).scan).toBe(1);
+    expect(scanReducer({ scan: 0.2, auto: true }, { type: 'sweep', fraction: -0.3 }).scan).toBe(0);
+  });
+
+  it('switches the sweep on and off without moving the plane', () => {
+    expect(scanReducer({ scan: 0.4, auto: false }, { type: 'setAuto', auto: true })).toEqual({ scan: 0.4, auto: true });
   });
 });

@@ -1,4 +1,4 @@
-import { findLevel, findPlatformEquipment, levelEnvelope, platformCameraTarget, toExplodeLevels } from './platformLayout';
+import { featureBounds, findLevel, findPlatformEquipment, levelEnvelope, platformCameraTarget, toExplodeLevels } from './platformLayout';
 import type { PlatformLayout } from './platformLayout';
 
 const LAYOUT: PlatformLayout = {
@@ -26,6 +26,33 @@ const LAYOUT: PlatformLayout = {
     },
   ],
 };
+
+describe(featureBounds.name, () => {
+  it('boxes a tower around its position', () => {
+    expect(featureBounds({ id: 'd', kind: 'derrick', position: [6, 0, 0] })).toEqual({ min: [1.5, 0, -4.5], max: [10.5, 30, 4.5] });
+  });
+
+  it('reaches east for an unrotated boom', () => {
+    const bounds = featureBounds({ id: 'f', kind: 'flare-boom', position: [20, 1, 0] });
+
+    expect(bounds.min[0]).toBeCloseTo(18.5);
+    expect(bounds.max[0]).toBeCloseTo(45.5);
+  });
+
+  it('reaches west for a boom turned half a circle', () => {
+    const bounds = featureBounds({ id: 'f', kind: 'flare-boom', position: [-20, 1, 0], rotationY: Math.PI });
+
+    expect(bounds.min[0]).toBeCloseTo(-45.5);
+    expect(bounds.max[0]).toBeCloseTo(-18.5);
+  });
+
+  it('reaches north for a boom turned a quarter circle', () => {
+    const bounds = featureBounds({ id: 'c', kind: 'crane', position: [0, 0, 0], rotationY: Math.PI / 2 });
+
+    expect(bounds.min[2]).toBeCloseTo(-19);
+    expect(bounds.max[2]).toBeCloseTo(3);
+  });
+});
 
 describe(levelEnvelope.name, () => {
   it('runs the jacket from below the waterline to its top', () => {

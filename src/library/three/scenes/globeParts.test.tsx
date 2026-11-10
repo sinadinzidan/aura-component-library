@@ -86,7 +86,7 @@ describe(SiteMarker.name, () => {
     const view = await renderScene(<SiteMarker lat={60} lon={5} size={0.3} />);
     const discs = withGeometry(view.objects(), 'CircleGeometry');
 
-    expect(discs.map((disc) => geometryParameter(disc, 'radius'))).toEqual([0.3 * 2.4, 0.3]);
+    expect(discs.map((disc) => geometryParameter(disc, 'radius'))).toEqual([0.3 * 2.2, 0.3]);
     expect(withGeometry(view.objects(), 'RingGeometry')).toHaveLength(1);
 
     await view.unmount();
@@ -101,10 +101,29 @@ describe(SiteMarker.name, () => {
   });
 
   it('adds a second ring when selected and grows', async () => {
-    const view = await renderScene(<SiteMarker lat={60} lon={5} selected />);
+    const plain = await renderScene(<SiteMarker lat={60} lon={5} constantSize={false} />);
+    await plain.advance();
+    const view = await renderScene(<SiteMarker lat={60} lon={5} constantSize={false} selected />);
+    await view.advance();
 
     expect(withGeometry(view.objects(), 'RingGeometry')).toHaveLength(2);
+    expect(plain.scene.children[0].scale.x).toBe(1);
     expect(view.scene.children[0].scale.x).toBeGreaterThan(1);
+
+    await plain.unmount();
+    await view.unmount();
+  });
+
+  it('grows with camera distance to hold its size on screen', async () => {
+    const view = await renderScene(<SiteMarker lat={0} lon={0} globeRadius={10} />);
+    view.camera.position.set(0, 0, 22);
+    await view.advance();
+    const near = view.scene.children[0].scale.x;
+    view.camera.position.set(0, 0, 40);
+    await view.advance();
+
+    expect(near).toBeCloseTo(1, 1);
+    expect(view.scene.children[0].scale.x).toBeGreaterThan(near * 1.8);
 
     await view.unmount();
   });
@@ -208,6 +227,18 @@ describe(GlobeControls.name, () => {
     expect(view.camera.position.x).toBeCloseTo(x);
     expect(view.camera.position.y).toBeCloseTo(y);
     expect(view.camera.position.z).toBeCloseTo(z);
+
+    await view.unmount();
+  });
+
+  it('flies back to the same view when its key changes', async () => {
+    const overview = { lat: 0, lon: 0, distance: 30 };
+    const view = await renderScene(<GlobeControls view={overview} viewKey={0} />, { reducedMotion: true });
+    view.camera.position.set(30, 0, 0);
+    await view.rerender(<GlobeControls view={overview} viewKey={1} />);
+
+    expect(view.camera.position.x).toBeCloseTo(0);
+    expect(view.camera.position.z).toBeCloseTo(30);
 
     await view.unmount();
   });

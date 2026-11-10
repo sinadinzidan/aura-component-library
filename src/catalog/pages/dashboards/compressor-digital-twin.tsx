@@ -15,7 +15,8 @@ import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import { ThemeScope } from '../../../library/themes/ThemeScope';
 import { CameraRig } from '../../../library/three/CameraRig';
-import { frameBounds } from '../../../library/three/cameraTargets';
+import { addVec3, boundsCenter, boundsRadius, distanceToFit, normalizeVec3, scaleVec3 } from '../../../library/three/cameraTargets';
+import type { Bounds, CameraTarget, Vec3 } from '../../../library/three/cameraTargets';
 import { Ground } from '../../../library/three/Ground';
 import { assemblyLeafIds, findAssembly, isAssemblyActive } from '../../../library/three/models/assemblyTree';
 import type { AssemblyNode } from '../../../library/three/models/assemblyTree';
@@ -145,6 +146,16 @@ function compTwin3dLimits(sensor: Sensor): TrendLimit[] {
     limits.push({ value: sensor.lowLimit, label: `Low ${formatLimit(sensor.lowLimit, sensor.decimals)}`, tone: 'warning' });
   }
   return limits;
+}
+
+/** From the front and a little towards the driver, so the shaft runs across the screen. */
+const COMPTWIN3D_VIEW_DIRECTION: Vec3 = [0.28, 0.5, 0.82];
+
+/** The camera pose that fits a box into the tall, narrow scene between the two panels. */
+function compTwin3dCamera(bounds: Bounds, padding: number): CameraTarget {
+  const lookAt = boundsCenter(bounds);
+  const distance = distanceToFit(boundsRadius(bounds), 40, 0.95) * padding;
+  return { position: addVec3(lookAt, scaleVec3(normalizeVec3(COMPTWIN3D_VIEW_DIRECTION), distance)), lookAt };
 }
 
 function compTwin3dAssemblyName(id: string): string {
@@ -403,7 +414,7 @@ function CompTwin3dTwin({ initial = {}, still = false }: { initial?: CompTwin3dI
   const hoveredIds = hoveredId ? assemblyLeafIds(COMPRESSOR_TRAIN_TREE, hoveredId) : [];
   // Two framings, not one per slider step: the camera flies once when the train starts to come apart.
   const bounds = explodedBounds(COMPRESSOR_TRAIN_BOUNDS, COMPRESSOR_TRAIN_EXPLODE, explode > 4 ? 1 : 0);
-  const target = bounds ? frameBounds(bounds, { aspect: 0.95, padding: explode > 4 ? 0.7 : 0.78 }) : null;
+  const target = bounds ? compTwin3dCamera(bounds, explode > 4 ? 1 : 0.9) : null;
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape') return;
@@ -469,7 +480,6 @@ function CompTwin3dTwin({ initial = {}, still = false }: { initial?: CompTwin3dI
             <SceneCanvas
               label={`3D model of compressor train ${asset.tag}, ${explode === 0 ? 'assembled' : `exploded ${explode} percent`}${sectionCut ? ', casing sectioned' : ''}, with ${COMPTWIN3D_READINGS.length} numbered measurement points`}
               fallback={<CompTwin3dFallback />}
-              onPointerMissed={() => setAssemblyId(null)}
             >
               <StillScene still={still}>
                 <SceneLights />
@@ -531,7 +541,7 @@ function CompTwin3dTwinBlueprint() {
 function CompTwin3dTwinHologram() {
   return (
     <ThemeScope preset="hologram" className="w-full">
-      <CompTwin3dTwin still initial={{ explode: 80, sectionCut: true, assemblyId: 'compressor' }} />
+      <CompTwin3dTwin still initial={{ explode: 100, sectionCut: true, assemblyId: 'rotor' }} />
     </ThemeScope>
   );
 }
@@ -685,7 +695,7 @@ function CompTwin3dPartTree() {
 
   return (
     <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex h-[34rem] w-full justify-center rounded-xl border border-default bg-base-background p-4">
+      <div className="flex h-[44rem] w-full justify-center rounded-xl border border-default bg-base-background p-4">
         <div className="flex min-h-0 w-64 flex-col overflow-hidden rounded-lg border border-default">
           <CompTwin3dPanel title="Assemblies" meta={selectedId ? `${isolated.length} isolated` : 'All shown'} className="flex-1">
             <CompTwin3dTree selectedId={selectedId} onSelect={setSelectedId} />
@@ -702,7 +712,7 @@ function CompTwin3dPartInspector() {
 
   return (
     <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex h-[34rem] w-full justify-center rounded-xl border border-default bg-base-background p-4">
+      <div className="flex h-[44rem] w-full justify-center rounded-xl border border-default bg-base-background p-4">
         <div className="flex min-h-0 w-80 flex-col overflow-hidden rounded-lg border border-default">
           <CompTwin3dPanel title={reading ? 'Reading' : 'Measurement points'} className="flex-1">
             {reading ? <CompTwin3dSensorDetail key={reading.sensor.id} reading={reading} onBack={() => setSensorId(null)} /> : <CompTwin3dReadingList onSelect={setSensorId} />}
@@ -791,7 +801,7 @@ export default definePage({
         {
           id: 'CompTwin3dTwinHologram',
           title: 'Hologram, exploded and sectioned',
-          note: 'Pick it for a review screen in a dark room, opened with the compressor isolated and the rotor out.',
+          note: 'Pick it for a review screen in a dark room, opened with the rotor pulled out of the casing and isolated.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',

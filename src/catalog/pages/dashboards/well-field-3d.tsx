@@ -257,14 +257,25 @@ function WellField3dLegend() {
   );
 }
 
-function WellField3dDepthRuler({ depth, onChange }: { depth: number; onChange: (depth: number) => void }) {
+function WellField3dDepthRuler({
+  depth,
+  onChange,
+  showInterval = true,
+  stacked = false,
+}: {
+  depth: number;
+  onChange: (depth: number) => void;
+  showInterval?: boolean;
+  /** Readout above the track instead of beside it, for narrow places. */
+  stacked?: boolean;
+}) {
   return (
-    <div className="flex w-full items-start gap-4">
+    <div className={`flex w-full gap-x-4 gap-y-2 ${stacked ? 'flex-col' : 'items-start'}`}>
       <div className="flex w-36 shrink-0 flex-col gap-0.5">
         <span className="text-xs text-muted-foreground">Cutting plane</span>
         <ValueReadout value={depth} unit="m below seabed" size="sm" />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1.5">
+      <div className={`flex min-w-0 flex-col gap-1.5 ${stacked ? 'w-full' : 'flex-1 pt-1.5'}`}>
         <Slider
           aria-label="Depth of the cutting plane in metres below the seabed"
           value={[depth]}
@@ -274,21 +285,28 @@ function WellField3dDepthRuler({ depth, onChange }: { depth: number; onChange: (
           onValueChange={(value) => onChange(value[0] ?? 0)}
         />
         <div aria-hidden="true" className="relative h-5">
-          {WELLFIELD3D_HORIZONS.map((horizon) => (
-            <span
-              key={horizon.id}
-              className="absolute top-0 flex h-5 items-end border-l border-emphasized pl-1 text-xs leading-none tabular-nums text-muted-foreground"
-              style={{ left: `${(horizon.depth / WELLFIELD3D_MAX_DEPTH) * 100}%` }}
-            >
-              {formatValue(horizon.depth)}
-            </span>
-          ))}
+          {WELLFIELD3D_HORIZONS.map((horizon, index) => {
+            const next = WELLFIELD3D_HORIZONS[index + 1];
+            // A label flips to the left of its tick when the next horizon is too close to leave it room.
+            const flip = next !== undefined && (next.depth - horizon.depth) / WELLFIELD3D_MAX_DEPTH < 0.15;
+            return (
+              <span
+                key={horizon.id}
+                className={`absolute top-0 flex h-5 items-end border-emphasized text-xs leading-none tabular-nums text-muted-foreground ${flip ? '-translate-x-full border-r pr-1' : 'border-l pl-1'}`}
+                style={{ left: `${(horizon.depth / WELLFIELD3D_MAX_DEPTH) * 100}%` }}
+              >
+                {formatValue(horizon.depth)}
+              </span>
+            );
+          })}
         </div>
       </div>
-      <dl className="hidden w-32 shrink-0 flex-col gap-0.5 xl:flex">
-        <dt className="text-xs text-muted-foreground">Interval</dt>
-        <dd className="text-sm font-medium text-base-foreground">{wellField3dInterval(depth)}</dd>
-      </dl>
+      {showInterval ? (
+        <dl className="flex w-28 shrink-0 flex-col gap-0.5">
+          <dt className="text-xs text-muted-foreground">Interval</dt>
+          <dd className="text-sm font-medium text-base-foreground">{wellField3dInterval(depth)}</dd>
+        </dl>
+      ) : null}
     </div>
   );
 }
@@ -456,7 +474,6 @@ function WellField3dField({ initial = {}, still = false }: { initial?: WellField
           <SceneCanvas
             label={`3D model of the Nordkapp Vest well field: ${WELLFIELD3D_WELLS.length} wells below a subsea template, cutting plane at ${formatValue(depth)} metres below the seabed${selected ? `, ${selected.well.name} selected` : ''}`}
             fallback={<WellField3dFallback />}
-            onPointerMissed={() => setSelectedId(null)}
           >
             <StillScene still={still}>
               <WellFieldScene
@@ -528,7 +545,7 @@ function WellField3dFieldEmber() {
 function WellField3dFieldHologram() {
   return (
     <ThemeScope preset="hologram" className="w-full">
-      <WellField3dField still initial={{ depth: 2440, selectedId: 'a03', view: 'section' }} />
+      <WellField3dField still initial={{ depth: 2440, selectedId: 'a05', view: 'section' }} />
     </ThemeScope>
   );
 }
@@ -672,7 +689,7 @@ function WellField3dPartDepthRuler() {
     <WellField3dPanelFrame>
       <div className="flex w-full flex-col gap-4">
         <div className="rounded-lg border border-default bg-card-background px-4 py-3">
-          <WellField3dDepthRuler depth={depth} onChange={setDepth} />
+          <WellField3dDepthRuler depth={depth} onChange={setDepth} showInterval={false} stacked />
         </div>
         <ul aria-label="Horizons" className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
           {WELLFIELD3D_HORIZONS.map((horizon) => (

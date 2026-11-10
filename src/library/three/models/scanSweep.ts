@@ -61,3 +61,24 @@ export function scanHeight(range: { min: number; max: number }, fraction: number
 export function quantizeFraction(fraction: number, steps = 100): number {
   return Math.round(Math.min(1, Math.max(0, fraction)) * steps) / steps;
 }
+
+/** Where the scan plane is and whether it sweeps by itself. */
+export type ScanState = { scan: number; auto: boolean };
+
+export type ScanAction =
+  /** The sweep reports its position. Ignored once the sweep is off, so a late report cannot undo a manual move. */
+  | { type: 'sweep'; fraction: number }
+  /** Someone placed the plane by hand: the sweep stops there. */
+  | { type: 'moveTo'; fraction: number }
+  | { type: 'setAuto'; auto: boolean };
+
+export function scanReducer(state: ScanState, action: ScanAction): ScanState {
+  switch (action.type) {
+    case 'sweep':
+      return state.auto ? { ...state, scan: Math.min(1, Math.max(0, action.fraction)) } : state;
+    case 'moveTo':
+      return { scan: Math.min(1, Math.max(0, action.fraction)), auto: false };
+    case 'setAuto':
+      return { ...state, auto: action.auto };
+  }
+}

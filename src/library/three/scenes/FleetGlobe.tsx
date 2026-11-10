@@ -40,6 +40,8 @@ export type FleetGlobeProps = {
   radius?: number;
   /** Where the camera is. Change it to swing the globe; see `GlobeControls`. */
   view: GlobeView;
+  /** Change it to fly back to `view` after the user has dragged away from it. */
+  viewKey?: number | string;
   /** Slow idle spin. Stop it when the user interacts. */
   spinning?: boolean;
   selectedId?: string | null;
@@ -58,19 +60,19 @@ export type FleetGlobeProps = {
  * routes between them. Only the selected site is labelled, so labels never pile up — list the
  * sites beside the canvas. Selection and camera are controlled. Render it inside `SceneCanvas`.
  */
-export function FleetGlobe({ sites, routes = [], outlines = [], radius = 10, view, spinning = false, selectedId = null, onSelect, onInteract, onClear, insets }: FleetGlobeProps) {
+export function FleetGlobe({ sites, routes = [], outlines = [], radius = 10, view, viewKey, spinning = false, selectedId = null, onSelect, onInteract, onClear, insets }: FleetGlobeProps) {
   const { top = 0, right = 0, bottom = 0, left = 0 } = insets ?? {};
 
   return (
     <>
       <ambientLight intensity={1.5} />
       <directionalLight position={[radius * 2, radius * 3, radius * 4]} intensity={1.6} />
-      <GlobeControls view={view} spinning={spinning} minDistance={radius * 1.25} maxDistance={radius * 5} onInteract={onInteract} />
+      <GlobeControls view={view} viewKey={viewKey} spinning={spinning} minDistance={radius * 1.25} maxDistance={radius * 5} onInteract={onInteract} />
       <ViewInsets top={top} right={right} bottom={bottom} left={left} />
       <Globe radius={radius} outlines={outlines} onClick={onClear} />
 
       {routes.map((route) => (
-        <GreatCircleArc key={route.id} from={route.from} to={route.to} globeRadius={radius} quiet={route.quiet} flow={route.flow} dimmed={route.dimmed} width={route.quiet ? 1 : 1.75} />
+        <GreatCircleArc key={route.id} from={route.from} to={route.to} globeRadius={radius} quiet={route.quiet} flow={route.flow} dimmed={route.dimmed} width={route.quiet ? 1.25 : 2} />
       ))}
 
       {sites.map((site) => {

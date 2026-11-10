@@ -125,7 +125,7 @@ export type FarmFraming = {
 export function farmCameraTarget(bounds: Bounds, framing: FarmFraming = {}): CameraTarget {
   const { plan = false, aspect = 1.6, fov = 40 } = framing;
   const lookAt = boundsCenter(bounds);
-  const distance = distanceToFit(boundsRadius(bounds), fov, aspect) * (plan ? 0.7 : 0.62);
+  const distance = distanceToFit(boundsRadius(bounds), fov, aspect) * (plan ? 0.56 : 0.62);
   const direction = normalizeVec3(plan ? VIEW_DIRECTIONS.top : FARM_VIEW_DIRECTION);
   return { position: addVec3(lookAt, scaleVec3(direction, distance)), lookAt };
 }

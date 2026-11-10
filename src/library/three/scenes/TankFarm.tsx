@@ -57,7 +57,7 @@ export type TankFarmProps = {
   /** `top` is the plan view; anything else is the 3D view from the south. */
   view?: CameraView;
   showLabels?: boolean;
-  /** Extra height given to every other label, so neighbours in a row do not collide. */
+  /** Distance every other label is pushed away, so neighbours in a row do not collide. */
   labelStagger?: number;
   /** Pixels that overlays cover on each edge of the canvas. */
   insets?: ViewInsetsValue;
@@ -71,7 +71,7 @@ export type TankFarmProps = {
  * transferring. Selecting a tank dims the others. Everything shown is a prop, so a time scrubber
  * can drive levels and flows from `levelsAt`. Render it inside `SceneCanvas`.
  */
-export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, selectedId = null, onSelect, view = 'perspective', showLabels = true, labelStagger = 8, insets, children }: TankFarmProps) {
+export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, selectedId = null, onSelect, view = 'perspective', showLabels = true, labelStagger = 11, insets, children }: TankFarmProps) {
   const { palette } = useSceneEnvironment();
   const size = useThree((state) => state.size);
   const fov = useThree((state) => ('fov' in state.camera && typeof state.camera.fov === 'number' ? state.camera.fov : 40));
@@ -85,6 +85,13 @@ export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, s
   const header = useMemo(() => headerRoute(tanks, manifold), [tanks, manifold]);
   const branches = useMemo(() => tanks.map((tank) => ({ id: tank.id, points: branchRoute(tank, manifold) })), [tanks, manifold]);
   const hasSelection = selectedId !== null;
+  // Every other label is pushed away from its neighbours: upwards in 3D, northwards seen from above.
+  const labelPosition = (tank: FarmTank, index: number): Vec3 => {
+    const push = (index % 2) * labelStagger;
+    if (view !== 'top') return tankLabelAnchor(tank, 1.2 + push);
+    const [x, y, z] = tankLabelAnchor(tank, 1.2);
+    return [x, y, z - push * 0.6];
+  };
 
   return (
     <>
@@ -111,7 +118,7 @@ export function TankFarm({ tanks, bunds = [], manifold, flows = [], plot, sea, s
             <IndicatorRing position={position} radius={tank.diameter / 2 + 2.2} width={1.1} color={ring.color} opacity={0.95 * ring.opacity} dimmed={isDimmed} />
             {showLabels ? (
               <SceneLabel
-                position={tankLabelAnchor(tank, 1.2 + (index % 2) * labelStagger)}
+                position={labelPosition(tank, index)}
                 tag={tank.tag}
                 value={tank.value}
                 tone={tank.tone}

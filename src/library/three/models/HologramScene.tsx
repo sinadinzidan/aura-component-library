@@ -23,7 +23,7 @@ export type HologramSceneProps = {
   colors?: Readonly<Record<string, string>>;
   faultId?: string | null;
   /** Callout on the faulted part. */
-  fault?: { title: string; detail?: string; onClick?: () => void };
+  fault?: { title: string; detail?: string; /** Length of the leader line in pixels. */ reach?: number; onClick?: () => void };
   /** Scan position, 0 (bottom) to 1 (top). In auto mode it is the starting point and follows `onScanChange`. */
   scan: number;
   /** Sweep the plane up and down by itself. Ignored under reduced motion. */
@@ -107,7 +107,7 @@ export function HologramScene({
       <group ref={plane} position={[0, height, 0]}>
         <ScanPlane radius={radius * 1.45} sectionRadius={sectionRadiusAt(slices, height)} />
       </group>
-      {faultAnchor && fault ? <FaultCallout position={faultAnchor} title={fault.title} detail={fault.detail} onClick={fault.onClick} /> : null}
+      {faultAnchor && fault ? <FaultCallout position={faultAnchor} title={fault.title} detail={fault.detail} reach={fault.reach} onClick={fault.onClick} /> : null}
     </>
   );
 }

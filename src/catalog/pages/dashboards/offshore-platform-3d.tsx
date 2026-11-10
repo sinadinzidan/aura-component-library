@@ -47,7 +47,7 @@ import source from './offshore-platform-3d.tsx?raw';
 const PLATFORM3D_LAYOUT: PlatformLayout = {
   size: [40, 26],
   gap: 11,
-  draught: 5,
+  draught: 10,
   levels: [
     { id: 'jacket', name: 'Jacket', kind: 'jacket', elevation: 12, height: 14, equipment: [] },
     {
@@ -502,7 +502,7 @@ function Platform3dExperience({ initial = INITIAL_PLATFORM_STATE, still = false 
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside aria-label="Decks and separation" className="flex w-44 shrink-0 flex-col gap-4 border-r border-default p-3">
+        <aside aria-label="Decks and separation" className="flex w-48 shrink-0 flex-col gap-4 border-r border-default p-3">
           <div className="flex flex-col gap-2">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Decks</span>
             <Platform3dDeckSelector levelId={state.levelId} onIsolate={(levelId) => dispatch({ type: 'isolate', levelId })} />
@@ -630,7 +630,7 @@ function Platform3dPartDerrick() {
 function Platform3dPartHelideck() {
   return (
     <Platform3dStage label="Living quarters with a helideck on the roof">
-      <TurntableStage subjectSize={[18, 15, 18]} padding={1}>
+      <TurntableStage subjectSize={[18, 15, 18]} padding={1.2}>
         <LivingQuarters position={[-2, 0, 0]} />
         <Helideck position={[2.5, 13.7, 0]} />
       </TurntableStage>
@@ -641,7 +641,7 @@ function Platform3dPartHelideck() {
 function Platform3dPartDeck() {
   return (
     <Platform3dStage label="Deck module carrying a separator, a compressor and two pumps">
-      <TurntableStage subjectSize={[32, 9, 20]} padding={0.85}>
+      <TurntableStage subjectSize={[32, 9, 20]} padding={0.62}>
         <group position={[0, 0.7, 0]}>
           <DeckModule size={[30, 7, 18]}>
             <HorizontalVessel position={[-8, 0, -4]} scale={0.8} tone="warning" />
@@ -658,7 +658,7 @@ function Platform3dPartDeck() {
 function Platform3dPartBooms() {
   return (
     <Platform3dStage label="Flare boom with a lit flare and a pedestal crane on a deck edge">
-      <TurntableStage subjectSize={[44, 22, 14]} padding={0.8}>
+      <TurntableStage subjectSize={[44, 22, 14]} padding={0.6}>
         <group position={[8, 0.7, 0]}>
           <DeckModule size={[22, 0, 12]} handrail>
             <FlareBoom position={[-11, 1, 0]} rotationY={Math.PI} length={22} />
@@ -680,7 +680,7 @@ function Platform3dPartExplode() {
         <ExplodeControl amount={amount} onAmountChange={setAmount} onToggle={() => setAmount(amount > 0.5 ? 0 : 1)} noun="modules" className="w-40 shrink-0" />
         <div className="min-w-0 flex-1">
           <SceneCanvas label={`Three stacked modules, ${Math.round(amount * 100)} percent separated`}>
-            <TurntableStage subjectSize={[22, 26, 14]} padding={0.95}>
+            <TurntableStage subjectSize={[22, 26, 14]} padding={0.72}>
               {offsets.map((offset, index) => (
                 <ExplodeLift key={index} y={offset}>
                   <group position={[0, 0.7 + index * 4.5, 0]}>
@@ -706,12 +706,12 @@ function Platform3dPartDecks() {
 
   return (
     <ThemeScope preset="hologram" className="w-full">
-      <div className="flex h-80 w-full gap-4 rounded-xl border border-default bg-base-background p-3">
+      <div className="flex w-full gap-4 rounded-xl border border-default bg-base-background p-3">
         <div className="flex w-36 shrink-0 flex-col gap-2">
           <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Decks</span>
           <Platform3dDeckSelector levelId={levelId} onIsolate={toggle} />
         </div>
-        <div className="min-w-0 flex-1 overflow-y-auto border-l border-default pl-4">
+        <div className="min-w-0 flex-1 border-l border-default px-4">
           <Platform3dManningStrip levelId={levelId} onIsolate={toggle} />
         </div>
       </div>

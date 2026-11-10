@@ -18,7 +18,7 @@ export type GreatCircleArcProps = {
   globeRadius?: number;
   /** Line width in pixels. */
   width?: number;
-  /** Colour: the accent by default, a status tone for a route in that state. */
+  /** Colour: the scene's highlight colour by default, so routes stand apart from coastlines; a status tone for a route in that state. */
   tone?: SceneTone;
   /** A quieter line, for secondary routes. */
   quiet?: boolean;
@@ -39,8 +39,8 @@ export function GreatCircleArc({ from, to, globeRadius = 10, width = 1.5, tone, 
   const points = useMemo(() => greatCircleArc(from, to, { radius: globeRadius * 1.006, segments: 40 }), [from, to, globeRadius]);
   const tuples = useMemo(() => points.map(toTuple), [points]);
   const total = useMemo(() => polylineLength(points), [points]);
-  const color = palette[tone ?? 'accent'].color;
-  const opacity = dimmed ? 0.12 : quiet ? 0.4 : 0.95;
+  const color = palette[tone ?? 'highlight'].color;
+  const opacity = dimmed ? 0.12 : quiet ? 0.45 : 1;
   const animate = flow && !reducedMotion && !dimmed && period > 0;
 
   useFrame((state) => {
@@ -56,8 +56,8 @@ export function GreatCircleArc({ from, to, globeRadius = 10, width = 1.5, tone, 
       <Line points={tuples} color={color} lineWidth={width} transparent opacity={opacity} depthWrite={false} />
       {flow ? (
         <mesh ref={bead} position={tuples[Math.floor(tuples.length / 2)]}>
-          <sphereGeometry args={[globeRadius * 0.008, 10, 8]} />
-          <meshBasicMaterial color={palette.highlight.color} transparent opacity={dimmed ? 0.15 : 1} />
+          <sphereGeometry args={[globeRadius * 0.006, 10, 8]} />
+          <meshBasicMaterial color={palette.accent.color} transparent opacity={dimmed ? 0.15 : 1} />
         </mesh>
       ) : null}
     </group>

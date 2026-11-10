@@ -41,19 +41,30 @@ export type PlatformLayout = {
   levels: readonly PlatformLevel[];
 };
 
-/** Space each feature takes around its position: x, y and z extents as [min, max]. Rotation is ignored. */
-const FEATURE_EXTENTS: Record<PlatformFeatureKind, { x: readonly [number, number]; y: readonly [number, number]; z: readonly [number, number] }> = {
-  derrick: { x: [-4.5, 4.5], y: [0, 30], z: [-4.5, 4.5] },
-  crane: { x: [-3, 16], y: [0, 22], z: [-3, 3] },
-  helideck: { x: [-7.5, 7.5], y: [-4, 0.5], z: [-7.5, 7.5] },
-  'flare-boom': { x: [-24, 24], y: [0, 19], z: [-24, 24] },
-  quarters: { x: [-5.5, 5.5], y: [0, 10.5], z: [-9.5, 9.5] },
+/**
+ * Space each feature takes around its position. `reach` is how far it sticks out along its own
+ * +x axis (a boom, a jib), which `rotationY` turns; `radius` is its footprint around the position.
+ */
+const FEATURE_EXTENTS: Record<PlatformFeatureKind, { radius: number; reach: number; y: readonly [number, number] }> = {
+  derrick: { radius: 4.5, reach: 0, y: [0, 30] },
+  crane: { radius: 3, reach: 16, y: [0, 22] },
+  helideck: { radius: 7.5, reach: 0, y: [-4, 0.5] },
+  'flare-boom': { radius: 1.5, reach: 24, y: [0, 19] },
+  quarters: { radius: 9.5, reach: 0, y: [0, 10.5] },
 };
 
-function featureBounds(feature: PlatformFeature): Bounds {
+/** Box around a feature, relative to the deck floor. */
+export function featureBounds(feature: PlatformFeature): Bounds {
   const extents = FEATURE_EXTENTS[feature.kind];
   const [x, y, z] = feature.position;
-  return { min: [x + extents.x[0], y + extents.y[0], z + extents.z[0]], max: [x + extents.x[1], y + extents.y[1], z + extents.z[1]] };
+  const angle = feature.rotationY ?? 0;
+  // A rotation about y turns local +x towards −z.
+  const tipX = Math.cos(angle) * extents.reach;
+  const tipZ = -Math.sin(angle) * extents.reach;
+  return {
+    min: [x + Math.min(0, tipX) - extents.radius, y + extents.y[0], z + Math.min(0, tipZ) - extents.radius],
+    max: [x + Math.max(0, tipX) + extents.radius, y + extents.y[1], z + Math.max(0, tipZ) + extents.radius],
+  };
 }
 
 /** World-space box around a level when assembled: its deck, its equipment and its features. */
@@ -107,7 +118,7 @@ export function platformCameraTarget(layout: PlatformLayout, framing: PlatformFr
     view: 'perspective',
     aspect: framing.aspect,
     fov: framing.fov,
-    padding: level ? (isJacket ? 0.9 : 0.74) : 0.8,
+    padding: level ? (isJacket ? 0.95 : 1.08) : 0.92,
     minDistance: 30,
   });
 }

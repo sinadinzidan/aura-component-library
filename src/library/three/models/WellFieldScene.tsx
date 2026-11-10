@@ -158,10 +158,12 @@ export function WellFieldScene({
         );
       })}
 
-      {layers.labels && layers.horizons
-        ? horizons.map((horizon) => (
-            <SceneLabel key={horizon.id} position={[-half, -horizonDepthAt(horizon, -halfExtent, -halfExtent) * scale, half]} tag={horizon.name} dimmed />
-          ))
+      {/* Horizon names sit on the near edge; from straight above they would stack, so the plan view leaves them out. */}
+      {layers.labels && layers.horizons && view !== 'plan'
+        ? horizons.map((horizon) => {
+            const east = view === 'section' ? -halfExtent * 0.6 : -halfExtent;
+            return <SceneLabel key={horizon.id} position={[east * scale, -horizonDepthAt(horizon, east, -halfExtent) * scale, half]} tag={horizon.name} dimmed />;
+          })
         : null}
 
       <DepthPlane

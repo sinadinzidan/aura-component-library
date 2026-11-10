@@ -703,7 +703,7 @@ function TankFarm3dPartBund() {
 
   return (
     <TankFarm3dStage label="A bunded row of four tanks of different sizes">
-      <TurntableStage subjectSize={[84, 12, 26]} padding={0.72}>
+      <TurntableStage subjectSize={[84, 12, 26]} padding={0.6}>
         {rect ? <BundWall rect={rect} /> : null}
         {spots.map((tank) => (
           <StorageTank key={tank.id} position={[tank.center[0], 0, tank.center[1]]} diameter={tank.diameter} height={tank.height} fill={fillFraction(tank.volume, tank.capacity)} />
@@ -732,7 +732,7 @@ function TankFarm3dPartManifold() {
 
   return (
     <TankFarm3dStage label="Manifold with a tank-to-tank transfer shown by flow chevrons">
-      <TurntableStage subjectSize={[74, 12, 44]} padding={0.72}>
+      <TurntableStage subjectSize={[74, 12, 44]} padding={0.5}>
         <StorageTank position={[north.center[0], 0, north.center[1]]} diameter={north.diameter} height={north.height} fill={0.7} />
         <StorageTank position={[south.center[0], 0, south.center[1]]} diameter={south.diameter} height={south.height} fill={0.3} />
         <PipeRun points={[[-36, 1, 0], [36, 1, 0]]} radius={0.32} />
@@ -923,7 +923,7 @@ export default definePage({
           title: 'Bunded row',
           note: 'Pick a bund wall to group tanks that share containment; it reads as one unit from any angle.',
           origin: 'custom',
-          size: 'md',
+          size: 'sm',
           align: 'stretch',
           uses: ['three/scenes/BundWall.tsx', 'three/scenes/tankFarmLayout.ts', 'three/StorageTank.tsx'],
           Component: TankFarm3dPartBund,
@@ -933,7 +933,7 @@ export default definePage({
           title: 'Jetty and tanker',
           note: 'Pick them to show the berth and whether it is occupied; the ship appears only while a cargo is being worked.',
           origin: 'custom',
-          size: 'md',
+          size: 'sm',
           align: 'stretch',
           uses: ['three/scenes/Jetty.tsx', 'three/scenes/TankerShip.tsx', 'three/scenes/SeaPlane.tsx'],
           Component: TankFarm3dPartJetty,
@@ -943,7 +943,7 @@ export default definePage({
           title: 'Transfer route',
           note: 'Pick flow chevrons on the exact route a movement takes, so the eye can follow product from source to destination.',
           origin: 'custom',
-          size: 'md',
+          size: 'sm',
           align: 'stretch',
           uses: ['three/PipeRun.tsx', 'three/scenes/tankFarmLayout.ts', 'three/StorageTank.tsx'],
           Component: TankFarm3dPartManifold,
@@ -953,7 +953,7 @@ export default definePage({
           title: 'Time scrubber',
           note: 'Pick it to look ahead over a fixed window: planned spans sit above the track, and playback stops at the end.',
           origin: 'custom',
-          size: 'md',
+          size: 'full',
           align: 'stretch',
           uses: ['three/scenes/TimeScrubber.tsx', 'three/scenes/inventoryProjection.ts'],
           Component: TankFarm3dPartScrubber,
