@@ -662,10 +662,10 @@ function SafetyPermitDetail() {
           </div>
           <dl className="flex flex-col gap-2 text-sm">
             {GAS_TEST.map((reading) => (
-              <div key={reading.gas} className="flex items-baseline justify-between gap-3">
+              <div key={reading.gas} className="grid grid-cols-[minmax(0,1fr)_auto_4.5rem] items-baseline gap-x-3">
                 <dt className="text-medium-foreground">{reading.gas}</dt>
-                <dd className="flex items-baseline gap-3">
-                  <span className="text-xs text-muted-foreground tabular-nums">{reading.limitText.toLowerCase()}</span>
+                <dd className="text-right text-xs text-muted-foreground tabular-nums">{reading.limitText.toLowerCase()}</dd>
+                <dd className="text-right">
                   <ValueReadout size="xs" value={reading.value} unit={reading.unit} decimals={reading.decimals} tone={gasReadingTone(reading.value, reading.limits)} />
                 </dd>
               </div>

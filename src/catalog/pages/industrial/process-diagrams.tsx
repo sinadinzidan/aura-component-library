@@ -762,7 +762,6 @@ function ProcessDiagramCard() {
       </CardContent>
       <CardFooter className="flex flex-wrap gap-x-6 gap-y-2">
         <StatusIndicator size="sm" {...runStateStatus('running')} detail="3 units" />
-        <StatusIndicator size="sm" {...runStateStatus('tripped')} detail="0 units" />
         <StatusIndicator size="sm" tone="warning" shape="square" label="Above limit" detail={`${DISCHARGE_TEMPERATURE.tag}, ${COOLER_TEMPERATURE.tag}`} />
         <StatusIndicator size="sm" tone="neutral" shape="ring" label="Vibration" detail={`${VIBRATION.value} ${VIBRATION.unit}`} />
       </CardFooter>

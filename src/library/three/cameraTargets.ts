@@ -108,3 +108,8 @@ export function frameBounds(bounds: Bounds, options: FrameOptions = {}): CameraT
   const direction = normalizeVec3(VIEW_DIRECTIONS[view]);
   return { position: addVec3(lookAt, scaleVec3(direction, distance)), lookAt };
 }
+
+/** A mutable copy, in the tuple shape react-three-fiber props expect. */
+export function toTuple(vector: Vec3): [number, number, number] {
+  return [vector[0], vector[1], vector[2]];
+}

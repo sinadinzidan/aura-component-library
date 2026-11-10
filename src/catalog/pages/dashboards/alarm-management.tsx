@@ -58,8 +58,8 @@ const ALARM_ACTOR_SEEDS: readonly AlarmActorSeed[] = [
   { tag: '23-TT-92532', text: 'Discharge temperature high', assetId: '23-ka-9101', severity: 'high', weight: 1.1, floods: { trip: 6 }, seed: 101, setting: 'High 145.0 °C · deadband 0.5 °C · no delay', finding: 'The reading sits within 4 °C of the limit and crosses it on every load swing.', action: 'Widen the deadband to 2 °C and add a 30 s on-delay.', chatter: 14 },
   { tag: '23-VT-92540', text: 'Drive-end vibration approaching limit', assetId: '23-ka-9101', severity: 'high', weight: 0.8, floods: { trip: 5 }, seed: 102, setting: 'High 7.1 mm/s · deadband 0.1 mm/s · delay 5 s', finding: 'A pre-alarm with no defined operator response repeats while the bearing wears.', action: 'Replace with a rate-of-change alarm tied to the vibration survey.' },
   { tag: '20-LT-10012', text: 'Separator level deviation', assetId: '20-va-1001', severity: 'low', weight: 0.7, floods: { separator: 12 }, seed: 103, setting: 'Deviation ±15% · deadband 1% · no delay', finding: 'Slugging moves the level across the deviation band several times a minute.', action: 'Add a 60 s on-delay and suppress while the slug catcher is draining.', chatter: 11 },
-  { tag: '23-TT-91141', text: 'Cooler outlet temperature high', assetId: '23-ha-9114', severity: 'medium', weight: 0.6, floods: { changeover: 8, trip: 3 }, seed: 104, setting: 'High 40.0 °C · deadband 0.5 °C · delay 10 s', finding: 'Fouled tubes keep the outlet close to the limit; every pump changeover trips it.', action: 'Clean the tube bundle (WO-104471), then review the limit.' },
-  { tag: '40-TT-40015', text: 'Bearing temperature signal lost', assetId: '40-pa-4001', severity: 'medium', weight: 0.5, floods: { changeover: 10 }, seed: 105, setting: 'Bad quality · no deadband · no delay', finding: 'A failing transmitter drops in and out; the alarm is shelved between bursts.', action: 'Replace the transmitter (WO-104479) and remove the shelving.', chatter: 9 },
+  { tag: '23-TT-91141', text: 'Cooler outlet temperature high', assetId: '23-ha-9114', severity: 'medium', weight: 0.6, floods: { changeover: 14, trip: 3 }, seed: 104, setting: 'High 40.0 °C · deadband 0.5 °C · delay 10 s', finding: 'Fouled tubes keep the outlet close to the limit; every pump changeover trips it.', action: 'Clean the tube bundle (WO-104471), then review the limit.' },
+  { tag: '40-TT-40015', text: 'Bearing temperature signal lost', assetId: '40-pa-4001', severity: 'medium', weight: 0.5, floods: { changeover: 18 }, seed: 105, setting: 'Bad quality · no deadband · no delay', finding: 'A failing transmitter drops in and out; the alarm is shelved between bursts.', action: 'Replace the transmitter (WO-104479) and remove the shelving.', chatter: 9 },
   { tag: '27-IT-20013', text: 'Motor current high', assetId: '27-pa-2001a', severity: 'medium', weight: 0.4, floods: { separator: 4 }, seed: 106, setting: 'High 95.0 A · deadband 1.0 A · delay 5 s', finding: 'Follows export flow during upsets; the operator cannot act on it separately.', action: 'Group under the export flow alarm during an inlet upset.' },
   { tag: '20-PT-10010', text: 'Separator pressure low', assetId: '20-va-1001', severity: 'high', weight: 0.3, floods: { separator: 9 }, seed: 107, setting: 'Low 11.0 barg · deadband 0.2 barg · delay 5 s', finding: 'Consequential to the level upset and annunciated alongside it.', action: 'Add first-out grouping with 20-LT-10012.' },
   { tag: '23-VT-92740', text: 'Recompressor vibration high', assetId: '23-ka-9103', severity: 'critical', weight: 0.2, floods: { trip: 14 }, seed: 108, setting: 'High-high 11.0 mm/s · deadband 0.2 mm/s · no delay', finding: 'Repeated around the trip as the machine ran down through its critical speed.', action: 'Latch after the first annunciation until the trip is reset.', chatter: 6 },
@@ -68,7 +68,7 @@ const ALARM_ACTOR_SEEDS: readonly AlarmActorSeed[] = [
 ];
 
 /** The thirty-odd tags that alarm now and then, counted together. */
-const ALARM_OTHER_SEED: AlarmActorSeed = { tag: 'Other', text: 'All other tags', assetId: 'nk', severity: 'low', weight: 0.9, floods: { changeover: 3, separator: 3, trip: 4 }, seed: 199, setting: '', finding: '', action: '' };
+const ALARM_OTHER_SEED: AlarmActorSeed = { tag: 'Other', text: 'All other tags', assetId: 'nk', severity: 'low', weight: 0.9, floods: { changeover: 6, separator: 3, trip: 4 }, seed: 199, setting: '', finding: '', action: '' };
 
 function alarmFloodAt(hour: number): AlarmFlood | undefined {
   return ALARM_FLOODS.find((flood) => hour >= flood.fromHour && hour < flood.toHour);
@@ -332,8 +332,8 @@ function AlarmBadActorsPanel({ period, selectedTag, onSelect }: { period: AlarmP
                 onClick={() => onSelect(actor.tag)}
                 className={`cursor-pointer border-t border-default align-top ${selected ? 'bg-base-background' : 'hover:bg-muted-background'}`}
               >
-                <td className="py-2 pl-1 tabular-nums text-muted-foreground">{index + 1}</td>
-                <td className="py-2 pr-3">
+                <td className="py-1.5 pl-1 tabular-nums text-muted-foreground">{index + 1}</td>
+                <td className="py-1.5 pr-3">
                   <button
                     type="button"
                     aria-pressed={selected}
@@ -343,8 +343,8 @@ function AlarmBadActorsPanel({ period, selectedTag, onSelect }: { period: AlarmP
                   </button>
                   <p className="line-clamp-2 text-base-foreground">{actor.text}</p>
                 </td>
-                <td className="py-2 text-right tabular-nums text-base-foreground">{count}</td>
-                <td className="py-2 pr-1 text-right tabular-nums text-muted-foreground">{alarmShare(count, total)}</td>
+                <td className="py-1.5 text-right tabular-nums text-base-foreground">{count}</td>
+                <td className="py-1.5 pr-1 text-right tabular-nums text-muted-foreground">{alarmShare(count, total)}</td>
               </tr>
             );
           })}
@@ -479,10 +479,7 @@ function AlarmDashboard() {
           <AlarmRatePanel period={period} onPeriodChange={setPeriod} />
         </DashboardCell>
         <DashboardCell span={3}>
-          <div className="flex min-w-0 flex-col gap-4 [&>*:first-child]:flex-1">
-            <AlarmFiguresPanel />
-            <AlarmSeverityPanel period={period} />
-          </div>
+          <AlarmFiguresPanel />
         </DashboardCell>
         <DashboardCell span={7}>
           <AlarmBadActorsPanel period={period} selectedTag={tag} onSelect={setTag} />
@@ -490,11 +487,14 @@ function AlarmDashboard() {
         <DashboardCell span={5}>
           <AlarmInspectorPanel period={period} tag={tag} />
         </DashboardCell>
-        <DashboardCell span={5}>
+        <DashboardCell span={4}>
           <AlarmChatteringPanel selectedTag={tag} onSelect={setTag} />
         </DashboardCell>
-        <DashboardCell span={7}>
+        <DashboardCell span={5}>
           <AlarmOpenPanel />
+        </DashboardCell>
+        <DashboardCell span={3}>
+          <AlarmSeverityPanel period={period} />
         </DashboardCell>
       </DashboardGrid>
     </DashboardFrame>

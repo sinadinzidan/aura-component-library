@@ -27,7 +27,7 @@ export type TankInventoryTileProps = {
   capacity: number;
   unit?: string;
   decimals?: number;
-  /** Level limits in percent of capacity. */
+  /** Level limits in percent of capacity. All four decide the state; the drawing marks low and high. */
   limits?: Limits;
   movement?: TankMovement;
   /** Overrides the state derived from the limits, e.g. "Out of service". */
@@ -76,16 +76,16 @@ export function TankInventoryTile({
 
   return (
     <Card data-slot="tank-inventory-tile" data-tone={tone} role="group" aria-label={`${product}, tank ${tag}`} className={cn('w-full min-w-0 gap-3', className)}>
-      <div className="flex h-5 items-center justify-between gap-3">
-        <span className={cn(LABEL_TEXT, 'flex min-w-0 items-center gap-2')}>
-          <span className="truncate">{product}</span>
-          <span className="font-mono text-base-foreground">{tag}</span>
-        </span>
-        {resolvedStatus ? <StatusIndicator size="sm" {...resolvedStatus} /> : null}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-sm font-medium text-base-foreground">{product}</span>
+          <span className="font-mono text-xs text-muted-foreground">{tag}</span>
+        </div>
+        {resolvedStatus ? <StatusIndicator size="sm" className="pt-0.5" {...resolvedStatus} /> : null}
       </div>
 
       <div className="flex items-stretch gap-4">
-        <LevelMeter label={`${product} level`} value={level} limits={limits} tone={status ? tone : undefined} height={height} decimals={1} showReadout={false} />
+        <LevelMeter label={`${product} level`} value={level} limits={{ low: limits.low, high: limits.high }} tone={tone} height={height} decimals={1} showReadout={false} />
         <dl className="flex min-w-0 flex-1 flex-col justify-between gap-2">
           <div className="flex flex-col gap-1.5">
             <dt className={LABEL_TEXT}>Level</dt>

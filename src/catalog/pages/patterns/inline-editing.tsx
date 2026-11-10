@@ -189,7 +189,14 @@ function InlineEditDescription() {
   );
 }
 
-type LimitRecord = { tag: string; name: string; high: string; unit: string; severity: string; calibration: Dayjs | null };
+type LimitRecord = {
+  tag: string;
+  name: string;
+  high: string;
+  unit: string;
+  severity: string;
+  calibration: Dayjs | null;
+};
 
 function InlineEditTableCells() {
   const [rows, setRows] = useState<LimitRecord[]>(
@@ -277,7 +284,11 @@ function InlineEditRowMode() {
     }))
   );
   const [editingId, setEditingId] = useState<string | null>(orders[1].id);
-  const [draft, setDraft] = useState<OrderDraft>({ title: orders[1].title, priority: orders[1].priority, hours: orders[1].hours });
+  const [draft, setDraft] = useState<OrderDraft>({
+    title: orders[1].title,
+    priority: orders[1].priority,
+    hours: orders[1].hours,
+  });
   const titleError = draft.title.trim() === '' ? 'Enter a title.' : null;
 
   return (
@@ -338,7 +349,12 @@ function InlineEditRowMode() {
                       setOrders((current) =>
                         current.map((item) =>
                           item.id === order.id
-                            ? { ...item, title: draft.title.trim(), priority: draft.priority, hours: draft.hours ?? item.hours }
+                            ? {
+                                ...item,
+                                title: draft.title.trim(),
+                                priority: draft.priority,
+                                hours: draft.hours ?? item.hours,
+                              }
                             : item
                         )
                       );
@@ -555,7 +571,7 @@ function InlineEditBulk() {
               {selected.length} selected
             </span>
             <span className="text-sm text-muted-foreground">Set priority to</span>
-            <div className="w-28">
+            <div className="w-36">
               <OptionSelect
                 aria-label="Priority for selected work orders"
                 size="sm"
@@ -568,7 +584,9 @@ function InlineEditBulk() {
             <Button
               size="sm"
               onClick={() => {
-                setOrders((current) => current.map((order) => (selected.includes(order.id) ? { ...order, priority } : order)));
+                setOrders((current) =>
+                  current.map((order) => (selected.includes(order.id) ? { ...order, priority } : order))
+                );
                 setSelected([]);
               }}
             >
@@ -606,7 +624,9 @@ function InlineEditBulk() {
                   label={`Select ${order.id}`}
                   checked={selected.includes(order.id)}
                   onChange={(checked) =>
-                    setSelected((current) => (checked ? [...current, order.id] : current.filter((id) => id !== order.id)))
+                    setSelected((current) =>
+                      checked ? [...current, order.id] : current.filter((id) => id !== order.id)
+                    )
                   }
                 />
               </td>
@@ -622,13 +642,19 @@ function InlineEditBulk() {
 }
 
 function InlineEditKeyValue() {
-  const [values, setValues] = useState({ manufacturer: 'Siemens Energy', model: 'STC-SV 08-6-A', serial: 'SE-2019-04417', power: '12.5' });
+  const [values, setValues] = useState({
+    manufacturer: 'Siemens Energy',
+    model: 'STC-SV 08-6-A',
+    serial: 'SE-2019-04417',
+    power: '12.5',
+  });
   return (
     <dl className="flex w-full max-w-md flex-col">
       <div className="flex items-center gap-4 border-b border-default py-1">
         <dt className="w-32 shrink-0 text-sm text-muted-foreground">Manufacturer</dt>
         <dd className="min-w-0 flex-1">
           <EditableCell
+            affordance="always"
             value={values.manufacturer}
             label="Manufacturer"
             onSave={(manufacturer) => setValues({ ...values, manufacturer })}
@@ -638,19 +664,30 @@ function InlineEditKeyValue() {
       <div className="flex items-center gap-4 border-b border-default py-1">
         <dt className="w-32 shrink-0 text-sm text-muted-foreground">Model</dt>
         <dd className="min-w-0 flex-1">
-          <EditableCell value={values.model} label="Model" onSave={(model) => setValues({ ...values, model })} />
+          <EditableCell
+            affordance="always"
+            value={values.model}
+            label="Model"
+            onSave={(model) => setValues({ ...values, model })}
+          />
         </dd>
       </div>
       <div className="flex items-center gap-4 border-b border-default py-1">
         <dt className="w-32 shrink-0 text-sm text-muted-foreground">Serial number</dt>
         <dd className="min-w-0 flex-1">
-          <EditableCell value={values.serial} label="Serial number" onSave={(serial) => setValues({ ...values, serial })} />
+          <EditableCell
+            affordance="always"
+            value={values.serial}
+            label="Serial number"
+            onSave={(serial) => setValues({ ...values, serial })}
+          />
         </dd>
       </div>
       <div className="flex items-center gap-4 py-1">
         <dt className="w-32 shrink-0 text-sm text-muted-foreground">Rated power</dt>
         <dd className="min-w-0 flex-1">
           <EditableCell
+            affordance="always"
             value={values.power}
             unit="MW"
             inputMode="decimal"
@@ -718,7 +755,13 @@ function InlineEditReadEditCard() {
           <div className="grid w-full grid-cols-2 gap-4">
             <FormField label="Assignee">
               {(control) => (
-                <OptionSelect {...control} options={PEOPLE_OPTIONS} value={assignee} onValueChange={setAssignee} width="compact" />
+                <OptionSelect
+                  {...control}
+                  options={PEOPLE_OPTIONS}
+                  value={assignee}
+                  onValueChange={setAssignee}
+                  width="compact"
+                />
               )}
             </FormField>
             <FormField label="Estimate">
@@ -829,7 +872,9 @@ function InlineEditRenameList() {
                     ? 'Another view has this name.'
                     : null
               }
-              onSave={(name) => setViews((current) => current.map((item) => (item.id === view.id ? { ...item, name } : item)))}
+              onSave={(name) =>
+                setViews((current) => current.map((item) => (item.id === view.id ? { ...item, name } : item)))
+              }
             />
           </div>
           <ConfirmButton
@@ -918,7 +963,10 @@ function InlineEditFailedSave() {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-1">
-      <FormField label="High limit, 23-PT-92531" helper="Your value is kept until it is saved. The stored limit is still 52.0 barg.">
+      <FormField
+        label="High limit, 23-PT-92531"
+        helper="Your value is kept until it is saved. The stored limit is still 52.0 barg."
+      >
         {(control) => (
           <UnitNumberInput
             {...control}
@@ -940,7 +988,11 @@ function InlineEditFailedSave() {
 function InlineEditUnsavedBar() {
   const saved: Record<string, string> = { '23-PT-92531': '52.0', '23-TT-92532': '145.0', '23-VT-92540': '7.1' };
   const units: Record<string, string> = { '23-PT-92531': 'barg', '23-TT-92532': '°C', '23-VT-92540': 'mm/s' };
-  const [values, setValues] = useState<Record<string, string>>({ ...saved, '23-PT-92531': '53.5', '23-VT-92540': '6.8' });
+  const [values, setValues] = useState<Record<string, string>>({
+    ...saved,
+    '23-PT-92531': '53.5',
+    '23-VT-92540': '6.8',
+  });
   const tags = Object.keys(saved);
   const dirtyCount = tags.filter((tag) => values[tag] !== saved[tag]).length;
 
@@ -997,7 +1049,10 @@ function InlineEditConflict() {
         <span className="text-sm font-medium tabular-nums text-base-foreground">{resolved ?? '53.5'} barg</span>
       </div>
       {resolved === null ? (
-        <div role="alert" className="flex flex-col gap-3 rounded-lg bg-warning-background p-3 text-sm text-warning-foreground">
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-lg bg-warning-background p-3 text-sm text-warning-foreground"
+        >
           <p>
             Aisha Khan changed this limit to <span className="font-medium tabular-nums">52.5 barg</span> while you were
             editing. Your value, 53.5 barg, is not saved yet.
@@ -1063,7 +1118,15 @@ function InlineEditSetpoint() {
     <div className="flex w-full max-w-xs flex-col gap-2">
       <FormField label="Separator pressure setpoint">
         {(control) => (
-          <UnitNumberInput {...control} value={setpoint} onValueChange={setSetpoint} unit="barg" min={11} max={15} step={0.1} />
+          <UnitNumberInput
+            {...control}
+            value={setpoint}
+            onValueChange={setSetpoint}
+            unit="barg"
+            min={11}
+            max={15}
+            step={0.1}
+          />
         )}
       </FormField>
       <div className="flex min-h-8 items-center justify-between gap-2">

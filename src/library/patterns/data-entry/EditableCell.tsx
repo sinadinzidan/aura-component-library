@@ -23,6 +23,8 @@ type EditableCellProps = {
    * that a failed save or a reload interrupted. Focus is not moved on mount.
    */
   defaultDraft?: string;
+  /** `hover` shows the pencil on hover and focus, for dense tables; `always` keeps it visible. */
+  affordance?: 'hover' | 'always';
 };
 
 const acceptAnything = () => null;
@@ -42,6 +44,7 @@ export function EditableCell({
   inputMode = 'text',
   display,
   defaultDraft,
+  affordance = 'hover',
 }: EditableCellProps) {
   const [editing, setEditing] = useState(defaultDraft !== undefined);
   const [draft, setDraft] = useState(defaultDraft ?? value);
@@ -51,25 +54,23 @@ export function EditableCell({
   const inputRef = useRef<HTMLInputElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const restoreFocus = useRef(false);
-  const skipFocus = useRef(defaultDraft !== undefined);
+  // Only an edit the user started takes focus; a restored draft must not pull focus on page load.
+  const takeFocus = useRef(false);
   const errorId = useId();
 
   useEffect(() => {
-    if (skipFocus.current) {
-      // A restored draft must not pull focus to itself when the page loads.
-      skipFocus.current = false;
-      return;
-    }
-    if (editing) {
+    if (editing && takeFocus.current) {
+      takeFocus.current = false;
       inputRef.current?.focus();
       inputRef.current?.select();
-    } else if (restoreFocus.current) {
+    } else if (!editing && restoreFocus.current) {
       restoreFocus.current = false;
       buttonRef.current?.focus();
     }
   }, [editing]);
 
   const start = () => {
+    takeFocus.current = true;
     setDraft(value);
     setError(null);
     setEditing(true);
@@ -113,7 +114,10 @@ export function EditableCell({
         </span>
         <IconPencil
           aria-hidden="true"
-          className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover/cell:opacity-100 group-focus-visible/cell:opacity-100"
+          data-affordance={affordance}
+          className={`size-3.5 shrink-0 text-muted-foreground ${
+            affordance === 'always' ? '' : 'opacity-0 group-hover/cell:opacity-100 group-focus-visible/cell:opacity-100'
+          }`}
         />
       </button>
     );

@@ -17,7 +17,13 @@ type FormActionsProps = {
  * The footer of a form: the actions at one end and an optional status at the other. With `sticky`
  * it stays in view while a long form scrolls underneath, so saving never needs a scroll.
  */
-export function FormActions({ children, status, align = 'end', sticky = false, label = 'Form actions' }: FormActionsProps) {
+export function FormActions({
+  children,
+  status,
+  align = 'end',
+  sticky = false,
+  label = 'Form actions',
+}: FormActionsProps) {
   const buttons = (
     <div role="group" aria-label={label} className="flex shrink-0 items-center gap-2">
       {children}

@@ -96,7 +96,7 @@ export function PermitCard({
       {conditions.length > 0 ? (
         <ul aria-label="Conditions" className="flex flex-wrap gap-1.5">
           {conditions.map((condition) => (
-            <li key={condition} className="rounded-md bg-muted-background px-2 py-1 text-xs text-medium-foreground">
+            <li key={condition} className="rounded-md bg-base-background px-2 py-1 text-xs text-medium-foreground">
               {condition}
             </li>
           ))}

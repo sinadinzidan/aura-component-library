@@ -113,7 +113,7 @@ export function PlaybackBar({
         />
         <TooltipContent>Go to end</TooltipContent>
       </Tooltip>
-      <span data-slot="playback-position" className="w-28 shrink-0 text-sm text-base-foreground tabular-nums">
+      <span data-slot="playback-position" className="shrink-0 px-1 text-sm text-base-foreground tabular-nums">
         {formatTime(value)}
       </span>
       <Slider
@@ -128,7 +128,7 @@ export function PlaybackBar({
           if (position !== undefined) onValueChange(position);
         }}
       />
-      <span className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground tabular-nums sm:inline">{formatTime(to)}</span>
+      <span className="hidden shrink-0 px-1 text-xs text-muted-foreground tabular-nums sm:inline">{formatTime(to)}</span>
       <Tooltip>
         <TooltipTrigger
           render={

@@ -33,6 +33,7 @@ const numbers = (points: readonly TrendPoint[]): number[] => points.flatMap((poi
 const PRESSURE = trend({ seed: 11, base: 48.2, amplitude: 1.4, noise: 0.4, cycles: 2 });
 const TEMPERATURE = [...trend({ seed: 13, base: 137, amplitude: 3, noise: 0.9, drift: 5, cycles: 2 }).slice(0, -4), ...[143.6, 144.8, 145.7, 146.3].map((v, index) => ({ t: NOW - (3 - index) * STEP, v }))];
 const SUCTION = trend({ seed: 12, base: 12.4, amplitude: 0.5, noise: 0.15, cycles: 2 });
+const INTERSTAGE = trend({ seed: 18, base: 42.6, amplitude: 0.6, noise: 0.2, cycles: 2 });
 const PRESSURE_SERIES: TrendSeries = { key: 'pressure', label: 'Discharge pressure', points: PRESSURE };
 const TEMPERATURE_SERIES: TrendSeries = { key: 'temperature', label: 'Discharge temperature', points: TEMPERATURE };
 
@@ -215,7 +216,7 @@ function ChartAnnotationNumbered() {
         yTicks={[125, 130, 135, 140, 145, 150]}
         unit="°C"
       />
-      <ol className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+      <ol aria-label="Events" className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
         {EVENTS.map((event, index) => (
           <li key={event.id} className="flex items-baseline gap-2">
             <span className="w-3 shrink-0 font-medium text-base-foreground tabular-nums">{index + 1}</span>
@@ -245,10 +246,10 @@ function ChartAnnotationThresholdCrossing() {
 }
 
 function ChartAnnotationPointNote() {
-  const point = PRESSURE[62];
+  const point = PRESSURE.slice(84, 108).reduce((best, candidate) => ((candidate.v ?? 0) > (best.v ?? 0) ? candidate : best), PRESSURE[84]);
   return (
     <TrendChart
-      label="Discharge pressure over the last 24 hours with a note on the reading at 00:20: anti-surge valve opened"
+      label={`Discharge pressure over the last 24 hours with a note on the reading at ${formatTime(point.t)}: anti-surge valve opened`}
       series={[PRESSURE_SERIES]}
       markers={[{ t: point.t, v: point.v ?? 48, label: 'Anti-surge valve opened', tone: 'info' }]}
       yDomain={[44, 54]}
@@ -284,7 +285,7 @@ function ChartAnnotationMinMax() {
       series={[PRESSURE_SERIES]}
       markers={[
         { t: high.t, v: high.v ?? 0, label: `Max ${high.v}` },
-        { t: low.t, v: low.v ?? 0, label: `Min ${low.v}` },
+        { t: low.t, v: low.v ?? 0, label: `Min ${low.v}`, labelPosition: 'bottom' },
       ]}
       yDomain={[44, 54]}
       yTicks={[44, 46, 48, 50, 52, 54]}
@@ -296,8 +297,8 @@ function ChartAnnotationMinMax() {
 function ChartAnnotationCursorReadout() {
   const [cursor, setCursor] = useState(NOW - 9 * HOUR);
   const series = [
-    { key: 'discharge', label: 'Discharge pressure', points: PRESSURE, color: chartSeriesColor(1), unit: 'barg' },
-    { key: 'suction', label: 'Suction pressure', points: SUCTION.map((point) => ({ t: point.t, v: (point.v ?? 0) + 30 })), color: chartSeriesColor(2), unit: 'barg' },
+    { key: 'discharge', label: 'Discharge', points: PRESSURE, color: chartSeriesColor(1), unit: 'barg' },
+    { key: 'interstage', label: 'Interstage', points: INTERSTAGE, color: chartSeriesColor(2), unit: 'barg' },
   ];
   return (
     <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_14rem]">

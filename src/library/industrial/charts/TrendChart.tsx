@@ -67,7 +67,15 @@ export type TrendEvent = {
   solid?: boolean;
 };
 
-export type TrendMarker = { t: number; v: number; label?: string; tone?: Tone; axis?: TrendAxis };
+export type TrendMarker = {
+  t: number;
+  v: number;
+  label?: string;
+  tone?: Tone;
+  axis?: TrendAxis;
+  /** Side of the dot the label sits on; pick the side the series leaves free. */
+  labelPosition?: 'top' | 'bottom' | 'left' | 'right';
+};
 
 /** A stretch of a discrete state, drawn as a strip under the plot on the same time axis. */
 export type TrendState = { from: number; to: number; label: string; tone: Tone };
@@ -146,6 +154,17 @@ const MARGIN_RIGHT = 12;
 /** The lighter step of a `chart-*-450` token; other colours are returned unchanged. */
 export function softColor(color: string, step: 100 | 200 = 100): string {
   return color.replace(/-450\)$/, `-${step})`);
+}
+
+/**
+ * Where an event label goes: centred above its line, or tucked inside the plot beside the line
+ * when the event is so close to an edge that a centred label would be cut off.
+ */
+export function eventLabelPosition(label: string, percent: number): 'top' | 'insideTopLeft' | 'insideTopRight' {
+  const reach = Math.min(30, label.length * 1.2);
+  if (percent > 100 - reach) return 'insideTopRight';
+  if (percent < reach) return 'insideTopLeft';
+  return 'top';
 }
 
 type AxisScale = { domain: [number, number]; ticks: number[] };
@@ -427,7 +446,7 @@ export function TrendChart({
                 x={event.t}
                 stroke={STROKE[event.tone ?? 'neutral']}
                 strokeDasharray={event.solid ? undefined : '2 3'}
-                label={event.label && !compact ? { value: event.label, position: 'top', className: LABEL_CLASS } : undefined}
+                label={event.label && !compact ? { value: event.label, position: eventLabelPosition(event.label, timeFraction(event.t, from, to)), className: LABEL_CLASS } : undefined}
               />
             ))}
             {cursor !== undefined ? <ReferenceLine yAxisId="left" x={cursor} stroke="var(--color-chart-neutral-450)" /> : null}
@@ -455,7 +474,7 @@ export function TrendChart({
                 fill={STROKE[marker.tone ?? 'neutral']}
                 stroke="var(--color-base-background)"
                 strokeWidth={1.5}
-                label={marker.label && !compact ? { value: marker.label, position: 'top', offset: 8, className: 'fill-base-foreground' } : undefined}
+                label={marker.label && !compact ? { value: marker.label, position: marker.labelPosition ?? 'top', offset: 8, className: 'fill-base-foreground' } : undefined}
               />
             ))}
           </ComposedChart>

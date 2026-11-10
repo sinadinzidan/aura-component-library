@@ -34,7 +34,9 @@ describe(TimeStepper.name, () => {
   it('disables forward at the latest data', () => {
     render(<TimeStepper value={[NOW - 8 * HOUR, NOW]} onValueChange={vi.fn()} bounds={{ max: NOW }} />);
 
-    expect(screen.getByRole('button', { name: 'Forward 8 h' })).toBeDisabled();
+    const forward = screen.getByRole('button', { name: 'Forward 8 h, unavailable: already at the latest data' });
+    expect(forward).toBeDisabled();
+    expect(forward).toHaveAttribute('title', 'Already at the latest data');
     expect(screen.getByRole('button', { name: 'Back 8 h' })).toBeEnabled();
   });
 

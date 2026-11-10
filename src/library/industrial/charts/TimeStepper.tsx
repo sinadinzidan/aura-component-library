@@ -24,7 +24,7 @@ export type TimeStepperProps = {
 
 /**
  * Step back and forward through time by the length of the current window, with the window written
- * out between the arrows. Forward is disabled at "now", and the tooltip says why.
+ * out between the arrows. Forward is disabled at "now", and its name and title say why.
  */
 export function TimeStepper({ value, onValueChange, bounds = {}, fraction = 1, showLatest = false, timeZone = 'UTC', className }: TimeStepperProps) {
   const span = formatSpan((value[1] - value[0]) * fraction);
@@ -37,12 +37,19 @@ export function TimeStepper({ value, onValueChange, bounds = {}, fraction = 1, s
       <Tooltip>
         <TooltipTrigger
           render={
-            <Button variant="ghost" size="icon-sm" aria-label={`Back ${span}`} disabled={!back} onClick={() => onValueChange(shiftWindow(value, -1, bounds, fraction))}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={back ? `Back ${span}` : `Back ${span}, unavailable: start of the data`}
+              title={back ? undefined : 'Start of the data'}
+              disabled={!back}
+              onClick={() => onValueChange(shiftWindow(value, -1, bounds, fraction))}
+            >
               <IconChevronLeft />
             </Button>
           }
         />
-        <TooltipContent>{back ? `Back ${span}` : 'Start of the data'}</TooltipContent>
+        <TooltipContent>Back {span}</TooltipContent>
       </Tooltip>
       <span data-slot="time-stepper-range" aria-live="polite" className="min-w-44 px-1 text-center text-sm text-base-foreground tabular-nums">
         {formatRange(value[0], value[1], timeZone)}
@@ -50,14 +57,19 @@ export function TimeStepper({ value, onValueChange, bounds = {}, fraction = 1, s
       <Tooltip>
         <TooltipTrigger
           render={
-            <span className="inline-flex">
-              <Button variant="ghost" size="icon-sm" aria-label={`Forward ${span}`} disabled={!forward} onClick={() => onValueChange(shiftWindow(value, 1, bounds, fraction))}>
-                <IconChevronRight />
-              </Button>
-            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={forward ? `Forward ${span}` : `Forward ${span}, unavailable: already at the latest data`}
+              title={forward ? undefined : 'Already at the latest data'}
+              disabled={!forward}
+              onClick={() => onValueChange(shiftWindow(value, 1, bounds, fraction))}
+            >
+              <IconChevronRight />
+            </Button>
           }
         />
-        <TooltipContent>{forward ? `Forward ${span}` : 'Already at the latest data'}</TooltipContent>
+        <TooltipContent>Forward {span}</TooltipContent>
       </Tooltip>
       {showLatest && bounds.max !== undefined ? (
         <Button variant="ghost" size="sm" disabled={atLatest} onClick={() => onValueChange(windowEndingAt(bounds.max ?? value[1], value[1] - value[0]))}>

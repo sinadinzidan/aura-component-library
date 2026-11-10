@@ -23,7 +23,11 @@ describe(SettingRow.name, () => {
 
   it('disables the control and shows the reason instead of the description', () => {
     render(
-      <SettingRow label="Pressure unit" description="Used in charts and tables." disabledReason="Set by your organization.">
+      <SettingRow
+        label="Pressure unit"
+        description="Used in charts and tables."
+        disabledReason="Set by your organization."
+      >
         {(control) => <input {...control} />}
       </SettingRow>
     );

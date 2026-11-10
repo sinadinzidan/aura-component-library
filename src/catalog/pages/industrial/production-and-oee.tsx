@@ -26,7 +26,7 @@ const KPI = PLANT_KPIS;
 const CHART_FRAME = 'aspect-auto h-full w-full';
 const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
 const TD = 'px-3 py-2.5 align-middle';
-const CODE = 'rounded-md bg-muted-background px-1.5 py-0.5 font-mono text-xs text-medium-foreground';
+const CODE = 'rounded-md border border-default px-1.5 py-0.5 font-mono text-xs text-medium-foreground';
 
 /** The three OEE factors for the last 24 hours; their product is the plant OEE of 82.7 %. */
 const FACTORS = { availability: KPI.availability.value, performance: 87.4, quality: 98.2 };

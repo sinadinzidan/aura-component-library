@@ -503,7 +503,7 @@ function EquipSymbolDoColour() {
           </EquipFigure>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">Running equipment stays grey and filled. The one tripped machine is the only colour on the screen, and it is also named.</p>
+      <p className="text-xs text-muted-foreground">Running equipment stays grey and filled. Only the tripped machine is drawn in colour, and it is also named.</p>
     </div>
   );
 }
@@ -854,7 +854,7 @@ export default definePage({
         {
           id: 'EquipSymbolOnDark',
           title: 'On a dark control-room surface',
-          note: 'Pick it for wall displays and night shift: the same rules hold, with the tripped machine still the only colour.',
+          note: 'Pick it for wall displays and night shift: the same rules hold, and only the tripped symbol is drawn in colour.',
           origin: 'custom',
           uses: ['industrial/diagrams/EquipmentSymbol.tsx', 'industrial/diagrams/symbolState.ts', 'industrial/StatusIndicator.tsx'],
           size: 'lg',

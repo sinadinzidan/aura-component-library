@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { TrendChart, axisScale, softColor } from './TrendChart';
+import { TrendChart, axisScale, eventLabelPosition, softColor } from './TrendChart';
 import type { TrendSeries } from './TrendChart';
 
 const HOUR = 3_600_000;
@@ -109,5 +109,21 @@ describe(softColor.name, () => {
 
   it('leaves other colours alone', () => {
     expect(softColor('var(--color-chart-neutral-300)')).toBe('var(--color-chart-neutral-300)');
+  });
+});
+
+describe(eventLabelPosition.name, () => {
+  it('centres the label above the line away from the edges', () => {
+    expect(eventLabelPosition('Alarm raised', 50)).toBe('top');
+  });
+
+  it('tucks the label inside the plot near either edge', () => {
+    expect(eventLabelPosition('Alarm raised', 97)).toBe('insideTopRight');
+    expect(eventLabelPosition('Alarm raised', 3)).toBe('insideTopLeft');
+  });
+
+  it('lets short labels sit closer to the edge than long ones', () => {
+    expect(eventLabelPosition('1', 97)).toBe('top');
+    expect(eventLabelPosition('Work order started', 80)).toBe('insideTopRight');
   });
 });

@@ -203,6 +203,9 @@ function SiteMapRegion({ selectedId }: { selectedId?: string }) {
       <SiteMapText x={16} y={206} quiet>
         North Sea
       </SiteMapText>
+      <SiteMapText x={330} y={190} anchor="middle" quiet>
+        Mainland
+      </SiteMapText>
       {FLEET.map((site) => {
         const offset = site.labelSide === 'start' ? 16 : -16;
         return (
@@ -538,7 +541,7 @@ function SiteMapEscapeRoutes() {
     <DiagramCanvas
       label="Escape routes on the Nordkapp plot plan: walkways between the process areas lead south to muster point A at the control room, with 24 people on site"
       width={460}
-      height={270}
+      height={276}
     >
       {blocks.map((block) => (
         <g key={block.name}>
@@ -562,7 +565,7 @@ function SiteMapEscapeRoutes() {
       <SiteMapText x={246} y={249} quiet>
         Control room · 24 on site
       </SiteMapText>
-      <SiteMapText x={12} y={262} quiet>
+      <SiteMapText x={12} y={270} quiet>
         Dashed lines are escape routes; arrows point to the muster point.
       </SiteMapText>
     </DiagramCanvas>

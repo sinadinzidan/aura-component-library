@@ -19,7 +19,7 @@ describe(LiveToggle.name, () => {
     render(<LiveToggle live={false} onLiveChange={vi.fn()} lastUpdated={NOW - 18 * MINUTE} now={NOW} />);
 
     expect(screen.getByRole('status')).toHaveTextContent('Paused');
-    expect(screen.getByRole('status')).toHaveTextContent('paused at 13:42, 18 min behind');
+    expect(screen.getByRole('status')).toHaveTextContent('since 13:42, 18 min behind');
   });
 
   it('pauses when live and resumes when paused', async () => {

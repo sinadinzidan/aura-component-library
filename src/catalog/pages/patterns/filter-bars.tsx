@@ -1,11 +1,6 @@
 import { Badge } from '@cognite/aura/components/badge';
 import { Button } from '@cognite/aura/components/button';
-import {
-  CheckboxGroup,
-  CheckboxItem,
-  CheckboxItemControl,
-  CheckboxItemLabel,
-} from '@cognite/aura/components/checkbox';
+import { CheckboxGroup, CheckboxItem, CheckboxItemControl, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -219,7 +214,13 @@ function FilterBarInlineSelects() {
         <Search aria-label="Search work orders" placeholder="Search" />
       </div>
       <div className="w-36">
-        <OptionSelect aria-label="Status" options={STATUS_OPTIONS} value={status} onValueChange={setStatus} width="compact" />
+        <OptionSelect
+          aria-label="Status"
+          options={STATUS_OPTIONS}
+          value={status}
+          onValueChange={setStatus}
+          width="compact"
+        />
       </div>
       <div className="w-36">
         <OptionSelect
@@ -376,7 +377,9 @@ function FilterBarNoResults() {
         <EmptyState type="no-results">
           <EmptyStateIcon />
           <EmptyStateTitle as="h4">No assets match these filters</EmptyStateTitle>
-          <EmptyStateDescription>Check the tag for typos, or reset the filters to see every asset.</EmptyStateDescription>
+          <EmptyStateDescription>
+            Check the tag for typos, or reset the filters to see every asset.
+          </EmptyStateDescription>
           <EmptyStateActions>
             <Button variant="secondary" size="sm" onClick={() => setChips([])}>
               Reset filters
@@ -404,7 +407,10 @@ function FilterBarDateRange() {
 }
 
 function FilterBarPopoverApply() {
-  const [value, setValue] = useState<Record<string, string[]>>({ priority: ['P1'], type: ['corrective', 'inspection'] });
+  const [value, setValue] = useState<Record<string, string[]>>({
+    priority: ['P1'],
+    type: ['corrective', 'inspection'],
+  });
   const chips = WORK_ORDER_GROUPS.flatMap((group) => {
     const selected = value[group.id] ?? [];
     if (selected.length === 0) return [];
@@ -496,11 +502,13 @@ function FilterBarSortAndGroup() {
   const [group, setGroup] = useState('status');
   const directionLabel = ascending ? 'Ascending. Sort descending' : 'Descending. Sort ascending';
   return (
-    <div role="group" aria-label="Sort and group work orders" className="flex w-full flex-wrap items-center gap-x-6 gap-y-3">
+    <div
+      role="group"
+      aria-label="Sort and group work orders"
+      className="flex w-full flex-wrap items-center gap-x-6 gap-y-3"
+    >
       <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">
-          Sort by
-        </span>
+        <span className="text-sm text-muted-foreground">Sort by</span>
         <div className="w-36">
           <OptionSelect
             aria-label="Sort by"
@@ -513,7 +521,12 @@ function FilterBarSortAndGroup() {
         <Tooltip>
           <TooltipTrigger
             render={
-              <Button variant="ghost" size="icon" aria-label={directionLabel} onClick={() => setAscending((value) => !value)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={directionLabel}
+                onClick={() => setAscending((value) => !value)}
+              >
                 {ascending ? <IconSortAscending /> : <IconSortDescending />}
               </Button>
             }
@@ -716,7 +729,8 @@ function FilterBarCompactTable() {
   const [status, setStatus] = useState(ALL);
   const rows = WORK_ORDERS.filter(
     (order) =>
-      (status === ALL || order.status === status) && matchesQuery(`${order.id} ${order.title} ${assetLabel(order.assetId)}`, query)
+      (status === ALL || order.status === status) &&
+      matchesQuery(`${order.id} ${order.title} ${assetLabel(order.assetId)}`, query)
   ).slice(0, 4);
   return (
     <div className="flex w-full flex-col gap-2">
@@ -731,7 +745,13 @@ function FilterBarCompactTable() {
           />
         </div>
         <div className="w-36">
-          <OptionSelect aria-label="Status" options={STATUS_OPTIONS} value={status} onValueChange={setStatus} width="compact" />
+          <OptionSelect
+            aria-label="Status"
+            options={STATUS_OPTIONS}
+            value={status}
+            onValueChange={setStatus}
+            width="compact"
+          />
         </div>
         <output aria-live="polite" className="pl-1 text-sm tabular-nums text-muted-foreground">
           {rows.length} shown
@@ -809,7 +829,8 @@ function FilterBarFacetedSidebar() {
   const [states, setStates] = useState<string[]>([]);
   const stateIds = ['running', 'standby', 'tripped', 'maintenance'];
   const rows = EQUIPMENT.filter(
-    (asset) => (types.length === 0 || types.includes(asset.type)) && (states.length === 0 || states.includes(asset.state))
+    (asset) =>
+      (types.length === 0 || types.includes(asset.type)) && (states.length === 0 || states.includes(asset.state))
   );
   const applied = types.length + states.length;
   return (
@@ -837,7 +858,10 @@ function FilterBarFacetedSidebar() {
           <CheckboxGroup aria-labelledby="filter-bar-facet-type">
             {EQUIPMENT_TYPES.map((type) => (
               <CheckboxItem key={type}>
-                <CheckboxItemControl checked={types.includes(type)} onCheckedChange={() => setTypes(toggleIn(types, type))} />
+                <CheckboxItemControl
+                  checked={types.includes(type)}
+                  onCheckedChange={() => setTypes(toggleIn(types, type))}
+                />
                 <CheckboxItemLabel className="flex items-center justify-between gap-2">
                   {TYPE_LABELS[type] ?? type}
                   <span className="text-xs font-normal tabular-nums text-muted-foreground">
@@ -984,19 +1008,25 @@ function FilterBarAssetCascade() {
   const [site, setSite] = useState('nordkapp');
   const [area, setArea] = useState('nk-23');
   const [type, setType] = useState('compressor');
-  const areaOptions = [{ value: ALL, label: 'All systems' }, ...AREAS.map((item) => ({ value: item.id, label: item.name }))];
+  const areaOptions = [
+    { value: ALL, label: 'All systems' },
+    ...AREAS.map((item) => ({ value: item.id, label: item.name })),
+  ];
   const typeOptions = [
     { value: ALL, label: 'All types' },
-    ...EQUIPMENT_TYPES.filter((item) => area === ALL || EQUIPMENT.some((asset) => asset.parentId === area && asset.type === item)).map(
-      (item) => ({ value: item, label: TYPE_LABELS[item] ?? item })
-    ),
+    ...EQUIPMENT_TYPES.filter(
+      (item) => area === ALL || EQUIPMENT.some((asset) => asset.parentId === area && asset.type === item)
+    ).map((item) => ({ value: item, label: TYPE_LABELS[item] ?? item })),
   ];
   const atNordkapp = site === 'nordkapp';
   const count = atNordkapp
-    ? EQUIPMENT.filter((asset) => (area === ALL || asset.parentId === area) && (type === ALL || asset.type === type)).length
+    ? EQUIPMENT.filter((asset) => (area === ALL || asset.parentId === area) && (type === ALL || asset.type === type))
+        .length
     : 0;
   const chips = [
-    ...(area === ALL ? [] : [{ id: 'area', label: 'System', value: AREAS.find((item) => item.id === area)?.name ?? area }]),
+    ...(area === ALL
+      ? []
+      : [{ id: 'area', label: 'System', value: AREAS.find((item) => item.id === area)?.name ?? area }]),
     ...(type === ALL ? [] : [{ id: 'type', label: 'Type', value: TYPE_LABELS[type] ?? type }]),
   ];
   return (
@@ -1046,9 +1076,7 @@ function FilterBarAssetCascade() {
           width="compact"
         />
       </div>
-      {atNordkapp ? null : (
-        <p className="text-sm text-muted-foreground">No systems are mapped for this site yet.</p>
-      )}
+      {atNordkapp ? null : <p className="text-sm text-muted-foreground">No systems are mapped for this site yet.</p>}
     </FilterBar>
   );
 }

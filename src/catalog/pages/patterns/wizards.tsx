@@ -176,7 +176,12 @@ function WizardOptionalAndDisabled() {
           { id: 'connect', label: 'Connect', description: 'historian.nordkapp.test' },
           { id: 'select', label: 'Select tags', description: '1,284 tags found.' },
           { id: 'backfill', label: 'Backfill history', description: 'Load data from before today.', optional: true },
-          { id: 'start', label: 'Start extraction', description: 'Available once tags are selected.', state: 'disabled' },
+          {
+            id: 'start',
+            label: 'Start extraction',
+            description: 'Available once tags are selected.',
+            state: 'disabled',
+          },
         ]}
       />
     </div>
@@ -208,7 +213,12 @@ function WizardFrameBasic() {
         {current === 1 ? (
           <FormField label="Run" required helper="You can change the schedule later.">
             {(control) => (
-              <OptionSelect {...control} options={INTERVAL_OPTIONS} value={runInterval} onValueChange={setRunInterval} />
+              <OptionSelect
+                {...control}
+                options={INTERVAL_OPTIONS}
+                value={runInterval}
+                onValueChange={setRunInterval}
+              />
             )}
           </FormField>
         ) : null}
@@ -304,7 +314,8 @@ function WizardBlockedNext() {
           </FormField>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Results go to <span className="font-medium text-base-foreground">{labelOf(DATA_SET_OPTIONS, dataSet)}</span>.
+            Results go to <span className="font-medium text-base-foreground">{labelOf(DATA_SET_OPTIONS, dataSet)}</span>
+            .
           </p>
         )}
       </div>
@@ -399,7 +410,13 @@ function WizardSidePanel() {
           </FormActions>
         }
       >
-        <Stepper steps={steps} current={current} orientation="vertical" label="Return to service" onStepSelect={setCurrent} />
+        <Stepper
+          steps={steps}
+          current={current}
+          orientation="vertical"
+          label="Return to service"
+          onStepSelect={setCurrent}
+        />
       </PanelFrame>
     </div>
   );
@@ -580,8 +597,8 @@ function WizardErrorStep() {
           <Alert variant="error">
             <AlertTitle>Connection failed</AlertTitle>
             <AlertDescription>
-              historian.nordkapp.test did not answer on port 4840. Check the firewall, then try again. Your settings
-              are kept.
+              historian.nordkapp.test did not answer on port 4840. Check the firewall, then try again. Your settings are
+              kept.
             </AlertDescription>
             <AlertActions>
               <AlertButton onClick={() => setFailed(false)}>Try again</AlertButton>
@@ -609,7 +626,13 @@ function WizardResumeDraft() {
             : 'You stopped at step 3 of 4 on 11 Mar. The draft is saved for 30 days.'}
         </p>
       </div>
-      <Progress value={resumed ? 3 : 2} max={4} size="sm" aria-label="Draft progress" aria-valuetext="2 of 4 steps done" />
+      <Progress
+        value={resumed ? 3 : 2}
+        max={4}
+        size="sm"
+        aria-label="Draft progress"
+        aria-valuetext="2 of 4 steps done"
+      />
       <div className="flex items-center gap-2">
         {resumed ? (
           <Button variant="secondary" onClick={() => setResumed(false)}>
@@ -637,7 +660,13 @@ function WizardSetupChecklist() {
       done: false,
       actionLabel: 'Map tags',
     },
-    { id: 'limits', label: 'Set alarm limits', description: 'Copy them from the trip matrix.', done: false, actionLabel: 'Set limits' },
+    {
+      id: 'limits',
+      label: 'Set alarm limits',
+      description: 'Copy them from the trip matrix.',
+      done: false,
+      actionLabel: 'Set limits',
+    },
     { id: 'people', label: 'Invite the control room', done: false, actionLabel: 'Invite people' },
   ];
   const [items, setItems] = useState(initial);
@@ -648,7 +677,9 @@ function WizardSetupChecklist() {
         title="Set up Nordkapp"
         items={items}
         completeText="Ready for operations"
-        onAction={(id) => setItems((current) => current.map((item) => (item.id === id ? { ...item, done: true } : item)))}
+        onAction={(id) =>
+          setItems((current) => current.map((item) => (item.id === id ? { ...item, done: true } : item)))
+        }
       />
       {allDone ? (
         <div>
@@ -696,7 +727,11 @@ function WizardCommissioningChecklist() {
           </CheckboxItem>
         ))}
       </CheckboxGroup>
-      <FormActions status={remaining > 0 ? `${remaining} ${remaining === 1 ? 'check' : 'checks'} left to sign.` : 'All checks signed.'}>
+      <FormActions
+        status={
+          remaining > 0 ? `${remaining} ${remaining === 1 ? 'check' : 'checks'} left to sign.` : 'All checks signed.'
+        }
+      >
         <Button disabled={remaining > 0}>Approve start-up</Button>
       </FormActions>
     </div>
@@ -777,7 +812,12 @@ function WizardPipelineSetup() {
         {current === 2 ? (
           <FormField label="Run" required helper="Each run reads what changed since the last one.">
             {(control) => (
-              <OptionSelect {...control} options={INTERVAL_OPTIONS} value={runInterval} onValueChange={setRunInterval} />
+              <OptionSelect
+                {...control}
+                options={INTERVAL_OPTIONS}
+                value={runInterval}
+                onValueChange={setRunInterval}
+              />
             )}
           </FormField>
         ) : null}

@@ -17,7 +17,8 @@ type ValidationSummaryProps = {
   focusField?: (fieldId: string) => void;
 };
 
-const defaultFormatTitle = (count: number) => (count === 1 ? 'Fix 1 field to continue' : `Fix ${count} fields to continue`);
+const defaultFormatTitle = (count: number) =>
+  count === 1 ? 'Fix 1 field to continue' : `Fix ${count} fields to continue`;
 
 const focusById = (fieldId: string) => document.getElementById(fieldId)?.focus();
 

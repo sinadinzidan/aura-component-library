@@ -43,7 +43,7 @@ export function LiveToggle({ live, onLiveChange, lastUpdated, now, interval, tim
       <span className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums" role="status">
         <StatusDot tone={live ? 'success' : 'neutral'} shape={live ? 'dot' : 'ring'} pulse={live} size="sm" />
         <span className="font-medium text-base-foreground">{live ? 'Live' : 'Paused'}</span>
-        <span>{liveStatusText({ live, lastUpdated, now, interval, timeZone }).replace(/^(Updated|Paused) /, (match) => match.toLowerCase())}</span>
+        <span>{liveStatusText({ live, lastUpdated, now, interval, timeZone }).replace(/^Updated /, 'updated ').replace(/^Paused at /, 'since ')}</span>
       </span>
     </div>
   );

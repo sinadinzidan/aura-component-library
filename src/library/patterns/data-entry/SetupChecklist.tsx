@@ -54,13 +54,23 @@ export function SetupChecklist({
             {countText}
           </output>
         </div>
-        <Progress value={doneCount} max={Math.max(items.length, 1)} size="sm" aria-label={title} aria-valuetext={countText} />
+        <Progress
+          value={doneCount}
+          max={Math.max(items.length, 1)}
+          size="sm"
+          aria-label={title}
+          aria-valuetext={countText}
+        />
       </div>
       <ol className="flex list-none flex-col gap-3">
         {items.map((item, index) => {
           const isNext = item.id === nextItem?.id;
           return (
-            <li key={item.id} data-state={item.done ? 'done' : isNext ? 'next' : 'open'} className="flex items-start gap-3">
+            <li
+              key={item.id}
+              data-state={item.done ? 'done' : isNext ? 'next' : 'open'}
+              className="flex items-start gap-3"
+            >
               <span
                 aria-hidden="true"
                 className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ${
@@ -74,7 +84,9 @@ export function SetupChecklist({
                 {item.done ? <IconCheck className="size-3.5" /> : index + 1}
               </span>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className={item.done ? 'text-sm text-muted-foreground' : 'text-sm font-medium text-base-foreground'}>
+                <span
+                  className={item.done ? 'text-sm text-muted-foreground' : 'text-sm font-medium text-base-foreground'}
+                >
                   <span className="sr-only">{item.done ? 'Done: ' : 'To do: '}</span>
                   {item.label}
                 </span>

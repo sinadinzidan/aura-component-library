@@ -56,7 +56,7 @@ export function FilterBar({
         <div className="flex items-start justify-between gap-4">
           {hasChips ? (
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <ul aria-label="Applied filters" className="flex min-w-0 list-none flex-wrap items-center gap-2">
+              <ul aria-label="Applied filters" className="contents list-none">
                 {chips.map((chip) => (
                   <li key={chip.id} className="flex min-w-0">
                     <FilterChip label={chip.label} value={chip.value} onRemove={() => onRemoveChip?.(chip.id)} />
@@ -71,7 +71,10 @@ export function FilterBar({
             </div>
           ) : null}
           {summary ? (
-            <output aria-live="polite" className="flex min-h-7 shrink-0 items-center text-sm tabular-nums text-muted-foreground">
+            <output
+              aria-live="polite"
+              className="flex min-h-7 shrink-0 items-center text-sm tabular-nums text-muted-foreground"
+            >
               {summary}
             </output>
           ) : null}

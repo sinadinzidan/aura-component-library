@@ -45,7 +45,13 @@ const LABEL: Record<StepStatus, string> = {
  * panel. Each step reads as done, current, upcoming, needing attention or unavailable, in shape
  * and in words as well as colour.
  */
-export function Stepper({ steps, current, orientation = 'horizontal', onStepSelect, label = 'Progress' }: StepperProps) {
+export function Stepper({
+  steps,
+  current,
+  orientation = 'horizontal',
+  onStepSelect,
+  label = 'Progress',
+}: StepperProps) {
   const vertical = orientation === 'vertical';
 
   return (

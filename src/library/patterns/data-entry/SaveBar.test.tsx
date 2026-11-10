@@ -49,9 +49,7 @@ describe(SaveBar.name, () => {
   });
 
   it('replaces the count with the error after a failed save', () => {
-    render(
-      <SaveBar dirtyCount={2} error="Couldn't save changes. Try again." onSave={vi.fn()} onDiscard={vi.fn()} />
-    );
+    render(<SaveBar dirtyCount={2} error="Couldn't save changes. Try again." onSave={vi.fn()} onDiscard={vi.fn()} />);
 
     expect(screen.getByRole('status')).toHaveTextContent("Couldn't save changes. Try again.");
   });

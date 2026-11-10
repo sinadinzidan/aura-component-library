@@ -21,7 +21,9 @@ describe(FormSection.name, () => {
       </FormSection>
     );
 
-    expect(screen.getByRole('region', { name: 'Schedule' })).toHaveAccessibleDescription('When the transformation runs.');
+    expect(screen.getByRole('region', { name: 'Schedule' })).toHaveAccessibleDescription(
+      'When the transformation runs.'
+    );
   });
 
   it('marks the aside layout so the heading can sit beside the fields', () => {

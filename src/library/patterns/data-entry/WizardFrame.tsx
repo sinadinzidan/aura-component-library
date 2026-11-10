@@ -80,7 +80,13 @@ export function WizardFrame({
         </div>
         {indicator === 'stepper' ? <Stepper steps={steps} current={current} label={`${title} steps`} /> : null}
         {indicator === 'progress' ? (
-          <Progress value={current + 1} max={steps.length} size="sm" aria-label={`${title} progress`} aria-valuetext={countText} />
+          <Progress
+            value={current + 1}
+            max={steps.length}
+            size="sm"
+            aria-label={`${title} progress`}
+            aria-valuetext={countText}
+          />
         ) : null}
       </header>
       <div className="p-6">{children}</div>

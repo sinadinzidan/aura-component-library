@@ -43,7 +43,11 @@ describe(PanelFrame.name, () => {
 
   it('renders the footer and extra header content', () => {
     renderWithTooltips(
-      <PanelFrame title="Invite people" headerExtra={<p>Step 1 of 3</p>} footer={<button type="button">Send invites</button>}>
+      <PanelFrame
+        title="Invite people"
+        headerExtra={<p>Step 1 of 3</p>}
+        footer={<button type="button">Send invites</button>}
+      >
         <p>Body</p>
       </PanelFrame>
     );

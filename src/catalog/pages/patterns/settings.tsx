@@ -8,12 +8,7 @@ import {
   CardHeaderCenter,
   CardTitle,
 } from '@cognite/aura/components/card';
-import {
-  CheckboxGroup,
-  CheckboxItem,
-  CheckboxItemControl,
-  CheckboxItemLabel,
-} from '@cognite/aura/components/checkbox';
+import { CheckboxGroup, CheckboxItem, CheckboxItemControl, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
 import { Input } from '@cognite/aura/components/input';
 import {
   RadioGroup,
@@ -249,7 +244,12 @@ function SettingsDisabledWithReason() {
       <SettingRow label="Session timeout" disabledReason="Fixed at 8 hours for control room accounts.">
         {(control) => (
           <div className="w-36">
-            <OptionSelect {...control} options={[{ value: '8h', label: '8 hours' }]} defaultValue="8h" width="compact" />
+            <OptionSelect
+              {...control}
+              options={[{ value: '8h', label: '8 hours' }]}
+              defaultValue="8h"
+              width="compact"
+            />
           </div>
         )}
       </SettingRow>
@@ -355,7 +355,9 @@ function SettingsDangerZone() {
       <div className="flex flex-col divide-y divide-default">
         <SettingRow
           label="Archive data set"
-          description={archived ? 'Archived. Pipelines can no longer write to it.' : 'Stops new writes. You can restore it later.'}
+          description={
+            archived ? 'Archived. Pipelines can no longer write to it.' : 'Stops new writes. You can restore it later.'
+          }
         >
           {() => (
             <Button variant="secondary" size="sm" onClick={() => setArchived((value) => !value)}>
@@ -386,7 +388,15 @@ function SettingsDangerZone() {
 }
 
 function SettingsNotificationMatrix() {
-  const [enabled, setEnabled] = useState(['trip:app', 'trip:email', 'trip:sms', 'alarm:app', 'alarm:email', 'assigned:app', 'failed:email']);
+  const [enabled, setEnabled] = useState([
+    'trip:app',
+    'trip:email',
+    'trip:sms',
+    'alarm:app',
+    'alarm:email',
+    'assigned:app',
+    'failed:email',
+  ]);
   return (
     <table className="w-full max-w-2xl border-collapse">
       <caption className="pb-2 text-left text-sm font-semibold text-base-foreground">Notify me when</caption>
@@ -509,7 +519,13 @@ function SettingsUnitsAndLocale() {
         <SettingRow label="Pressure">
           {(control) => (
             <div className="w-36">
-              <OptionSelect {...control} options={PRESSURE_UNITS} value={pressure} onValueChange={setPressure} width="compact" />
+              <OptionSelect
+                {...control}
+                options={PRESSURE_UNITS}
+                value={pressure}
+                onValueChange={setPressure}
+                width="compact"
+              />
             </div>
           )}
         </SettingRow>
@@ -540,10 +556,15 @@ function SettingsUnitsAndLocale() {
           )}
         </SettingRow>
       </div>
-      <p aria-live="polite" className="rounded-lg bg-muted-background px-3 py-2 text-sm tabular-nums text-muted-foreground">
+      <p
+        aria-live="polite"
+        className="rounded-lg bg-muted-background px-3 py-2 text-sm tabular-nums text-muted-foreground"
+      >
         Preview: <span className="text-base-foreground">{READINGS[pressure]}</span> ·{' '}
         <span className="text-base-foreground">{READINGS[temperature]}</span> ·{' '}
-        <span className="text-base-foreground">{DATE_FORMATS.find((format) => format.value === dateFormat)?.label}</span>
+        <span className="text-base-foreground">
+          {DATE_FORMATS.find((format) => format.value === dateFormat)?.label}
+        </span>
       </p>
     </div>
   );
@@ -645,7 +666,11 @@ function SettingsIntegrations() {
               {item.state === 'attention' ? <StatusDot tone="warning" shape="diamond" size="sm" /> : null}
               {item.state === 'off' ? <StatusDot tone="neutral" shape="ring" size="sm" /> : null}
               <span>
-                {item.state === 'connected' ? 'Connected · ' : item.state === 'attention' ? 'Needs attention · ' : 'Not connected · '}
+                {item.state === 'connected'
+                  ? 'Connected · '
+                  : item.state === 'attention'
+                    ? 'Needs attention · '
+                    : 'Not connected · '}
                 {item.detail}
               </span>
             </span>
@@ -973,7 +998,11 @@ function SettingsSectionedPage() {
         </div>
       </FormSection>
       <Separator />
-      <FormSection layout="aside" title="Units" description="How measurements are shown to you. Stored values do not change.">
+      <FormSection
+        layout="aside"
+        title="Units"
+        description="How measurements are shown to you. Stored values do not change."
+      >
         <div className="flex flex-col divide-y divide-default">
           <SettingRow label="Pressure">
             {(control) => (
@@ -1067,7 +1096,11 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['forms/SettingSwitchRow.tsx', 'patterns/data-entry/SettingRow.tsx', 'patterns/data-entry/OptionSelect.tsx'],
+          uses: [
+            'forms/SettingSwitchRow.tsx',
+            'patterns/data-entry/SettingRow.tsx',
+            'patterns/data-entry/OptionSelect.tsx',
+          ],
           Component: SettingsDisabledWithReason,
         },
         {

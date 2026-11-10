@@ -125,8 +125,9 @@ export function RiskMatrix({
               {consequenceLabels[consequence - 1]}
             </span>
           ))}
+          <span aria-hidden="true" />
+          <span className={cn(LABEL_TEXT, 'col-span-5 text-center')}>Consequence</span>
         </div>
-        <span className={cn(LABEL_TEXT, 'text-right')}>Consequence</span>
       </div>
 
       <ul aria-label="Risk levels" className="flex flex-wrap gap-x-4 gap-y-1">

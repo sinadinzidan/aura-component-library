@@ -431,7 +431,11 @@ function FormLayoutSectionedAside() {
         </FormField>
       </FormSection>
       <Separator />
-      <FormSection layout="aside" title="Schedule" description="When the pipeline runs and what happens when a run fails.">
+      <FormSection
+        layout="aside"
+        title="Schedule"
+        description="When the pipeline runs and what happens when a run fails."
+      >
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Interval">
             {(control) => <OptionSelect {...control} options={INTERVAL_OPTIONS} defaultValue="15m" />}
@@ -708,7 +712,9 @@ function FormLayoutDependentSelect() {
             {(control) => <Input {...control} defaultValue="Server=sql.nordkapp.test;Database=maintenance" />}
           </FormField>
           <FormField label="Query" helper="Runs on every schedule tick.">
-            {(control) => <Textarea {...control} rows={2} defaultValue="SELECT * FROM work_orders WHERE changed > @last_run" />}
+            {(control) => (
+              <Textarea {...control} rows={2} defaultValue="SELECT * FROM work_orders WHERE changed > @last_run" />
+            )}
           </FormField>
         </>
       ) : null}
@@ -754,7 +760,10 @@ function FormLayoutRepeatingRows() {
         addLabel="Add limit"
         removeLabel={(_row, index) => `Remove limit ${index + 1}`}
         onAdd={() => {
-          setRows((current) => [...current, { id: `limit-${nextId.current}`, type: 'low', value: 40, severity: 'medium' }]);
+          setRows((current) => [
+            ...current,
+            { id: `limit-${nextId.current}`, type: 'low', value: 40, severity: 'medium' },
+          ]);
           nextId.current += 1;
         }}
         onRemove={(id) => setRows((current) => current.filter((row) => row.id !== id))}
@@ -806,7 +815,9 @@ function FormLayoutAdvancedCollapsed() {
         />
         <CollapsibleContent>
           <div className="space-y-4 pt-2">
-            <FormField label="Batch size">{(control) => <Input {...control} type="number" defaultValue={10000} />}</FormField>
+            <FormField label="Batch size">
+              {(control) => <Input {...control} type="number" defaultValue={10000} />}
+            </FormField>
             <FormField label="Retries">{(control) => <Input {...control} type="number" defaultValue={3} />}</FormField>
           </div>
         </CollapsibleContent>
@@ -820,7 +831,8 @@ function FormLayoutUnitsAndRange() {
   const [low, setLow] = useState<number | null>(sensor.lowLimit);
   const [high, setHigh] = useState<number | null>(38);
   const [deadband, setDeadband] = useState<number | null>(0.5);
-  const rangeError = low !== null && high !== null && high <= low ? `Enter a value above the low limit of ${low} barg.` : undefined;
+  const rangeError =
+    low !== null && high !== null && high <= low ? `Enter a value above the low limit of ${low} barg.` : undefined;
 
   return (
     <form className="w-full max-w-md space-y-4" onSubmit={(event) => event.preventDefault()}>
@@ -854,7 +866,15 @@ function FormLayoutUnitsAndRange() {
       </div>
       <FormField label="Deadband" helper="The value must move this far back inside the limit before the alarm clears.">
         {(control) => (
-          <UnitNumberInput {...control} value={deadband} onValueChange={setDeadband} unit="barg" min={0} max={5} step={0.1} />
+          <UnitNumberInput
+            {...control}
+            value={deadband}
+            onValueChange={setDeadband}
+            unit="barg"
+            min={0}
+            max={5}
+            step={0.1}
+          />
         )}
       </FormField>
     </form>
@@ -900,7 +920,9 @@ function FormLayoutConfigureAlarm() {
         </FormField>
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Limit type" required>
-            {(control) => <OptionSelect {...control} options={LIMIT_TYPE_OPTIONS} defaultValue="high" width="compact" />}
+            {(control) => (
+              <OptionSelect {...control} options={LIMIT_TYPE_OPTIONS} defaultValue="high" width="compact" />
+            )}
           </FormField>
           <FormField label="Limit value" required>
             {(control) => (
@@ -989,7 +1011,9 @@ function FormLayoutInviteUser() {
     <form className="w-full max-w-md space-y-6" onSubmit={(event) => event.preventDefault()}>
       <div className="space-y-4">
         <FormField label="Email address" required>
-          {(control) => <Input {...control} type="email" autoComplete="off" defaultValue="jonas.nyberg@nordkapp.test" />}
+          {(control) => (
+            <Input {...control} type="email" autoComplete="off" defaultValue="jonas.nyberg@nordkapp.test" />
+          )}
         </FormField>
         <ChoiceCardGroup
           label="Role"

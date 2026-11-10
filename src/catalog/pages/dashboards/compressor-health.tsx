@@ -314,7 +314,7 @@ function CompDiagramPanel({ selectedId, onSelect }: CompSelection) {
     <DashboardPanel
       title="Machine"
       description="Gas turbine, coupling and barrel compressor. Select a measurement point to inspect it."
-      footnote="Seven live measurement points. A callout is tinted and flagged only when its reading is near or beyond a limit."
+      footnote="Seven live measurement points; a callout is tinted and flagged only near or beyond a limit. The operating point is 24% right of the surge limit."
     >
       <DiagramCanvas
         interactive
@@ -409,6 +409,10 @@ function CompDiagramPanel({ selectedId, onSelect }: CompSelection) {
           );
         })}
       </DiagramCanvas>
+      <div className="flex flex-col gap-3 border-t border-default pt-4">
+        <p className="text-xs font-medium text-medium-foreground">Operating envelope</p>
+        <CompEnvelopeStrip />
+      </div>
     </DashboardPanel>
   );
 }
@@ -477,6 +481,27 @@ function CompInspectorPanel({ pointId }: { pointId: string }) {
   );
 }
 
+/** The operating point against the edges of the compressor map, one range per axis. */
+function CompEnvelopeStrip() {
+  return (
+    <ul aria-label="Operating envelope" className="grid w-full grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-3">
+      {COMP_ENVELOPE.map((axis) => (
+        <li key={axis.id} className="min-w-0">
+          <RangeIndicator
+            label={axis.label}
+            value={axis.value}
+            unit={axis.unit}
+            decimals={axis.decimals}
+            min={axis.min}
+            max={axis.max}
+            limits={{ low: axis.low, high: axis.high }}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function CompEnvelopePanel() {
   return (
     <DashboardPanel
@@ -484,21 +509,7 @@ function CompEnvelopePanel() {
       description="Where the machine runs between the edges of its map"
       footnote="The operating point is 24% right of the surge limit and inside the band on all three axes."
     >
-      <ul className="grid w-full grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-3">
-        {COMP_ENVELOPE.map((axis) => (
-          <li key={axis.id} className="min-w-0">
-            <RangeIndicator
-              label={axis.label}
-              value={axis.value}
-              unit={axis.unit}
-              decimals={axis.decimals}
-              min={axis.min}
-              max={axis.max}
-              limits={{ low: axis.low, high: axis.high }}
-            />
-          </li>
-        ))}
-      </ul>
+      <CompEnvelopeStrip />
     </DashboardPanel>
   );
 }
@@ -600,9 +611,6 @@ function CompDashboard() {
           </DashboardCell>
           <DashboardCell span={4}>
             <CompInspectorPanel pointId={selectedId} />
-          </DashboardCell>
-          <DashboardCell span={12}>
-            <CompEnvelopePanel />
           </DashboardCell>
         </DashboardGrid>
         <DashboardGrid>

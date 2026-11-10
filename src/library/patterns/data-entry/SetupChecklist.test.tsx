@@ -47,7 +47,9 @@ describe(SetupChecklist.name, () => {
 
   it('replaces the count once every task is done', () => {
     const allDone = ITEMS.map((item) => ({ ...item, done: true }));
-    render(<SetupChecklist title="Commission compressor" items={allDone} onAction={vi.fn()} completeText="Ready to start" />);
+    render(
+      <SetupChecklist title="Commission compressor" items={allDone} onAction={vi.fn()} completeText="Ready to start" />
+    );
 
     expect(screen.getByText('Ready to start')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
