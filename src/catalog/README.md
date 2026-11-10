@@ -127,6 +127,43 @@ its Overview, Colors, Layout, Do's and Don'ts and the section for your primitive
 - **Deterministic.** No `Math.random()`, no `Date.now()`, no network. Use `src/catalog/data`.
 - **Works in both themes.** Tokens handle it; check the dark screenshot anyway.
 
+## Lessons from the first pages
+
+- **The lint rule cannot see subpath imports.** `aura/no-overriding-styles` only checks components
+  imported from the old barrel, so zero warnings proves nothing. Police it yourself: the only
+  classes allowed on an Aura component are layout ones.
+- **`align: 'stretch'` gives full width and centres vertically.** Do not add `self-center` or
+  `mx-auto` hacks; cap the width with `w-full max-w-*` on your own wrapper when needed.
+- **There is no Table primitive.** Use a plain semantic `<table>` with token classes for small
+  static tables and `@cognite/aura/data-grid` for anything sortable, selectable or long.
+- **A vertical `Separator` needs a height from its row**, for example
+  `data-[orientation=vertical]:h-4`.
+- **Skeletons disappear on `bg-card-background` in dark theme.** Put loading placeholders on the
+  base surface.
+- **Themes change everything at once.** Accent, tinted surfaces, radius, spacing unit and typeface
+  can all differ (see Foundations → Themes), so never hard-code a pixel size, a radius or a ramp
+  step where a token or a spacing utility exists, and never assume the primary action is dark grey.
+- **Fill the row.** Aim for sections whose specimens fill whole rows (three `sm`, or `sm` + `lg`,
+  or two `md`), so a section does not end on a lone card.
+
+## What already exists in `src/library`
+
+Reuse before writing something new; read the file for the props.
+
+- `actions/` — AsyncButton, ConfirmButton, CopyButton, SplitButton, ToggleGroup, SelectionActionBar, ShortcutHint
+- `forms/` — FormField, PasswordInput, UnitNumberInput, CharacterCountTextarea, DebouncedSearch,
+  InlineEditText, SelectAllCheckboxList, ChoiceCardGroup, SettingSwitchRow, StateTextSwitch,
+  SliderField, SliderNumberInput, MultiSelectCombobox
+- `display/` — PersonAvatar, AvatarGroup, StatusBadge, MetadataList, StatDelta
+- `feedback/` — SingleToaster, DismissibleAlert, RetryBlock, LabelledProgress, Delayed,
+  SkeletonText, SkeletonList, SkeletonTable, SkeletonCard
+- `industrial/` — `status.ts` (tones, limits, formatters, class maps), ValueReadout, StatusDot,
+  StatusIndicator, Sparkline, TrendDelta, KpiTile, RadialGauge, LinearGauge, RangeIndicator,
+  LevelMeter, ProgressRing. In this grammar normal is neutral; colour appears only for a judged
+  change or an abnormal state.
+- `themes/` — theme options, presets and the generated stylesheet
+- `data/`, `navigation/`, `overlays/`, `ai/` — list the folder; more is being added.
+
 ## Reusable components — `src/library`
 
 When a customisation has behaviour or would be pasted more than once, make it a component in
