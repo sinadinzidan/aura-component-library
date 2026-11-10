@@ -95,9 +95,9 @@ const ASSET_PROPERTIES: readonly Property[] = [
 ];
 
 const LIMIT_PROPERTIES: readonly Property[] = [
-  { label: 'Discharge pressure', value: '40.0 to 52.0 barg' },
-  { label: 'Discharge temperature', value: '90.0 to 145.0 °C' },
-  { label: 'Drive-end vibration', value: 'Up to 7.1 mm/s' },
+  { label: 'Pressure', value: '40.0 to 52.0 barg' },
+  { label: 'Temperature', value: '90.0 to 145.0 °C' },
+  { label: 'Vibration', value: 'Up to 7.1 mm/s' },
 ];
 
 const MAINTENANCE_PROPERTIES: readonly Property[] = [
@@ -123,8 +123,8 @@ const sensorTrend = (sensor: Sensor): number[] => [
 ];
 
 /** Gives a panel the height it would get from the page column it sits in. */
-function DetailPanelFrame({ children }: { children: ReactNode }) {
-  return <div className="mx-auto h-104 w-full max-w-md">{children}</div>;
+function DetailPanelFrame({ tall = false, children }: { tall?: boolean; children: ReactNode }) {
+  return <div className={`mx-auto w-full max-w-md ${tall ? 'h-128' : 'h-104'}`}>{children}</div>;
 }
 
 /** An icon-only header action with its tooltip. */
@@ -227,8 +227,8 @@ function DetailPanelCopyable() {
             },
             {
               label: 'Data set',
-              value: <span className="font-mono text-xs">nordkapp-historian</span>,
-              action: <CopyButton text="nordkapp-historian" label="Copy data set ID" iconOnly variant="ghost" size="icon-sm" />,
+              value: <span className="font-mono text-xs">nk-historian</span>,
+              action: <CopyButton text="nk-historian" label="Copy data set ID" iconOnly variant="ghost" size="icon-sm" />,
             },
             { label: 'Unit', value: PRESSURE.unit },
             { label: 'Step series', value: 'No' },
@@ -297,17 +297,19 @@ function DetailPanelWithTabs() {
           title={COMPRESSOR.name}
           description={COMPRESSOR.tag}
           toolbar={
-            <TabsList showSeparator className="w-full">
-              <TabsTrigger value="properties">
-                <TabsLabel>Properties</TabsLabel>
-              </TabsTrigger>
-              <TabsTrigger value="readings" badge={String(READINGS.length)}>
-                <TabsLabel>Readings</TabsLabel>
-              </TabsTrigger>
-              <TabsTrigger value="work" badge={String(ASSET_ORDERS.length)}>
-                <TabsLabel>Work</TabsLabel>
-              </TabsTrigger>
-            </TabsList>
+            <div className="border-b border-default px-4">
+              <TabsList>
+                <TabsTrigger value="properties">
+                  <TabsLabel>Properties</TabsLabel>
+                </TabsTrigger>
+                <TabsTrigger value="readings" badge={String(READINGS.length)}>
+                  <TabsLabel>Readings</TabsLabel>
+                </TabsTrigger>
+                <TabsTrigger value="work" badge={String(ASSET_ORDERS.length)}>
+                  <TabsLabel>Work</TabsLabel>
+                </TabsTrigger>
+              </TabsList>
+            </div>
           }
         >
           <TabsPanel value="properties">
@@ -357,11 +359,6 @@ function DetailPanelHeaderActions() {
   return (
     <DetailPanelFrame>
       <SidePanel
-        leading={
-          <DetailPanelRecordIcon>
-            <IconEngine />
-          </DetailPanelRecordIcon>
-        }
         title={COMPRESSOR.name}
         description={COMPRESSOR.tag}
         actions={
@@ -600,7 +597,7 @@ function DetailPanelEditForm() {
 
 function DetailPanelAsset() {
   return (
-    <DetailPanelFrame>
+    <DetailPanelFrame tall>
       <SidePanel
         leading={
           <DetailPanelRecordIcon>
@@ -658,7 +655,7 @@ function DetailPanelAsset() {
 
 function DetailPanelWorkOrder() {
   return (
-    <DetailPanelFrame>
+    <DetailPanelFrame tall>
       <SidePanel
         leading={
           <DetailPanelRecordIcon>
@@ -983,7 +980,6 @@ function DetailPanelActivity() {
   const events = [
     { id: 'e1', person: TECHNICIAN, text: 'started work', at: REFERENCE_NOW - 50 * MINUTE },
     { id: 'e2', person: PEOPLE[1], text: 'assigned Tomás Barros', at: REFERENCE_NOW - 2 * HOUR },
-    { id: 'e3', person: PEOPLE[1], text: 'raised priority to P1', at: REFERENCE_NOW - 2 * HOUR - 4 * MINUTE },
     { id: 'e4', person: OPERATOR, text: 'created the work order', at: REFERENCE_NOW - 3 * HOUR },
   ];
 

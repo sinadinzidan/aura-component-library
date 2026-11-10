@@ -59,7 +59,7 @@ export function PropertyList({
       {items.map((item) => (
         <div key={item.label} className={rowLayout}>
           <dt className={`flex min-h-5 items-center gap-1 text-muted-foreground ${stacked ? 'text-xs' : ''}`}>
-            <span className="min-w-0 truncate">{item.label}</span>
+            <span className="min-w-0 break-words">{item.label}</span>
             {item.hint}
           </dt>
           <dd className="flex min-h-5 min-w-0 items-center gap-2 text-base-foreground">

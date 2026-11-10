@@ -18,6 +18,8 @@ export type HeatMapGridProps = {
   domain?: readonly [number, number];
   unit?: string;
   decimals?: number;
+  /** Maps a value to the number that drives the colour, e.g. `Math.abs` for correlations. Defaults to the value. */
+  intensityOf?: (value: number) => number;
   /** Print the value in each cell. Needs cells of at least `h-8`. */
   showValues?: boolean;
   /** Show every nth column label, for dense grids such as 24 hours. */
@@ -49,6 +51,7 @@ export function HeatMapGrid({
   domain,
   unit,
   decimals = 0,
+  intensityOf,
   showValues = false,
   columnLabelEvery = 1,
   cellClassName = 'h-6',
@@ -57,7 +60,8 @@ export function HeatMapGrid({
   summary,
   className,
 }: HeatMapGridProps) {
-  const range = domain ?? extent(values.flat()) ?? [0, 1];
+  const intensity = (value: number) => (intensityOf ? intensityOf(value) : value);
+  const range = domain ?? extent(values.flat().map((value) => (value === null ? null : intensity(value)))) ?? [0, 1];
 
   return (
     <figure data-slot="heat-map-grid" className={cn('m-0 flex w-full min-w-0 flex-col gap-2', className)}>
@@ -80,7 +84,7 @@ export function HeatMapGrid({
               </th>
               {columns.map((column, columnIndex) => {
                 const value = values[rowIndex]?.[columnIndex] ?? null;
-                const level = value === null ? null : heatLevel(value, range[0], range[1], HEAT_LEVEL_BG.length);
+                const level = value === null ? null : heatLevel(intensity(value), range[0], range[1], HEAT_LEVEL_BG.length);
                 return (
                   <td
                     key={`${column}-${columnIndex}`}

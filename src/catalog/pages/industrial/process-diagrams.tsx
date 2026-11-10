@@ -183,13 +183,13 @@ function ProcessPumpSkid() {
   return (
     <DiagramCanvas
       label={`Export pump skid: pump A on duty at ${MOTOR_CURRENT.value} amperes, pump B on standby, ${EXPORT_FLOW.value} cubic metres per hour to export`}
-      width={460}
+      width={480}
       height={230}
     >
       <PipeLine points={[{ x: 12, y: 117 }, { x: 70, y: 117 }]} weight="heavy" flow="forward" />
       <PipeLine points={[{ x: 70, y: 62 }, { x: 70, y: 172 }]} weight="heavy" />
       <PipeLine points={[{ x: 380, y: 62 }, { x: 380, y: 172 }]} weight="heavy" />
-      <PipeLine points={[{ x: 380, y: 117 }, { x: 448, y: 117 }]} weight="heavy" flow="forward" />
+      <PipeLine points={[{ x: 380, y: 117 }, { x: 468, y: 117 }]} weight="heavy" flow="forward" />
       {branches.map(({ pump, flowing, current }) => {
         const valve: PlacedUnit = { kind: 'check-valve', x: 310, y: valveCentre(pump.y, valveSize), tag: 'Check valve', state: 'stopped' };
         return (
@@ -203,7 +203,7 @@ function ProcessPumpSkid() {
           </g>
         );
       })}
-      <ValueTag x={448} y={72} anchor="end" label={EXPORT_FLOW.tag} mono value={EXPORT_FLOW.value} unit={EXPORT_FLOW.unit} />
+      <ValueTag x={394} y={72} label={EXPORT_FLOW.tag} mono value={EXPORT_FLOW.value} unit={EXPORT_FLOW.unit} />
     </DiagramCanvas>
   );
 }
@@ -403,11 +403,11 @@ function ProcessDiagramSeparator() {
       <PipeLine points={[portOf(vessel, 'out', size), { x: 448, y: 125 }]} flow="forward" />
       <PipeLine points={[bottom, { x: bottom.x, y: 206 }, { x: 448, y: 206 }]} flow="forward" arrows={2} />
       <EquipmentSymbol kind="horizontal-separator" size={size} cx={vessel.x} cy={vessel.y} label={`${SEPARATOR.tag}, running`} />
-      <path d={`M ${vessel.x - 44} ${levelY} H ${vessel.x + 14}`} strokeWidth={1.5} strokeDasharray="4 3" className="stroke-medium-foreground" />
-      <PipeLine points={[{ x: 180, y: top.y }, { x: 180, y: 74 }]} weight="light" dashed />
-      <InstrumentBubble letters="PT" loop="10010" size={30} cx={180} cy={59} />
-      <ValueTag x={158} y={49} anchor="end" value={SEPARATOR_PRESSURE.value} unit={SEPARATOR_PRESSURE.unit} decimals={1} />
-      <PipeLine points={[{ x: 180, y: bottom.y }, { x: 180, y: 190 }, { x: 137, y: 190 }]} weight="light" dashed />
+      <path d={`M ${vessel.x - 46} ${levelY} H ${vessel.x + 15}`} strokeWidth={1.5} strokeDasharray="4 3" className="stroke-medium-foreground" />
+      <PipeLine points={[{ x: 196, y: top.y }, { x: 196, y: 74 }]} weight="light" dashed />
+      <InstrumentBubble letters="PT" loop="10010" size={30} cx={196} cy={59} />
+      <ValueTag x={174} y={49} anchor="end" value={SEPARATOR_PRESSURE.value} unit={SEPARATOR_PRESSURE.unit} decimals={1} />
+      <PipeLine points={[{ x: 196, y: bottom.y }, { x: 196, y: 190 }, { x: 137, y: 190 }]} weight="light" dashed />
       <InstrumentBubble letters="LT" loop="10012" size={30} cx={122} cy={190} />
       <ValueTag x={100} y={180} anchor="end" value={SEPARATOR_LEVEL.value} unit={SEPARATOR_LEVEL.unit} decimals={1} />
       <ProcessText x={448} y={34} anchor="end" quiet>
@@ -436,26 +436,26 @@ function ProcessDiagramPumpSkid() {
 function ProcessDiagramCoolingLoop() {
   const pump: PlacedUnit = { kind: 'centrifugal-pump', x: 130, y: 60, tag: '40-PA-4002', name: 'Cooling water pump B', state: 'running' };
   const exchanger = place(COOLER, 'heat-exchanger', 330, 60);
-  const cooler: PlacedUnit = { kind: 'air-cooler', x: 240, y: 180, tag: '40-HA-4010', name: 'Cooling water cooler', state: 'running' };
+  const cooler: PlacedUnit = { kind: 'air-cooler', x: 240, y: 210, tag: '40-HA-4010', name: 'Cooling water cooler', state: 'running' };
   return (
-    <DiagramCanvas label="Closed cooling water loop: pump B circulates 640 cubic metres per hour through the interstage cooler at 18.4 degrees supply and 31.6 degrees return, then through the cooling water cooler" width={460} height={240}>
-      <PipeLine points={[{ x: 40, y: 180 }, { x: 40, y: 60 }, portOf(pump, 'in')]} flow="forward" arrows={2} />
+    <DiagramCanvas label="Closed cooling water loop: pump B circulates 640 cubic metres per hour through the interstage cooler at 18.4 degrees supply and 31.6 degrees return, then through the cooling water cooler" width={460} height={270}>
+      <PipeLine points={[{ x: 40, y: 210 }, { x: 40, y: 60 }, portOf(pump, 'in')]} flow="forward" arrows={2} />
       <PipeLine points={[portOf(pump, 'out'), portOf(exchanger, 'in')]} flow="forward" />
-      <PipeLine points={[portOf(exchanger, 'out'), { x: 420, y: 60 }, { x: 420, y: 180 }, portOf(cooler, 'out')]} flow="forward" arrows={2} />
-      <PipeLine points={[portOf(cooler, 'in'), { x: 40, y: 180 }]} flow="forward" />
+      <PipeLine points={[portOf(exchanger, 'out'), { x: 420, y: 60 }, { x: 420, y: 210 }, portOf(cooler, 'out')]} flow="forward" arrows={2} />
+      <PipeLine points={[portOf(cooler, 'in'), { x: 40, y: 210 }]} flow="forward" />
       {[pump, exchanger, cooler].map((unit) => (
         <ProcessUnit key={unit.tag} unit={unit} />
       ))}
       <ValueTag x={230} y={14} anchor="middle" label="Supply" value={18.4} unit="°C" decimals={1} leaderTo={{ x: 230, y: 60 }} />
-      <ValueTag x={410} y={104} anchor="end" label="Return" value={31.6} unit="°C" decimals={1} />
-      <ValueTag x={50} y={104} label="Circulation" value={640} unit="m³/h" />
+      <ValueTag x={410} y={126} anchor="end" label="Return" value={31.6} unit="°C" decimals={1} />
+      <ValueTag x={50} y={126} label="Circulation" value={640} unit="m³/h" />
     </DiagramCanvas>
   );
 }
 
 function ProcessDiagramAlarmUnit() {
   const y = 112;
-  const upstream = place(COMPRESSOR_2, 'compressor', 90, y);
+  const upstream: PlacedUnit = { kind: 'horizontal-separator', x: 90, y, tag: '20-VA-1002', name: 'Test separator', state: 'running' };
   const tripped = place(RECOMPRESSOR, 'compressor', 240, y);
   const downstream = place(COOLER, 'heat-exchanger', 390, y);
   const alarm = ALARMS[0];
@@ -533,7 +533,7 @@ function ProcessDiagramOneLine() {
     { sensor: SEPARATOR_LEVEL, x: 282, to: { x: 282, y } },
     { sensor: SUCTION_PRESSURE, x: 366, to: { x: 366, y } },
     { sensor: DISCHARGE_PRESSURE, x: 478, to: { x: 478, y } },
-    { sensor: DISCHARGE_TEMPERATURE, x: 562, to: { x: 540, y } },
+    { sensor: DISCHARGE_TEMPERATURE, x: 556, to: { x: 556, y } },
     { sensor: COOLER_TEMPERATURE, x: 668, to: { x: 668, y } },
     { sensor: GAS_FLOW, x: 790, to: { x: 790, y } },
   ];

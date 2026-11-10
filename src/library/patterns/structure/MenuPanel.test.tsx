@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { MenuPanel } from './MenuPanel';
 
@@ -15,17 +16,58 @@ describe(MenuPanel.name, () => {
     );
   });
 
-  it('shows the trigger outside the surface', () => {
+  it('shows the trigger outside the surface and marks it expanded', () => {
     render(
-      <MenuPanel label="Account menu" trigger={<button type="button">Ingrid Haugen</button>}>
+      <MenuPanel
+        label="Account menu"
+        trigger={(props) => (
+          <button type="button" {...props}>
+            Ingrid Haugen
+          </button>
+        )}
+      >
         Sign out
       </MenuPanel>
     );
 
-    expect(screen.getByRole('button', { name: 'Ingrid Haugen' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Account menu' })).not.toContainElement(
-      screen.getByRole('button', { name: 'Ingrid Haugen' })
+    const trigger = screen.getByRole('button', { name: 'Ingrid Haugen' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('group', { name: 'Account menu' })).not.toContainElement(trigger);
+  });
+
+  it('hides and shows the panel when the trigger is pressed', async () => {
+    render(
+      <MenuPanel
+        label="Account menu"
+        trigger={(props) => (
+          <button type="button" {...props}>
+            Ingrid Haugen
+          </button>
+        )}
+      >
+        Sign out
+      </MenuPanel>
     );
+    const trigger = screen.getByRole('button', { name: 'Ingrid Haugen' });
+
+    await userEvent.click(trigger);
+
+    expect(screen.queryByRole('group', { name: 'Account menu' })).not.toBeInTheDocument();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(trigger);
+
+    expect(screen.getByRole('group', { name: 'Account menu' })).toBeInTheDocument();
+  });
+
+  it('can start closed', () => {
+    render(
+      <MenuPanel label="Account menu" defaultOpen={false}>
+        Sign out
+      </MenuPanel>
+    );
+
+    expect(screen.queryByRole('group', { name: 'Account menu' })).not.toBeInTheDocument();
   });
 
   it('lines up with the end of the trigger when asked', () => {

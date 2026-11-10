@@ -145,7 +145,7 @@ async function auditPage(page, pageId, theme) {
 (async () => {
   const theme = { ...(presetId ? presetSettings(presetId) : {}), ...(dark ? { mode: 'dark' } : {}) };
   const pageIds = pagesArg.length > 0 ? pagesArg : builtPages();
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width, height: 1000 }, ignoreHTTPSErrors: true });
   const report = [];
   for (const pageId of pageIds) {

@@ -16,7 +16,7 @@ export type Mode = (typeof MODES)[number];
 export const ACCENTS = ['mountain', 'fjord', 'sky', 'nordic', 'aurora', 'dusk', 'amber', 'pink'] as const;
 export type Accent = (typeof ACCENTS)[number];
 
-export const SURFACES = ['neutral', 'tinted'] as const;
+export const SURFACES = ['neutral', 'tinted', 'deep'] as const;
 export type Surface = (typeof SURFACES)[number];
 
 export const SHAPES = ['sharp', 'default', 'soft'] as const;
@@ -62,7 +62,7 @@ export const ACCENT_LABELS: Record<Accent, string> = {
   pink: 'Pink',
 };
 
-export const SURFACE_LABELS: Record<Surface, string> = { neutral: 'Neutral', tinted: 'Tinted' };
+export const SURFACE_LABELS: Record<Surface, string> = { neutral: 'Neutral', tinted: 'Tinted', deep: 'Deep' };
 export const SHAPE_LABELS: Record<Shape, string> = { sharp: 'Sharp', default: 'Default', soft: 'Soft' };
 export const CONTRAST_LABELS: Record<Contrast, string> = { default: 'Default', high: 'High' };
 export const DENSITY_LABELS: Record<Density, string> = { compact: 'Compact', default: 'Default', spacious: 'Spacious' };
@@ -178,6 +178,39 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
     shape: 'sharp',
     density: 'compact',
   }),
+  preset('tron', 'Tron', 'Near-black surfaces, cyan lines and monospaced type for futuristic command screens.', {
+    mode: 'dark',
+    accent: 'sky',
+    surface: 'deep',
+    shape: 'sharp',
+    density: 'compact',
+    typeface: 'technical',
+  }),
+  preset('hologram', 'Hologram', 'Teal on black with soft shapes for 3D and digital-twin views.', {
+    mode: 'dark',
+    accent: 'nordic',
+    surface: 'deep',
+    shape: 'soft',
+  }),
+  preset('neon-dusk', 'Neon dusk', 'Purple on black with grotesk type for showpiece and AI screens.', {
+    mode: 'dark',
+    accent: 'dusk',
+    surface: 'deep',
+    typeface: 'grotesk',
+  }),
+  preset('night-vision', 'Night vision', 'Green on black, sharp and monospaced, for surveillance-style monitoring.', {
+    mode: 'dark',
+    accent: 'aurora',
+    surface: 'deep',
+    shape: 'sharp',
+    typeface: 'technical',
+  }),
+  preset('ember', 'Ember', 'Amber on black for furnace, flare and heat-centred screens.', {
+    mode: 'dark',
+    accent: 'amber',
+    surface: 'deep',
+    contrast: 'high',
+  }),
   preset('accessible', 'Accessible', 'High contrast, default shapes and extra space for maximum legibility.', {
     accent: 'fjord',
     contrast: 'high',
@@ -243,6 +276,36 @@ export function tintedSurfaceTokens(accent: Exclude<Accent, 'mountain'>, mode: M
   };
 }
 
+/**
+ * The deep surface: near-black page with accent-tinted panels and strokes, for futuristic and 3D
+ * screens. It only exists in dark mode; in light mode it behaves like neutral.
+ */
+export function deepSurfaceTokens(accent: Accent): TokenMap {
+  const neutral: TokenMap = {
+    'base-background': 'var(--mountain-black)',
+    'base-background-hover': 'var(--mountain-950)',
+    'muted-background': 'var(--mountain-black)',
+    'muted-background-hover': 'var(--mountain-950)',
+    'medium-background': 'var(--mountain-950)',
+    'popover-background': 'var(--mountain-950)',
+    'card-background': 'var(--mountain-950)',
+    'card-background-hover': 'var(--mountain-900)',
+    default: 'var(--mountain-800)',
+  };
+  if (accent === 'mountain') return neutral;
+  const step = (value: number) => `var(--${accent}-${value})`;
+  return {
+    ...neutral,
+    'card-background': step(950),
+    'card-background-hover': step(900),
+    default: step(800),
+    emphasized: step(700),
+    'secondary-background': step(900),
+    'secondary-background-hover': step(800),
+    'secondary-foreground': step(100),
+  };
+}
+
 export function highContrastTokens(mode: Mode): TokenMap {
   if (mode === 'light') {
     return {
@@ -292,7 +355,7 @@ const HEADER = `/*
  * Aura theme options. Generated from themes.ts — do not edit by hand.
  * Import after Aura's stylesheet, then set attributes on the root element:
  *   data-accent="mountain|fjord|sky|nordic|aurora|dusk|amber|pink"
- *   data-surface="neutral|tinted"   data-shape="sharp|default|soft"   data-contrast="default|high"
+ *   data-surface="neutral|tinted|deep"   data-shape="sharp|default|soft"   data-contrast="default|high"
  *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|technical"
  * Light and dark come from Aura's own .dark class.
  */`;
@@ -310,6 +373,15 @@ export function buildThemeCss(): string {
       block(
         `.dark[data-accent='${accent}'][data-surface='tinted'],\n.dark [data-accent='${accent}'][data-surface='tinted'],\n[data-accent='${accent}'][data-surface='tinted'] .dark`,
         tintedSurfaceTokens(accent, 'dark')
+      )
+    );
+  }
+
+  for (const accent of ACCENTS) {
+    blocks.push(
+      block(
+        `.dark[data-accent='${accent}'][data-surface='deep'],\n.dark [data-accent='${accent}'][data-surface='deep'],\n[data-accent='${accent}'][data-surface='deep'] .dark`,
+        deepSurfaceTokens(accent)
       )
     );
   }

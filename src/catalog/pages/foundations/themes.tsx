@@ -218,6 +218,26 @@ function ThemesPresetAccessible() {
   return <PresetSample presetId="accessible" />;
 }
 
+function ThemesPresetTron() {
+  return <PresetSample presetId="tron" />;
+}
+
+function ThemesPresetHologram() {
+  return <PresetSample presetId="hologram" />;
+}
+
+function ThemesPresetNeonDusk() {
+  return <PresetSample presetId="neon-dusk" />;
+}
+
+function ThemesPresetNightVision() {
+  return <PresetSample presetId="night-vision" />;
+}
+
+function ThemesPresetEmber() {
+  return <PresetSample presetId="ember" />;
+}
+
 function ThemesAccentOptions() {
   return (
     <div className="flex w-full flex-col gap-2">
@@ -325,7 +345,7 @@ export default definePage({
       id: 'presets',
       title: 'Presets',
       description:
-        'Twenty-four curated combinations. Dark presets always preview dark; the others follow the mode you are in.',
+        'Twenty-nine curated combinations. Dark presets always preview dark; the others follow the mode you are in.',
       specimens: [
         {
           id: 'ThemesPresetAura',
@@ -565,12 +585,62 @@ export default definePage({
           uses: ['themes/themes.css', 'themes/themes.ts'],
           Component: ThemesPresetAccessible,
         },
+        {
+          id: 'ThemesPresetTron',
+          title: 'Tron',
+          note: 'Near-black surfaces, cyan lines and monospaced type for futuristic command screens.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetTron,
+        },
+        {
+          id: 'ThemesPresetHologram',
+          title: 'Hologram',
+          note: 'Teal on black with soft shapes for 3D and digital-twin views.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetHologram,
+        },
+        {
+          id: 'ThemesPresetNeonDusk',
+          title: 'Neon dusk',
+          note: 'Purple on black with grotesk type for showpiece and AI screens.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetNeonDusk,
+        },
+        {
+          id: 'ThemesPresetNightVision',
+          title: 'Night vision',
+          note: 'Green on black, sharp and monospaced, for surveillance-style monitoring.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetNightVision,
+        },
+        {
+          id: 'ThemesPresetEmber',
+          title: 'Ember',
+          note: 'Amber on black for furnace, flare and heat-centred screens.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['themes/themes.css', 'themes/themes.ts'],
+          Component: ThemesPresetEmber,
+        },
       ],
     },
     {
       id: 'options',
       title: 'Options',
-      description: 'The six axes behind the presets. Any combination is valid: 8 accents × 2 surfaces × 3 shapes × 2 contrasts × 3 densities × 3 typefaces × 2 modes — 1,728 themes.',
+      description: 'The six axes behind the presets. Any combination is valid: 8 accents × 3 surfaces × 3 shapes × 2 contrasts × 3 densities × 3 typefaces × 2 modes. Deep surfaces exist in dark mode only.',
       specimens: [
         {
           id: 'ThemesAccentOptions',
@@ -595,7 +665,7 @@ export default definePage({
         {
           id: 'ThemesSurfaceOptions',
           title: 'Surface',
-          note: 'Tinted gives cards, muted areas and secondary buttons the accent hue; neutral keeps them grey.',
+          note: 'Tinted gives cards, muted areas and secondary buttons the accent hue; neutral keeps them grey; deep is near-black and only applies in dark mode.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',

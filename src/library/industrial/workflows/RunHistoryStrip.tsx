@@ -19,14 +19,14 @@ export type RunHistoryStripProps = {
 };
 
 const SQUARE: Record<RunStatus, string> = {
-  success: 'bg-chart-success-300',
+  success: 'bg-chart-neutral-300',
   failed: 'bg-critical-background text-critical-foreground',
   running: 'border-2 border-info-foreground-strong',
   skipped: 'border border-dashed border-emphasized text-muted-foreground',
 };
 
 /**
- * The last runs of a job as one square each, oldest to newest. A plain square succeeded; a failed
+ * The last runs of a job as one square each, oldest to newest. A plain grey square succeeded (success is the quiet default); a failed
  * run carries a cross, a skipped one a dash, a running one is hollow — so the pattern reads
  * without colour. The strip is one image with the counts as its accessible name.
  */

@@ -5,6 +5,7 @@ import {
   ACCENTS,
   accentTokens,
   buildThemeCss,
+  deepSurfaceTokens,
   DEFAULT_THEME,
   highContrastTokens,
   MODES,
@@ -106,6 +107,17 @@ describe.each(CASES)('$accent accent, $mode', ({ accent, mode }) => {
 
   it('keeps the focus ring visible against the page (3:1)', () => {
     expect(contrast(tokens['ring-default'], tokens['base-background'])).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe.each(ACCENTS)('deep surface, %s accent', (accent) => {
+  const tokens = { ...AURA_DEFAULTS.dark, ...(accent === 'mountain' ? {} : accentTokens(accent, 'dark')), ...deepSurfaceTokens(accent) };
+
+  it('keeps text readable on the page and on panels', () => {
+    expect(contrast(tokens['base-foreground'], tokens['base-background'])).toBeGreaterThanOrEqual(7);
+    expect(contrast(tokens['base-foreground'], tokens['card-background'])).toBeGreaterThanOrEqual(7);
+    expect(contrast(tokens['muted-foreground'], tokens['card-background'])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(tokens['secondary-foreground'], tokens['secondary-background'])).toBeGreaterThanOrEqual(4.5);
   });
 });
 

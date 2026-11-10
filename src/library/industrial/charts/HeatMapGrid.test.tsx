@@ -33,6 +33,17 @@ describe(HeatMapGrid.name, () => {
     expect(container.querySelectorAll('[data-level="0"]')).toHaveLength(7);
   });
 
+  it('colours by a derived intensity when given', () => {
+    const { container } = render(
+      <HeatMapGrid label="Correlation" rows={['a']} columns={['x', 'y']} values={[[-0.9, 0.1]]} domain={[0, 1]} intensityOf={Math.abs} decimals={1} showValues />
+    );
+
+    const cells = container.querySelectorAll('[data-slot="heat-cell"]');
+    expect(cells[0]).toHaveClass('bg-heat-map-intense');
+    expect(cells[0]).toHaveTextContent('\u22120.9');
+    expect(cells[1]).toHaveClass('bg-heat-map-mild');
+  });
+
   it('draws cells without data on the neutral surface and says so', () => {
     const { container } = render(<HeatMapGrid label="Alarms" rows={ROWS} columns={COLUMNS} values={VALUES} unit="alarms" />);
 

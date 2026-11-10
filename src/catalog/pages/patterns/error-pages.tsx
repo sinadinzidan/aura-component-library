@@ -14,7 +14,7 @@ import {
   IconChevronRight,
   IconClockPause,
   IconDeviceDesktop,
-  IconFolderPlus,
+  IconPlus,
   IconHourglassHigh,
   IconLogin2,
   IconPlugConnected,
@@ -484,7 +484,7 @@ function ErrorPageCompact() {
       <EmptyStateDescription>It was removed from this dashboard, or the link is incomplete.</EmptyStateDescription>
       <EmptyStateActions>
         <Button variant="secondary" size="sm">
-          <IconFolderPlus /> Add a chart
+          <IconPlus /> Add a chart
         </Button>
       </EmptyStateActions>
     </EmptyState>

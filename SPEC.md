@@ -32,7 +32,10 @@ data components — all on Aura tokens so everything picked from it looks like o
 ### Functional Requirements
 
 - FR-001: The library MUST organise content into six areas: Foundations, Primitives, Patterns, Industrial, Dashboards and Templates.
-- FR-017: The Dashboards area MUST contain at least ten complete dashboards. Each MUST use the shared dashboard frame, 12-column grid and panel, be shown in its own named theme and in other themes, and list its panels as separately copyable variants.
+- FR-017: The Dashboards area MUST contain at least twenty complete dashboards, and no two may share a layout: each has its own structure, interaction and visual character, shown in a named theme that suits it. Classic dashboards share the frame, grid and panel components so their craft is consistent.
+- FR-018: The Dashboards area MUST include interactive 3D dashboards of industrial plants (orbit, hover, select) built with WebGL, with a non-WebGL fallback, and at least one drill-down journey that takes the user from plant level through area and equipment to a single sensor.
+- FR-019: The Dashboards area MUST include futuristic styles (neon grid, HUD, glass, hologram, radial, text-mode) built only from Aura tokens and the deep dark surface.
+- FR-020: Scene colours in 3D views MUST be read from Aura tokens at run time so scenes follow the active theme.
 - FR-002: Every Aura primitive exported by `@cognite/aura` MUST have its own page with at least 20 variants.
 - FR-003: Every variant MUST have a unique id, a title, and a note saying when to use it; it MUST be marked as either Aura (plain component API) or Custom (a composition or customisation).
 - FR-004: Variants MUST be rendered live, at a size that fits their content (small, medium, large or full width), on a neutral preview surface.

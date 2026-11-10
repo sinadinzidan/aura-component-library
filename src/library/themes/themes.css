@@ -2,7 +2,7 @@
  * Aura theme options. Generated from themes.ts — do not edit by hand.
  * Import after Aura's stylesheet, then set attributes on the root element:
  *   data-accent="mountain|fjord|sky|nordic|aurora|dusk|amber|pink"
- *   data-surface="neutral|tinted"   data-shape="sharp|default|soft"   data-contrast="default|high"
+ *   data-surface="neutral|tinted|deep"   data-shape="sharp|default|soft"   data-contrast="default|high"
  *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|technical"
  * Light and dark come from Aura's own .dark class.
  */
@@ -313,6 +313,146 @@
   --secondary-background-hover: var(--pink-700);
   --secondary-foreground: var(--pink-100);
   --muted-foreground: var(--mountain-400);
+}
+
+.dark[data-accent='mountain'][data-surface='deep'],
+.dark [data-accent='mountain'][data-surface='deep'],
+[data-accent='mountain'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--mountain-950);
+  --card-background-hover: var(--mountain-900);
+  --default: var(--mountain-800);
+}
+
+.dark[data-accent='fjord'][data-surface='deep'],
+.dark [data-accent='fjord'][data-surface='deep'],
+[data-accent='fjord'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--fjord-950);
+  --card-background-hover: var(--fjord-900);
+  --default: var(--fjord-800);
+  --emphasized: var(--fjord-700);
+  --secondary-background: var(--fjord-900);
+  --secondary-background-hover: var(--fjord-800);
+  --secondary-foreground: var(--fjord-100);
+}
+
+.dark[data-accent='sky'][data-surface='deep'],
+.dark [data-accent='sky'][data-surface='deep'],
+[data-accent='sky'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--sky-950);
+  --card-background-hover: var(--sky-900);
+  --default: var(--sky-800);
+  --emphasized: var(--sky-700);
+  --secondary-background: var(--sky-900);
+  --secondary-background-hover: var(--sky-800);
+  --secondary-foreground: var(--sky-100);
+}
+
+.dark[data-accent='nordic'][data-surface='deep'],
+.dark [data-accent='nordic'][data-surface='deep'],
+[data-accent='nordic'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--nordic-950);
+  --card-background-hover: var(--nordic-900);
+  --default: var(--nordic-800);
+  --emphasized: var(--nordic-700);
+  --secondary-background: var(--nordic-900);
+  --secondary-background-hover: var(--nordic-800);
+  --secondary-foreground: var(--nordic-100);
+}
+
+.dark[data-accent='aurora'][data-surface='deep'],
+.dark [data-accent='aurora'][data-surface='deep'],
+[data-accent='aurora'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--aurora-950);
+  --card-background-hover: var(--aurora-900);
+  --default: var(--aurora-800);
+  --emphasized: var(--aurora-700);
+  --secondary-background: var(--aurora-900);
+  --secondary-background-hover: var(--aurora-800);
+  --secondary-foreground: var(--aurora-100);
+}
+
+.dark[data-accent='dusk'][data-surface='deep'],
+.dark [data-accent='dusk'][data-surface='deep'],
+[data-accent='dusk'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--dusk-950);
+  --card-background-hover: var(--dusk-900);
+  --default: var(--dusk-800);
+  --emphasized: var(--dusk-700);
+  --secondary-background: var(--dusk-900);
+  --secondary-background-hover: var(--dusk-800);
+  --secondary-foreground: var(--dusk-100);
+}
+
+.dark[data-accent='amber'][data-surface='deep'],
+.dark [data-accent='amber'][data-surface='deep'],
+[data-accent='amber'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--amber-950);
+  --card-background-hover: var(--amber-900);
+  --default: var(--amber-800);
+  --emphasized: var(--amber-700);
+  --secondary-background: var(--amber-900);
+  --secondary-background-hover: var(--amber-800);
+  --secondary-foreground: var(--amber-100);
+}
+
+.dark[data-accent='pink'][data-surface='deep'],
+.dark [data-accent='pink'][data-surface='deep'],
+[data-accent='pink'][data-surface='deep'] .dark {
+  --base-background: var(--mountain-black);
+  --base-background-hover: var(--mountain-950);
+  --muted-background: var(--mountain-black);
+  --muted-background-hover: var(--mountain-950);
+  --medium-background: var(--mountain-950);
+  --popover-background: var(--mountain-950);
+  --card-background: var(--pink-950);
+  --card-background-hover: var(--pink-900);
+  --default: var(--pink-800);
+  --emphasized: var(--pink-700);
+  --secondary-background: var(--pink-900);
+  --secondary-background-hover: var(--pink-800);
+  --secondary-foreground: var(--pink-100);
 }
 
 [data-contrast='high'] {

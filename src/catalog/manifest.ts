@@ -361,8 +361,45 @@ export const MANIFEST: readonly ManifestArea[] = [
   {
     id: 'dashboards',
     title: 'Dashboards',
-    blurb: 'Complete dashboards, each built on one grid and shown in its own theme.',
+    blurb: 'Complete dashboards and interactive experiences: 3D plants, futuristic screens, drill-down journeys and classic operational views.',
     groups: [
+      {
+        id: 'spatial-dashboards',
+        title: '3D and spatial',
+        pages: [
+          { id: 'plant-3d-explorer', title: '3D plant explorer', blurb: 'Fly from the whole plant down to one sensor.' },
+          { id: 'offshore-platform-3d', title: 'Offshore platform', blurb: 'Decks you can separate, with live status.' },
+          { id: 'compressor-digital-twin', title: 'Compressor digital twin', blurb: 'An exploded machine with sensor hotspots.' },
+          { id: 'tank-farm-3d', title: 'Tank farm in 3D', blurb: 'Tanks filled to their real levels.' },
+          { id: 'well-field-3d', title: 'Well field', blurb: 'Well paths under the surface.' },
+          { id: 'fleet-globe', title: 'Fleet globe', blurb: 'Sites on a globe you can spin.' },
+          { id: 'isometric-plant', title: 'Isometric plant', blurb: 'A 2.5D plant drawn in SVG, no WebGL.' },
+        ],
+      },
+      {
+        id: 'futuristic-dashboards',
+        title: 'Futuristic',
+        pages: [
+          { id: 'tron-grid-ops', title: 'Grid operations', blurb: 'Neon lines on a perspective grid.' },
+          { id: 'hud-command-center', title: 'HUD command center', blurb: 'Brackets, reticles and radial readouts.' },
+          { id: 'glass-cockpit', title: 'Glass cockpit', blurb: 'Translucent panels over a live scene.' },
+          { id: 'hologram-asset', title: 'Hologram asset', blurb: 'A wireframe machine with scanning readouts.' },
+          { id: 'radial-mission-control', title: 'Radial mission control', blurb: 'Everything arranged around one dial.' },
+          { id: 'neon-terminal', title: 'Neon terminal', blurb: 'A text-mode plant in characters and bars.' },
+        ],
+      },
+      {
+        id: 'journey-dashboards',
+        title: 'Drill-down journeys',
+        pages: [
+          { id: 'plant-to-sensor', title: 'Plant to sensor', blurb: 'One zoomable canvas, four levels deep.' },
+          { id: 'treemap-explorer', title: 'Treemap explorer', blurb: 'Click into areas sized by what matters.' },
+          { id: 'sunburst-hierarchy', title: 'Sunburst hierarchy', blurb: 'Rings from site to equipment.' },
+          { id: 'miller-columns', title: 'Column browser', blurb: 'Site, area, unit and tag side by side.' },
+          { id: 'process-walkthrough', title: 'Process walkthrough', blurb: 'Follow the gas from inlet to export.' },
+          { id: 'incident-replay', title: 'Incident replay', blurb: 'Scrub through a trip, minute by minute.' },
+        ],
+      },
       {
         id: 'operations-dashboards',
         title: 'Operations',
