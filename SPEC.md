@@ -36,6 +36,9 @@ data components — all on Aura tokens so everything picked from it looks like o
 - FR-018: The Dashboards area MUST include interactive 3D dashboards of industrial plants (orbit, hover, select) built with WebGL, with a non-WebGL fallback, and at least one drill-down journey that takes the user from plant level through area and equipment to a single sensor.
 - FR-019: The Dashboards area MUST include futuristic styles (neon grid, HUD, glass, hologram, radial, text-mode) built only from Aura tokens and the deep dark surface.
 - FR-020: Scene colours in 3D views MUST be read from Aura tokens at run time so scenes follow the active theme.
+- FR-021: The library MUST provide the building blocks Aura does not ship — table, tag, stepper, timeline, drawer, alert dialog, context menu and resizable panes — as reusable components with the same 20-variant pages as Aura's primitives, and existing pages MUST use them instead of one-off versions.
+- FR-022: The library MUST include working editors and builders (dashboard editor, form builder, query builder, node graph editor, Gantt chart, spreadsheet grid, pivot and tree tables, calendar scheduler, rich text editor, code and SQL editor) whose state changes through direct manipulation and keyboard, with no extra runtime dependencies beyond those already installed.
+- FR-023: The Industrial area MUST include an interactive P&ID viewer with pan, zoom and clickable live tags, and at least one dashboard that links a P&ID selection to the same equipment in a 3D scene.
 - FR-002: Every Aura primitive exported by `@cognite/aura` MUST have its own page with at least 20 variants.
 - FR-003: Every variant MUST have a unique id, a title, and a note saying when to use it; it MUST be marked as either Aura (plain component API) or Custom (a composition or customisation).
 - FR-004: Variants MUST be rendered live, at a size that fits their content (small, medium, large or full width), on a neutral preview surface.
