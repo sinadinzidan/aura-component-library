@@ -122,7 +122,9 @@ const AOA_EXPORT_VALUES = [...AOA_EXPORT.slice(0, -1).map((point) => point.v), P
 
 const AOA_HOURS = AOA_EXPORT.map((point) => formatTime(point.t));
 
-const AOA_ENERGY = makeValues({ seed: 43, points: 14, base: 32.2, amplitude: 0.5, noise: 0.3, drift: -1.2 });
+const AOA_ENERGY_WEEK = [32.6, 32.4, 32.1, 31.9, 31.6, 31.5, 31.2];
+
+const AOA_ENERGY = [...makeValues({ seed: 43, points: 7, base: 33, amplitude: 0.3, noise: 0.2, min: 32.6 }), ...AOA_ENERGY_WEEK];
 
 const AOA_ENERGY_DAYS = Array.from({ length: 14 }, (_, index) => `${index + 27 > 28 ? index - 1 : index + 27} ${index + 27 > 28 ? 'Mar' : 'Feb'}`);
 
@@ -295,8 +297,7 @@ function AoaAnswer({ topic }: { topic: AoaTopicId }) {
         <Bars
           label="Energy intensity per day for the last seven days against the target"
           categories={AOA_WEEK_DAYS}
-          series={[{ id: 'intensity', label: 'Energy intensity', values: AOA_ENERGY.slice(7), tone: 'purple' }]}
-          unit="kWh/boe"
+          series={[{ id: 'intensity', label: 'Energy intensity, kWh/boe', values: AOA_ENERGY_WEEK, tone: 'purple' }]}
           decimals={1}
           showValues
           height={170}

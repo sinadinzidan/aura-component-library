@@ -17,7 +17,7 @@ const STATE_TONE: Record<AgentStepState, Tone> = {
 const STATE_WORD: Record<AgentStepState, string> = {
   done: 'Done',
   running: 'Running',
-  waiting: 'Needs you',
+  waiting: 'Waiting',
   failed: 'Failed',
   queued: 'Queued',
 };
@@ -62,8 +62,8 @@ export function AgentStep({ title, state, detail, duration, last = false, classN
         data-state={state}
         className={cx('flex min-w-0 flex-col gap-2 rounded-(--kit-radius) bg-(--t-solid) p-4 text-(color:--t-on-solid)', className)}
       >
-        <span className="flex items-center gap-2 text-2xl leading-none font-extrabold tracking-tight">
-          <StateIcon state={state} className="size-7 shrink-0" />
+        <span className="flex items-center gap-2 text-xl leading-none font-extrabold tracking-tight">
+          <StateIcon state={state} className="size-6 shrink-0" />
           {STATE_WORD[state]}
         </span>
         <span className="text-base font-semibold">{title}</span>

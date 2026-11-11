@@ -421,11 +421,11 @@ function HaAssetCard({ className }: { className?: string }) {
           {[
             ['Speed', '9,840 rpm'],
             ['Flow', '182 kSm³/h'],
-            ['On watch', `${watch} of ${HA_PARTS.length} parts`],
+            ['On watch', `${watch} of ${HA_PARTS.length}`],
             ['Run time', '41,260 h'],
           ].map(([label, value]) => (
             <div key={label} className="flex items-baseline justify-between gap-2 border-b border-[var(--kit-rule)] pb-1.5 last:border-b-0 last:pb-0">
-              <dt className="text-[var(--kit-text-2)]">{label}</dt>
+              <dt className="whitespace-nowrap text-[var(--kit-text-2)]">{label}</dt>
               <dd className="font-semibold whitespace-nowrap tabular-nums">{value}</dd>
             </div>
           ))}

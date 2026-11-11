@@ -63,7 +63,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 - FR-029: The Plant overview dashboard MUST show one plant data set as a full screen in every look, with a different composition per look (where the hero sits, how KPIs and state are shown, which chrome is used), followed by the kit parts.
 - FR-012: Users MUST be able to search pages and variants and jump to a result.
 - FR-013: Current page, theme, search text and open variant MUST be synced to the host so reload and shared links restore them; outside Fusion the same state MUST be kept in the URL.
-- FR-014: Pages MUST load on demand so opening the library does not load every page's code.
+- FR-014: Pages MUST load on demand so opening the library does not load every page's code. A page that fails to load MUST be retried automatically, and if it still fails the user MUST be offered a "Try again" action that loads it without reloading the app.
 - FR-015: Icon-only controls MUST have an accessible name and a tooltip; every chart MUST have a text label.
 
 ## Success Criteria

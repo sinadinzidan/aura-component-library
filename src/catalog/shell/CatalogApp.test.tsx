@@ -89,6 +89,7 @@ describe(CatalogApp.name, () => {
         },
       ]),
       lookupPageLoader: (location) => (location.page.id === 'button' ? () => Promise.resolve(BUTTON_PAGE) : null),
+      pageLoadRetry: { count: 0, delayMs: 0 },
       loadLibrarySource: vi.fn((file: string) => Promise.resolve(`// source of ${file}`)),
     };
   });
@@ -147,7 +148,29 @@ describe(CatalogApp.name, () => {
 
     renderApp(createChannel(JSON.stringify({ page: 'button' })), deps);
 
-    expect(await screen.findByText('This page could not be loaded. Reload to try again.')).toBeInTheDocument();
+    expect(await screen.findByText('This page could not be loaded.')).toBeInTheDocument();
+  });
+
+  it('retries a page that fails to load once and then shows it', async () => {
+    const loader = vi.fn<() => Promise<typeof BUTTON_PAGE>>();
+    loader.mockRejectedValueOnce(new Error('chunk failed')).mockResolvedValue(BUTTON_PAGE);
+    deps = { ...deps, lookupPageLoader: () => loader, pageLoadRetry: { count: 1, delayMs: 0 } };
+
+    renderApp(createChannel(JSON.stringify({ page: 'button' })), deps);
+
+    expect(await screen.findByRole('article', { name: 'Primary' })).toBeInTheDocument();
+    expect(loader).toHaveBeenCalledTimes(2);
+  });
+
+  it('loads the page again when Try again is pressed after a failure', async () => {
+    const loader = vi.fn<() => Promise<typeof BUTTON_PAGE>>();
+    loader.mockRejectedValueOnce(new Error('chunk failed')).mockResolvedValue(BUTTON_PAGE);
+    deps = { ...deps, lookupPageLoader: () => loader };
+    renderApp(createChannel(JSON.stringify({ page: 'button' })), deps);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByRole('article', { name: 'Primary' })).toBeInTheDocument();
   });
 
   it('opens the code view for a specimen and syncs it', async () => {

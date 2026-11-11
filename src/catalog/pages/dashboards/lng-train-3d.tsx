@@ -171,9 +171,9 @@ function lngTrain3dStageOfUnit(unit: LngUnit): number {
   return LNGTRAIN3D_STAGES.findIndex((stage) => stage.id === unit.stageId);
 }
 
-function lngTrain3dTarget(state: TourState) {
+function lngTrain3dTarget(state: TourState, zoom = 1.12) {
   const stop = tourStopFor(state, LNGTRAIN3D_STAGES.map((stage) => stage.stop), LNGTRAIN3D_OVERVIEW);
-  return tourFlightTarget(tourCameraTarget(stop, 1.12), state.flights);
+  return tourFlightTarget(tourCameraTarget(stop, zoom), state.flights);
 }
 
 function lngTrain3dReadings(state: TourState): { temperature: number | null; subject: string } {
@@ -260,13 +260,15 @@ type LngTrain3dSceneProps = {
   colourBy: LngTrain3dColourBy;
   insets?: { top?: number; right?: number; bottom?: number; left?: number };
   still?: boolean;
+  /** Multiplier on the camera distance of every stop, for narrow frames. */
+  zoom?: number;
   /** Corner content over the scene. */
   overlay?: ReactNode;
   className?: string;
 };
 
 /** The site in 3D inside a stage; grabbing it leaves the tour. */
-function LngTrain3dScene({ state, dispatch, colourBy, insets, still = false, overlay, className }: LngTrain3dSceneProps) {
+function LngTrain3dScene({ state, dispatch, colourBy, insets, still = false, zoom, overlay, className }: LngTrain3dSceneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const ramp = useTokenColors(TEMPERATURE_RAMP_TOKENS, rootRef);
   const rampColors = ramp ? { step0: ramp.step0.color, step1: ramp.step1.color, step2: ramp.step2.color, step3: ramp.step3.color, step4: ramp.step4.color } : null;
@@ -304,7 +306,7 @@ function LngTrain3dScene({ state, dispatch, colourBy, insets, still = false, ove
               lines={LNGTRAIN3D_LINES}
               land={{ center: [0, 0], size: [290, 170] }}
               sea={{ center: [215, 0], size: [150, 170], level: 0 }}
-              target={lngTrain3dTarget(state)}
+              target={lngTrain3dTarget(state, zoom)}
               insets={insets}
               activeStageId={stage?.id ?? null}
               selectedUnitId={state.selectedUnitId}
@@ -354,13 +356,13 @@ function LngTrain3dStrip({ state, dispatch, compact = false }: LngTrain3dStripPr
                 type="button"
                 aria-current={current ? 'step' : undefined}
                 onClick={() => dispatch({ type: 'goTo', stageIndex: index })}
-                className={`flex min-w-0 flex-1 flex-col gap-2 rounded-[var(--kit-radius-sm)] border p-3.5 text-left transition-[translate,box-shadow] ${LNGTRAIN3D_FOCUS} ${
+                className={`flex min-w-0 flex-1 flex-col gap-2 rounded-[var(--kit-radius-sm)] border text-left transition-[translate,box-shadow] ${compact ? 'p-2.5' : 'p-3.5'} ${LNGTRAIN3D_FOCUS} ${
                   current
                     ? '-translate-y-1.5 border-transparent bg-[var(--primary-background)] text-[color:var(--primary-foreground)] shadow-[0_16px_28px_-14px_var(--primary-background)]'
                     : 'border-[color:var(--kit-rule)] bg-[var(--kit-surface)] text-[color:var(--kit-text)] hover:border-[color:var(--kit-rule-strong)]'
                 }`}
               >
-                <span className="flex items-center gap-2">
+                <span className={compact ? 'flex flex-col gap-1.5' : 'flex items-center gap-2'}>
                   <span
                     aria-hidden="true"
                     className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
@@ -369,9 +371,9 @@ function LngTrain3dStrip({ state, dispatch, compact = false }: LngTrain3dStripPr
                   >
                     {index + 1}
                   </span>
-                  <span className="min-w-0 truncate text-sm font-semibold">{stage.label}</span>
+                  <span className={`min-w-0 text-sm font-semibold ${compact ? '' : 'truncate'}`}>{stage.label}</span>
                 </span>
-                <span className="text-2xl leading-none tracking-tight">
+                <span className={`leading-none tracking-tight ${compact ? 'mt-auto text-base' : 'text-2xl'}`}>
                   <LngTrain3dTemperatureChip temperature={stage.temperature} />
                 </span>
                 {compact ? null : (
@@ -623,12 +625,12 @@ function LngTrainColdChain() {
 
   return (
     <LookScope look="studio">
-      <Canvas className="grid h-[40rem] grid-cols-[11rem_minmax(0,1fr)_24rem] grid-rows-[minmax(0,1fr)] gap-[var(--kit-gap)]">
+      <Canvas className="grid h-[40rem] grid-cols-[10.5rem_minmax(0,1fr)_22rem] grid-rows-[minmax(0,1fr)] gap-[var(--kit-gap)]">
         <Panel title="Temperature" subtitle={temperature === null ? 'Whole site' : subject}>
           <TemperatureRail temperature={temperature} scale={LNGTRAIN3D_SCALE} ticks={LNGTRAIN3D_TICKS} subject={subject} className="min-h-0 flex-1" />
         </Panel>
         <LngTrain3dSceneFrame className="h-full">
-          <LngTrain3dScene className="h-full" state={state} dispatch={dispatch} colourBy="temperature" insets={{ top: 50, bottom: 50 }} still overlay={<LngTrain3dSceneOverlay state={state} dispatch={dispatch} colourBy="temperature" />} />
+          <LngTrain3dScene className="h-full" state={state} dispatch={dispatch} colourBy="temperature" insets={{ top: 50, bottom: 50 }} zoom={1.7} still overlay={<LngTrain3dSceneOverlay state={state} dispatch={dispatch} colourBy="temperature" />} />
         </LngTrain3dSceneFrame>
         <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--kit-gap)]">
           <Panel
@@ -652,6 +654,7 @@ function LngTrainColdChain() {
               unit="°C"
               yDomain={[-180, 40]}
               height={230}
+              highlightLast={false}
               showLegend={false}
             />
             <ul className="mt-3 flex flex-wrap gap-1.5">
@@ -695,7 +698,7 @@ function LngTrainTablet() {
 function LngTrain3dPartStage({ label, children, footer }: { label: string; children: ReactNode; footer?: ReactNode }) {
   return (
     <LookScope look="studio" className="w-full">
-      <Canvas className="flex h-80 flex-col gap-3">
+      <Canvas className="flex h-[26rem] flex-col gap-3">
         <LngTrain3dSceneFrame className="min-h-0 flex-1">
           <SceneStage className="h-full">
             <SceneCanvas label={label}>
@@ -753,7 +756,7 @@ function LngTrainPartRail() {
 function LngTrainPartExchanger() {
   return (
     <LngTrain3dPartStage label="Main cryogenic heat exchanger, a tall insulated tower in a steel structure">
-      <TurntableStage subjectSize={CRYOGENIC_EXCHANGER_SIZE} padding={0.72}>
+      <TurntableStage subjectSize={CRYOGENIC_EXCHANGER_SIZE} padding={1.2}>
         <CryogenicExchanger />
       </TurntableStage>
     </LngTrain3dPartStage>
@@ -785,7 +788,7 @@ function LngTrainPartTank() {
 function LngTrainPartCarrier() {
   return (
     <LngTrain3dPartStage label="LNG carrier with four spherical tanks at a berth with loading arms">
-      <TurntableStage subjectSize={lngCarrierSize()} padding={0.62}>
+      <TurntableStage subjectSize={lngCarrierSize()} padding={0.95}>
         <LngCarrier rotation={[0, Math.PI / 2, 0]} position={[0, 0, 0]} />
         <LoadingArms position={[-8, 0, 0]} rotation={[0, 0, 0]} connected={3} />
       </TurntableStage>
@@ -798,7 +801,7 @@ function LngTrainPartLegends() {
 
   return (
     <LookScope look="studio" className="w-full">
-      <Canvas className="flex h-80 flex-col justify-center gap-5">
+      <Canvas className="flex h-[32rem] flex-col justify-center gap-5">
         <LngTrain3dColourSwitch value={colourBy} onChange={setColourBy} />
         <div>
           <Panel padding="tight">

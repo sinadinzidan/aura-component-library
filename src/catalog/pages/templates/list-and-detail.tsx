@@ -423,15 +423,10 @@ function ListDetailBulkSelect() {
     <BrowserFrame url="control.nordkapp.example.test/work-orders?select=2" look="console" tab="Work planning">
       <AppFrame
         brand={{ name: 'Nordkapp', detail: 'Work planning', mark: <IconFlame /> }}
-        nav={LD_NAV.slice(0, 5)}
+        nav={LD_NAV.filter((item) => ['overview', 'alarms', 'assets', 'work'].includes(item.id))}
         current="work"
         padding="none"
-        tools={
-          <>
-            <span>Planner · M. Solberg</span>
-            <span className="font-medium tabular-nums">14:00:00 UTC</span>
-          </>
-        }
+        tools={<span className="font-medium tabular-nums">14:00:00 UTC</span>}
       >
         <Grid className="shell-grow grid-rows-[auto_auto_1fr]">
           <StatGroup columns={5} label="Backlog" className="col-span-12">
@@ -1068,15 +1063,10 @@ function ListDetailSideSheet() {
     <BrowserFrame url="control.nordkapp.example.test/alarms/ALM-4811" look="console" tab="Alarm journal">
       <AppFrame
         brand={{ name: 'Nordkapp', detail: 'Control room 1', mark: <IconFlame /> }}
-        nav={LD_NAV.slice(0, 5)}
+        nav={LD_NAV.slice(0, 4)}
         current="alarms"
         padding="none"
-        tools={
-          <>
-            <span>Day shift · I. Haugen</span>
-            <span className="font-medium tabular-nums">14:00:00 UTC</span>
-          </>
-        }
+        tools={<span className="font-medium tabular-nums">14:00:00 UTC</span>}
       >
         <div className="shell-grow relative flex flex-col">
           <Panel

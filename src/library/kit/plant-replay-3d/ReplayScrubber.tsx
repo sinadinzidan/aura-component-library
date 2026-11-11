@@ -178,7 +178,7 @@ export function ReplayScrubber({ label, from, to, value, onValueChange, stepMs =
 
           <div data-slot="scrubber-playhead" aria-hidden="true" style={{ left }} className="pointer-events-none absolute inset-y-0 z-20 w-0">
             <span className="absolute inset-y-0 -left-px w-0.5 bg-[var(--kit-text)]" />
-            <span className="absolute -top-2.5 left-0 -translate-x-1/2 whitespace-nowrap bg-[var(--kit-text)] px-1.5 py-0.5 text-xs font-semibold tabular-nums leading-4 text-[var(--kit-halo)]">{formatTime(value)}</span>
+            <span className="absolute -top-3.5 left-0 -translate-x-1/2 whitespace-nowrap bg-[var(--kit-text)] px-1.5 py-0.5 text-xs font-semibold tabular-nums leading-4 text-[var(--kit-halo)]">{formatTime(value)}</span>
           </div>
         </div>
       </div>

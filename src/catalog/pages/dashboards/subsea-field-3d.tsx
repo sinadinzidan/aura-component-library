@@ -655,7 +655,7 @@ function Subsea3dPartCards() {
   return (
     <LookScope look="glass">
       <Canvas>
-        <ul aria-label="Integrity cards in four states" className="flex flex-wrap justify-center gap-4">
+        <ul aria-label="Integrity cards in four states" className="mx-auto grid w-fit grid-cols-2 gap-4">
           {['fl-c', 'rs-1', 'rs-2', 't-b'].map((id) => {
             const item = subsea3dItem(id);
             const record = SUBSEA3D_INTEGRITY[id];

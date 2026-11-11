@@ -317,15 +317,10 @@ function DashPagesFilterRail() {
     <BrowserFrame url="control.nordkapp.example.test/dashboards/alarms" look="console" tab="Alarm performance">
       <AppFrame
         brand={{ name: 'Nordkapp', detail: 'Alarm performance', mark: <IconFlame /> }}
-        nav={DP_NAV.slice(0, 5)}
+        nav={DP_NAV.slice(0, 4)}
         current="alarms"
         padding="none"
-        tools={
-          <>
-            <span>Day shift · L. Wold</span>
-            <span className="font-medium tabular-nums">14:00:00 UTC</span>
-          </>
-        }
+        tools={<span className="font-medium tabular-nums">14:00:00 UTC</span>}
       >
         <Panes label="Alarm dashboard with filters" columns="15rem minmax(0, 1fr)">
           <Pane

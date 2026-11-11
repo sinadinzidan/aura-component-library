@@ -331,12 +331,16 @@ function PlantReplay3dPlantState({ t, layout = 'rows' }: { t: number; layout?: '
 
   if (layout === 'strip') {
     return (
-      <ul aria-label={`Plant state at ${formatTime(t)}`} className="flex gap-px">
+      <ul aria-label={`Plant state at ${formatTime(t)}`} className="@container flex gap-px">
         {rows.map((row) => (
-          <li key={row.id} className="flex min-w-0 flex-1 flex-col items-start gap-1.5 bg-base-background px-3.5 py-2.5">
+          <li key={row.id} className={`flex min-w-0 flex-col items-start gap-1.5 bg-base-background px-3.5 py-2.5 ${row.tag ? 'flex-[1.5]' : 'flex-1'}`}>
             <span className="flex w-full items-baseline gap-2 text-sm">
-              <span className="truncate text-base-foreground">{row.name}</span>
-              {row.tag ? <TagId className="shrink-0">{row.tag}</TagId> : null}
+              <span className="whitespace-nowrap text-base-foreground">{row.name}</span>
+              {row.tag ? (
+                <span className="hidden shrink-0 @2xl:inline">
+                  <TagId>{row.tag}</TagId>
+                </span>
+              ) : null}
             </span>
             <StatusPill tone={row.tone} icon={row.id === 'flare' ? <IconFlame /> : undefined}>
               {row.label}
@@ -497,7 +501,7 @@ function PlantReplay3dConsole({ initialMinute = 40, still = false }: { initialMi
             events={PLANTREPLAY3D_MARKERS}
             ticks={PLANTREPLAY3D_TICKS}
             formatTime={formatTime}
-            className="pt-2"
+            className="pt-4"
           />
         </Panel>
       </div>
@@ -655,7 +659,7 @@ function PlantReplay3dTablet() {
               events={PLANTREPLAY3D_MARKERS}
               ticks={PLANTREPLAY3D_TICKS.filter((_, index) => index % 2 === 0)}
               formatTime={formatTime}
-              className="pt-2"
+              className="pt-4"
             />
           </Panel>
           <div className="grid grid-cols-2 gap-px">
@@ -709,7 +713,7 @@ function PlantReplay3dPartScrubber() {
             events={PLANTREPLAY3D_MARKERS}
             ticks={PLANTREPLAY3D_TICKS}
             formatTime={formatTime}
-            className="pt-2"
+            className="pt-4"
           />
         </Panel>
       </Canvas>

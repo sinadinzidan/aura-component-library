@@ -328,7 +328,7 @@ function TflUllage({ tank }: { tank: TflTank }) {
         <div className="flex h-7 border-2 border-[var(--t-on-pop)]" aria-hidden="true">
           <span className="bg-[var(--t-on-pop)] opacity-45" style={{ width: `${heel}%` }} />
           <span className="bg-[var(--t-on-pop)]" style={{ width: `${stock}%` }} />
-          <span className="bg-[var(--kit-surface)]" style={{ width: `${room}%` }} />
+          <span className="bg-[var(--mountain-white)]" style={{ width: `${room}%` }} />
         </div>
         <p className="mt-1.5 flex justify-between text-sm font-semibold tabular-nums">
           <span>Pumpable {formatNumber(tflPumpable(tank))}</span>

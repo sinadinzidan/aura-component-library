@@ -260,20 +260,20 @@ function WellField3dViewSwitch({ view, onChange }: { view: WellFieldView; onChan
 /** The well index: every slot on the template as a cell of the drawing; the picked one is inked in. */
 function WellField3dPicker({ selectedId, onSelect }: { selectedId: string; onSelect: (id: string) => void }) {
   return (
-    <ul aria-label="Wells on template A" className="grid h-full grid-cols-3 @2xl:grid-cols-9">
+    <ul aria-label="Wells on template A" className="grid h-full grid-cols-3 @xl:grid-cols-9">
       {WELLFIELD3D_WELLS.map((well) => {
         const status = WELLFIELD3D_STATUS[well.status];
         const selected = well.id === selectedId;
         return (
-          <li key={well.id} className="flex border-b border-r border-[var(--kit-rule)] @2xl:border-b-0 @2xl:last:border-r-0">
+          <li key={well.id} className="flex border-b border-r border-[var(--kit-rule)] @xl:border-b-0 @xl:last:border-r-0">
             <button
               type="button"
               aria-pressed={selected}
               aria-label={`${well.name}, ${well.kind}, ${status.label}`}
               onClick={() => onSelect(well.id)}
-              className={`flex w-full flex-col justify-center gap-1 px-3 py-2 text-left hover:bg-[color-mix(in_oklab,var(--kit-text)_8%,transparent)] aria-pressed:bg-[var(--kit-text)] aria-pressed:text-[var(--kit-halo)] ${WELLFIELD3D_FOCUS}`}
+              className={`flex w-full flex-col justify-center gap-1 px-2 py-2 text-left @5xl:px-3 hover:bg-[color-mix(in_oklab,var(--kit-text)_8%,transparent)] aria-pressed:bg-[var(--kit-text)] aria-pressed:text-[var(--kit-halo)] ${WELLFIELD3D_FOCUS}`}
             >
-              <span className="flex items-center gap-1.5 text-sm font-semibold tabular-nums">
+              <span className="flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold tabular-nums">
                 <WellField3dKindMark kind={well.kind} />
                 {well.name.slice(3, 7)}
               </span>
@@ -316,7 +316,7 @@ function WellField3dTitleBlock({ sheet, title }: { sheet: string; title: string 
 
 function WellField3dFigure({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="flex min-w-0 flex-col border-l border-[var(--kit-rule)] pl-3 first:border-l-0 first:pl-0">
+    <div className="flex min-w-0 flex-col border-l border-[var(--kit-rule)] pl-3 odd:border-l-0 odd:pl-0 @md:odd:border-l @md:odd:pl-3 @md:first:border-l-0 @md:first:pl-0">
       <dt className="whitespace-nowrap text-xs text-[var(--kit-text-2)]">{label}</dt>
       <dd className="flex items-baseline gap-1 whitespace-nowrap">
         <span className="text-xl font-medium tabular-nums text-[var(--kit-text)]">{value}</span>
@@ -332,7 +332,7 @@ function WellField3dFigures({ model, depth }: { model: WellField3dModel; depth: 
   const at = wellField3dAtDepth(model, depth);
   const status = WELLFIELD3D_STATUS[well.status];
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="@container flex w-full flex-col gap-2.5">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <span className="flex items-center gap-2 text-[0.8125rem] text-[var(--kit-text)]">
           <StatusPill tone={status.tone}>{status.label}</StatusPill>
@@ -342,7 +342,7 @@ function WellField3dFigures({ model, depth }: { model: WellField3dModel; depth: 
           {at.reached ? `At ${formatNumber(depth)} m: ${at.formation}, ${at.lining.toLowerCase()}, ${formatNumber(at.inc)}° inclination` : `Ends above the plane, at ${formatNumber(at.td)} m TVD`}
         </span>
       </div>
-      <dl className="grid grid-cols-4 gap-3 border-t border-[var(--kit-text)] pt-2.5">
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-[var(--kit-text)] pt-2.5 @md:grid-cols-4">
         <WellField3dFigure label={well.kind === 'producer' ? 'Oil rate' : 'Injection rate'} value={formatNumber(well.rate)} unit={well.rateUnit} />
         {well.kind === 'producer' ? <WellField3dFigure label="Water cut" value={formatNumber(well.waterCut ?? 0)} unit="%" /> : <WellField3dFigure label="Total depth" value={formatNumber(well.plan.tdMd)} unit="m MD" />}
         <WellField3dFigure label="Choke" value={formatNumber(well.choke)} unit="%" />
@@ -411,6 +411,7 @@ function WellField3dScene({ depth, selectedId, onSelect, view, still, layers }: 
             onSelect={onSelect}
             colors={colors}
             padding={view === 'perspective' ? 1.12 : 0.9}
+            insets={view === 'perspective' ? { left: 56 } : undefined}
           />
         </StillScene>
       </SceneCanvas>
@@ -474,11 +475,11 @@ function WellField3dDrawing({ initial = {}, still = false }: { initial?: WellFie
         <WellField3dScene depth={depth} selectedId={selected.well.id} onSelect={setSelectedId} view={view} still={still} />
       </Panel>
 
-      <Panel className="min-h-0" title={`Section A–A′, ${selected.well.name}`} subtitle={`Along azimuth ${selected.well.plan.azimuth}°, true scale, metres`} footer={<WellField3dFigures model={selected} depth={depth} />}>
+      <Panel className="min-h-0" title="Section A–A′" subtitle={`${selected.well.name} · azimuth ${selected.well.plan.azimuth}° · true scale`} footer={<WellField3dFigures model={selected} depth={depth} />}>
         <WellField3dSectionDrawing model={selected} depth={depth} className="min-h-0 flex-1" />
       </Panel>
 
-      <div className="@container col-span-2 grid grid-cols-[minmax(0,1fr)_17rem] gap-6">
+      <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_14rem] gap-6 @5xl:grid-cols-[minmax(0,1fr)_17rem]">
         <Panel padding="none" title="Well index" subtitle="Template A, 9 slots">
           <WellField3dPicker selectedId={selected.well.id} onSelect={setSelectedId} />
         </Panel>
@@ -490,7 +491,7 @@ function WellField3dDrawing({ initial = {}, still = false }: { initial?: WellFie
 
 function WellField3dSignature() {
   return (
-    <LookScope look="blueprint" className="w-full">
+    <LookScope look="blueprint" className="@container w-full">
       <WellField3dDrawing />
     </LookScope>
   );
@@ -518,7 +519,7 @@ function WellField3dWellSheet() {
   return (
     <LookScope look="blueprint" className="w-full">
       <div className="grid h-[46rem] w-full grid-cols-[minmax(0,6fr)_minmax(0,5fr)] grid-rows-[minmax(0,1fr)_auto] gap-6 p-7 text-[var(--kit-text)] [background:var(--kit-canvas-bg)]">
-        <Panel className="row-span-2 min-h-0" title={`Section A–A′, ${model.well.name}`} subtitle={`Along azimuth ${model.well.plan.azimuth}°, true scale, metres`} footer={<WellField3dFigures model={model} depth={1900} />}>
+        <Panel className="row-span-2 min-h-0" title="Section A–A′" subtitle={`${model.well.name} · azimuth ${model.well.plan.azimuth}° · true scale`} footer={<WellField3dFigures model={model} depth={1900} />}>
           <WellField3dSectionDrawing model={model} depth={1900} className="min-h-0 flex-1" />
         </Panel>
         <Panel className="min-h-0" padding="none" title="Survey" subtitle="Minimum curvature, metres from the wellhead">
@@ -630,8 +631,8 @@ function WellField3dPartSection() {
     <WellField3dPartFrame className="h-[34rem]">
       <Panel
         className="min-h-0 flex-1"
-        title={`Section A–A′, ${model.well.name}`}
-        subtitle={model.well.service}
+        title="Section A–A′"
+        subtitle={model.well.name}
         actions={
           <SegmentedControl value={wellId} onValueChange={(value) => setWellId(value)}>
             <SegmentedControlList size="small" aria-label="Well in section">
@@ -686,7 +687,7 @@ function WellField3dPartPlane() {
   const [depth, setDepth] = useState(2340);
   const model = WELLFIELD3D_MODELS[4];
   return (
-    <WellField3dPartFrame className="h-80 justify-center">
+    <WellField3dPartFrame className="h-[25rem] justify-center">
       <Panel title="Cutting plane" subtitle="One depth for the model and the section">
         <div className="flex flex-col gap-4">
           <WellField3dPlaneControl depth={depth} onChange={setDepth} />
@@ -702,7 +703,7 @@ function WellField3dPartWellheads() {
   const colors = useTokenColors(WELL_FIELD_TOKENS, scope);
   const target = wellFieldCameraTarget('perspective', { halfExtent: 3.4, depth: 0 }, { padding: 0.8 });
   return (
-    <WellField3dPartFrame className="h-80">
+    <WellField3dPartFrame className="h-[25rem]">
       <Panel className="min-h-0 flex-1" padding="none" title="Template and wellheads" subtitle="Up produces, down injects">
         <div ref={scope} className="relative h-full min-h-0 w-full">
           <SceneCanvas label="Subsea template with a producer wellhead pointing up and an injector wellhead pointing down">
@@ -730,7 +731,7 @@ function WellField3dPartHorizon() {
   const horizon = WELLFIELD3D_HORIZONS[2];
   const target = wellFieldCameraTarget('perspective', { halfExtent: 20, depth: 3 }, { padding: 0.85 });
   return (
-    <WellField3dPartFrame className="h-80">
+    <WellField3dPartFrame className="h-[25rem]">
       <Panel className="min-h-0 flex-1" padding="none" title={horizon.name} subtitle={`Mean depth ${formatNumber(horizon.depth)} m, relief exaggerated six times`}>
         <div ref={scope} className="relative h-full min-h-0 w-full">
           <SceneCanvas label={`${horizon.name} horizon as an undulating low-poly surface around ${horizon.depth} metres`}>

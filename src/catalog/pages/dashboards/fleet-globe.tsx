@@ -427,6 +427,7 @@ function FleetGlobeSiteCard({ site, onClose, className }: { site: FleetGlobeSite
               limits={[{ value: site.plan, label: 'Plan', tone: 'neutral' }]}
               unit="kboe/d"
               height={128}
+              highlightLast={false}
               showLegend={false}
             />
           </>
@@ -526,7 +527,7 @@ function FleetGlobeBoard({ initial = FLEETGLOBE_INITIAL, still = false }: { init
     <LookScope look="glass">
       <Canvas padding="none" className="h-[54rem]">
         <SceneStage
-          className="h-full"
+          className="h-full [&_*]:![backdrop-filter:none]"
           onEscape={() => dispatch({ type: 'clear' })}
           overlay={
             <div className="flex h-full flex-col justify-between gap-4 p-6">
@@ -601,7 +602,7 @@ function FleetGlobeRegister() {
 
   return (
     <LookScope look="console">
-      <Canvas padding="none" className="grid h-[38rem] grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-px bg-[var(--kit-rule)]">
+      <Canvas padding="none" className="grid h-[34rem] grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-px bg-[var(--kit-rule)]">
         <Panel title="Fleet register" subtitle={`${formatNumber(totals.production)} of ${formatNumber(totals.plan)} kboe/d · 10 sites`} padding="none">
           <DataTable
             label="Sites of the fleet with state, production, plan, availability and open alarms"
@@ -609,6 +610,7 @@ function FleetGlobeRegister() {
             rows={FLEETGLOBE_STATE_ORDER.flatMap((order) => FLEETGLOBE_SITES.filter((site) => site.state === order))}
             rowKey={(site) => site.id}
             rowTone={(site) => (site.state === 'producing' ? undefined : FLEETGLOBE_STATES[site.state].tone)}
+            density="comfortable"
             flush
           />
         </Panel>
@@ -625,7 +627,7 @@ function FleetGlobeRegister() {
 function FleetGlobePartStage({ label, children }: { label: string; children: ReactNode }) {
   return (
     <LookScope look="glass" className="w-full">
-      <Canvas padding="none" className="h-72">
+      <Canvas padding="none" className="h-[26rem]">
         <SceneStage className="h-full">
           <SceneCanvas label={label} camera={{ fov: 40, near: 0.5, far: 400 }}>
             <StillScene>{children}</StillScene>
@@ -654,11 +656,18 @@ function FleetGlobePartAttention() {
 
   return (
     <LookScope look="glass" className="w-full">
-      <Canvas className="flex h-[40rem] flex-col gap-4">
+      <Canvas className="flex h-[40rem] flex-col justify-between gap-4">
         <div>
           <FleetGlobeAttention filter={state.filter} onSelect={(id) => dispatch({ type: 'select', id })} />
         </div>
-        <p className="text-sm text-[color:var(--kit-text-2)]">{selected ? `Opens the card of ${selected.name} and swings the globe to it.` : 'Picking a row opens that site and swings the globe to it.'}</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-[color:var(--kit-text-2)]">
+            {selected ? `Opens the card of ${selected.name} and swings the globe to it.` : 'Picking a row opens that site and swings the globe to it. A region filter shortens the list:'}
+          </p>
+          <div>
+            <FleetGlobeAttention filter="Barents Sea" onSelect={(id) => dispatch({ type: 'select', id })} />
+          </div>
+        </div>
       </Canvas>
     </LookScope>
   );
@@ -669,7 +678,7 @@ function FleetGlobePartDock() {
 
   return (
     <LookScope look="glass" className="w-full">
-      <Canvas className="flex h-72 flex-col items-center justify-center gap-4">
+      <Canvas className="flex h-80 flex-col items-center justify-center gap-4">
         <FleetGlobeRegionSwitch value={state.filter} onChange={(filter) => dispatch({ type: 'filter', filter })} />
         <FleetGlobeDock filter={state.filter} selectedId={state.selectedId} onSelect={(id) => dispatch({ type: 'select', id })} />
       </Canvas>
@@ -680,7 +689,7 @@ function FleetGlobePartDock() {
 function FleetGlobePartHeadline() {
   return (
     <LookScope look="glass" className="w-full">
-      <Canvas className="flex h-72 flex-col justify-center">
+      <Canvas className="flex h-80 flex-col justify-center">
         <FleetGlobeHeadline filter="All" />
       </Canvas>
     </LookScope>
@@ -721,7 +730,7 @@ function FleetGlobePartArcs() {
 function FleetGlobePartFallback() {
   return (
     <LookScope look="glass" className="w-full">
-      <Canvas className="h-72">
+      <Canvas className="h-[26rem]">
         <SceneCanvas label="Globe showing the fleet" forceFallback fallback={<FleetGlobeFallbackList />} camera={{ fov: 40, near: 0.5, far: 400 }}>
           <FleetGlobe sites={[]} view={FLEETGLOBE_OVERVIEW} />
         </SceneCanvas>

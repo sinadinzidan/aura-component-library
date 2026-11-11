@@ -582,7 +582,7 @@ function Platform3dConsole({ initial = INITIAL_PLATFORM_STATE, still = false }: 
             <span className="whitespace-nowrap text-xs leading-tight">Compressor B tripped 14 min ago</span>
           </div>
         </div>
-        <div className="hidden min-w-0 flex-1 items-stretch overflow-hidden @4xl:flex">
+        <div className="flex h-full min-w-0 flex-1 flex-wrap overflow-hidden">
           <Platform3dFact label="Gas export" value="6.8 MSm³/d" />
           <Platform3dFact label="Wind" value="14 m/s NW" />
           <Platform3dFact label="Wave height" value="2.1 m" />
@@ -594,7 +594,7 @@ function Platform3dConsole({ initial = INITIAL_PLATFORM_STATE, still = false }: 
       </header>
 
       <div className="flex min-h-0 flex-1 gap-px">
-        <aside aria-label="Deck selector" className="flex w-56 shrink-0 flex-col gap-px">
+        <aside aria-label="Deck selector" className="flex w-52 shrink-0 flex-col gap-px @5xl:w-56">
           <Panel className="min-h-0 flex-1" padding="none" title="Decks" subtitle="Pick one to isolate it">
             <DeckStack label="Decks of Valhall Sør, top first" levels={PLATFORM3D_DECKS} selectedId={state.levelId} onSelect={(levelId) => dispatch({ type: 'isolate', levelId })} className="flex-1" />
           </Panel>
@@ -619,7 +619,7 @@ function Platform3dConsole({ initial = INITIAL_PLATFORM_STATE, still = false }: 
           </div>
         </div>
 
-        <aside aria-label="Equipment and faceplate" className="flex w-[23rem] shrink-0 flex-col gap-px">
+        <aside aria-label="Equipment and faceplate" className="flex w-[20.5rem] shrink-0 flex-col gap-px @5xl:w-[23rem]">
           <Panel className="min-h-0 flex-1" padding="none" title="Equipment" subtitle={level ? level.name : 'All decks'}>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <Platform3dEquipmentTable levelId={state.levelId} selectedId={state.equipmentId} onSelect={(levelId, equipmentId) => dispatch({ type: 'selectEquipment', levelId, equipmentId })} />

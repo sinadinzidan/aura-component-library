@@ -122,8 +122,13 @@ export function PageView({ location }: PageViewProps) {
       {result.status === 'error' ? (
         <div className="mt-8 max-w-[37.5rem]">
           <Alert variant="error">
-            <AlertDescription>This page could not be loaded. Reload to try again.</AlertDescription>
+            <AlertDescription>This page could not be loaded.</AlertDescription>
           </Alert>
+          <div className="mt-3">
+            <Button variant="outline" onClick={result.retry}>
+              Try again
+            </Button>
+          </div>
         </div>
       ) : null}
 

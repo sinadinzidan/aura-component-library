@@ -20,7 +20,7 @@ describe(AgentStep.name, () => {
     expect(step).toHaveTextContent('0:12');
   });
 
-  it('says it needs the person when it is waiting', () => {
+  it('says in a word that it is waiting and shows what it waits for', () => {
     render(
       <ul>
         <AgentStep title="Create work order" state="waiting">
@@ -29,7 +29,7 @@ describe(AgentStep.name, () => {
       </ul>,
     );
 
-    expect(screen.getByText('Needs you')).toBeInTheDocument();
+    expect(screen.getByText('Waiting')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
   });
 

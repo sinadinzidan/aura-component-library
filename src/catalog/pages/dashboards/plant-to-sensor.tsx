@@ -69,7 +69,7 @@ const PTS_COPY: Record<string, { headline: string; standfirst: string }> = {
   'vt-92540': {
     headline: 'Vibration sits 0.3 mm/s under its limit.',
     standfirst:
-      'This is the sensor the whole chain comes down to. It has crept up through the afternoon; at 7.1 the operator gets an alarm and at 11.0 the machine trips, as its neighbour did at 13:46.',
+      'This is the sensor the whole chain comes down to. It has brushed its high limit twice since yesterday; at 7.1 the operator gets an alarm and at 11.0 the machine trips, as its neighbour did at 13:46.',
   },
 };
 

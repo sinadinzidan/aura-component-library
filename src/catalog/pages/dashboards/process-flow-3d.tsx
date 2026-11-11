@@ -152,7 +152,7 @@ const PROCESSFLOW3D_EQUIPMENT: readonly PlantEquipment[] = [
 
 const PROCESSFLOW3D_LABELLED: readonly string[] = ['20-va-1001', '23-ka-9101', '23-ka-9102', '23-ka-9103', '23-ha-9114', '27-vg-2001', 'flare'];
 
-const PROCESSFLOW3D_TARGET = frameBounds({ min: [-76, 0, -42], max: [76, 10, 30] }, { view: 'perspective', fov: 40, aspect: 1.5, padding: 0.62 });
+const PROCESSFLOW3D_TARGET = frameBounds({ min: [-76, 0, -42], max: [76, 10, 30] }, { view: 'perspective', fov: 40, aspect: 1.5, padding: 0.8 });
 
 function processFlow3dLine(id: string): ProcessFlow3dLine | undefined {
   return PROCESSFLOW3D_LINES.find((line) => line.id === id);
@@ -679,7 +679,7 @@ function ProcessFlowPartSheet() {
 
   return (
     <LookScope look="blueprint" className="w-full">
-      <Canvas className="flex h-[36rem] flex-col">
+      <Canvas className="flex h-[41rem] flex-col">
         <ProcessFlow3dSheet key={state.selectedId ?? 'none'} state={state} onSelect={(lineId) => dispatch({ type: 'select', lineId })} onClear={() => dispatch({ type: 'clear' })} />
       </Canvas>
     </LookScope>
@@ -691,7 +691,7 @@ function ProcessFlowPartValves() {
 
   return (
     <LookScope look="blueprint" className="w-full">
-      <Canvas className="flex h-[36rem] flex-col">
+      <Canvas className="flex h-[41rem] flex-col">
         <ProcessFlow3dValves state={state} dispatch={dispatch} />
       </Canvas>
     </LookScope>

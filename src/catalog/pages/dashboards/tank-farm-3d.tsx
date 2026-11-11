@@ -221,8 +221,8 @@ function tankFarm3dSpans(selectedId: string | null): ScrubberSpan[] {
     const tank = tankFarm3dTank(movement.from ?? movement.to ?? '');
     return {
       id: movement.id,
-      // A four-hour bar is too short for a tag; its full name is in the accessible description and the list above.
-      label: tank && movement.endHour - movement.startHour >= 8 ? tank.tag.slice(3) : '',
+      // A bar shorter than twelve hours is too narrow for a tag; its full name is in the accessible description and the list above.
+      label: tank && movement.endHour - movement.startHour >= 12 ? tank.tag.slice(3) : '',
       description: `${movement.name}, ${tank?.tag ?? ''}, ${movement.counterparty}`,
       startHour: movement.startHour,
       endHour: movement.endHour,
@@ -423,7 +423,7 @@ function TankFarm3dMovements({ hour, selectedId, onOpen, limit = 3 }: { hour: nu
     .sort((a, b) => a.startHour - b.startHour)
     .slice(0, limit);
   return (
-    <ol aria-label="Next movements" className="flex flex-col">
+    <ol aria-label="Next movements" className="@container flex flex-col">
       {upcoming.length === 0 ? <li className="py-2 text-sm font-semibold text-[var(--kit-text)]">The plan is complete: nothing more to move in this window.</li> : null}
       {upcoming.map((movement) => {
         const tankId = movement.from ?? movement.to ?? '';
@@ -440,8 +440,9 @@ function TankFarm3dMovements({ hour, selectedId, onOpen, limit = 3 }: { hour: nu
               className={`grid w-full grid-cols-[4.5rem_minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-1.5 text-left text-sm hover:bg-[color-mix(in_oklab,var(--kit-text)_8%,transparent)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--ring-default)] ${touches ? 'bg-[color-mix(in_oklab,var(--kit-text)_10%,transparent)]' : ''}`}
             >
               <span className={`w-fit px-1.5 text-xs font-bold leading-5 tabular-nums ${active ? 'bg-[var(--kit-text)] text-[var(--kit-surface)]' : 'border-2 border-[var(--kit-rule-strong)] text-[var(--kit-text)]'}`}>{active ? 'Now' : `+${Math.round(movement.startHour - hour)} h`}</span>
-              <span className="truncate font-bold text-[var(--kit-text)]">
-                {movement.name} <span className="font-semibold text-[var(--kit-text-2)]">· {movement.counterparty}</span>
+              <span className="flex min-w-0 flex-col leading-tight @xl:flex-row @xl:items-baseline @xl:gap-2">
+                <span className="whitespace-nowrap font-bold text-[var(--kit-text)]">{movement.name}</span>
+                <span className="whitespace-nowrap text-[0.8125rem] font-semibold text-[var(--kit-text-2)]">{movement.counterparty}</span>
               </span>
               <span data-tone={tank ? TANKFARM3D_PRODUCTS[tank.product].tone : 'neutral'} className="border-2 border-[var(--kit-rule-strong)] bg-[var(--t-pop)] px-1.5 text-xs font-bold leading-5 tabular-nums text-[var(--t-on-pop)]">
                 {tank ? tank.tag.slice(3) : '—'}
@@ -540,7 +541,7 @@ function TankFarm3dTerminal({ initial = TANKFARM3D_INITIAL, layout = 'desk', sti
             selectedId={state.selectedId}
             onSelect={(id) => dispatch({ type: 'select', id })}
             view={state.plan ? 'top' : 'perspective'}
-            insets={{ top: 44, bottom: 8, left: 16 }}
+            insets={{ top: 44, bottom: 8, left: 36 }}
           >
             <TankFarm3dScenery berthed={berth !== undefined} />
           </TankFarm>

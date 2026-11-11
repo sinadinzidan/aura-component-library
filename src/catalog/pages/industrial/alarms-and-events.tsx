@@ -1,627 +1,1143 @@
-import { Banner, BannerAction, BannerActions, BannerClose, BannerIcon, BannerStatus, BannerTitle } from '@cognite/aura/components/banner';
 import { Button } from '@cognite/aura/components/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardFooterEnd,
-  CardFooterStart,
-  CardHeader,
-  CardHeaderCenter,
-  CardHeaderEnd,
-  CardTitle,
-} from '@cognite/aura/components/card';
-import { EmptyState, EmptyStateDescription, EmptyStateIcon, EmptyStateTitle } from '@cognite/aura/components/empty-state';
 import { Label } from '@cognite/aura/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@cognite/aura/components/select';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import { Textarea } from '@cognite/aura/components/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@cognite/aura/components/tooltip';
-import { IconAlertTriangleFilled, IconBell, IconBellZ, IconCheck, IconChevronRight, IconTool } from '@cognite/aura/icons';
+import {
+  IconAlertOctagon,
+  IconAlertTriangle,
+  IconBell,
+  IconBellOff,
+  IconBellRinging,
+  IconCheck,
+  IconCircleCheck,
+  IconClipboardList,
+  IconFlame,
+  IconHistory,
+  IconInfoCircle,
+  IconLayoutDashboard,
+  IconRepeat,
+  IconSettings,
+  IconTool,
+  IconUser,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { ToggleGroup } from '../../../library/actions/ToggleGroup';
-import { MetadataList } from '../../../library/display/MetadataList';
-import { SkeletonList } from '../../../library/feedback/SkeletonList';
-import { KpiTile } from '../../../library/industrial/KpiTile';
-import { AlarmList } from '../../../library/industrial/operations/AlarmList';
-import { AlarmRow } from '../../../library/industrial/operations/AlarmRow';
-import { SEVERITY_ORDER, countBySeverity, isOpenAlarm } from '../../../library/industrial/operations/alarms';
-import { AlarmStateLabel } from '../../../library/industrial/operations/AlarmStateLabel';
-import { AlarmSummary } from '../../../library/industrial/operations/AlarmSummary';
-import { EventTimeline } from '../../../library/industrial/operations/EventTimeline';
-import type { TimelineEvent } from '../../../library/industrial/operations/EventTimeline';
-import { SeverityBadge } from '../../../library/industrial/operations/SeverityBadge';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { severityStatus } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ALARMS, ASSETS, findAsset } from '../../data/plant';
-import type { Alarm, Severity } from '../../data/plant';
-import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatAgo, formatDateTime, formatTime, makeValues } from '../../data/series';
+import { AlarmLanes, type AlarmLane } from '../../../library/kit/alarms-and-events/AlarmLanes';
+import { AlarmRow } from '../../../library/kit/alarms-and-events/AlarmRow';
+import { AnnunciatorGrid, type AnnunciatorWindow } from '../../../library/kit/alarms-and-events/AnnunciatorGrid';
+import { EventTimeline, type TimelineEvent } from '../../../library/kit/alarms-and-events/EventTimeline';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { EmptyPanel } from '../../../library/kit/EmptyPanel';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip, type HeatRow } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Legend } from '../../../library/kit/Legend';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
+import { ALARMS, ASSETS, findAsset, type Alarm, type Severity } from '../../data/plant';
+import { formatAgo, formatTime, makeSeries, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './alarms-and-events.tsx?raw';
 
-function alarmById(id: string): Alarm {
-  const alarm = ALARMS.find((candidate) => candidate.id === id);
-  if (!alarm) throw new Error(`Unknown alarm ${id}`);
-  return alarm;
-}
+const AE_SEVERITIES: readonly Severity[] = ['critical', 'high', 'medium', 'low'];
 
-const alarmAssetName = (alarm: Alarm): string | undefined => findAsset(alarm.assetId)?.name;
+const AE_TONE: Record<Severity, Tone> = { critical: 'critical', high: 'warning', medium: 'info', low: 'neutral' };
 
-/** Alarms that still stand in the plant: unacknowledged or acknowledged, not shelved or cleared. */
-const OPEN_ALARMS = ALARMS.filter(isOpenAlarm);
+const AE_WORD: Record<Severity, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
 
-/** Open for more than a day: the ones an alarm review asks about. */
-const STANDING_ALARMS = ALARMS.filter((alarm) => alarm.state !== 'cleared' && REFERENCE_NOW - alarm.raisedAt > 8 * HOUR);
-
-const ALARM_TREND = makeValues({ seed: 13, points: 48, base: 141, amplitude: 2.5, noise: 0.9, drift: 5, cycles: 2, decimals: 1 });
-const ALARM_RATE = makeValues({ seed: 31, points: 24, base: 3.2, amplitude: 1.4, noise: 0.8, drift: 1.2, min: 0, decimals: 1 });
-
-type PlantEvent = {
-  id: string;
-  at: number;
-  kind: 'Alarm' | 'Acknowledged' | 'Shelved' | 'Operator action' | 'State change' | 'Work order';
-  tag: string;
-  text: string;
-  by: string;
-  severity?: Severity;
+const AE_STATE: Record<Alarm['state'], string> = {
+  active: 'Active',
+  acknowledged: 'Acknowledged',
+  shelved: 'Shelved',
+  cleared: 'Cleared',
 };
 
-/** The last few hours of the plant journal, newest first. */
-const PLANT_EVENTS: readonly PlantEvent[] = [
-  { id: 'ev-9', at: REFERENCE_NOW - 6 * MINUTE, kind: 'Work order', tag: 'WO-104482', text: 'Inspect recompressor drive-end bearing set to in progress', by: 'Tomás Barros' },
-  { id: 'ev-8', at: REFERENCE_NOW - 14 * MINUTE, kind: 'Alarm', tag: '23-VT-92740', text: 'Recompressor tripped on high vibration', by: 'System', severity: 'critical' },
-  { id: 'ev-7', at: REFERENCE_NOW - 14 * MINUTE, kind: 'State change', tag: '23-KA-9103', text: 'Recompressor changed from running to tripped', by: 'System' },
-  { id: 'ev-6', at: REFERENCE_NOW - 22 * MINUTE, kind: 'Operator action', tag: '23-FV-92511', text: 'Anti-surge valve set to manual, 35 % open', by: 'Ingrid Haugen' },
-  { id: 'ev-5', at: REFERENCE_NOW - 38 * MINUTE, kind: 'Alarm', tag: '23-TT-92532', text: 'Discharge temperature high', by: 'System', severity: 'high' },
-  { id: 'ev-4', at: REFERENCE_NOW - 96 * MINUTE, kind: 'Acknowledged', tag: '23-VT-92540', text: 'Drive-end vibration approaching limit acknowledged', by: 'Ingrid Haugen' },
-  { id: 'ev-3', at: REFERENCE_NOW - 2 * HOUR, kind: 'Alarm', tag: '23-VT-92540', text: 'Drive-end vibration approaching limit', by: 'System', severity: 'high' },
-  { id: 'ev-2', at: REFERENCE_NOW - 160 * MINUTE, kind: 'Shelved', tag: '40-TT-40015', text: 'Bearing temperature signal lost shelved for 12 h', by: 'Jonas Nyberg' },
-  { id: 'ev-1', at: REFERENCE_NOW - 3 * HOUR, kind: 'State change', tag: '40-PA-4001', text: 'Cooling water pump changed from stopped to maintenance', by: 'Magnus Solberg' },
+const AE_OPEN = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged');
+
+const AE_COUNT: Record<Severity, number> = {
+  critical: AE_OPEN.filter((alarm) => alarm.severity === 'critical').length,
+  high: AE_OPEN.filter((alarm) => alarm.severity === 'high').length,
+  medium: AE_OPEN.filter((alarm) => alarm.severity === 'medium').length,
+  low: AE_OPEN.filter((alarm) => alarm.severity === 'low').length,
+};
+
+const AE_HISTORY: Record<Severity, number[]> = {
+  critical: [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+  high: [1, 2, 2, 1, 1, 3, 2, 2, 1, 2, 2, 2],
+  medium: [3, 2, 2, 3, 4, 2, 2, 1, 2, 1, 1, 1],
+  low: [4, 4, 3, 3, 2, 2, 3, 2, 2, 1, 1, 1],
+};
+
+const AE_RATE_SLOTS = ['12:20', '12:30', '12:40', '12:50', '13:00', '13:10', '13:20', '13:30', '13:40', '13:50'];
+
+const AE_RATE = [2, 1, 3, 2, 4, 3, 6, 9, 17, 12];
+
+const AE_RATE_TONES: Tone[] = AE_RATE.map((count) => (count > 10 ? 'critical' : count > 5 ? 'warning' : 'accent'));
+
+const AE_VIBRATION = makeSeries({ seed: 71, points: 25, base: 7.4, amplitude: 0.5, noise: 0.25, drift: 4.4, decimals: 1, stepMs: 5 * 60_000 });
+
+const AE_VIBRATION_VALUES = [...AE_VIBRATION.slice(0, -1).map((point) => point.v), 11.6];
+
+const AE_VIBRATION_LABELS = AE_VIBRATION.map((point) => formatTime(point.t));
+
+const AE_AREAS = ASSETS.filter((asset) => asset.parentId === 'nk');
+
+const AE_HEAT: HeatRow[] = AE_AREAS.map((area, index) => ({
+  label: area.name,
+  values: makeValues({ seed: 80 + index, points: 24, base: area.health === 'watch' ? 4.5 : 1.1, amplitude: 1.3, noise: 1.5, cycles: 2, min: 0, decimals: 0 }),
+  tone: area.health === 'watch' ? 'warning' : 'accent',
+}));
+
+const AE_UNITS = ['23-ka-9103', '23-ka-9101', '23-ha-9114', '40-pa-4001', '27-pa-2001b', '20-va-1001'];
+
+const AE_WINDOWS: AnnunciatorWindow[] = [
+  { id: 'w1', tag: '23-VT-92740', label: 'Vibration high-high', tone: 'critical', state: 'new', stateLabel: 'Unacknowledged', firstOut: true },
+  { id: 'w2', tag: '23-KA-9103', label: 'Recompressor trip', tone: 'critical', state: 'new', stateLabel: 'Unacknowledged' },
+  { id: 'w3', tag: '23-TT-92532', label: 'Discharge temp high', tone: 'warning', state: 'new', stateLabel: 'Unacknowledged' },
+  { id: 'w4', tag: '23-VT-92540', label: 'Vibration high', tone: 'warning', state: 'held', stateLabel: 'Acknowledged' },
+  { id: 'w5', tag: '23-PT-92531', label: 'Discharge pressure', tone: 'neutral', state: 'normal', stateLabel: 'Normal' },
+  { id: 'w6', tag: '23-PT-92530', label: 'Suction pressure', tone: 'neutral', state: 'normal', stateLabel: 'Normal' },
+  { id: 'w7', tag: '23-TT-91141', label: 'Cooler outlet temp', tone: 'info', state: 'held', stateLabel: 'Acknowledged' },
+  { id: 'w8', tag: '23-FT-92510', label: 'Gas flow low', tone: 'neutral', state: 'normal', stateLabel: 'Normal' },
+  { id: 'w9', tag: '23-LT-92520', label: 'Scrubber level', tone: 'neutral', state: 'normal', stateLabel: 'Normal' },
+  { id: 'w10', tag: '23-XV-92505', label: 'Anti-surge valve', tone: 'info', state: 'held', stateLabel: 'Open, acknowledged' },
+  { id: 'w11', tag: '23-PDT-9255', label: 'Seal gas pressure', tone: 'neutral', state: 'normal', stateLabel: 'Normal' },
+  { id: 'w12', tag: '23-ST-92501', label: 'Overspeed', tone: 'neutral', state: 'normal', stateLabel: 'Normal' },
 ];
 
-const hourOf = (timestamp: number): string => `${formatTime(timestamp).slice(0, 2)}:00`;
-
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
-
-const SHELVE_DURATIONS = [
-  { value: '1', label: '1 hour' },
-  { value: '4', label: '4 hours' },
-  { value: '12', label: 'Until end of shift (12 hours)' },
-  { value: '24', label: '24 hours' },
+const AE_EVENTS: TimelineEvent[] = [
+  { id: 'e1', time: '13:31', kind: 'Alarm', tone: 'warning', icon: <IconAlertTriangle />, title: 'Drive-end vibration high', detail: '23-VT-92740 · 9.4 mm/s against 7.1' },
+  { id: 'e2', time: '13:38', kind: 'Operator', tone: 'info', icon: <IconUser />, title: 'Acknowledged, load reduced to 80 %', detail: 'Ingrid Haugen' },
+  { id: 'e3', time: '13:44', kind: 'Alarm', tone: 'critical', icon: <IconAlertOctagon />, title: 'Vibration high-high, first out', detail: '23-VT-92740 · 11.6 mm/s against 11.0' },
+  { id: 'e4', time: '13:46', kind: 'Trip', tone: 'critical', icon: <IconBellRinging />, title: 'Recompressor tripped', detail: '23-KA-9103 · protection system' },
+  { id: 'e5', time: '13:47', kind: 'System', tone: 'neutral', icon: <IconSettings />, title: 'Anti-surge valve opened', detail: '23-XV-92505 · automatic' },
+  { id: 'e6', time: '13:52', kind: 'Work', tone: 'success', icon: <IconTool />, title: 'Bearing inspection raised', detail: 'WO-104482 · Tomás Barros' },
 ];
 
-function AlarmIconAction({ label, children, onClick }: { label: string; children: ReactNode; onClick?: () => void }) {
+const AE_LANES: AlarmLane[] = [
+  {
+    id: 'l1',
+    label: 'Recompressor vibration high-high',
+    tag: '23-VT-92740',
+    total: '16 min',
+    spans: [{ from: 0.989, to: 1, tone: 'critical', label: 'Active from 13:44' }],
+  },
+  {
+    id: 'l2',
+    label: 'Discharge temperature high',
+    tag: '23-TT-92532',
+    total: '9 times',
+    spans: [
+      { from: 0.31, to: 0.325, tone: 'warning', label: '21:26' },
+      { from: 0.34, to: 0.35, tone: 'warning', label: '22:10' },
+      { from: 0.362, to: 0.38, tone: 'warning', label: '22:41' },
+      { from: 0.4, to: 0.408, tone: 'warning', label: '23:36' },
+      { from: 0.71, to: 0.73, tone: 'warning', label: '07:02' },
+      { from: 0.745, to: 0.752, tone: 'warning', label: '07:53' },
+      { from: 0.77, to: 0.79, tone: 'warning', label: '08:29' },
+      { from: 0.82, to: 0.83, tone: 'warning', label: '09:41' },
+      { from: 0.974, to: 1, tone: 'warning', label: 'Active from 13:22' },
+    ],
+  },
+  {
+    id: 'l3',
+    label: 'Drive-end vibration approaching limit',
+    tag: '23-VT-92540',
+    total: '2 h 0 min',
+    spans: [
+      { from: 0.917, to: 0.93, tone: 'warning', label: 'Active 12:00 to 12:19' },
+      { from: 0.93, to: 1, tone: 'warning', kind: 'acknowledged', label: 'Acknowledged from 12:19' },
+    ],
+  },
+  {
+    id: 'l4',
+    label: 'Cooler outlet temperature high',
+    tag: '23-TT-91141',
+    total: '5 h 0 min',
+    spans: [
+      { from: 0.792, to: 0.81, tone: 'info', label: 'Active 09:00 to 09:26' },
+      { from: 0.81, to: 1, tone: 'info', kind: 'acknowledged', label: 'Acknowledged from 09:26' },
+    ],
+  },
+  {
+    id: 'l5',
+    label: 'Bearing temperature signal lost',
+    tag: '40-TT-40015',
+    total: '9 h 0 min',
+    spans: [
+      { from: 0.625, to: 0.66, tone: 'info', label: 'Active 05:00 to 05:50' },
+      { from: 0.66, to: 1, tone: 'info', kind: 'shelved', label: 'Shelved from 05:50 until the transmitter is replaced' },
+    ],
+  },
+  {
+    id: 'l6',
+    label: 'Separator level deviation',
+    tag: '20-LT-10012',
+    total: '48 min',
+    spans: [{ from: 0.125, to: 0.158, tone: 'neutral', label: 'Active 17:00 to 17:48, cleared' }],
+  },
+];
+
+const AE_LANE_TICKS = ['14:00', '18:00', '22:00', '02:00', '06:00', '10:00', '14:00'];
+
+type AeLogEntry = { id: string; time: string; kind: string; tone: Tone; text: string; tag: string; value: string; by: string };
+
+const AE_LOG: AeLogEntry[] = [
+  { id: 'g1', time: '13:52:10', kind: 'Work order', tone: 'success', text: 'Bearing inspection raised', tag: '23-KA-9103', value: 'WO-104482', by: 'Tomás Barros' },
+  { id: 'g2', time: '13:47:02', kind: 'System', tone: 'neutral', text: 'Anti-surge valve opened', tag: '23-XV-92505', value: '100 %', by: 'Automatic' },
+  { id: 'g3', time: '13:46:41', kind: 'Trip', tone: 'critical', text: 'Recompressor tripped on high vibration', tag: '23-KA-9103', value: '11.6 mm/s', by: 'Protection system' },
+  { id: 'g4', time: '13:44:18', kind: 'Alarm', tone: 'critical', text: 'Vibration high-high, first out', tag: '23-VT-92740', value: '11.6 mm/s', by: 'Raised' },
+  { id: 'g5', time: '13:38:55', kind: 'Operator', tone: 'info', text: 'Acknowledged, load reduced to 80 %', tag: '23-VT-92740', value: '9.8 mm/s', by: 'Ingrid Haugen' },
+  { id: 'g6', time: '13:31:07', kind: 'Alarm', tone: 'warning', text: 'Drive-end vibration high', tag: '23-VT-92740', value: '9.4 mm/s', by: 'Raised' },
+  { id: 'g7', time: '13:22:30', kind: 'Alarm', tone: 'warning', text: 'Discharge temperature high', tag: '23-TT-92532', value: '146.3 °C', by: 'Raised' },
+];
+
+const AE_LOG_COLUMNS: DataTableColumn<AeLogEntry>[] = [
+  { id: 'time', header: 'Time (UTC)', nowrap: true, cell: (entry) => <span className="font-medium tabular-nums">{entry.time}</span> },
+  { id: 'kind', header: 'Type', nowrap: true, cell: (entry) => <StatusPill tone={entry.tone}>{entry.kind}</StatusPill> },
+  { id: 'text', header: 'Event', cell: (entry) => entry.text },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (entry) => <TagId>{entry.tag}</TagId> },
+  { id: 'value', header: 'Value', numeric: true, nowrap: true, cell: (entry) => entry.value },
+  { id: 'by', header: 'By', nowrap: true, muted: true, cell: (entry) => entry.by },
+];
+
+const AE_NAV: AppFrameNavItem[] = [
+  { id: 'overview', label: 'Overview', icon: <IconLayoutDashboard /> },
+  { id: 'alarms', label: 'Alarms', icon: <IconBell />, badge: '5' },
+  { id: 'events', label: 'Event log', icon: <IconHistory /> },
+  { id: 'shelved', label: 'Shelved', icon: <IconBellOff />, badge: '1' },
+  { id: 'work', label: 'Work orders', icon: <IconClipboardList /> },
+];
+
+function AeIcon({ severity }: { severity: Severity }) {
+  if (severity === 'critical') return <IconAlertOctagon aria-hidden="true" />;
+  if (severity === 'high') return <IconAlertTriangle aria-hidden="true" />;
+  if (severity === 'medium') return <IconInfoCircle aria-hidden="true" />;
+  return <IconBell aria-hidden="true" />;
+}
+
+type AeRowProps = {
+  alarm: Alarm;
+  /** Overrides the recorded state, for lists that acknowledge locally. */
+  state?: Alarm['state'];
+  density?: 'default' | 'compact';
+  markers?: ReactNode;
+  actions?: ReactNode;
+  selected?: boolean;
+  onSelect?: () => void;
+};
+
+function AeRow({ alarm, state = alarm.state, density, markers, actions, selected, onSelect }: AeRowProps) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
-            {children}
-          </Button>
-        }
-      />
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
+    <AlarmRow
+      severity={AE_WORD[alarm.severity]}
+      tone={AE_TONE[alarm.severity]}
+      icon={<AeIcon severity={alarm.severity} />}
+      message={alarm.message}
+      tag={alarm.sensorTag}
+      value={alarm.value}
+      limit={alarm.limit}
+      state={AE_STATE[state]}
+      age={formatAgo(alarm.raisedAt)}
+      quiet={state !== 'active'}
+      density={density}
+      markers={markers}
+      actions={actions}
+      selected={selected}
+      onSelect={onSelect}
+    />
   );
 }
 
-function AlarmRowDefault() {
-  const alarm = alarmById('alm-4811');
+function AeRows({ alarms = AE_OPEN, density }: { alarms?: readonly Alarm[]; density?: 'default' | 'compact' }) {
   return (
-    <ul className="w-full">
-      <AlarmRow alarm={alarm} age={formatAgo(alarm.raisedAt)} assetName={alarmAssetName(alarm)} />
-    </ul>
-  );
-}
-
-function AlarmRowCompact() {
-  const alarm = alarmById('alm-4811');
-  return (
-    <ul className="w-full max-w-md">
-      <AlarmRow alarm={alarm} age={formatAgo(alarm.raisedAt)} assetName={alarmAssetName(alarm)} density="compact" />
-    </ul>
-  );
-}
-
-function AlarmSeverityBadges() {
-  return (
-    <div className="flex flex-col items-start gap-3">
-      {SEVERITY_ORDER.map((severity) => (
-        <SeverityBadge key={severity} severity={severity} />
+    <ul>
+      {alarms.map((alarm) => (
+        <AeRow key={alarm.id} alarm={alarm} density={density} />
       ))}
-    </div>
-  );
-}
-
-function AlarmStates() {
-  return (
-    <ul aria-label="Alarm states" className="flex w-full flex-col divide-y divide-default">
-      <AlarmRow alarm={alarmById('alm-4811')} age="38 min ago" assetName="1st stage compressor" />
-      <AlarmRow alarm={alarmById('alm-4809')} age="2 h ago" assetName="1st stage compressor" stateDetail="IH" />
-      <AlarmRow alarm={alarmById('alm-4803')} age="9 h ago" assetName="Cooling water pump" stateDetail="until 02:00" />
-      <AlarmRow alarm={alarmById('alm-4798')} age="21 h ago" assetName="Inlet separator" />
     </ul>
   );
 }
 
-function AlarmStateLabels() {
+function AeCounts({ size = 'md', plain = false }: { size?: 'md' | 'lg' | 'hero'; plain?: boolean }) {
   return (
-    <div className="flex flex-col items-start gap-3">
-      <AlarmStateLabel state="active" detail="38 min" />
-      <AlarmStateLabel state="acknowledged" detail="by Ingrid Haugen" />
-      <AlarmStateLabel state="shelved" detail="until 02:00" />
-      <AlarmStateLabel state="cleared" detail="12 Mar, 09:14" />
-    </div>
+    <>
+      {AE_SEVERITIES.map((severity) => (
+        <Stat
+          key={severity}
+          variant={plain ? 'plain' : 'tile'}
+          size={size}
+          tone={AE_TONE[severity]}
+          label={`${AE_WORD[severity]} alarms`}
+          value={AE_COUNT[severity]}
+          icon={plain ? undefined : <AeIcon severity={severity} />}
+          state={AE_COUNT[severity] === 0 ? 'None open' : severity === 'critical' ? 'Act now' : severity === 'high' ? 'Respond' : 'Monitor'}
+          target={`${AE_HISTORY[severity].reduce((sum, count) => sum + count, 0)} raised in 12 h`}
+          sparkline={plain ? undefined : AE_HISTORY[severity]}
+        />
+      ))}
+    </>
   );
 }
 
-function AlarmAssetBadge() {
-  const assets = ASSETS.filter((asset) => OPEN_ALARMS.some((alarm) => alarm.assetId === asset.id));
+function AeRateBars({ height = 220 }: { height?: number }) {
   return (
-    <ul className="flex w-full max-w-md flex-col gap-3">
-      {assets.map((asset) => {
-        const alarms = OPEN_ALARMS.filter((alarm) => alarm.assetId === asset.id);
-        const worst = SEVERITY_ORDER.find((severity) => alarms.some((alarm) => alarm.severity === severity)) ?? 'low';
+    <Bars
+      label="Alarms raised per ten minutes over the last 100 minutes against the flood limit"
+      categories={AE_RATE_SLOTS}
+      series={[{ id: 'rate', label: 'Alarms per 10 min', values: AE_RATE }]}
+      tones={AE_RATE_TONES}
+      limit={{ value: 10, label: 'Flood limit 10', tone: 'critical' }}
+      showValues
+      height={height}
+    />
+  );
+}
+
+function AeVibrationTrend({ height = 240 }: { height?: number }) {
+  return (
+    <TrendLine
+      label="Recompressor drive-end vibration over the last two hours with its high and trip limits"
+      labels={AE_VIBRATION_LABELS}
+      unit="mm/s"
+      height={height}
+      yDomain={[4, 14]}
+      series={[{ id: 'vibration', label: '23-VT-92740', values: AE_VIBRATION_VALUES, tone: 'critical' }]}
+      limits={[
+        { value: 7.1, label: 'High 7.1', tone: 'warning' },
+        { value: 11, label: 'Trip 11.0', tone: 'critical' },
+      ]}
+    />
+  );
+}
+
+function AeFacts({ items }: { items: ReadonlyArray<readonly [string, ReactNode]> }) {
+  return (
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2.5 text-sm">
+      {items.map(([term, detail]) => (
+        <div key={term} className="col-span-2 grid grid-cols-subgrid items-baseline">
+          <dt className="text-medium-foreground">{term}</dt>
+          <dd className="font-medium">{detail}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function AeUnitRows() {
+  return (
+    <ul>
+      {AE_UNITS.map((unitId) => {
+        const unit = findAsset(unitId);
+        const alarms = ALARMS.filter((alarm) => alarm.assetId === unitId && alarm.state !== 'cleared');
+        const worst = AE_SEVERITIES.find((severity) => alarms.some((alarm) => alarm.severity === severity));
         return (
-          <li key={asset.id} className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="truncate text-sm text-base-foreground">{asset.name}</p>
-              <p className="font-mono text-xs text-muted-foreground">{asset.tag}</p>
-            </div>
-            <SeverityBadge severity={worst} count={alarms.length} />
-          </li>
+          <ListRow
+            key={unitId}
+            tone={worst ? AE_TONE[worst] : 'neutral'}
+            leading={
+              <IconChip tone={worst ? AE_TONE[worst] : 'success'} size="sm">
+                {worst ? <AeIcon severity={worst} /> : <IconCircleCheck />}
+              </IconChip>
+            }
+            title={unit?.name ?? unitId}
+            meta={<TagId>{unit?.tag ?? ''}</TagId>}
+            trailing={
+              worst ? (
+                <StatusPill tone={AE_TONE[worst]}>
+                  {alarms.length} {AE_WORD[worst].toLowerCase()}
+                </StatusPill>
+              ) : (
+                <StatusPill tone="success" variant="outline">
+                  No alarms
+                </StatusPill>
+              )
+            }
+          />
         );
       })}
     </ul>
   );
 }
 
-function AlarmChattering() {
-  const alarm = alarmById('alm-4806');
+function AlarmsAndEventsRows() {
   return (
-    <ul className="w-full">
-      <AlarmRow
-        alarm={{ ...alarm, state: 'active' }}
-        age="2 min ago"
-        assetName={alarmAssetName(alarm)}
-        density="compact"
-        repeatCount={14}
-      />
-    </ul>
+    <Canvas>
+      <Panel title="Open alarms" subtitle="Most severe first, then newest" footer="Priority · message and tag · value against limit · state and age — the same order in every list">
+        <AeRows />
+      </Panel>
+    </Canvas>
   );
 }
 
-function AlarmStanding() {
+function AlarmsAndEventsStates() {
+  const samples: readonly Alarm[] = [ALARMS[1], ALARMS[2], ALARMS[4], ALARMS[5]];
   return (
-    <div className="flex w-full flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium text-base-foreground">Standing alarms</span>
-        <span className="text-xs text-muted-foreground">Open for more than 8 h</span>
-      </div>
-      <ul className="flex w-full flex-col divide-y divide-default">
-        {STANDING_ALARMS.map((alarm) => (
-          <li key={alarm.id} className="flex items-center gap-4 py-2.5">
-            <span className="w-20 shrink-0">
-              <StatusIndicator size="sm" {...severityStatus(alarm.severity)} />
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <p className="truncate text-sm text-base-foreground">{alarm.message}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                <span className="font-mono">{alarm.sensorTag}</span> · since {formatDateTime(alarm.raisedAt)}
-              </p>
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-8" title="Lifecycle" subtitle="Only a new, unseen alarm asks for attention">
+          <AeRows alarms={samples} />
+        </Panel>
+        <Panel className="col-span-4" title="State words" subtitle="Said in text, never by colour alone">
+          <ul className="flex flex-1 flex-col justify-between gap-4 text-sm">
+            <li className="flex flex-col gap-1.5">
+              <StatusPill tone="critical" variant="filled" icon={<IconBellRinging />} className="self-start">
+                Active
+              </StatusPill>
+              <span className="text-medium-foreground">Raised and not yet seen. Full colour.</span>
+            </li>
+            <li className="flex flex-col gap-1.5">
+              <StatusPill tone="warning" variant="soft" icon={<IconCheck />} className="self-start">
+                Acknowledged
+              </StatusPill>
+              <span className="text-medium-foreground">Seen and still standing. Colour steps back.</span>
+            </li>
+            <li className="flex flex-col gap-1.5">
+              <StatusPill tone="info" variant="outline" icon={<IconBellOff />} className="self-start">
+                Shelved until 18:00
+              </StatusPill>
+              <span className="text-medium-foreground">Silenced on purpose, with a return time.</span>
+            </li>
+            <li className="flex flex-col gap-1.5">
+              <StatusPill tone="neutral" variant="outline" icon={<IconCircleCheck />} className="self-start">
+                Cleared
+              </StatusPill>
+              <span className="text-medium-foreground">Back inside its limit. Kept for the record.</span>
+            </li>
+          </ul>
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsCompact() {
+  return (
+    <Canvas>
+      <Panel title="All alarms, last three days" subtitle="One line each for long lists and side panels" actions={<StatusPill tone="neutral">{ALARMS.length} alarms</StatusPill>}>
+        <AeRows alarms={ALARMS} density="compact" />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsMarkers() {
+  return (
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-4" title="Chattering" subtitle="Came back 9 times in 24 hours" icon={<IconChip tone="warning"><IconRepeat /></IconChip>}>
+          <div className="flex flex-1 flex-col justify-between gap-4">
+            <div className="flex items-end justify-between gap-4">
+              <Stat variant="plain" size="lg" label="Discharge temperature high" value={9} unit="activations" tone="warning" />
+              <SparkLine className="h-12 w-28" variant="bars" tone="warning" label="Activations per hour, last 12 hours" values={[0, 1, 0, 2, 1, 0, 0, 1, 2, 1, 0, 1]} />
             </div>
-            <span className="shrink-0 text-right text-sm font-medium text-base-foreground tabular-nums">
-              {REFERENCE_NOW - alarm.raisedAt >= DAY
-                ? `${Math.round((REFERENCE_NOW - alarm.raisedAt) / DAY)} d`
-                : `${Math.round((REFERENCE_NOW - alarm.raisedAt) / HOUR)} h`}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill tone="warning" icon={<IconRepeat />}>
+                Chattering ×9
+              </StatusPill>
+              <TagId variant="chip">23-TT-92532</TagId>
+            </div>
+            <p className="text-sm text-medium-foreground">Count the returns on the row itself; nine rows for one alarm bury the list.</p>
+          </div>
+        </Panel>
+        <Panel className="col-span-4" title="Standing" subtitle="Active for more than 24 hours" icon={<IconChip tone="info"><IconHistory /></IconChip>}>
+          <div className="flex flex-1 flex-col justify-between gap-5">
+            <Meter label="Export pump B standby test overdue" value={48} max={72} unit="h" tone="info" target={{ value: 24, label: 'Standing after' }} />
+            <Meter label="Bearing temperature signal lost" value={9} max={72} unit="h" tone="neutral" target={{ value: 24, label: 'Standing after' }} />
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusPill tone="info" icon={<IconHistory />}>
+                Standing 2 d
+              </StatusPill>
+              <span className="text-sm text-medium-foreground">Reviewed weekly, not left to age.</span>
+            </div>
+          </div>
+        </Panel>
+        <Panel className="col-span-4" title="First out" subtitle="What tripped first, before the cascade" icon={<IconChip tone="critical"><IconAlertOctagon /></IconChip>}>
+          <ol className="flex flex-1 flex-col justify-between gap-3 text-sm">
+            <li className="flex items-center gap-3">
+              <span className="w-18 font-semibold tabular-nums">13:44:18</span>
+              <span className="min-w-0 flex-1 font-semibold">Vibration high-high</span>
+              <StatusPill tone="critical" variant="filled">
+                First out
+              </StatusPill>
+            </li>
+            <li className="flex items-center gap-3 text-medium-foreground">
+              <span className="w-18 tabular-nums">13:46:41</span>
+              <span className="min-w-0 flex-1">Recompressor trip</span>
+              <span className="tabular-nums">+2 min 23 s</span>
+            </li>
+            <li className="flex items-center gap-3 text-medium-foreground">
+              <span className="w-18 tabular-nums">13:47:02</span>
+              <span className="min-w-0 flex-1">Anti-surge valve open</span>
+              <span className="tabular-nums">+2 min 44 s</span>
+            </li>
+            <li className="flex items-center gap-3 text-medium-foreground">
+              <span className="w-18 tabular-nums">13:47:30</span>
+              <span className="min-w-0 flex-1">Gas flow low</span>
+              <span className="tabular-nums">+3 min 12 s</span>
+            </li>
+            <li className="text-medium-foreground">Mark the cause; the rest are consequences.</li>
+          </ol>
+        </Panel>
+      </Grid>
+    </Canvas>
   );
 }
 
-function AlarmFirstOut() {
-  const trip = alarmById('alm-4812');
-  const sequence: readonly Alarm[] = [
-    { ...trip, id: 'seq-1', message: 'Drive-end vibration high-high', raisedAt: trip.raisedAt - 4_200 },
-    { ...trip, id: 'seq-2', message: 'Recompressor tripped on high vibration', raisedAt: trip.raisedAt },
-    { ...trip, id: 'seq-3', severity: 'high', message: 'Recompressor suction pressure high', sensorTag: '23-PT-92730', value: '15.8 barg', limit: '15.0 barg', raisedAt: trip.raisedAt + 1_800 },
-    { ...trip, id: 'seq-4', severity: 'medium', message: 'Anti-surge valve fully open', sensorTag: '23-FV-92711', value: '100 %', limit: '95 %', raisedAt: trip.raisedAt + 3_100 },
-  ];
+function AlarmsAndEventsCounts() {
   return (
-    <AlarmList
-      alarms={sequence}
-      label="Trip sequence, recompressor"
-      sort="none"
-      firstOutId="seq-1"
-      formatAge={(raisedAt) => `+${((raisedAt - sequence[0].raisedAt) / 1000).toFixed(1)} s`}
-      getAssetName={alarmAssetName}
-    />
+    <Canvas>
+      <StatGroup columns={4} label="Open alarms by priority">
+        <AeCounts />
+      </StatGroup>
+    </Canvas>
   );
 }
 
-function AlarmSummaryInline() {
-  return <AlarmSummary counts={countBySeverity(OPEN_ALARMS)} label="Open alarms by severity" showTotal />;
-}
-
-function AlarmSummaryTiles() {
+function AlarmsAndEventsFlood() {
   return (
-    <div className="flex w-full max-w-md flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium text-base-foreground">Open alarms</span>
-        <span className="text-xs text-muted-foreground">Nordkapp plant</span>
-      </div>
-      <AlarmSummary variant="tiles" counts={countBySeverity(OPEN_ALARMS)} label="Open alarms by severity" />
-    </div>
-  );
-}
-
-function AlarmHeaderStrip() {
-  const latest = alarmById('alm-4812');
-  return (
-    <div className="flex w-full items-center gap-4 rounded-lg bg-muted-background px-4 py-2">
-      <span className="inline-flex shrink-0 items-center gap-2 text-sm font-medium text-base-foreground">
-        <IconBell aria-hidden="true" className="size-4" />
-        Alarms
-      </span>
-      <AlarmSummary counts={countBySeverity(OPEN_ALARMS)} label="Open alarms by severity" className="shrink-0" />
-      <span aria-hidden="true" className="h-4 w-px shrink-0 bg-chart-neutral-300" />
-      <p className="min-w-0 flex-1 truncate text-sm text-base-foreground">
-        <span className="text-muted-foreground">Latest · {formatAgo(latest.raisedAt)} · </span>
-        {latest.message}
-      </p>
-      <Button variant="ghost" size="sm" className="shrink-0">
-        View all
-        <IconChevronRight aria-hidden="true" />
-      </Button>
-    </div>
-  );
-}
-
-function AlarmKpiTiles() {
-  const shelved = ALARMS.filter((alarm) => alarm.state === 'shelved').length;
-  return (
-    <div className="grid w-full grid-cols-2 gap-4 lg:grid-cols-4">
-      <KpiTile
-        label="Alarms per hour"
-        value={ALARM_RATE[ALARM_RATE.length - 1]}
-        decimals={1}
-        delta={{ reference: 3.1, goodDirection: 'down', caption: 'vs yesterday' }}
-        trend={{ values: ALARM_RATE, variant: 'bar', label: 'Alarms per hour, last 24 hours', limit: 6 }}
-      />
-      <KpiTile label="Unacknowledged" value={OPEN_ALARMS.filter((alarm) => alarm.state === 'active').length} delta={{ reference: 1, goodDirection: 'down', caption: 'vs 1 h ago', decimals: 0 }} />
-      <KpiTile label="Standing alarms" value={STANDING_ALARMS.length} target={{ value: 0 }} footnote="Open for more than 8 h" />
-      <KpiTile label="Shelved" value={shelved} footnote="Next returns at 02:00" />
-    </div>
-  );
-}
-
-function AlarmFloodBanner() {
-  return (
-    <div className="w-full">
-      <Banner variant="warning" inset>
-        <BannerIcon icon={IconAlertTriangleFilled} />
-        <BannerTitle>
-          <span className="truncate text-base-foreground">Alarm flood in Gas compression: 34 alarms in the last 10 min</span>
-        </BannerTitle>
-        <BannerStatus variant="warning">Since 13:46</BannerStatus>
-        <BannerActions>
-          <BannerAction>Show critical only</BannerAction>
-          <BannerClose>Dismiss</BannerClose>
-        </BannerActions>
-      </Banner>
-    </div>
-  );
-}
-
-function AlarmListSorted() {
-  const [acknowledged, setAcknowledged] = useState<readonly string[]>([]);
-  const alarms = OPEN_ALARMS.map((alarm) => (acknowledged.includes(alarm.id) ? { ...alarm, state: 'acknowledged' as const } : alarm));
-  return (
-    <AlarmList
-      alarms={alarms}
-      label="Open alarms, most severe first"
-      formatAge={formatAgo}
-      getAssetName={alarmAssetName}
-      renderActions={(alarm) => (
-        <>
-          {alarm.state === 'active' ? (
-            <AlarmIconAction label={`Acknowledge ${alarm.message}`} onClick={() => setAcknowledged((current) => [...current, alarm.id])}>
-              <IconCheck />
-            </AlarmIconAction>
-          ) : (
-            <span aria-hidden="true" className="size-7" />
-          )}
-          <AlarmIconAction label={`Shelve ${alarm.message}`}>
-            <IconBellZ />
-          </AlarmIconAction>
-        </>
-      )}
-    />
-  );
-}
-
-function AlarmSeverityFilter() {
-  const [shown, setShown] = useState<string[]>(['critical', 'high']);
-  const counts = countBySeverity(ALARMS);
-  const alarms = ALARMS.filter((alarm) => shown.includes(alarm.severity));
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <ToggleGroup
-          label="Severities shown"
-          variant="outline"
-          size="sm"
-          value={shown}
-          onValueChange={setShown}
-          options={SEVERITY_ORDER.map((severity) => ({ value: severity, label: severityStatus(severity).label, count: counts[severity] }))}
-        />
-        <span role="status" className="text-xs text-muted-foreground tabular-nums">
-          {alarms.length} of {ALARMS.length} alarms
-        </span>
-      </div>
-      <AlarmList alarms={alarms} label="Filtered alarms" formatAge={formatAgo} getAssetName={alarmAssetName} empty="Select a severity to show alarms" />
-    </div>
-  );
-}
-
-function AlarmEmpty() {
-  return (
-    <EmptyState>
-      <EmptyStateIcon>
-        <IconCheck />
-      </EmptyStateIcon>
-      <EmptyStateTitle as="h4">No active alarms</EmptyStateTitle>
-      <EmptyStateDescription>Gas export has been clear since 9 Mar, 07:12. 1 alarm is shelved.</EmptyStateDescription>
-    </EmptyState>
-  );
-}
-
-function AlarmListLoading() {
-  return (
-    <div className="w-full max-w-md">
-      <SkeletonList rows={4} media={false} trailing label="Loading alarms" />
-    </div>
-  );
-}
-
-function AlarmLifecycle() {
-  const alarm = alarmById('alm-4809');
-  const steps: readonly TimelineEvent[] = [
-    { id: 'raised', time: formatTime(alarm.raisedAt), title: 'Raised', detail: alarm.value, tone: 'warning', shape: 'square' },
-    { id: 'acknowledged', time: formatTime(alarm.raisedAt + 24 * MINUTE), title: 'Acknowledged', detail: 'Ingrid Haugen' },
-    { id: 'cleared', title: 'Cleared', pending: true },
-  ];
-  return (
-    <div className="flex w-full max-w-md flex-col gap-4">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-base-foreground">{alarm.message}</p>
-        <p className="font-mono text-xs text-muted-foreground">{alarm.sensorTag}</p>
-      </div>
-      <EventTimeline orientation="horizontal" label="Alarm life cycle" events={steps} />
-    </div>
-  );
-}
-
-function AlarmEventTimeline() {
-  const events: readonly TimelineEvent[] = PLANT_EVENTS.map((event) => ({
-    id: event.id,
-    time: formatTime(event.at),
-    title: event.text,
-    detail: (
-      <>
-        <span className="font-mono">{event.tag}</span> · {event.by}
-      </>
-    ),
-    group: hourOf(event.at),
-    tone: event.severity ? severityStatus(event.severity).tone : undefined,
-    shape: event.severity ? severityStatus(event.severity).shape : undefined,
-  }));
-  return (
-    <div className="w-full max-w-md">
-      <EventTimeline label="Plant events by hour, newest first" events={events} />
-    </div>
-  );
-}
-
-function AlarmEventLog() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-2xl border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Time
-            </th>
-            <th scope="col" className={TH}>
-              Event
-            </th>
-            <th scope="col" className={TH}>
-              Tag
-            </th>
-            <th scope="col" className={TH}>
-              Description
-            </th>
-            <th scope="col" className={TH}>
-              By
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {PLANT_EVENTS.map((event) => (
-            <tr key={event.id} className="border-t border-default">
-              <td className={`${TD} whitespace-nowrap text-muted-foreground tabular-nums`}>{formatTime(event.at)}</td>
-              <td className={`${TD} whitespace-nowrap`}>
-                {event.severity ? <StatusIndicator size="sm" {...severityStatus(event.severity)} label={`${severityStatus(event.severity).label} alarm`} /> : <span className="text-xs text-muted-foreground">{event.kind}</span>}
-              </td>
-              <td className={`${TD} whitespace-nowrap font-mono text-xs text-base-foreground`}>{event.tag}</td>
-              <td className={`${TD} text-base-foreground`}>{event.text}</td>
-              <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{event.by}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AlarmAcknowledgeComment() {
-  const alarm = alarmById('alm-4811');
-  const [comment, setComment] = useState('');
-  const [acknowledged, setAcknowledged] = useState(false);
-  return (
-    <div className="flex w-full max-w-md flex-col gap-4">
-      <ul>
-        <AlarmRow alarm={acknowledged ? { ...alarm, state: 'acknowledged' } : alarm} age={formatAgo(alarm.raisedAt)} density="compact" className="py-0" />
-      </ul>
-      {acknowledged ? (
-        <div className="flex items-center justify-between gap-3">
-          <AlarmStateLabel state="acknowledged" detail="by Ingrid Haugen, just now" />
-          <Button variant="ghost" size="sm" onClick={() => setAcknowledged(false)}>
-            Undo
-          </Button>
-        </div>
-      ) : (
-        <div className="flex flex-col">
-          <Label htmlFor="alarm-ack-comment">Comment</Label>
-          <Textarea
-            id="alarm-ack-comment"
-            rows={2}
-            placeholder="What you checked or did"
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
-          />
-          <div className="mt-3 flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setComment('')}>
-              Cancel
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-12" tone="critical" padding="tight">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <IconChip tone="critical" size="lg">
+              <IconBellRinging />
+            </IconChip>
+            <div className="min-w-0 flex-1">
+              <p className="text-lg leading-6 font-semibold">Alarm flood on gas compression</p>
+              <p className="text-sm text-medium-foreground">29 alarms in the last 20 minutes · started 13:40 · the list is grouped by first-out cause</p>
+            </div>
+            <StatusPill tone="critical" size="lg" icon={<IconAlertOctagon />}>
+              17 per 10 min
+            </StatusPill>
+            <Button variant="outline" size="sm">
+              Show first-out only
             </Button>
-            <Button size="sm" onClick={() => setAcknowledged(true)}>
-              <IconCheck aria-hidden="true" />
-              Acknowledge
+          </div>
+        </Panel>
+        <Panel className="col-span-8" title="Alarm rate" subtitle="Raised per ten minutes, against the flood limit">
+          <AeRateBars />
+        </Panel>
+        <Panel className="col-span-4" title="This hour" subtitle="Against the targets an operator can handle">
+          <div className="flex flex-1 flex-col justify-between gap-5">
+            <Meter size="lg" label="Average rate" value={5.9} decimals={1} max={20} unit="per 10 min" tone="warning" target={{ value: 1, label: 'Target' }} high={10} />
+            <Meter size="lg" label="Time in flood" value={20} max={60} unit="min" tone="critical" target={{ value: 0, label: 'Target' }} />
+            <Meter size="lg" label="Acknowledged within 10 min" value={86} max={100} unit="%" tone="success" target={{ value: 90, label: 'Target' }} />
+          </div>
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsAnnunciator() {
+  const [selected, setSelected] = useState('w1');
+  const window = AE_WINDOWS.find((item) => item.id === selected) ?? AE_WINDOWS[0];
+  return (
+    <Canvas>
+      <Panel
+        title="Compression train annunciator"
+        subtitle="Fixed positions: the pattern is readable before the text"
+        actions={<StatusPill tone="critical">3 unacknowledged</StatusPill>}
+        footer={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <TagId>{window.tag}</TagId>
+            <span className="font-medium text-base-foreground">{window.label}</span>
+            <span>{window.stateLabel}</span>
+          </span>
+        }
+      >
+        <AnnunciatorGrid label="Compression train annunciator" windows={AE_WINDOWS} columns={4} selected={selected} onSelect={setSelected} />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsByUnit() {
+  return (
+    <Canvas>
+      <Panel title="Alarms by unit" subtitle="Worst priority and count on every unit" footer="Zero is shown too — the absence is information">
+        <AeUnitRows />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsFiltered() {
+  const [filter, setFilter] = useState('all');
+  const [acknowledged, setAcknowledged] = useState<readonly string[]>([]);
+  const [selected, setSelected] = useState(AE_OPEN[0].id);
+  const shown = AE_OPEN.filter((alarm) => filter === 'all' || alarm.severity === filter);
+  const stateOf = (alarm: Alarm): Alarm['state'] => (acknowledged.includes(alarm.id) ? 'acknowledged' : alarm.state);
+  const unseen = AE_OPEN.filter((alarm) => stateOf(alarm) === 'active').length;
+
+  return (
+    <Canvas>
+      <Panel
+        title="Open alarms"
+        subtitle={`${unseen} unacknowledged of ${AE_OPEN.length} open`}
+        actions={
+          <SegmentedControl value={filter} onValueChange={(next) => setFilter(String(next))}>
+            <SegmentedControlList size="small" aria-label="Filter by priority">
+              <SegmentedControlButton value="all">All {AE_OPEN.length}</SegmentedControlButton>
+              {AE_SEVERITIES.map((severity) => (
+                <SegmentedControlButton key={severity} value={severity}>
+                  {AE_WORD[severity]} {AE_COUNT[severity]}
+                </SegmentedControlButton>
+              ))}
+            </SegmentedControlList>
+          </SegmentedControl>
+        }
+        footer="Select a row with a click or Enter. Acknowledging keeps the alarm in the list and quietens it."
+      >
+        {shown.length === 0 ? (
+          <EmptyPanel icon={<IconCircleCheck />} title="No alarms at this priority" description="Nothing open matches the filter. Other priorities still have open alarms." />
+        ) : (
+          <ul role="listbox" aria-label="Open alarms">
+            {shown.map((alarm) => (
+              <AeRow
+                key={alarm.id}
+                alarm={alarm}
+                state={stateOf(alarm)}
+                selected={alarm.id === selected}
+                onSelect={() => setSelected(alarm.id)}
+                actions={
+                  stateOf(alarm) === 'active' ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setAcknowledged((current) => [...current, alarm.id]);
+                      }}
+                    >
+                      <IconCheck /> Acknowledge
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsEmpty() {
+  return (
+    <Canvas>
+      <Panel title="Open alarms" subtitle="Gas export · NK-27" actions={<StatusPill tone="success">All clear</StatusPill>}>
+        <EmptyPanel
+          icon={<IconCircleCheck />}
+          title="No active alarms"
+          description="The last alarm on gas export cleared 3 days ago. One alarm is shelved and returns at 18:00."
+          action={
+            <Button variant="outline" size="sm">
+              Show shelved
+            </Button>
+          }
+        />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsAcknowledge() {
+  const [comment, setComment] = useState('Load reduced to 80 %. Vibration analyst called out.');
+  const [done, setDone] = useState(false);
+  const alarm = ALARMS[1];
+  return (
+    <Canvas>
+      <Panel
+        title="Acknowledge alarm"
+        subtitle="A comment turns an acknowledgement into a handover note"
+        icon={
+          <IconChip tone="warning">
+            <IconAlertTriangle />
+          </IconChip>
+        }
+        footer={done ? 'Acknowledged 14:00 by Ingrid Haugen. The alarm stays in the list until it clears.' : 'Acknowledging silences the horn; it does not clear the alarm.'}
+      >
+        <div className="flex flex-col gap-4">
+          <ul>
+            <AeRow alarm={alarm} state={done ? 'acknowledged' : 'active'} />
+          </ul>
+          <div className="flex flex-col">
+            <Label htmlFor="alarms-and-events-ack-comment">What you checked or did</Label>
+            <Textarea id="alarms-and-events-ack-comment" rows={2} value={comment} disabled={done} onChange={(event) => setComment(event.target.value)} />
+          </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setDone(false)} disabled={!done}>
+              Undo
+            </Button>
+            <Button size="sm" onClick={() => setDone(true)} disabled={done}>
+              <IconCheck /> Acknowledge
             </Button>
           </div>
         </div>
-      )}
-    </div>
+      </Panel>
+    </Canvas>
   );
 }
 
-function AlarmShelve() {
-  const alarm = alarmById('alm-4803');
-  const [hours, setHours] = useState('12');
-  const until = formatTime(REFERENCE_NOW + Number(hours) * HOUR);
-  return (
-    <div className="flex w-full max-w-md flex-col gap-4">
-      <ul>
-        <AlarmRow alarm={{ ...alarm, state: 'active' }} age={formatAgo(alarm.raisedAt)} density="compact" className="py-0" />
-      </ul>
-      <div className="flex flex-col">
-        <Label htmlFor="alarm-shelve-duration">Shelve for</Label>
-        <Select items={SHELVE_DURATIONS} value={hours} onValueChange={setHours}>
-          <SelectTrigger id="alarm-shelve-duration" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SHELVE_DURATIONS.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <span className="text-xs text-muted-foreground tabular-nums">
-            Returns at {until} UTC. Linked to <span className="font-mono">WO-104479</span>
-          </span>
-          <Button variant="secondary" size="sm">
-            <IconBellZ aria-hidden="true" />
-            Shelve alarm
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
+const AE_SHELVE: Record<string, string> = { '1': '15:00', '4': '18:00', '8': '22:00', shift: '19:00, end of shift' };
 
-function AlarmDetailCard() {
-  const alarm = alarmById('alm-4811');
-  const asset = findAsset(alarm.assetId);
+function AlarmsAndEventsShelve() {
+  const [hours, setHours] = useState('4');
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>{alarm.message}</CardTitle>
-          <CardDescription>
-            <span className="font-mono">{alarm.sensorTag}</span> · {asset?.name} · <span className="font-mono">{asset?.tag}</span>
-          </CardDescription>
-        </CardHeaderCenter>
-        <CardHeaderEnd>
-          <SeverityBadge severity={alarm.severity} />
-        </CardHeaderEnd>
-      </CardHeader>
-      <CardContent>
-        <div className="grid w-full gap-6 md:grid-cols-[16rem_minmax(0,1fr)]">
-          <MetadataList
+    <Canvas>
+      <Panel
+        title="Shelve alarm"
+        subtitle="A shelved alarm always has a reason and a return time"
+        icon={
+          <IconChip tone="info">
+            <IconBellOff />
+          </IconChip>
+        }
+        footer="Shelving is logged with your name. One alarm is shelved now; the limit for this console is five."
+      >
+        <div className="flex flex-col gap-4">
+          <ul>
+            <AeRow alarm={ALARMS[4]} />
+          </ul>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-sm font-medium">Shelve for</span>
+            <SegmentedControl value={hours} onValueChange={(next) => setHours(String(next))}>
+              <SegmentedControlList size="small" aria-label="Shelve duration">
+                <SegmentedControlButton value="1">1 h</SegmentedControlButton>
+                <SegmentedControlButton value="4">4 h</SegmentedControlButton>
+                <SegmentedControlButton value="8">8 h</SegmentedControlButton>
+                <SegmentedControlButton value="shift">End of shift</SegmentedControlButton>
+              </SegmentedControlList>
+            </SegmentedControl>
+          </div>
+          <AeFacts
             items={[
-              { label: 'State', value: <AlarmStateLabel state={alarm.state} /> },
-              { label: 'Value', value: <span className="tabular-nums">{alarm.value}</span> },
-              { label: 'High limit', value: <span className="tabular-nums">{alarm.limit}</span> },
-              { label: 'Trip limit', value: <span className="tabular-nums">155.0 °C</span> },
-              { label: 'Raised', value: <span className="tabular-nums">{formatDateTime(alarm.raisedAt)}</span> },
-              { label: 'Times this week', value: <span className="tabular-nums">3</span> },
+              ['Returns at', <span key="returns" className="tabular-nums">{AE_SHELVE[hours]}</span>],
+              ['Reason', 'Transmitter fault, WO-104479 planned'],
+              ['Compensating check', 'Local gauge read every hour'],
             ]}
           />
-          <div className="flex min-w-0 flex-col gap-2">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-xs text-muted-foreground">Discharge temperature, last 48 h</span>
-              <span className="text-xs text-muted-foreground tabular-nums">Limit 145.0 °C</span>
-            </div>
-            <Sparkline
-              values={ALARM_TREND}
-              label="Discharge temperature, last 48 hours, against the 145 °C high limit"
-              variant="area"
-              tone="warning"
-              limit={145}
-              unit="°C"
-              height={120}
-              showLast
-              className="w-full"
-            />
-            <div aria-hidden="true" className="flex justify-between text-xs text-muted-foreground tabular-nums">
-              <span>10 Mar, 14:00</span>
-              <span>11 Mar, 14:00</span>
-              <span>Now</span>
-            </div>
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="ghost" size="sm">
+              Cancel
+            </Button>
+            <Button size="sm">
+              <IconBellOff /> Shelve until {AE_SHELVE[hours].split(',')[0]}
+            </Button>
           </div>
         </div>
-      </CardContent>
-      <CardFooter>
-        <CardFooterStart>
-          <span className="text-xs text-muted-foreground">Unacknowledged for 38 min</span>
-        </CardFooterStart>
-        <CardFooterEnd className="gap-2">
-          <Button variant="ghost" size="sm">
-            <IconTool aria-hidden="true" />
-            Create work order
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsDetail() {
+  return (
+    <Canvas>
+      <Grid>
+        <Panel
+          className="col-span-8"
+          tone="critical"
+          title="Recompressor tripped on high vibration"
+          subtitle="23-VT-92740 · Recompressor 23-KA-9103 · raised 13:44"
+          icon={
+            <IconChip tone="critical">
+              <IconAlertOctagon />
+            </IconChip>
+          }
+          actions={
+            <>
+              <StatusPill tone="critical" variant="filled">
+                Critical · Active
+              </StatusPill>
+              <Button size="sm">
+                <IconCheck /> Acknowledge
+              </Button>
+            </>
+          }
+        >
+          <AeVibrationTrend height={260} />
+        </Panel>
+        <Panel className="col-span-4" title="What to do" subtitle="From the alarm response sheet">
+          <div className="flex flex-1 flex-col justify-between gap-5">
+            <AeFacts
+              items={[
+                ['Value', <span key="v" className="tabular-nums">11.6 mm/s</span>],
+                ['Trip limit', <span key="l" className="tabular-nums">11.0 mm/s</span>],
+                ['Likely cause', 'Drive-end bearing wear'],
+                ['Consequence', 'Loss of recompression, flaring'],
+                ['Time to respond', '10 minutes'],
+              ]}
+            />
+            <ol className="flex flex-col gap-2 text-sm">
+              <li className="flex gap-2.5">
+                <span className="font-semibold tabular-nums">1</span>
+                <span>Confirm the machine has stopped and the anti-surge valve is open.</span>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="font-semibold tabular-nums">2</span>
+                <span>Do not restart before the bearing has been inspected.</span>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="font-semibold tabular-nums">3</span>
+                <span>Rebalance load on the first and second stage.</span>
+              </li>
+            </ol>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm">
+                <IconTool /> Open WO-104482
+              </Button>
+              <Button variant="outline" size="sm">
+                <IconBellOff /> Shelve
+              </Button>
+            </div>
+          </div>
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsTimeline() {
+  return (
+    <Canvas>
+      <Panel title="Recompressor trip" subtitle="Alarms, operator actions and system events in one sequence" footer="21 minutes from first warning to work order">
+        <EventTimeline label="Events around the recompressor trip, 13:31 to 13:52" events={AE_EVENTS} />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsHeat() {
+  return (
+    <Canvas>
+      <Panel title="Alarm load by hour" subtitle="Where and when alarms pile up, last 24 hours">
+        <div className="flex flex-1 flex-col justify-between gap-5">
+          <div className="grid grid-cols-3 gap-4">
+            <Stat variant="plain" size="md" label="Raised" value={71} />
+            <Stat variant="plain" size="md" label="Busiest hour" value="9" unit="at 13:00" tone="warning" />
+            <Stat variant="plain" size="md" label="From compression" value={62} unit="%" />
+          </div>
+          <HeatStrip
+            size="lg"
+            label="Alarms per hour by area over the last 24 hours"
+            rows={AE_HEAT}
+            ticks={['14:00', '20:00', '02:00', '08:00', '14:00']}
+            scale={{ label: 'Alarms per hour', low: '0', high: '9' }}
+          />
+        </div>
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AeLaneLegend() {
+  return (
+    <Legend
+      items={[
+        { label: 'Active, unacknowledged', tone: 'critical' },
+        { label: 'Acknowledged, still standing', tone: 'neutral' },
+        { label: 'Shelved', tone: 'info', mark: 'dashed' },
+      ]}
+    />
+  );
+}
+
+function AlarmsAndEventsLanes() {
+  return (
+    <Canvas>
+      <Panel title="Standing time per alarm" subtitle="Last 24 hours on one clock: a comb is chattering, a long bar is standing" footer={<AeLaneLegend />}>
+        <AlarmLanes label="Standing time per alarm over the last 24 hours" lanes={AE_LANES} ticks={AE_LANE_TICKS} />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsLog() {
+  return (
+    <Canvas>
+      <Panel title="Event log" subtitle="Gas compression · newest first" padding="none" actions={<Button variant="outline" size="sm">Export</Button>}>
+        <DataTable
+          label="Event log for gas compression"
+          flush
+          columns={AE_LOG_COLUMNS}
+          rows={AE_LOG}
+          rowKey={(entry) => entry.id}
+          rowTone={(entry) => (entry.tone === 'critical' || entry.tone === 'warning' ? entry.tone : undefined)}
+        />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmsAndEventsConsole() {
+  const [selected, setSelected] = useState('w1');
+  return (
+    <LookScope look="console">
+      <Canvas padding="none">
+        <Grid>
+          <StatGroup columns={4} label="Open alarms by priority" className="col-span-12">
+            <AeCounts size="lg" plain />
+          </StatGroup>
+          <Panel className="col-span-7" title="Alarm summary" subtitle="5 open · sorted by priority, then age" padding="none" tone="critical">
+            <ul>
+              {ALARMS.map((alarm) => (
+                <AeRow key={alarm.id} alarm={alarm} density="compact" />
+              ))}
+            </ul>
+          </Panel>
+          <Panel className="col-span-5" title="23 Gas compression" subtitle="Annunciator" padding="none">
+            <AnnunciatorGrid label="Gas compression annunciator" windows={AE_WINDOWS} columns={3} selected={selected} onSelect={setSelected} />
+          </Panel>
+          <Panel className="col-span-7" title="Alarm rate" subtitle="Per 10 min · flood limit 10">
+            <AeRateBars height={200} />
+          </Panel>
+          <Panel className="col-span-5" title="Sequence of events" subtitle="23-KA-9103 · 13:31 to 13:52">
+            <EventTimeline label="Sequence of events for the recompressor trip" events={AE_EVENTS} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmsAndEventsSignal() {
+  return (
+    <LookScope look="signal">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-7" tone="critical">
+            <div className="flex flex-1 flex-col justify-between gap-6">
+              <p className="text-lg font-semibold">Top alarm · 14 min ago</p>
+              <div className="flex items-center gap-5">
+                <IconAlertOctagon className="size-20 shrink-0" stroke={2.2} aria-hidden="true" />
+                <p className="text-6xl leading-none font-extrabold tracking-tighter">Recompressor tripped</p>
+              </div>
+              <p className="text-xl font-medium">High vibration on 23-VT-92740: 11.6 mm/s against a trip limit of 11.0. Not acknowledged.</p>
+            </div>
+          </Panel>
+          <div className="col-span-5 grid grid-cols-2 gap-2">
+            {AE_SEVERITIES.map((severity) => (
+              <Stat
+                key={severity}
+                size="lg"
+                tone={AE_COUNT[severity] === 0 ? 'success' : AE_TONE[severity]}
+                label={AE_WORD[severity]}
+                value={AE_COUNT[severity]}
+                unit="open"
+                state={AE_COUNT[severity] === 0 ? 'Clear' : severity === 'critical' ? 'Act now' : severity === 'high' ? 'Respond' : 'Monitor'}
+                stateIcon={AE_COUNT[severity] === 0 ? <IconCircleCheck /> : <AeIcon severity={severity} />}
+              />
+            ))}
+          </div>
+          <Panel className="col-span-7" title="Open alarms" subtitle="Unacknowledged alarms fill their row">
+            <ul>
+              {AE_OPEN.map((alarm) => (
+                <AeRow key={alarm.id} alarm={alarm} />
+              ))}
+            </ul>
+          </Panel>
+          <Panel className="col-span-5" title="Gas compression" subtitle="Annunciator, 12 points">
+            <AnnunciatorGrid label="Gas compression annunciator" windows={AE_WINDOWS} columns={3} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmsAndEventsPoster() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Grid>
+          <StatGroup columns={4} label="Open alarms by priority" className="col-span-12">
+            {AE_SEVERITIES.map((severity) => (
+              <Stat key={severity} size="hero" tone={AE_TONE[severity]} label={AE_WORD[severity]} value={AE_COUNT[severity]} unit="open" target={`${AE_HISTORY[severity].reduce((sum, count) => sum + count, 0)} raised in 12 h`} />
+            ))}
+          </StatGroup>
+          <Panel className="col-span-7" title="Open alarms" subtitle="Worst first" padding="none">
+            <ul>
+              {AE_OPEN.map((alarm) => (
+                <AeRow key={alarm.id} alarm={alarm} />
+              ))}
+            </ul>
+          </Panel>
+          <Panel className="col-span-5" title="Alarm rate" subtitle="Per ten minutes, flood limit 10">
+            <AeRateBars height={280} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmsAndEventsEditorial() {
+  return (
+    <LookScope look="editorial">
+      <Canvas>
+        <Grid>
+          <div className="col-span-12 flex flex-col gap-2">
+            <p className="text-sm font-medium text-medium-foreground">Nordkapp alarm report · Thursday 12 March 2026 · day shift</p>
+            <h3 className="max-w-4xl text-4xl leading-tight font-semibold tracking-tight">One trip, one flood, and a temperature alarm that came back nine times.</h3>
+          </div>
+          <StatGroup columns={4} label="Shift figures" className="col-span-12">
+            <Stat variant="plain" size="lg" label="Alarms raised" value={71} delta={{ value: 23, decimals: 0, good: 'down', caption: 'on yesterday' }} />
+            <Stat variant="plain" size="lg" label="Peak rate" value={17} unit="per 10 min" target="Flood limit 10" />
+            <Stat variant="plain" size="lg" label="Acknowledged in 10 min" value={86} unit="%" target="Target 90 %" />
+            <Stat variant="plain" size="lg" label="Standing over 24 h" value={1} target="Target 0" />
+          </StatGroup>
+          <Panel className="col-span-7" title="Open at handover" subtitle="Five alarms carry over to the night shift">
+            <ul>
+              {AE_OPEN.map((alarm) => (
+                <AeRow key={alarm.id} alarm={alarm} />
+              ))}
+            </ul>
+          </Panel>
+          <Panel className="col-span-5" title="The trip, minute by minute" subtitle="Recompressor 23-KA-9103">
+            <EventTimeline label="Sequence of events for the recompressor trip" events={AE_EVENTS} />
+          </Panel>
+          <Panel className="col-span-12" title="Standing time" subtitle="Every open alarm on the same 24-hour clock" footer={<AeLaneLegend />}>
+            <AlarmLanes label="Standing time per alarm over the last 24 hours" lanes={AE_LANES.slice(0, 5)} ticks={AE_LANE_TICKS} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmsAndEventsWorkbench() {
+  const [selected, setSelected] = useState(AE_OPEN[0].id);
+  const alarm = AE_OPEN.find((item) => item.id === selected) ?? AE_OPEN[0];
+  const unit = findAsset(alarm.assetId);
+  return (
+    <LookScope look="studio">
+      <AppFrame
+        brand={{ name: 'Nordkapp', detail: 'Gas processing', mark: <IconFlame /> }}
+        nav={AE_NAV}
+        current="alarms"
+        title="Alarms"
+        subtitle="5 open · 1 shelved · updated 14:00 UTC"
+        status={
+          <StatusPill tone="critical" size="lg" icon={<IconAlertOctagon />}>
+            1 critical
+          </StatusPill>
+        }
+        actions={
+          <Button variant="outline" size="sm">
+            <IconCheck /> Acknowledge all seen
           </Button>
-          <Button variant="secondary" size="sm">
-            <IconBellZ aria-hidden="true" />
-            Shelve
-          </Button>
-          <Button size="sm">
-            <IconCheck aria-hidden="true" />
-            Acknowledge
-          </Button>
-        </CardFooterEnd>
-      </CardFooter>
-    </Card>
+        }
+      >
+        <Grid>
+          <StatGroup columns={4} label="Open alarms by priority" className="col-span-12">
+            <AeCounts />
+          </StatGroup>
+          <Panel className="col-span-7" title="Open alarms" subtitle="Select an alarm to see its trend and response">
+            <ul role="listbox" aria-label="Open alarms">
+              {AE_OPEN.map((item) => (
+                <AeRow key={item.id} alarm={item} selected={item.id === selected} onSelect={() => setSelected(item.id)} />
+              ))}
+            </ul>
+          </Panel>
+          <Panel
+            className="col-span-5"
+            tone={AE_TONE[alarm.severity]}
+            title={alarm.message}
+            subtitle={`${unit?.name ?? ''} · ${unit?.tag ?? ''}`}
+            icon={
+              <IconChip tone={AE_TONE[alarm.severity]}>
+                <AeIcon severity={alarm.severity} />
+              </IconChip>
+            }
+            footer={
+              <span className="flex flex-wrap gap-2">
+                <Button size="sm">
+                  <IconCheck /> Acknowledge
+                </Button>
+                <Button variant="outline" size="sm">
+                  <IconBellOff /> Shelve
+                </Button>
+                <Button variant="outline" size="sm">
+                  <IconTool /> Create work order
+                </Button>
+              </span>
+            }
+          >
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <div className="grid grid-cols-3 gap-4">
+                <Stat variant="plain" size="md" label="Value" value={alarm.value} tone={AE_TONE[alarm.severity]} />
+                <Stat variant="plain" size="md" label="Limit" value={alarm.limit} />
+                <Stat variant="plain" size="md" label="Raised" value={formatTime(alarm.raisedAt)} unit="UTC" />
+              </div>
+              <AeFacts
+                items={[
+                  ['Priority', <StatusPill key="p" tone={AE_TONE[alarm.severity]}>{AE_WORD[alarm.severity]}</StatusPill>],
+                  ['State', AE_STATE[alarm.state]],
+                  ['Tag', <TagId key="t">{alarm.sensorTag}</TagId>],
+                  ['Age', formatAgo(alarm.raisedAt)],
+                ]}
+              />
+            </div>
+          </Panel>
+          <Panel className="col-span-12" title="Standing time per alarm" subtitle="Last 24 hours" footer={<AeLaneLegend />}>
+            <AlarmLanes label="Standing time per alarm over the last 24 hours" lanes={AE_LANES} ticks={AE_LANE_TICKS} />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
+  );
+}
+
+function AlarmsAndEventsGlass() {
+  return (
+    <LookScope look="glass">
+      <AppFrame
+        brand={{ name: 'Nordkapp', mark: <IconFlame /> }}
+        nav={AE_NAV}
+        current="alarms"
+        title="Alarm system health"
+        subtitle="Day shift · Thursday 12 March"
+        status={<StatusPill tone="warning">Flood at 13:40</StatusPill>}
+      >
+        <Grid>
+          <Panel className="col-span-4" title="Operator load" subtitle="This shift against targets">
+            <div className="grid flex-1 grid-cols-2 place-items-center gap-5">
+              <RingGauge label="Acknowledged in 10 min" value={86} tone="success" size={116} />
+              <RingGauge label="Time out of flood" value={94} tone="warning" size={116} />
+              <RingGauge label="Alarms with a response" value={78} tone="accent" size={116} />
+              <RingGauge label="Shelving slots used" value={20} tone="info" size={116} />
+            </div>
+          </Panel>
+          <Panel className="col-span-8" title="Vibration, recompressor drive end" subtitle="23-VT-92740 · the two hours before the trip">
+            <AeVibrationTrend height={280} />
+          </Panel>
+          <Panel className="col-span-5" title="What happened" subtitle="13:31 to 13:52">
+            <EventTimeline label="Sequence of events for the recompressor trip" events={AE_EVENTS.slice(0, 5)} />
+          </Panel>
+          <Panel className="col-span-7" title="Open alarms" subtitle="5 open, most severe first">
+            <AeRows />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
   );
 }
 
@@ -629,18 +1145,19 @@ export default definePage({
   id: 'alarms-and-events',
   title: 'Alarms and events',
   summary:
-    'Alarms as an operator works them: one row grammar for severity, message, tag, value against limit, state and age, then the lists, summaries, timelines and actions built from it. Severity owns the colour; state is carried by words and weight.',
+    'Alarms as an operator works them: one row grammar for priority, message, tag, value against limit, state and age, then the summaries, annunciators, timelines and actions built from it — shown in six looks, from a studio list to a console lightbox and a wall screen.',
   guidance: {
     use: [
-      'Sort by severity first and age second, so the top of the list is always the next thing to handle.',
-      'Say severity three ways: colour, dot shape and the word. Say state in words.',
+      'Sort by priority first and age second, so the top of the list is always the next thing to handle.',
+      'Say priority three ways: colour, shape and the word. Say state in words.',
       'Show the value next to the limit it crossed; an alarm without its number sends people to another screen.',
-      'Summarise once per view (counts, a flood banner) and keep per-alarm state on the row.',
+      'Let acknowledged, shelved and cleared alarms recede; only what is new and unseen asks for attention.',
     ],
     avoid: [
-      'Stacking one Alert per alarm — a list of alarms is a list, not a pile of banners.',
-      'Pulsing or colouring acknowledged, shelved or cleared alarms; only what is new and unseen asks for attention.',
+      'Stacking one banner per alarm — a list of alarms is a list, summarised once above it.',
+      'Priority as a small dot or as colour alone.',
       'Hiding shelved alarms without saying how many there are and when they return.',
+      'Monospace for tags and values; tabular figures in the UI typeface align just as well.',
     ],
   },
   source,
@@ -648,274 +1165,272 @@ export default definePage({
     {
       id: 'rows',
       title: 'Rows and states',
-      description: 'The alarm row and the vocabulary every other specimen reuses.',
+      description: 'The alarm row and what it carries. These follow the look chosen in the theme menu.',
       specimens: [
         {
-          id: 'AlarmRowDefault',
-          title: 'Alarm row',
-          note: 'Pick it as the line item of any alarm list: severity, message, tag, value against limit, state and age.',
+          id: 'AlarmsAndEventsRows',
+          title: 'Alarm rows',
+          note: 'Pick it for any list an operator works from; the column order never changes.',
           origin: 'custom',
-          uses: ['industrial/operations/AlarmRow.tsx', 'industrial/operations/alarms.ts'],
-          size: 'lg',
-          align: 'stretch',
-          Component: AlarmRowDefault,
-        },
-        {
-          id: 'AlarmSeverityBadges',
-          title: 'Severity badges',
-          note: 'Pick the badge where severity labels one record — a card header, a detail page — not for every row of a list.',
-          origin: 'custom',
-          uses: ['industrial/operations/SeverityBadge.tsx'],
-          Component: AlarmSeverityBadges,
-        },
-        {
-          id: 'AlarmStates',
-          title: 'Alarm states',
-          note: 'Pick these four states for the alarm life cycle: unacknowledged, acknowledged, shelved and cleared.',
-          origin: 'custom',
-          uses: ['industrial/operations/AlarmRow.tsx', 'industrial/operations/AlarmStateLabel.tsx'],
-          size: 'lg',
-          align: 'stretch',
-          Component: AlarmStates,
-        },
-        {
-          id: 'AlarmStateLabels',
-          title: 'State labels',
-          note: 'Pick the label alone when a table or card needs the alarm state with who or until when.',
-          origin: 'custom',
-          uses: ['industrial/operations/AlarmStateLabel.tsx'],
-          Component: AlarmStateLabels,
-        },
-        {
-          id: 'AlarmRowCompact',
-          title: 'Compact row',
-          note: 'Pick it in side panels and cards where the limit and state columns do not fit.',
-          origin: 'custom',
-          uses: ['industrial/operations/AlarmRow.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRowCompact,
-        },
-        {
-          id: 'AlarmAssetBadge',
-          title: 'Per-asset alarm badge',
-          note: 'Pick it beside an asset in a list or tree: the count of open alarms in the colour of the worst one.',
-          origin: 'custom',
-          uses: ['industrial/operations/SeverityBadge.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmAssetBadge,
-        },
-      ],
-    },
-    {
-      id: 'markers',
-      title: 'Markers',
-      description: 'What makes an alarm different from its neighbours: it repeats, it has stood for days, or it came first.',
-      specimens: [
-        {
-          id: 'AlarmChattering',
-          title: 'Chattering alarm',
-          note: 'Pick it when an alarm re-triggers many times in ten minutes, so it shows as one row with a count instead of fourteen rows.',
-          origin: 'custom',
-          uses: ['industrial/operations/AlarmRow.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmChattering,
-        },
-        {
-          id: 'AlarmStanding',
-          title: 'Standing alarms',
-          note: 'Pick it for alarm reviews: the alarms that have stayed open longest, with how long they have stood.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmStanding,
-        },
-        {
-          id: 'AlarmFirstOut',
-          title: 'First-out indication',
-          note: 'Pick it after a trip: alarms in time order with the one that started the sequence flagged.',
-          origin: 'custom',
-          uses: ['industrial/operations/AlarmList.tsx', 'industrial/operations/AlarmRow.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmFirstOut,
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/Panel.tsx'],
+          Component: AlarmsAndEventsRows,
+        },
+        {
+          id: 'AlarmsAndEventsStates',
+          title: 'Lifecycle states',
+          note: 'Pick these four treatments so an alarm that has been dealt with never competes with a new one.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/StatusPill.tsx'],
+          Component: AlarmsAndEventsStates,
+        },
+        {
+          id: 'AlarmsAndEventsCompact',
+          title: 'Compact rows',
+          note: 'Pick one-line rows for history, side panels and anywhere more than ten alarms must fit.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx'],
+          Component: AlarmsAndEventsCompact,
+        },
+        {
+          id: 'AlarmsAndEventsMarkers',
+          title: 'Chattering, standing and first-out',
+          note: 'Pick a marker when the pattern matters more than the single alarm: it repeats, it never clears, or it caused the rest.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Meter.tsx', 'kit/SparkLine.tsx', 'kit/StatusPill.tsx'],
+          Component: AlarmsAndEventsMarkers,
         },
       ],
     },
     {
       id: 'summaries',
       title: 'Summaries',
-      description: 'How many, how bad, and how fast they are arriving.',
+      description: 'One summary per view: counts, a flood banner, an annunciator, a roll-up per unit.',
       specimens: [
         {
-          id: 'AlarmSummaryInline',
-          title: 'Counts by severity',
-          note: 'Pick it as the one-line summary above a list or in a toolbar; zero counts stay in place but go quiet.',
+          id: 'AlarmsAndEventsCounts',
+          title: 'Counts by priority',
+          note: 'Pick it above a list or at the top of a dashboard; a zero stays in place and says so.',
           origin: 'custom',
-          uses: ['industrial/operations/AlarmSummary.tsx', 'industrial/operations/alarms.ts'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/StatGroup.tsx'],
+          Component: AlarmsAndEventsCounts,
+        },
+        {
+          id: 'AlarmsAndEventsFlood',
+          title: 'Alarm flood',
+          note: 'Pick it when the rate passes what one operator can handle: say so once, show the rate, offer first-out only.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Bars.tsx', 'kit/Meter.tsx'],
+          Component: AlarmsAndEventsFlood,
+        },
+        {
+          id: 'AlarmsAndEventsAnnunciator',
+          title: 'Annunciator',
+          note: 'Pick it for a fixed set of alarm points on one system, where position is how people find them.',
+          origin: 'custom',
           size: 'md',
-          Component: AlarmSummaryInline,
+          bleed: true,
+          uses: ['kit/alarms-and-events/AnnunciatorGrid.tsx', 'kit/Panel.tsx'],
+          Component: AlarmsAndEventsAnnunciator,
         },
         {
-          id: 'AlarmSummaryTiles',
-          title: 'Counts as figures',
-          note: 'Pick it on an overview where the four counts are the content, not a caption.',
+          id: 'AlarmsAndEventsByUnit',
+          title: 'Alarms by unit',
+          note: 'Pick it on overview pages to show where the alarms are before which they are.',
           origin: 'custom',
-          uses: ['industrial/operations/AlarmSummary.tsx', 'industrial/operations/alarms.ts'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmSummaryTiles,
-        },
-        {
-          id: 'AlarmHeaderStrip',
-          title: 'Header alarm strip',
-          note: 'Pick it under a page header so counts and the latest alarm stay in view on every screen of an area.',
-          origin: 'custom',
-          uses: ['industrial/operations/AlarmSummary.tsx', 'industrial/operations/alarms.ts'],
-          size: 'full',
-          align: 'stretch',
-          Component: AlarmHeaderStrip,
-        },
-        {
-          id: 'AlarmKpiTiles',
-          title: 'Alarm KPI tiles',
-          note: 'Pick it to judge alarm system health over a shift: rate, unacknowledged, standing and shelved.',
-          origin: 'custom',
-          uses: ['industrial/KpiTile.tsx'],
-          size: 'full',
-          align: 'stretch',
-          Component: AlarmKpiTiles,
-        },
-        {
-          id: 'AlarmFloodBanner',
-          title: 'Alarm flood banner',
-          note: 'Pick it when alarms arrive faster than anyone can read them: one banner names the flood and offers the filter that helps.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          Component: AlarmFloodBanner,
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/IconChip.tsx', 'kit/StatusPill.tsx'],
+          Component: AlarmsAndEventsByUnit,
         },
       ],
     },
     {
-      id: 'lists',
-      title: 'Lists and filters',
-      description: 'The working list, its filter and what it shows when there is nothing to show.',
+      id: 'acting',
+      title: 'Lists and actions',
+      description: 'Filtering, selecting, acknowledging and shelving, with the empty state.',
       specimens: [
         {
-          id: 'AlarmListSorted',
-          title: 'Alarm list by severity',
-          note: 'Pick it as the main alarm list: most severe first, newest first within a severity, actions on each row.',
+          id: 'AlarmsAndEventsFiltered',
+          title: 'Filter, select and acknowledge',
+          note: 'Pick it as the working list: priority filter with counts, selectable rows and acknowledge on the row.',
           origin: 'custom',
-          uses: ['industrial/operations/AlarmList.tsx', 'industrial/operations/AlarmRow.tsx', 'industrial/operations/alarms.ts'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmListSorted,
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/EmptyPanel.tsx', 'kit/Panel.tsx'],
+          Component: AlarmsAndEventsFiltered,
         },
         {
-          id: 'AlarmSeverityFilter',
-          title: 'Severity filter',
-          note: 'Pick toggles when people switch severities on and off while watching the list; each shows its count.',
-          origin: 'custom',
-          uses: ['actions/ToggleGroup.tsx', 'industrial/operations/AlarmList.tsx', 'industrial/operations/alarms.ts'],
-          size: 'full',
-          align: 'stretch',
-          Component: AlarmSeverityFilter,
-        },
-        {
-          id: 'AlarmEmpty',
-          title: 'No active alarms',
-          note: 'Pick it when the list is empty for a good reason: say since when it has been clear and what is shelved.',
-          origin: 'custom',
-          size: 'md',
-          Component: AlarmEmpty,
-        },
-        {
-          id: 'AlarmListLoading',
-          title: 'Loading',
-          note: 'Pick it while alarms load, so the list does not flash "no alarms" before the first response.',
-          origin: 'custom',
-          uses: ['feedback/SkeletonList.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmListLoading,
-        },
-      ],
-    },
-    {
-      id: 'events',
-      title: 'Timelines and logs',
-      description: 'Alarms in time: the life of one alarm, and everything that happened around it.',
-      specimens: [
-        {
-          id: 'AlarmLifecycle',
-          title: 'Alarm timeline',
-          note: 'Pick it on an alarm detail view to show raised, acknowledged and cleared, with the steps still to come left hollow.',
-          origin: 'custom',
-          uses: ['industrial/operations/EventTimeline.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmLifecycle,
-        },
-        {
-          id: 'AlarmEventTimeline',
-          title: 'Event timeline by hour',
-          note: 'Pick it for a shift handover or an incident review: alarms, operator actions and state changes on one line, grouped by hour.',
-          origin: 'custom',
-          uses: ['industrial/operations/EventTimeline.tsx', 'industrial/status.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmEventTimeline,
-        },
-        {
-          id: 'AlarmEventLog',
-          title: 'Event log table',
-          note: 'Pick a table when people scan and compare columns — time, tag, who — across many events.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'full',
-          align: 'stretch',
-          Component: AlarmEventLog,
-        },
-      ],
-    },
-    {
-      id: 'actions',
-      title: 'Acting on an alarm',
-      description: 'Acknowledge, shelve, and the detail card that leads to a work order.',
-      specimens: [
-        {
-          id: 'AlarmAcknowledgeComment',
+          id: 'AlarmsAndEventsAcknowledge',
           title: 'Acknowledge with comment',
-          note: 'Pick it when acknowledging should leave a note for the next shift about what was checked.',
+          note: 'Pick it when the acknowledgement should carry what the operator checked or did.',
           origin: 'custom',
-          uses: ['industrial/operations/AlarmRow.tsx', 'industrial/operations/AlarmStateLabel.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmAcknowledgeComment,
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/Panel.tsx'],
+          Component: AlarmsAndEventsAcknowledge,
         },
         {
-          id: 'AlarmShelve',
+          id: 'AlarmsAndEventsShelve',
           title: 'Shelve with duration',
-          note: 'Pick it for a known nuisance alarm: shelving always has an end time and says when the alarm returns.',
+          note: 'Pick it for silencing a known nuisance: a duration, a reason and a compensating check.',
           origin: 'custom',
-          uses: ['industrial/operations/AlarmRow.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmShelve,
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/Panel.tsx'],
+          Component: AlarmsAndEventsShelve,
         },
         {
-          id: 'AlarmDetailCard',
-          title: 'Alarm detail card',
-          note: 'Pick it as the detail view of one alarm: the facts, the trend against the limit, and the three actions an operator can take.',
+          id: 'AlarmsAndEventsDetail',
+          title: 'Alarm detail',
+          note: 'Pick it as the destination of a row: the trend against its limits beside the response sheet.',
           origin: 'custom',
-          uses: ['industrial/operations/SeverityBadge.tsx', 'industrial/operations/AlarmStateLabel.tsx', 'industrial/Sparkline.tsx', 'display/MetadataList.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmDetailCard,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx'],
+          Component: AlarmsAndEventsDetail,
+        },
+        {
+          id: 'AlarmsAndEventsEmpty',
+          title: 'No active alarms',
+          note: 'Pick it when the list is empty: say when the last one cleared and what is shelved.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/EmptyPanel.tsx', 'kit/Panel.tsx'],
+          Component: AlarmsAndEventsEmpty,
+        },
+      ],
+    },
+    {
+      id: 'time',
+      title: 'Over time',
+      description: 'When alarms stood, where they piled up, and the log behind them.',
+      specimens: [
+        {
+          id: 'AlarmsAndEventsTimeline',
+          title: 'Event timeline',
+          note: 'Pick it to tell one incident in order, mixing alarms, operator actions and system events.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/alarms-and-events/EventTimeline.tsx', 'kit/Panel.tsx'],
+          Component: AlarmsAndEventsTimeline,
+        },
+        {
+          id: 'AlarmsAndEventsLanes',
+          title: 'Standing-time lanes',
+          note: 'Pick it to see chattering and standing alarms at a glance on one clock.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmLanes.tsx', 'kit/Legend.tsx'],
+          Component: AlarmsAndEventsLanes,
+        },
+        {
+          id: 'AlarmsAndEventsHeat',
+          title: 'Alarm load by hour',
+          note: 'Pick it to show which area and which hours produce the load.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/HeatStrip.tsx', 'kit/Stat.tsx'],
+          Component: AlarmsAndEventsHeat,
+        },
+        {
+          id: 'AlarmsAndEventsLog',
+          title: 'Event log',
+          note: 'Pick a table when the record must be exact, exportable and searchable by time.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: AlarmsAndEventsLog,
+        },
+      ],
+    },
+    {
+      id: 'looks',
+      title: 'The same alarms in four looks',
+      description: 'Not a recolour: the row, the counts and the timeline are built differently in each.',
+      specimens: [
+        {
+          id: 'AlarmsAndEventsConsole',
+          title: 'Console',
+          note: 'Pick it for the control room: filled priority blocks on hairlines, a lightbox annunciator and a ledger of events.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/alarms-and-events/AnnunciatorGrid.tsx', 'kit/alarms-and-events/EventTimeline.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmsAndEventsConsole,
+        },
+        {
+          id: 'AlarmsAndEventsSignal',
+          title: 'Signal',
+          note: 'Pick it for a wall screen: the top alarm in words, state-filled tiles and rows that fill until acknowledged.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/alarms-and-events/AnnunciatorGrid.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmsAndEventsSignal,
+        },
+        {
+          id: 'AlarmsAndEventsPoster',
+          title: 'Poster',
+          note: 'Pick it for a team board where the four counts must land from across the room.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/Stat.tsx', 'kit/Bars.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmsAndEventsPoster,
+        },
+        {
+          id: 'AlarmsAndEventsEditorial',
+          title: 'Editorial',
+          note: 'Pick it for the shift or weekly alarm report: ruled rows, large figures and the incident told as a ledger.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/alarms-and-events/AlarmRow.tsx', 'kit/alarms-and-events/EventTimeline.tsx', 'kit/alarms-and-events/AlarmLanes.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmsAndEventsEditorial,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Two screens ready to drop into a product.',
+      specimens: [
+        {
+          id: 'AlarmsAndEventsWorkbench',
+          title: 'Alarm workbench',
+          note: 'Pick it as the alarm page of a desk product: counts, a selectable list, the selected alarm and the day on lanes.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/alarms-and-events/AlarmRow.tsx', 'kit/alarms-and-events/AlarmLanes.tsx', 'kit/Stat.tsx'],
+          Component: AlarmsAndEventsWorkbench,
+        },
+        {
+          id: 'AlarmsAndEventsGlass',
+          title: 'Alarm system health',
+          note: 'Pick it for a review screen on a dark display: operator-load rings, the trend behind the trip and the sequence.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/RingGauge.tsx', 'kit/TrendLine.tsx', 'kit/alarms-and-events/EventTimeline.tsx'],
+          Component: AlarmsAndEventsGlass,
         },
       ],
     },

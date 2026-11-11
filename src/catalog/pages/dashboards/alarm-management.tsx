@@ -480,7 +480,7 @@ const AM_HOURLY = [3, 5, 4, 3, 21, 6, 4, 3, 5, 4, 6, 17, 19, 7, 5, 4, 3, 5, 4, 6
 const AM_HOUR_LABELS = AM_HOURLY.map((_, index) => formatTime(REFERENCE_NOW - (23 - index) * HOUR).slice(0, 2));
 
 const AM_FLOODS: readonly AmFlood[] = [
-  { id: 'all', label: 'All 24 hours', window: '14:00 to 14:00', cause: 'Every hour, floods included', hours: AM_HOURLY.map((_, index) => index) },
+  { id: 'all', label: 'Last 24 hours', window: 'all hours', cause: 'Every hour, floods included', hours: AM_HOURLY.map((_, index) => index) },
   { id: 'changeover', label: 'Flood 1', window: '19:00 to 20:00', cause: 'Cooling water pump changeover', hours: [4] },
   { id: 'separator', label: 'Flood 2', window: '02:00 to 04:00', cause: 'Inlet separator level upset', hours: [11, 12] },
   { id: 'trip', label: 'Flood 3', window: '13:00 to 14:00', cause: 'Recompressor trip', hours: [22] },
@@ -541,14 +541,14 @@ function AlarmManagementFloodReview() {
             })}
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-px">
-            <Panel title="Alarm rate" subtitle="Annunciations per hour, one operator · EEMUA 191 bands">
+            <Panel title="Alarm rate" subtitle="Annunciations per hour for one operator · EEMUA 191 calls 12 an hour manageable">
               <Bars
                 label="Alarm annunciations per hour over the last 24 hours against the manageable limit of twelve"
                 categories={AM_HOUR_LABELS}
                 series={[{ id: 'rate', label: 'Alarms per hour', values: AM_HOURLY }]}
                 tones={AM_HOURLY.map((count, hour) => (!flood.hours.includes(hour) ? 'neutral' : count > 12 ? 'critical' : count > 6 ? 'warning' : 'success'))}
                 height={230}
-                limit={{ value: 12, label: 'Manageable', tone: 'warning' }}
+                limit={{ value: 12, label: 'Limit', tone: 'warning' }}
               />
             </Panel>
             <Panel title="Bad actors" subtitle={`${flood.cause} · ${total} annunciations`} padding="none">

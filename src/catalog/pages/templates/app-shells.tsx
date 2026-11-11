@@ -366,15 +366,10 @@ function AppShellsConsoleStatusBar() {
     <BrowserFrame url="control.nordkapp.example.test/alarms" look="console" tab="Control room 1">
       <AppFrame
         brand={{ name: 'Nordkapp', detail: 'Control room 1', mark: <IconFlame /> }}
-        nav={SHELLS_NAV.slice(0, 5)}
+        nav={SHELLS_NAV.slice(0, 4)}
         current="alarms"
         padding="none"
-        tools={
-          <>
-            <span>Day shift · I. Haugen</span>
-            <span className="font-medium tabular-nums">14:00:00 UTC</span>
-          </>
-        }
+        tools={<span className="font-medium tabular-nums">14:00:00 UTC</span>}
       >
         <Panes label="Alarm console" columns="23rem minmax(0, 1fr)">
           <Pane title="Alarms" subtitle="8 in 3 days · 5 open" padding="none">
@@ -445,7 +440,7 @@ function AppShellsConsoleStatusBar() {
             { id: 'lag', label: 'Data lag', value: '2 s' },
           ]}
           end={[
-            { id: 'mode', label: 'Mode', value: 'Operate' },
+            { id: 'operator', label: 'Day shift', value: 'I. Haugen' },
             { id: 'station', label: 'Station', value: 'CR1-A' },
           ]}
         />

@@ -16,7 +16,7 @@ import {
   IconLayoutSidebarRightExpand,
   IconTool,
 } from '@cognite/aura/icons';
-import { useReducer, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 
 import { IconChip } from '../../../library/kit/IconChip';
@@ -903,7 +903,18 @@ function Plant3dExplorer({ initial = INITIAL_EXPLORER_STATE, layout = 'desk', in
   const [view, setView] = useState<CameraView>(initialView);
   const [showLabels, setShowLabels] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [narrow, setNarrow] = useState(false);
+  const frame = useRef<HTMLDivElement>(null);
   const desk = layout === 'desk';
+
+  // On a narrow frame the free part of the canvas is nearly square; larger insets pull the camera back so the plot still fits.
+  useEffect(() => {
+    const element = frame.current;
+    if (!element || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => setNarrow(entry.contentRect.width < 1000));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   const level = explorerLevel(state);
   const sensor = state.sensorId ? PLANT3D_SENSORS.find((candidate) => candidate.id === state.sensorId) : undefined;
@@ -937,10 +948,11 @@ function Plant3dExplorer({ initial = INITIAL_EXPLORER_STATE, layout = 'desk', in
           tone: sensorTone === 'accent' ? undefined : sensorTone,
         }
       : null;
-  const insets = desk ? { top: 112, bottom: 150, left: 0, right: inspectorOpen ? 392 : 0 } : { top: 76, bottom: inspectorOpen ? 440 : 48, left: 0, right: 0 };
+  const insets = desk ? { top: narrow && inspectorOpen ? 150 : 112, bottom: narrow && inspectorOpen ? 210 : 150, left: 0, right: inspectorOpen ? 392 : 0 } : { top: 76, bottom: inspectorOpen ? 440 : 48, left: 0, right: 0 };
 
   return (
     <div
+      ref={frame}
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onPointerDownCapture={(event) => {
