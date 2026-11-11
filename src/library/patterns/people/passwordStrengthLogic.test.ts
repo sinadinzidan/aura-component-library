@@ -1,4 +1,4 @@
-import { DEFAULT_PASSWORD_RULES, scorePassword } from './passwordStrength';
+import { DEFAULT_PASSWORD_RULES, scorePassword } from './passwordStrengthLogic';
 
 describe(scorePassword.name, () => {
   it('scores an empty password as empty with no rule met', () => {

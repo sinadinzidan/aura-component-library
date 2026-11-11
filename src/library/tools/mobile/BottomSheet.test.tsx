@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 
 import { BottomSheet } from './BottomSheet';
-import type { SheetSnap } from './bottomSheet';
+import type { SheetSnap } from './bottomSheetLogic';
 
 function Harness({ initial = 'half' as SheetSnap, onChange = (_snap: SheetSnap) => undefined }) {
   const [snap, setSnap] = useState<SheetSnap>(initial);

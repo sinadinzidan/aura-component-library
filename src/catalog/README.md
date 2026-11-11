@@ -207,3 +207,10 @@ ellipsis, elements sticking out of the card, and console errors.
 
 Then look at it: open the page in both themes and check that nothing overflows its frame, nothing
 is clipped, every specimen has the room it needs, and the page looks like the Button page's sibling.
+
+## File names must differ by more than letter case
+
+Two modules in one folder whose names differ only by case (`LngSite.tsx` and `lngSite.ts`) work
+on Linux but collide on macOS and Windows, where the page importing them fails to load. Name
+logic modules `<name>Logic.ts` (or similar) next to a component `<Name>.tsx`. A test in
+`src/catalog/fileNames.test.ts` fails if two tracked source files collide.

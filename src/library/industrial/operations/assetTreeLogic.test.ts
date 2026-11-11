@@ -1,5 +1,5 @@
-import { ASSET_TREE_ROOT, filterAssetTree, indexAssetTree, pathTo, rollUp, siblingsOf } from './assetTree';
-import type { AssetTreeInput } from './assetTree';
+import { ASSET_TREE_ROOT, filterAssetTree, indexAssetTree, pathTo, rollUp, siblingsOf } from './assetTreeLogic';
+import type { AssetTreeInput } from './assetTreeLogic';
 
 describe('assetTree', () => {
   it('indexes a flat list under a hidden root', () => {

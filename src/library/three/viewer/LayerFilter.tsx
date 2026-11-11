@@ -4,8 +4,8 @@ import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '
 import { cn } from '../../../lib/utils';
 
 import { SYSTEM_ORDER, systemLabel } from './colorBy';
-import { VIEWER_PARTS } from './viewerModel';
-import type { ViewerSystem } from './viewerModel';
+import { VIEWER_PARTS } from './viewerModelLogic';
+import type { ViewerSystem } from './viewerModelLogic';
 
 export type LayerFilterProps = {
   /** Systems that are switched on. */

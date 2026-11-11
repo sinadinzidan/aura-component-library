@@ -22,7 +22,7 @@ import { CryogenicExchanger } from '../../../library/three/plants/CryogenicExcha
 import { LngCarrier } from '../../../library/three/plants/LngCarrier';
 import { LngSite } from '../../../library/three/plants/LngSite';
 import type { LngLine, LngRack, LngUnitStatus } from '../../../library/three/plants/LngSite';
-import type { LngUnit } from '../../../library/three/plants/lngSite';
+import type { LngUnit } from '../../../library/three/plants/lngSiteLogic';
 import { LoadingArms } from '../../../library/three/plants/LoadingArms';
 import { CRYOGENIC_EXCHANGER_SIZE, containmentTankSize, lngCarrierSize } from '../../../library/three/plants/plantSizes';
 import { TemperatureRail } from '../../../library/three/plants/TemperatureRail';
@@ -876,7 +876,7 @@ export default definePage({
             'kit/Legend.tsx',
             'looks/LookScope.tsx',
             'three/plants/LngSite.tsx',
-            'three/plants/lngSite.ts',
+            'three/plants/lngSiteLogic.ts',
             'three/plants/tourState.ts',
             'three/plants/temperatureRamp.ts',
             'three/scenes/Jetty.tsx',

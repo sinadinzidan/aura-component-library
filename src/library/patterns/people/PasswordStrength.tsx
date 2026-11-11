@@ -1,7 +1,7 @@
 import { IconCheck, IconCircle } from '@cognite/aura/icons';
 
-import { DEFAULT_PASSWORD_RULES, scorePassword } from './passwordStrength';
-import type { PasswordLevel, PasswordRule } from './passwordStrength';
+import { DEFAULT_PASSWORD_RULES, scorePassword } from './passwordStrengthLogic';
+import type { PasswordLevel, PasswordRule } from './passwordStrengthLogic';
 
 type PasswordStrengthProps = {
   /** The password as typed. Nothing is stored or sent. */

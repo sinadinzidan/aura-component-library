@@ -1,4 +1,4 @@
-import { checkPassword } from './passwordRules';
+import { checkPassword } from './passwordRulesLogic';
 
 describe(checkPassword.name, () => {
   it('meets nothing for an empty password', () => {

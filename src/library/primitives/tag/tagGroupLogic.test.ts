@@ -1,4 +1,4 @@
-import { nextTagGroupValue, rovingIndex } from './tagGroup';
+import { nextTagGroupValue, rovingIndex } from './tagGroupLogic';
 
 describe(nextTagGroupValue.name, () => {
   it('replaces the selection in single mode', () => {

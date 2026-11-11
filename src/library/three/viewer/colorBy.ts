@@ -1,7 +1,7 @@
 import type { Tone } from '../../industrial/status';
 
-import { VIEWER_SYSTEMS } from './viewerModel';
-import type { ViewerPart, ViewerSystem } from './viewerModel';
+import { VIEWER_SYSTEMS } from './viewerModelLogic';
+import type { ViewerPart, ViewerSystem } from './viewerModelLogic';
 
 export type ColorMode = 'none' | 'status' | 'system' | 'health';
 

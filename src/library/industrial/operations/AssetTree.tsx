@@ -7,8 +7,8 @@ import { healthStatus, runStateStatus } from '../status';
 import { StatusDot } from '../StatusDot';
 import { StatusIndicator } from '../StatusIndicator';
 
-import { ASSET_TREE_ROOT, rollUp } from './assetTree';
-import type { AssetTreeIndex, AssetTreeNode } from './assetTree';
+import { ASSET_TREE_ROOT, rollUp } from './assetTreeLogic';
+import type { AssetTreeIndex, AssetTreeNode } from './assetTreeLogic';
 
 export type AssetTreeProps = {
   /** From `indexAssetTree`. */

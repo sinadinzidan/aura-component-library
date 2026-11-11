@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 import { MiniMap } from './MiniMap';
-import { VIEWER_BOUNDS } from './viewerModel';
+import { VIEWER_BOUNDS } from './viewerModelLogic';
 
 const pose = { position: [0, 8, 12] as const, lookAt: [0, 0, 0] as const };
 

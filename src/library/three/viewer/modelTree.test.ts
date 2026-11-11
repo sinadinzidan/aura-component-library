@@ -1,5 +1,5 @@
 import { INITIAL_TREE_VISIBILITY, displayCounts, nodeVisibility, resolveDisplay, treeReducer } from './modelTree';
-import { VIEWER_PARTS, VIEWER_TREE } from './viewerModel';
+import { VIEWER_PARTS, VIEWER_TREE } from './viewerModelLogic';
 
 const hide = (ids: string[]) => ({ hiddenIds: ids, isolatedId: null });
 

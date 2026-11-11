@@ -774,7 +774,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroup.ts'],
+          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroupLogic.ts'],
           Component: TagChipFilterChips,
         },
         {
@@ -784,7 +784,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroup.ts'],
+          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroupLogic.ts'],
           Component: TagChipFilterCounts,
         },
         {
@@ -792,7 +792,7 @@ export default definePage({
           title: 'Choice chips',
           note: 'One of a few short options that changes the view at once, such as a time range.',
           origin: 'custom',
-          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroup.ts'],
+          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroupLogic.ts'],
           Component: TagChipChoiceChips,
         },
         {

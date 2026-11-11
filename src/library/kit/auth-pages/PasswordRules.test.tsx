@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 import { PasswordRules } from './PasswordRules';
-import { checkPassword } from './passwordRules';
+import { checkPassword } from './passwordRulesLogic';
 
 describe(PasswordRules.name, () => {
   it('lists every rule with whether it is met', () => {

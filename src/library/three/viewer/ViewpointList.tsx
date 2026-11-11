@@ -6,7 +6,7 @@ import { useState } from 'react';
 
 import { cn } from '../../../lib/utils';
 
-import { describeView, directionOfPose } from './viewCube';
+import { describeView, directionOfPose } from './viewCubeLogic';
 import type { Viewpoint } from './viewpoints';
 
 export type ViewpointListProps = {

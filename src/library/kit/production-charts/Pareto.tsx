@@ -4,7 +4,7 @@ import { useLookDefinition } from '../../looks/useLook';
 import { ChartFrame } from '../ChartFrame';
 import { cx, formatNumber, niceTicks, toneLine, type Tone } from '../tones';
 
-import { paretoRows, type ParetoItem } from './pareto';
+import { paretoRows, type ParetoItem } from './paretoLogic';
 
 type ParetoProps = {
   /** What the chart shows, in words. */

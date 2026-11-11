@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 
-import { dragFraction, nearestSnap, snapLabel, SNAP_FRACTION } from './bottomSheet';
-import type { SheetSnap } from './bottomSheet';
+import { dragFraction, nearestSnap, snapLabel, SNAP_FRACTION } from './bottomSheetLogic';
+import type { SheetSnap } from './bottomSheetLogic';
 
 export type BottomSheetProps = {
   snap: SheetSnap;

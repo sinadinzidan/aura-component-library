@@ -14,8 +14,8 @@ import { enableLocalClipping } from './clipRenderer';
 import { colorKeyFor } from './colorBy';
 import type { ColorKey, ColorMode } from './colorBy';
 import type { PartDisplay } from './modelTree';
-import { VIEWER_EXPLODE, VIEWER_PARTS } from './viewerModel';
-import type { ViewerPart } from './viewerModel';
+import { VIEWER_EXPLODE, VIEWER_PARTS } from './viewerModelLogic';
+import type { ViewerPart } from './viewerModelLogic';
 
 export type ViewerModelProps = {
   parts?: readonly ViewerPart[];

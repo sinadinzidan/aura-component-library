@@ -4,7 +4,7 @@ import { useLook } from '../../looks/useLook';
 import { Meter } from '../Meter';
 import { cx } from '../tones';
 
-import type { PasswordRule } from './passwordRules';
+import type { PasswordRule } from './passwordRulesLogic';
 
 const STRENGTH = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong'];
 

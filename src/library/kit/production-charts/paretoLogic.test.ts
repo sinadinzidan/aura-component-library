@@ -1,4 +1,4 @@
-import { calendarWeeks, paretoRows, symmetricExtent } from './pareto';
+import { calendarWeeks, paretoRows, symmetricExtent } from './paretoLogic';
 
 describe(paretoRows.name, () => {
   it('sorts largest first and accumulates shares', () => {

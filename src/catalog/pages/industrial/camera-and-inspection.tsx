@@ -895,7 +895,7 @@ export default definePage({
           title: 'Before and after',
           note: 'Pick it to prove a repair: drag the divider, or use the arrow keys on the handle.',
           origin: 'custom',
-          uses: ['industrial/vision/CompareSlider.tsx', 'industrial/vision/compareSlider.ts'],
+          uses: ['industrial/vision/CompareSlider.tsx', 'industrial/vision/compareSliderLogic.ts'],
           size: 'md',
           align: 'stretch',
           Component: CameraInspectCompare,

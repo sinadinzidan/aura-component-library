@@ -1,7 +1,7 @@
 import { cn } from '../../../lib/utils';
 
-import { CUBE_FACES, cubeTransform, directionFromAngles, isFacingCamera } from './viewCube';
-import type { CubeFaceId, ViewAngles } from './viewCube';
+import { CUBE_FACES, cubeTransform, directionFromAngles, isFacingCamera } from './viewCubeLogic';
+import type { CubeFaceId, ViewAngles } from './viewCubeLogic';
 
 export type ViewCubeProps = {
   /** Where the camera is, so the cube shows the model's orientation as the camera sees it. */

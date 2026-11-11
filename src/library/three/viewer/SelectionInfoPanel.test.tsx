@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
 import { SelectionInfoPanel } from './SelectionInfoPanel';
-import { findPart } from './viewerModel';
+import { findPart } from './viewerModelLogic';
 
 describe(SelectionInfoPanel.name, () => {
   it('asks for a selection when there is none', () => {

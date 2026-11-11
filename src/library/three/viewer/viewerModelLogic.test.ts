@@ -1,7 +1,7 @@
 import { assemblyLeafIds } from '../models/assemblyTree';
 import { explodeOffset } from '../models/explodeOffsets';
 
-import { VIEWER_BOUNDS, VIEWER_EXPLODE, VIEWER_PARTS, VIEWER_TREE, findPart, partBounds, partIdsInSystems, systemOf } from './viewerModel';
+import { VIEWER_BOUNDS, VIEWER_EXPLODE, VIEWER_PARTS, VIEWER_TREE, findPart, partBounds, partIdsInSystems, systemOf } from './viewerModelLogic';
 
 describe('VIEWER_PARTS', () => {
   it('has unique ids and tags', () => {

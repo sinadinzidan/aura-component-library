@@ -1,5 +1,5 @@
-import { branchIds, buildTree, createTreeState, treeKey, treeReducer, visibleTreeRows } from './treeTable';
-import type { TreeNodeInput, TreeState } from './treeTable';
+import { branchIds, buildTree, createTreeState, treeKey, treeReducer, visibleTreeRows } from './treeTableLogic';
+import type { TreeNodeInput, TreeState } from './treeTableLogic';
 
 const NODES: readonly TreeNodeInput[] = [
   { id: 'nk', parentId: null, label: 'Plant', values: {} },

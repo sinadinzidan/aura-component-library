@@ -21,7 +21,7 @@ import { PersonAvatar } from '../../../library/display/PersonAvatar';
 import { LinearGauge } from '../../../library/industrial/LinearGauge';
 import { AssetCard } from '../../../library/industrial/operations/AssetCard';
 import type { AssetCardReading } from '../../../library/industrial/operations/AssetCard';
-import { indexAssetTree, rollUp } from '../../../library/industrial/operations/assetTree';
+import { indexAssetTree, rollUp } from '../../../library/industrial/operations/assetTreeLogic';
 import { SeverityBadge } from '../../../library/industrial/operations/SeverityBadge';
 import { healthStatus, runStateStatus, toneFromLimits } from '../../../library/industrial/status';
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
@@ -732,7 +732,7 @@ export default definePage({
           title: 'Site with roll-up counts',
           note: 'Pick it one level up: a site or area with its units counted by run state, and open alarms and work orders rolled up.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts', 'industrial/operations/SeverityBadge.tsx', 'industrial/StatusIndicator.tsx'],
+          uses: ['industrial/operations/assetTreeLogic.ts', 'industrial/operations/SeverityBadge.tsx', 'industrial/StatusIndicator.tsx'],
           align: 'stretch',
           Component: AssetCardSite,
         },

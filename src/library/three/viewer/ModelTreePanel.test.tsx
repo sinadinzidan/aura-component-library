@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { INITIAL_TREE_VISIBILITY } from './modelTree';
 import { ModelTreePanel } from './ModelTreePanel';
-import { VIEWER_PARTS, VIEWER_TREE } from './viewerModel';
+import { VIEWER_PARTS, VIEWER_TREE } from './viewerModelLogic';
 
 function setup(visibility = INITIAL_TREE_VISIBILITY, selectedId: string | null = null) {
   const handlers = { onToggle: vi.fn(), onIsolate: vi.fn(), onSelect: vi.fn(), onShowAll: vi.fn() };

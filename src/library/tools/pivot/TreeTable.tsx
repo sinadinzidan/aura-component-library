@@ -6,8 +6,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 
 import { cn } from '../../../lib/utils';
 
-import { branchIds, buildTree, createTreeState, treeKey, treeReducer, visibleTreeRows } from './treeTable';
-import type { TreeKey, TreeNodeInput, TreeRollup, TreeRow } from './treeTable';
+import { branchIds, buildTree, createTreeState, treeKey, treeReducer, visibleTreeRows } from './treeTableLogic';
+import type { TreeKey, TreeNodeInput, TreeRollup, TreeRow } from './treeTableLogic';
 
 export type TreeColumn = {
   id: string;

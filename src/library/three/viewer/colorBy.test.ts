@@ -1,5 +1,5 @@
 import { COLOR_KEY_BG, COLOR_KEY_TOKENS, COLOR_MODES, colorKeyFor, legendFor, legendInUse, systemLabel } from './colorBy';
-import { VIEWER_PARTS, findPart } from './viewerModel';
+import { VIEWER_PARTS, findPart } from './viewerModelLogic';
 
 const part = (id: string) => {
   const found = findPart(id);

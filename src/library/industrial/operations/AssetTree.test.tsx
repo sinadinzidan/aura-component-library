@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { indexAssetTree } from './assetTree';
-import type { AssetTreeInput } from './assetTree';
+import { indexAssetTree } from './assetTreeLogic';
+import type { AssetTreeInput } from './assetTreeLogic';
 import { AssetTree } from './AssetTree';
 
 describe(AssetTree.name, () => {

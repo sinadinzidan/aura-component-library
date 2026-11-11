@@ -1,5 +1,5 @@
-import { lngLabelAnchor, lngUnitRingRadius, lngUnitSize, unitsCentre, unitsOfStage } from './lngSite';
-import type { LngUnit } from './lngSite';
+import { lngLabelAnchor, lngUnitRingRadius, lngUnitSize, unitsCentre, unitsOfStage } from './lngSiteLogic';
+import type { LngUnit } from './lngSiteLogic';
 
 const TANK: LngUnit = { id: 'tank', kind: 'tank', tag: '61-TK-101', name: 'LNG tank', stageId: 'storage', position: [10, 0, 20], temperature: -162 };
 const MCHE: LngUnit = { id: 'mche', kind: 'mche', tag: '40-HX-001', name: 'Main exchanger', stageId: 'liquefaction', position: [0, 0, 0], temperature: -150, height: 50 };

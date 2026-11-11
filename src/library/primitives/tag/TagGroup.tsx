@@ -4,8 +4,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 import { cn } from '../../../lib/utils';
 
 import { Tag } from './Tag';
-import { nextTagGroupValue, rovingIndex } from './tagGroup';
-import type { TagGroupSelection } from './tagGroup';
+import { nextTagGroupValue, rovingIndex } from './tagGroupLogic';
+import type { TagGroupSelection } from './tagGroupLogic';
 import type { TagSize, TagVariant } from './tagVariants';
 
 export type TagGroupOption = {

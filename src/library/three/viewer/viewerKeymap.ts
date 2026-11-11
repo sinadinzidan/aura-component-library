@@ -1,4 +1,4 @@
-import type { ViewPresetId } from './viewCube';
+import type { ViewPresetId } from './viewCubeLogic';
 
 export type ViewerCommand =
   | { type: 'mode'; mode: 'orbit' | 'pan' | 'zoom' }

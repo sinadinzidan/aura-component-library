@@ -13,8 +13,8 @@ import {
   isFacingCamera,
   frameFromDirection,
   presetTarget,
-} from './viewCube';
-import { VIEWER_BOUNDS } from './viewerModel';
+} from './viewCubeLogic';
+import { VIEWER_BOUNDS } from './viewerModelLogic';
 
 describe('angles and directions', () => {
   it('reads azimuth and elevation from a direction', () => {

@@ -15,7 +15,7 @@ import { PinLayer } from './PinLayer';
 import type { PinState } from './pins';
 import { SectionPlaneHelper } from './SectionPlaneHelper';
 import { ViewerModel } from './ViewerModel';
-import { VIEWER_BOUNDS, findPart } from './viewerModel';
+import { VIEWER_BOUNDS, findPart } from './viewerModelLogic';
 import { ViewerRig } from './ViewerRig';
 import type { ViewerMode } from './ViewerToolbar3d';
 

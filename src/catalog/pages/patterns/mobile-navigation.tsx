@@ -28,7 +28,7 @@ import { IconAction } from '../../../library/patterns/collections/IconAction';
 import { BottomNav } from '../../../library/templates/BottomNav';
 import { ActionSheet } from '../../../library/tools/mobile/ActionSheet';
 import { BottomSheet } from '../../../library/tools/mobile/BottomSheet';
-import { sheetReducer } from '../../../library/tools/mobile/bottomSheet';
+import { sheetReducer } from '../../../library/tools/mobile/bottomSheetLogic';
 import { LargeTitleScreen } from '../../../library/tools/mobile/LargeTitleScreen';
 import { MobileAppBar } from '../../../library/tools/mobile/MobileAppBar';
 import { MobileDrawer } from '../../../library/tools/mobile/MobileDrawer';
@@ -805,7 +805,7 @@ export default definePage({
           origin: 'custom',
           size: 'sm',
           align: 'center',
-          uses: ['tools/mobile/BottomSheet.tsx', 'tools/mobile/bottomSheet.ts', 'industrial/analytics/DeviceFrame.tsx'],
+          uses: ['tools/mobile/BottomSheet.tsx', 'tools/mobile/bottomSheetLogic.ts', 'industrial/analytics/DeviceFrame.tsx'],
           Component: MobileNavBottomSheet,
         },
         {

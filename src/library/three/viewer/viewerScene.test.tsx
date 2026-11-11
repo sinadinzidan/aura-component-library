@@ -8,7 +8,7 @@ import type { ColorKey } from './colorBy';
 import { MeasureLayer } from './MeasureLayer';
 import { SectionPlaneHelper } from './SectionPlaneHelper';
 import { ViewerModel } from './ViewerModel';
-import { VIEWER_PARTS } from './viewerModel';
+import { VIEWER_PARTS } from './viewerModelLogic';
 import { ViewerRig } from './ViewerRig';
 
 function isMesh(object: Object3D): object is Mesh {

@@ -1,6 +1,6 @@
 import type { PlanSpace } from './plan';
 import { planBox, planHeading, planPoint, planScale, viewConePath } from './plan';
-import { VIEWER_BOUNDS } from './viewerModel';
+import { VIEWER_BOUNDS } from './viewerModelLogic';
 
 const space = { bounds: { min: [-10, 0, -5], max: [10, 3, 5] }, width: 120, height: 80, padding: 10 } as const;
 

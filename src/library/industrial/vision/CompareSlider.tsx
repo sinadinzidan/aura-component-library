@@ -3,7 +3,7 @@ import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 
 import { cn } from '../../../lib/utils';
 
-import { afterClipPath, dividerAfterKey, dividerFromPointer, dividerPercent } from './compareSlider';
+import { afterClipPath, dividerAfterKey, dividerFromPointer, dividerPercent } from './compareSliderLogic';
 
 export type CompareSliderProps = {
   /** What is being compared, for the accessible name: "Compressor hall, before and after the repair". */

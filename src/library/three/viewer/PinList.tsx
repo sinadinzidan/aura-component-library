@@ -7,7 +7,7 @@ import { cn } from '../../../lib/utils';
 
 import { pinNumber } from './pins';
 import type { PinState } from './pins';
-import { findPart } from './viewerModel';
+import { findPart } from './viewerModelLogic';
 
 export type PinListProps = {
   state: PinState;

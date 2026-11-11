@@ -4,7 +4,7 @@ import { useLookDefinition } from '../../looks/useLook';
 import { ChartFrame } from '../ChartFrame';
 import { cx, formatNumber, type Tone } from '../tones';
 
-import { symmetricExtent } from './pareto';
+import { symmetricExtent } from './paretoLogic';
 
 type DeviationBarsProps = {
   /** What the chart shows, in words. */

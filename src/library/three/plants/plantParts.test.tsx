@@ -11,7 +11,7 @@ import { FlowParticles } from './FlowParticles';
 import { FlowValveMarker } from './FlowValveMarker';
 import { LngCarrier } from './LngCarrier';
 import { LngSite } from './LngSite';
-import type { LngUnit } from './lngSite';
+import type { LngUnit } from './lngSiteLogic';
 import { LoadingArms } from './LoadingArms';
 import { ReplayPlantScene } from './ReplayPlantScene';
 import { SlugCatcher } from './SlugCatcher';

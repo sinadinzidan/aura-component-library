@@ -4,8 +4,8 @@ import { formatValue, healthStatus, runStateStatus } from '../../industrial/stat
 import { StatusIndicator } from '../../industrial/StatusIndicator';
 
 import { systemLabel } from './colorBy';
-import { partBounds } from './viewerModel';
-import type { ViewerPart } from './viewerModel';
+import { partBounds } from './viewerModelLogic';
+import type { ViewerPart } from './viewerModelLogic';
 
 export type SelectionInfoPanelProps = {
   part: ViewerPart | null;

@@ -57,7 +57,7 @@ import { PasswordInput } from '../../../library/forms/PasswordInput';
 import { AuthCard } from '../../../library/patterns/people/AuthCard';
 import { OneTimeCodeInput } from '../../../library/patterns/people/OneTimeCodeInput';
 import { PasswordStrength } from '../../../library/patterns/people/PasswordStrength';
-import { scorePassword } from '../../../library/patterns/people/passwordStrength';
+import { scorePassword } from '../../../library/patterns/people/passwordStrengthLogic';
 import { RecoveryCodes } from '../../../library/patterns/people/RecoveryCodes';
 import { PEOPLE } from '../../data/plant';
 import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatAgo, formatTime } from '../../data/series';
@@ -906,7 +906,7 @@ export default definePage({
           uses: [
             'patterns/people/AuthCard.tsx',
             'patterns/people/PasswordStrength.tsx',
-            'patterns/people/passwordStrength.ts',
+            'patterns/people/passwordStrengthLogic.ts',
             'forms/FormField.tsx',
             'forms/PasswordInput.tsx',
           ],
@@ -939,7 +939,7 @@ export default definePage({
           uses: [
             'patterns/people/AuthCard.tsx',
             'patterns/people/PasswordStrength.tsx',
-            'patterns/people/passwordStrength.ts',
+            'patterns/people/passwordStrengthLogic.ts',
             'forms/FormField.tsx',
             'forms/PasswordInput.tsx',
           ],

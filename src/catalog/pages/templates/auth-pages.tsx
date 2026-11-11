@@ -38,7 +38,7 @@ import { ChoiceRow } from '../../../library/kit/auth-pages/ChoiceRow';
 import { CodeInput } from '../../../library/kit/auth-pages/CodeInput';
 import { DetailList, type DetailItem } from '../../../library/kit/auth-pages/DetailList';
 import { PasswordRules } from '../../../library/kit/auth-pages/PasswordRules';
-import { checkPassword } from '../../../library/kit/auth-pages/passwordRules';
+import { checkPassword } from '../../../library/kit/auth-pages/passwordRulesLogic';
 import { StepRail, type StepRailStep } from '../../../library/kit/auth-pages/StepRail';
 import { Canvas } from '../../../library/kit/Canvas';
 import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
@@ -1380,7 +1380,7 @@ export default definePage({
             'kit/landing-pages/BrowserFrame.tsx',
             'kit/AppFrame.tsx',
             'kit/auth-pages/PasswordRules.tsx',
-            'kit/auth-pages/passwordRules.ts',
+            'kit/auth-pages/passwordRulesLogic.ts',
             'kit/ListRow.tsx',
             'forms/PasswordInput.tsx',
           ],

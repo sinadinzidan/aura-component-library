@@ -1,4 +1,4 @@
-import { dragFraction, nearestSnap, sheetReducer, snapLabel, SNAP_FRACTION, stepSnap } from './bottomSheet';
+import { dragFraction, nearestSnap, sheetReducer, snapLabel, SNAP_FRACTION, stepSnap } from './bottomSheetLogic';
 
 describe('nearestSnap', () => {
   it.each([

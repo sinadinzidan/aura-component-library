@@ -18,8 +18,8 @@ import type { MouseEvent } from 'react';
 import { MetadataList } from '../../../library/display/MetadataList';
 import { SkeletonList } from '../../../library/feedback/SkeletonList';
 import { AssetCard } from '../../../library/industrial/operations/AssetCard';
-import { ASSET_TREE_ROOT, filterAssetTree, indexAssetTree, pathTo, rollUp, siblingsOf } from '../../../library/industrial/operations/assetTree';
-import type { AssetTreeNode } from '../../../library/industrial/operations/assetTree';
+import { ASSET_TREE_ROOT, filterAssetTree, indexAssetTree, pathTo, rollUp, siblingsOf } from '../../../library/industrial/operations/assetTreeLogic';
+import type { AssetTreeNode } from '../../../library/industrial/operations/assetTreeLogic';
 import { AssetTree } from '../../../library/industrial/operations/AssetTree';
 import { SeverityBadge } from '../../../library/industrial/operations/SeverityBadge';
 import { healthStatus, runStateStatus } from '../../../library/industrial/status';
@@ -634,7 +634,7 @@ export default definePage({
           title: 'Plain tree',
           note: 'Pick it for navigation where the names are enough and state lives on the page the row opens.',
           origin: 'custom',
-          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTree.ts'],
+          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTreeLogic.ts'],
           align: 'stretch',
           Component: AssetHierarchyPlain,
         },
@@ -661,7 +661,7 @@ export default definePage({
           title: 'With rolled-up alarm counts',
           note: 'Pick it so a collapsed area still shows how many alarms are open below it, in the colour of the worst.',
           origin: 'custom',
-          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTree.ts'],
+          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTreeLogic.ts'],
           align: 'stretch',
           Component: AssetHierarchyAlarmCounts,
         },
@@ -695,7 +695,7 @@ export default definePage({
           title: 'Search filter',
           note: 'Pick it for any hierarchy past a screenful: matches on name or tag stay with the branches that lead to them.',
           origin: 'custom',
-          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTree.ts'],
+          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTreeLogic.ts'],
           size: 'md',
           align: 'stretch',
           Component: AssetHierarchySearch,
@@ -766,7 +766,7 @@ export default definePage({
           title: 'Breadcrumb path',
           note: 'Pick it above an asset page: the path from site to unit, every level a link.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts'],
+          uses: ['industrial/operations/assetTreeLogic.ts'],
           size: 'md',
           Component: AssetHierarchyBreadcrumb,
         },
@@ -775,7 +775,7 @@ export default definePage({
           title: 'Path chips',
           note: 'Pick chips where space is tight and readers know the tags: the same path, in tag numbers.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts'],
+          uses: ['industrial/operations/assetTreeLogic.ts'],
           size: 'md',
           Component: AssetHierarchyPathChips,
         },
@@ -784,7 +784,7 @@ export default definePage({
           title: 'Sibling navigator',
           note: 'Pick it on a detail page to step through the units of one area without going back to the tree.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts'],
+          uses: ['industrial/operations/assetTreeLogic.ts'],
           size: 'md',
           align: 'stretch',
           Component: AssetHierarchySiblingNav,
@@ -794,7 +794,7 @@ export default definePage({
           title: 'Hierarchy summary',
           note: 'Pick it above a tree or on a site page: how big the hierarchy is and what it is made of.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts', 'industrial/ValueReadout.tsx'],
+          uses: ['industrial/operations/assetTreeLogic.ts', 'industrial/ValueReadout.tsx'],
           size: 'md',
           align: 'stretch',
           Component: AssetHierarchySummaryCounts,
@@ -811,7 +811,7 @@ export default definePage({
           title: 'Collapsible area list',
           note: 'Pick it for a two-level plant on a narrow panel or a phone: areas fold, units list with their state.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts', 'industrial/StatusIndicator.tsx'],
+          uses: ['industrial/operations/assetTreeLogic.ts', 'industrial/StatusIndicator.tsx'],
           size: 'md',
           align: 'stretch',
           Component: AssetHierarchyAreaList,
@@ -821,7 +821,7 @@ export default definePage({
           title: 'Grouped by type',
           note: 'Pick it when people look for "all the pumps": the hierarchy flattened, with the area as context.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts', 'industrial/StatusIndicator.tsx'],
+          uses: ['industrial/operations/assetTreeLogic.ts', 'industrial/StatusIndicator.tsx'],
           size: 'md',
           align: 'stretch',
           Component: AssetHierarchyByType,
@@ -831,7 +831,7 @@ export default definePage({
           title: 'Drill-down cards',
           note: 'Pick it for overview screens and touch: site, area and equipment as columns of cards, one choice per level.',
           origin: 'custom',
-          uses: ['industrial/operations/AssetCard.tsx', 'industrial/operations/assetTree.ts'],
+          uses: ['industrial/operations/AssetCard.tsx', 'industrial/operations/assetTreeLogic.ts'],
           size: 'full',
           align: 'stretch',
           Component: AssetHierarchyDrillDown,
@@ -848,7 +848,7 @@ export default definePage({
           title: 'Indented table',
           note: 'Pick it when several facts per asset matter at once: the tree becomes the first column of a table.',
           origin: 'custom',
-          uses: ['industrial/operations/assetTree.ts', 'industrial/operations/SeverityBadge.tsx', 'industrial/StatusIndicator.tsx'],
+          uses: ['industrial/operations/assetTreeLogic.ts', 'industrial/operations/SeverityBadge.tsx', 'industrial/StatusIndicator.tsx'],
           size: 'full',
           align: 'stretch',
           Component: AssetHierarchyTreeTable,
@@ -858,7 +858,7 @@ export default definePage({
           title: 'Tree and detail',
           note: 'Pick it as the asset explorer: the tree on the left chooses, the panel on the right answers.',
           origin: 'custom',
-          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTree.ts', 'display/MetadataList.tsx', 'industrial/operations/SeverityBadge.tsx'],
+          uses: ['industrial/operations/AssetTree.tsx', 'industrial/operations/assetTreeLogic.ts', 'display/MetadataList.tsx', 'industrial/operations/SeverityBadge.tsx'],
           size: 'full',
           align: 'stretch',
           Component: AssetHierarchySplit,

@@ -14,7 +14,7 @@ import { PivotTable } from '../../../library/tools/pivot/PivotTable';
 import type { PivotSelection } from '../../../library/tools/pivot/PivotTable';
 import { TreeTable } from '../../../library/tools/pivot/TreeTable';
 import type { TreeColumn } from '../../../library/tools/pivot/TreeTable';
-import type { TreeNodeInput } from '../../../library/tools/pivot/treeTable';
+import type { TreeNodeInput } from '../../../library/tools/pivot/treeTableLogic';
 import { ALARMS, ASSETS, WORK_ORDERS } from '../../data/plant';
 import type { Asset } from '../../data/plant';
 import { createRandom } from '../../data/series';
@@ -435,7 +435,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['tools/pivot/TreeTable.tsx', 'tools/pivot/treeTable.ts'],
+          uses: ['tools/pivot/TreeTable.tsx', 'tools/pivot/treeTableLogic.ts'],
           Component: PivotTreeAssetHierarchy,
         },
         {

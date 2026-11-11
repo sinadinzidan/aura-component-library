@@ -14,7 +14,7 @@ import { Panel } from '../../../library/kit/Panel';
 import { CalendarGrid } from '../../../library/kit/production-charts/CalendarGrid';
 import { DeviationBars } from '../../../library/kit/production-charts/DeviationBars';
 import { Pareto } from '../../../library/kit/production-charts/Pareto';
-import { paretoRows, type CalendarDay } from '../../../library/kit/production-charts/pareto';
+import { paretoRows, type CalendarDay } from '../../../library/kit/production-charts/paretoLogic';
 import { SectionHeader } from '../../../library/kit/SectionHeader';
 import { Stat } from '../../../library/kit/Stat';
 import { StatGroup } from '../../../library/kit/StatGroup';

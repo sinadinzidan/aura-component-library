@@ -4,8 +4,8 @@ import { cn } from '../../../lib/utils';
 
 import { COLOR_KEY_BG, COLOR_MODES, legendInUse } from './colorBy';
 import type { ColorMode } from './colorBy';
-import { VIEWER_PARTS } from './viewerModel';
-import type { ViewerPart } from './viewerModel';
+import { VIEWER_PARTS } from './viewerModelLogic';
+import type { ViewerPart } from './viewerModelLogic';
 
 export type ColorByControlProps = {
   mode: ColorMode;

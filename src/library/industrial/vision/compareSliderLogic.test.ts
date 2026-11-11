@@ -1,4 +1,4 @@
-import { afterClipPath, clampDivider, dividerAfterKey, dividerFromPointer, dividerPercent } from './compareSlider';
+import { afterClipPath, clampDivider, dividerAfterKey, dividerFromPointer, dividerPercent } from './compareSliderLogic';
 
 describe('compare slider', () => {
   it('clamps the divider', () => {

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
 import { LayerFilter } from './LayerFilter';
-import type { ViewerSystem } from './viewerModel';
+import type { ViewerSystem } from './viewerModelLogic';
 
 const ALL: ViewerSystem[] = ['separation', 'compression', 'cooling', 'piping', 'structure'];
 

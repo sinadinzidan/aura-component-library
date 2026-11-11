@@ -29,12 +29,12 @@ import { ModelTreePanel } from '../../../library/three/viewer/ModelTreePanel';
 import { PinList } from '../../../library/three/viewer/PinList';
 import { createPinState, pinReducer } from '../../../library/three/viewer/pins';
 import { SelectionInfoPanel } from '../../../library/three/viewer/SelectionInfoPanel';
-import type { CubeFaceId, ViewPresetId } from '../../../library/three/viewer/viewCube';
-import { anglesFromDirection, VIEW_PRESETS, activeFace, describeView, directionOfPose, faceTarget, frameFromDirection, presetTarget } from '../../../library/three/viewer/viewCube';
+import type { CubeFaceId, ViewPresetId } from '../../../library/three/viewer/viewCubeLogic';
+import { anglesFromDirection, VIEW_PRESETS, activeFace, describeView, directionOfPose, faceTarget, frameFromDirection, presetTarget } from '../../../library/three/viewer/viewCubeLogic';
 import { ViewCube } from '../../../library/three/viewer/ViewCube';
 import { commandForKey } from '../../../library/three/viewer/viewerKeymap';
-import type { ViewerSystem } from '../../../library/three/viewer/viewerModel';
-import { VIEWER_BOUNDS, VIEWER_PARTS, VIEWER_TREE, findPart, partIdsInSystems } from '../../../library/three/viewer/viewerModel';
+import type { ViewerSystem } from '../../../library/three/viewer/viewerModelLogic';
+import { VIEWER_BOUNDS, VIEWER_PARTS, VIEWER_TREE, findPart, partIdsInSystems } from '../../../library/three/viewer/viewerModelLogic';
 import { ViewerScene } from '../../../library/three/viewer/ViewerScene';
 import { ViewerStage } from '../../../library/three/viewer/ViewerStage';
 import { ViewerToolbar3d } from '../../../library/three/viewer/ViewerToolbar3d';
@@ -946,7 +946,7 @@ export default definePage({
           title: 'View cube on a model',
           note: 'Pick it to keep people oriented: the cube turns with the camera and each face flies the camera to that side.',
           origin: 'custom',
-          uses: ['three/viewer/ViewCube.tsx', 'three/viewer/viewCube.ts', 'three/viewer/ViewerRig.tsx'],
+          uses: ['three/viewer/ViewCube.tsx', 'three/viewer/viewCubeLogic.ts', 'three/viewer/ViewerRig.tsx'],
           size: 'md',
           align: 'stretch',
           Component: ViewerChromeCubeLive,
@@ -1023,7 +1023,7 @@ export default definePage({
           title: 'View cube',
           note: 'Pick it as an orientation gizmo; the face the camera looks at is outlined.',
           origin: 'custom',
-          uses: ['three/viewer/ViewCube.tsx', 'three/viewer/viewCube.ts'],
+          uses: ['three/viewer/ViewCube.tsx', 'three/viewer/viewCubeLogic.ts'],
           size: 'sm',
           align: 'stretch',
           Component: ViewerChromeCubeAlone,
@@ -1033,7 +1033,7 @@ export default definePage({
           title: 'Camera presets',
           note: 'Pick it for one-click standard views, each with a number key.',
           origin: 'custom',
-          uses: ['three/viewer/viewCube.ts', 'display/MetadataList.tsx'],
+          uses: ['three/viewer/viewCubeLogic.ts', 'display/MetadataList.tsx'],
           size: 'sm',
           align: 'stretch',
           Component: ViewerChromePresets,

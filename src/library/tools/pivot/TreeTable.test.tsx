@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 
 import { TreeTable } from './TreeTable';
 import type { TreeTableProps } from './TreeTable';
-import type { TreeNodeInput } from './treeTable';
+import type { TreeNodeInput } from './treeTableLogic';
 
 const NODES: readonly TreeNodeInput[] = [
   { id: 'nk', parentId: null, label: 'Nordkapp plant', code: 'NK', values: {} },

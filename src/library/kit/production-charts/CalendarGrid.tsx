@@ -1,7 +1,7 @@
 import { useLook } from '../../looks/useLook';
 import { cx, formatNumber, type Tone } from '../tones';
 
-import { calendarWeeks, type CalendarDay } from './pareto';
+import { calendarWeeks, type CalendarDay } from './paretoLogic';
 
 type CalendarGridProps = {
   /** What the calendar shows: "Gas export per day, March 2026". */

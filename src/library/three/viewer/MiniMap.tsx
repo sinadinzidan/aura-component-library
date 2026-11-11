@@ -3,7 +3,7 @@ import type { Bounds, CameraTarget } from '../cameraTargets';
 
 import { planBox, planPoint, viewConePath } from './plan';
 import type { PlanSpace } from './plan';
-import { findPart, partBounds } from './viewerModel';
+import { findPart, partBounds } from './viewerModelLogic';
 
 export type MiniMapProps = {
   /** Bounds of the whole model. */
