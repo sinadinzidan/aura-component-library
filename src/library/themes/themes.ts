@@ -4,11 +4,16 @@
  * changes, because they only ever reference the tokens.
  *
  *   <html class="dark" data-accent="fjord" data-surface="tinted" data-shape="soft" data-contrast="high"
- *         data-density="compact" data-typeface="technical">
+ *         data-density="compact" data-typeface="plex" data-look="console">
+ *
+ * The look (`data-look`) is the structural half of a theme: it changes how kit components are
+ * built, not which tokens they read. See `src/library/looks`.
  *
  * `themes.css` is generated from this file (see themes.test.ts) and is the only thing an app
  * needs to import, after Aura's own stylesheet.
  */
+
+import { DEFAULT_LOOK, parseLook, type LookId } from '../looks/looks';
 
 export const MODES = ['light', 'dark'] as const;
 export type Mode = (typeof MODES)[number];
@@ -28,7 +33,7 @@ export type Contrast = (typeof CONTRASTS)[number];
 export const DENSITIES = ['compact', 'default', 'spacious'] as const;
 export type Density = (typeof DENSITIES)[number];
 
-export const TYPEFACES = ['inter', 'grotesk', 'technical'] as const;
+export const TYPEFACES = ['inter', 'grotesk', 'manrope', 'plex', 'sora'] as const;
 export type Typeface = (typeof TYPEFACES)[number];
 
 export type ThemeSettings = {
@@ -39,6 +44,8 @@ export type ThemeSettings = {
   contrast: Contrast;
   density: Density;
   typeface: Typeface;
+  /** Structural design language for kit components. */
+  look: LookId;
 };
 
 export const DEFAULT_THEME: ThemeSettings = {
@@ -49,6 +56,7 @@ export const DEFAULT_THEME: ThemeSettings = {
   contrast: 'default',
   density: 'default',
   typeface: 'inter',
+  look: DEFAULT_LOOK,
 };
 
 export const ACCENT_LABELS: Record<Accent, string> = {
@@ -66,7 +74,13 @@ export const SURFACE_LABELS: Record<Surface, string> = { neutral: 'Neutral', tin
 export const SHAPE_LABELS: Record<Shape, string> = { sharp: 'Sharp', default: 'Default', soft: 'Soft' };
 export const CONTRAST_LABELS: Record<Contrast, string> = { default: 'Default', high: 'High' };
 export const DENSITY_LABELS: Record<Density, string> = { compact: 'Compact', default: 'Default', spacious: 'Spacious' };
-export const TYPEFACE_LABELS: Record<Typeface, string> = { inter: 'Inter', grotesk: 'Grotesk', technical: 'Technical' };
+export const TYPEFACE_LABELS: Record<Typeface, string> = {
+  inter: 'Inter',
+  grotesk: 'Grotesk',
+  manrope: 'Manrope',
+  plex: 'Plex Sans',
+  sora: 'Sora',
+};
 
 export type ThemePreset = {
   id: string;
@@ -87,36 +101,42 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
     shape: 'sharp',
     contrast: 'high',
     density: 'compact',
+    look: 'console',
   }),
   preset('wall-display', 'Wall display', 'Dark, spacious and high contrast for screens read from across a room.', {
     mode: 'dark',
     accent: 'sky',
     contrast: 'high',
     density: 'spacious',
+    look: 'signal',
   }),
   preset('blueprint', 'Blueprint', 'Sharp corners and blue-tinted surfaces for engineering tools.', {
     accent: 'fjord',
     surface: 'tinted',
     shape: 'sharp',
+    look: 'blueprint',
   }),
-  preset('schematic', 'Schematic', 'Monospaced, sharp and compact for configuration and tag-heavy tools.', {
+  preset('schematic', 'Schematic', 'Drawing-style, sharp and compact for configuration and tag-heavy tools.', {
     accent: 'sky',
     shape: 'sharp',
     density: 'compact',
-    typeface: 'technical',
+    typeface: 'plex',
+    look: 'blueprint',
   }),
-  preset('terminal', 'Terminal', 'Monospaced on dark for logs, queries and developer consoles.', {
+  preset('terminal', 'Terminal', 'Console look on dark for logs, queries and developer consoles.', {
     mode: 'dark',
     accent: 'aurora',
     shape: 'sharp',
     density: 'compact',
-    typeface: 'technical',
+    typeface: 'plex',
+    look: 'console',
   }),
   preset('field', 'Field', 'High contrast and large, soft shapes for tablets used outdoors.', {
     accent: 'aurora',
     shape: 'soft',
     contrast: 'high',
     density: 'spacious',
+    look: 'poster',
   }),
   preset('field-night', 'Field night', 'The field theme for night rounds.', {
     mode: 'dark',
@@ -124,48 +144,57 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
     shape: 'soft',
     contrast: 'high',
     density: 'spacious',
+    look: 'signal',
   }),
   preset('nordic', 'Nordic', 'Teal actions on neutral surfaces for monitoring products.', { accent: 'nordic' }),
   preset('nordic-night', 'Nordic night', 'Teal on tinted dark surfaces for views that stay open all shift.', {
     mode: 'dark',
     accent: 'nordic',
     surface: 'tinted',
+    look: 'glass',
   }),
   preset('aurora', 'Aurora', 'Green accents on tinted surfaces for sustainability and energy views.', {
     accent: 'aurora',
     surface: 'tinted',
+    look: 'soft',
   }),
   preset('dusk', 'Dusk', 'Purple accents on soft shapes for analytics and AI features.', {
     accent: 'dusk',
     surface: 'tinted',
     shape: 'soft',
+    look: 'soft',
   }),
   preset('dusk-night', 'Dusk night', 'Purple on tinted dark surfaces for AI workspaces.', {
     mode: 'dark',
     accent: 'dusk',
     surface: 'tinted',
     shape: 'soft',
+    look: 'glass',
   }),
   preset('amber-shift', 'Amber shift', 'Warm accents on dark surfaces for night shifts.', {
     mode: 'dark',
     accent: 'amber',
     surface: 'tinted',
+    look: 'console',
   }),
   preset('sandstone', 'Sandstone', 'Warm tinted surfaces for reports and documents.', {
     accent: 'amber',
     surface: 'tinted',
     density: 'spacious',
+    look: 'editorial',
   }),
   preset('pink-soft', 'Pink soft', 'A friendly, rounded theme for onboarding and internal tools.', {
     accent: 'pink',
     surface: 'tinted',
     shape: 'soft',
+    look: 'soft',
   }),
   preset('sky', 'Sky', 'Light blue accents for a lighter product tone.', { accent: 'sky', surface: 'tinted' }),
   preset('editorial', 'Editorial', 'Grotesk type and generous space for landing pages and summaries.', {
     typeface: 'grotesk',
     density: 'spacious',
     shape: 'soft',
+    look: 'editorial',
   }),
   preset('editorial-dark', 'Editorial dark', 'The editorial theme on dark.', {
     mode: 'dark',
@@ -173,48 +202,56 @@ export const THEME_PRESETS: readonly ThemePreset[] = [
     typeface: 'grotesk',
     density: 'spacious',
     shape: 'soft',
+    look: 'editorial',
   }),
   preset('dense-data', 'Dense data', 'Compact and sharp for large tables and trading-style screens.', {
     shape: 'sharp',
     density: 'compact',
+    look: 'console',
   }),
-  preset('tron', 'Tron', 'Near-black surfaces, cyan lines and monospaced type for futuristic command screens.', {
+  preset('tron', 'Tron', 'Near-black surfaces, cyan lines and glass panels for futuristic command screens.', {
     mode: 'dark',
     accent: 'sky',
     surface: 'deep',
     shape: 'sharp',
     density: 'compact',
-    typeface: 'technical',
+    typeface: 'plex',
+    look: 'glass',
   }),
   preset('hologram', 'Hologram', 'Teal on black with soft shapes for 3D and digital-twin views.', {
     mode: 'dark',
     accent: 'nordic',
     surface: 'deep',
     shape: 'soft',
+    look: 'glass',
   }),
   preset('neon-dusk', 'Neon dusk', 'Purple on black with grotesk type for showpiece and AI screens.', {
     mode: 'dark',
     accent: 'dusk',
     surface: 'deep',
     typeface: 'grotesk',
+    look: 'glass',
   }),
-  preset('night-vision', 'Night vision', 'Green on black, sharp and monospaced, for surveillance-style monitoring.', {
+  preset('night-vision', 'Night vision', 'Green on black, sharp and dense, for surveillance-style monitoring.', {
     mode: 'dark',
     accent: 'aurora',
     surface: 'deep',
     shape: 'sharp',
-    typeface: 'technical',
+    typeface: 'plex',
+    look: 'console',
   }),
   preset('ember', 'Ember', 'Amber on black for furnace, flare and heat-centred screens.', {
     mode: 'dark',
     accent: 'amber',
     surface: 'deep',
     contrast: 'high',
+    look: 'signal',
   }),
   preset('accessible', 'Accessible', 'High contrast, default shapes and extra space for maximum legibility.', {
     accent: 'fjord',
     contrast: 'high',
     density: 'spacious',
+    look: 'poster',
   }),
 ];
 
@@ -340,10 +377,15 @@ export const DENSITY_SPACING: Record<Exclude<Density, 'default'>, string> = {
   spacious: '0.28125rem',
 };
 
-/** UI font per typeface, using the families Aura already loads. */
+/**
+ * UI font per typeface: readable sans families only. Monospace is for code blocks, never for the
+ * interface. Grotesk ships with Aura; the others are imported in `src/styles.css`.
+ */
 export const TYPEFACE_FAMILIES: Record<Exclude<Typeface, 'inter'>, string> = {
   grotesk: "'Space Grotesk', 'Inter', sans-serif",
-  technical: "'Source Code Pro', ui-monospace, monospace",
+  manrope: "'Manrope Variable', 'Inter', sans-serif",
+  plex: "'IBM Plex Sans Variable', 'Inter', sans-serif",
+  sora: "'Sora Variable', 'Inter', sans-serif",
 };
 
 function block(selector: string, tokens: Record<string, string>): string {
@@ -356,7 +398,8 @@ const HEADER = `/*
  * Import after Aura's stylesheet, then set attributes on the root element:
  *   data-accent="mountain|fjord|sky|nordic|aurora|dusk|amber|pink"
  *   data-surface="neutral|tinted|deep"   data-shape="sharp|default|soft"   data-contrast="default|high"
- *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|technical"
+ *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|manrope|plex|sora"
+ *   data-look="studio|console|poster|glass|editorial|soft|blueprint|signal" (styled by looks.css)
  * Light and dark come from Aura's own .dark class.
  */`;
 
@@ -416,6 +459,7 @@ export function themeAttributes(settings: ThemeSettings): Record<string, string>
     'data-contrast': settings.contrast,
     'data-density': settings.density,
     'data-typeface': settings.typeface,
+    'data-look': settings.look,
   };
 }
 
@@ -435,6 +479,7 @@ export function parseThemeSettings(value: unknown): ThemeSettings {
     contrast: isOneOf(CONTRASTS, record.contrast) ? record.contrast : DEFAULT_THEME.contrast,
     density: isOneOf(DENSITIES, record.density) ? record.density : DEFAULT_THEME.density,
     typeface: isOneOf(TYPEFACES, record.typeface) ? record.typeface : DEFAULT_THEME.typeface,
+    look: parseLook(record.look),
   };
 }
 
@@ -446,6 +491,7 @@ export function sameTheme(a: ThemeSettings, b: ThemeSettings): boolean {
     a.shape === b.shape &&
     a.contrast === b.contrast &&
     a.density === b.density &&
-    a.typeface === b.typeface
+    a.typeface === b.typeface &&
+    a.look === b.look
   );
 }

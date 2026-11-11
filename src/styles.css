@@ -1,5 +1,9 @@
 @import '@cognite/aura/styles.source.css';
+@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/ibm-plex-sans';
+@import '@fontsource-variable/sora';
 @import './library/themes/themes.css';
+@import './library/looks/looks.css';
 
 @source '../node_modules/@cognite/aura/dist/components';
 

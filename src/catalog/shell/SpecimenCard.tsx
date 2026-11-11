@@ -14,13 +14,6 @@ const SPAN: Record<SpecimenSize, string> = {
   full: 'col-span-12',
 };
 
-const MIN_HEIGHT: Record<SpecimenSize, string> = {
-  sm: 'min-h-40',
-  md: 'min-h-48',
-  lg: 'min-h-56',
-  full: 'min-h-56',
-};
-
 const ALIGN: Record<SpecimenAlign, string> = {
   center: 'items-center justify-center',
   start: 'items-start justify-start',
@@ -28,9 +21,16 @@ const ALIGN: Record<SpecimenAlign, string> = {
   stretch: 'items-center justify-center [&>*]:min-w-0 [&>*]:w-full',
 };
 
+/**
+ * The preview is a quiet stage, not a white box: a muted ground with a fine dot pattern, so the
+ * edges of the specimen itself are what the eye finds.
+ */
+const STAGE =
+  'bg-[radial-gradient(circle_at_1px_1px,var(--emphasized)_1px,transparent_0)] bg-[length:16px_16px]';
+
 const SURFACE: Record<SpecimenSurface, string> = {
-  base: 'bg-base-background',
-  muted: 'bg-muted-background',
+  base: `bg-muted-background ${STAGE}`,
+  muted: `bg-medium-background ${STAGE}`,
   chrome: 'bg-popover-background-fixed-dark',
 };
 
@@ -40,7 +40,7 @@ type SpecimenCardProps = {
 };
 
 export function SpecimenCard({ specimen, onViewCode }: SpecimenCardProps) {
-  const { id, title, note, origin, size = 'sm', align = 'center', surface = 'base', Component } = specimen;
+  const { id, title, note, origin, size = 'sm', align = 'center', surface = 'base', bleed = false, Component } = specimen;
 
   return (
     <article
@@ -50,13 +50,18 @@ export function SpecimenCard({ specimen, onViewCode }: SpecimenCardProps) {
     >
       <div
         data-specimen-preview
-        className={`flex flex-1 overflow-x-auto p-6 ${MIN_HEIGHT[size]} ${ALIGN[align]} ${SURFACE[surface]}`}
+        // Hugs its content: a small part gets comfortable padding, never a tall empty box.
+        className={
+          bleed
+            ? 'flex overflow-x-auto [&>*]:min-w-0 [&>*]:w-full'
+            : `flex overflow-x-auto px-6 py-8 ${ALIGN[align]} ${SURFACE[surface]}`
+        }
       >
         <SpecimenBoundary>
           <Component />
         </SpecimenBoundary>
       </div>
-      <footer className="flex min-h-20 items-start gap-3 border-t border-default px-4 py-3">
+      <footer className="flex flex-1 items-start gap-3 border-t border-default px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 id={`${id}-title`} className="truncate text-sm font-medium text-base-foreground">

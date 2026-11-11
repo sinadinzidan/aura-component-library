@@ -15,6 +15,7 @@ import {
 import { IconCheck, IconPalette } from '@cognite/aura/icons';
 import type { ReactNode } from 'react';
 
+import { LOOK_DEFINITIONS, LOOKS } from '../../library/looks/looks';
 import {
   ACCENT_LABELS,
   ACCENTS,
@@ -85,7 +86,7 @@ function Segments<T extends string>({ label, options, labels, value, onChange }:
   );
 }
 
-/** Theme options for the whole library: presets, accent, surface, shape and contrast. */
+/** Theme options for the whole library: presets, look, accent, surface, shape, contrast, density and typeface. */
 export function ThemeMenu() {
   const { state, setTheme } = useCatalogViewModel();
   const theme = state.theme;
@@ -123,6 +124,28 @@ export function ThemeMenu() {
                         className={`size-3 shrink-0 rounded-full ${ACCENT_SWATCH[preset.settings.accent]}`}
                       />
                       <span className="truncate">{preset.name}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </OptionGroup>
+          <OptionGroup label="Look">
+            <ul className="grid grid-cols-4 gap-1">
+              {LOOKS.map((look) => {
+                const definition = LOOK_DEFINITIONS[look];
+                const active = theme.look === look;
+                return (
+                  <li key={look}>
+                    <button
+                      type="button"
+                      aria-pressed={active}
+                      title={definition.description}
+                      // A dark-only look brings its mode with it; the others keep the current one.
+                      onClick={() => setTheme(definition.mode === 'dark' ? { look, mode: 'dark' } : { look })}
+                      className={`flex h-8 w-full items-center justify-center rounded-md px-2 text-sm outline-none transition-colors hover:bg-base-background-hover focus-visible:shadow-focus-ring ${active ? 'bg-secondary-background font-medium text-base-foreground' : 'text-medium-foreground'}`}
+                    >
+                      {definition.label}
                     </button>
                   </li>
                 );

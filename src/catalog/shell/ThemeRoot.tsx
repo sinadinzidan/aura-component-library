@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 
+import { LookProvider } from '../../library/looks/LookScope';
 import { themeAttributes, type ThemeSettings } from '../../library/themes/themes';
 
 type ThemeRootProps = {
@@ -10,11 +11,11 @@ type ThemeRootProps = {
   children: ReactNode;
 };
 
-/** Keeps the document root in step with the selected theme. */
+/** Keeps the document root in step with the selected theme and gives kit components its look. */
 export function ThemeRoot({ theme, target, children }: ThemeRootProps) {
   useEffect(() => {
     target.classList.toggle('dark', theme.mode === 'dark');
     for (const [name, value] of Object.entries(themeAttributes(theme))) target.setAttribute(name, value);
   }, [theme, target]);
-  return <>{children}</>;
+  return <LookProvider look={theme.look}>{children}</LookProvider>;
 }

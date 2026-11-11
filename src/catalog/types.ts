@@ -22,6 +22,8 @@ export type Specimen = {
   size?: SpecimenSize;
   align?: SpecimenAlign;
   surface?: SpecimenSurface;
+  /** The specimen brings its own backdrop (a full screen on a kit `Canvas`): no padding around it. */
+  bleed?: boolean;
   /** Reusable library files this specimen relies on, relative to `src/library`. */
   uses?: readonly string[];
   Component: ComponentType;

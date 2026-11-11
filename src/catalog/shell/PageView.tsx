@@ -154,7 +154,7 @@ export function PageView({ location }: PageViewProps) {
               {section.description ? (
                 <p className="mt-1 max-w-[37.5rem] text-sm text-muted-foreground">{section.description}</p>
               ) : null}
-              <div className="mt-4 grid grid-cols-12 gap-4">
+              <div className="mt-4 grid grid-cols-12 items-start gap-4">
                 {section.specimens.map((specimen) => (
                   <SpecimenCard
                     key={specimen.id}
