@@ -60,6 +60,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 - SC-004: No variant uses raw hex, rgb or hsl colour values.
 - SC-005: Every page renders without errors in both themes.
 - SC-006: The layout audit (`scripts/audit-layout.cjs`) reports no variant that is cut off, overflows its frame or crashes, in the default theme and in a dense dark theme.
+- SC-007: Pages without WebGL hold 60 frames per second at rest on a machine with no GPU; continuous decorative animation that costs more than that is opt-in.
 
 ## Clarifications
 

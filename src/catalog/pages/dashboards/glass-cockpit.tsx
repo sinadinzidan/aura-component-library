@@ -1,3 +1,4 @@
+import { Switch } from '@cognite/aura/components/switch';
 import { useState } from 'react';
 
 import type { CautionItem, CautionLevel } from '../../../library/experiences/spatial/cautions';
@@ -242,7 +243,10 @@ function GlassCockpitPrimaryDisplay({ mode }: { mode: GlassCockpitMode }) {
   );
 }
 
-function GlassCockpitScreen({ animated = false }: { animated?: boolean }) {
+function GlassCockpitScreen({ canAnimate = false }: { canAnimate?: boolean }) {
+  // The moving backdrop is opt-in: re-blurring it under every glass panel on each frame is costly
+  // on machines without a GPU, so the screen starts still and the user chooses motion.
+  const [animated, setAnimated] = useState(false);
   const [mode, setMode] = useState<GlassCockpitMode>('pressure');
   const [focus, setFocus] = useState<GlassCockpitPanelId | null>(null);
   const [cautions, setCautions] = useState(GLASS_COCKPIT_CAUTIONS);
@@ -265,7 +269,15 @@ function GlassCockpitScreen({ animated = false }: { animated?: boolean }) {
             </p>
           </div>
           <LayerSwitch label="Primary display" value={mode} options={GLASS_COCKPIT_MODE_OPTIONS} onValueChange={setMode} />
-          <StatusIndicator tone="warning" label="Reduced capacity" detail="recompressor tripped" shape="square" />
+          <div className="flex items-center gap-4">
+            {canAnimate ? (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Switch checked={animated} onCheckedChange={setAnimated} aria-label="Animate backdrop" />
+                Animate backdrop
+              </label>
+            ) : null}
+            <StatusIndicator tone="warning" label="Reduced capacity" detail="recompressor tripped" shape="square" />
+          </div>
         </header>
         <div
           className="grid min-h-0 gap-3 transition-[grid-template-columns] duration-500 motion-reduce:transition-none"
@@ -292,7 +304,7 @@ function GlassCockpitScreen({ animated = false }: { animated?: boolean }) {
 function GlassCockpitExperience() {
   return (
     <ThemeScope preset="neon-dusk" className="w-full">
-      <GlassCockpitScreen animated />
+      <GlassCockpitScreen canAnimate />
     </ThemeScope>
   );
 }
