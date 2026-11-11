@@ -546,7 +546,7 @@ function VibAnalysisDiagnosis() {
   const signature = diagnosis && (diagnosis.faultId === 'unbalance' || diagnosis.faultId === 'misalignment' || diagnosis.faultId === 'looseness') ? FAULT_SIGNATURES[diagnosis.faultId] : null;
 
   return (
-    <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="flex min-w-0 flex-col gap-3">
         <VibAnalysisHeading title="Spectrum peaks" meta={`${peaks.length} peaks above 0.4 mm/s`} />
         <SpectrumPlot

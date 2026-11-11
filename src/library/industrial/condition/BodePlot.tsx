@@ -49,11 +49,11 @@ export function BodePlot({ label, points, unit, operatingRpm, markCritical = tru
         heightClassName={heightClassName}
         gutterClassName={GUTTER}
         overlay={() =>
-          marks.map((mark) => (
+          marks.map((mark, index) => (
             <span
               key={mark.key}
               data-slot="bode-mark-label"
-              className={cn('absolute top-0 whitespace-nowrap rounded-xs bg-base-background px-0.5 text-xs leading-none tabular-nums', mark.textClassName, percent(mark.rpm) > 70 ? '-translate-x-full pr-1.5' : 'pl-1.5')}
+              className={cn('absolute whitespace-nowrap rounded-xs bg-base-background px-0.5 text-xs leading-none tabular-nums', index === 0 ? 'top-0' : 'top-5', mark.textClassName, percent(mark.rpm) > 70 ? '-translate-x-full pr-1.5' : 'pl-1.5')}
               style={{ left: `${percent(mark.rpm)}%` }}
             >
               {mark.text}

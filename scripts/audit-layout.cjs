@@ -11,6 +11,7 @@
 //   overflow-x   content is wider than its preview frame (it scrolls instead of fitting)
 //   clipped      an element's content is cut by `overflow: hidden` without an ellipsis
 //   squeezed     an ellipsis hides more than half of a label
+//   text-overlap two pieces of text are drawn on top of each other
 //   offscreen    an element sticks out of the specimen card
 //   tiny-text    text rendered under 10px
 const fs = require('node:fs');
@@ -128,6 +129,64 @@ async function auditPage(page, pageId, theme) {
           if (!seen.has('tiny')) {
             seen.add('tiny');
             add('tiny-text', `${style.fontSize} ${describe(element)}`);
+          }
+        }
+      }
+      // Text drawn over other text. Compared per line box (an inline link that wraps has one box
+      // per line) and only where both pieces are actually visible: parts clipped away by a
+      // scrolling or overflow-hidden ancestor do not count.
+      const clipRects = (element) => {
+        const rects = [];
+        for (let node = element.parentElement; node && node !== card; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          if (style.overflowX !== 'visible' || style.overflowY !== 'visible') rects.push(node.getBoundingClientRect());
+        }
+        return rects;
+      };
+      const intersect = (box, clip) => {
+        const left = Math.max(box.left, clip.left);
+        const top = Math.max(box.top, clip.top);
+        const right = Math.min(box.right, clip.right);
+        const bottom = Math.min(box.bottom, clip.bottom);
+        return right - left > 0 && bottom - top > 0 ? { left, top, right, bottom } : null;
+      };
+      const leaves = [];
+      for (const element of preview.querySelectorAll('*')) {
+        if (element.children.length > 0 || !(element.textContent ?? '').trim()) continue;
+        if (element.closest('svg') || element.closest('[aria-hidden="true"]') || element.closest('[data-slot="tooltip-content"]')) continue;
+        const style = getComputedStyle(element);
+        if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) < 0.2) continue;
+        const clips = clipRects(element);
+        const lines = [];
+        for (const rect of element.getClientRects()) {
+          if (rect.width < 6 || rect.height < 6) continue;
+          let visible = { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+          for (const clip of clips) {
+            visible = visible && intersect(visible, clip);
+          }
+          if (visible && (visible.right - visible.left) * (visible.bottom - visible.top) >= 0.6 * rect.width * rect.height) lines.push(visible);
+        }
+        if (lines.length > 0) leaves.push({ element, lines });
+      }
+      let reported = 0;
+      for (let a = 0; a < leaves.length && reported < 2; a += 1) {
+        for (let b = a + 1; b < leaves.length && reported < 2; b += 1) {
+          const first = leaves[a];
+          const second = leaves[b];
+          if (first.element.contains(second.element) || second.element.contains(first.element)) continue;
+          let hit = false;
+          for (const one of first.lines) {
+            for (const two of second.lines) {
+              const width = Math.min(one.right, two.right) - Math.max(one.left, two.left);
+              const height = Math.min(one.bottom, two.bottom) - Math.max(one.top, two.top);
+              if (width <= 2 || height <= 3) continue;
+              const smaller = Math.min((one.right - one.left) * (one.bottom - one.top), (two.right - two.left) * (two.bottom - two.top));
+              if ((width * height) / smaller >= 0.4) hit = true;
+            }
+          }
+          if (hit) {
+            reported += 1;
+            add('text-overlap', `${describe(first.element)} over ${describe(second.element)}`);
           }
         }
       }

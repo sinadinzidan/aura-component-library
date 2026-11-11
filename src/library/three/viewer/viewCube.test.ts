@@ -10,6 +10,7 @@ import {
   faceTarget,
   findFace,
   findPreset,
+  isFacingCamera,
   frameFromDirection,
   presetTarget,
 } from './viewCube';
@@ -93,5 +94,22 @@ describe('faces and presets', () => {
     expect(describeView([0, 0.12, 1])).toBe('From the front, 7° above');
     expect(describeView([0, 1, 0.012])).toBe('From the top');
     expect(describeView([1, 0.82, 1])).toMatch(/^Oblique, 45° round, \d+° above$/);
+  });
+});
+
+describe('isFacingCamera', () => {
+  it('shows the three faces an isometric camera sees', () => {
+    const direction = directionFromAngles({ azimuth: 45, elevation: 30 });
+    const facing = CUBE_FACES.filter((face) => isFacingCamera(face.id, direction)).map((face) => face.id);
+
+    expect(facing.sort()).toEqual(['front', 'right', 'top']);
+  });
+
+  it('shows only the front face to a level camera in front', () => {
+    expect(CUBE_FACES.filter((face) => isFacingCamera(face.id, [0, 0, 1])).map((face) => face.id)).toEqual(['front']);
+  });
+
+  it('treats an edge-on face as turned away', () => {
+    expect(isFacingCamera('left', [0, 0, 1])).toBe(false);
   });
 });

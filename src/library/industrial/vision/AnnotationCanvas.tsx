@@ -192,7 +192,7 @@ export function AnnotationCanvas({ state, dispatch, children, defaultLabel, read
           moving.current = null;
         }}
         onKeyDown={onKeyDown}
-        className={cn('relative touch-none overflow-hidden rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring-default)]', readOnly ? 'cursor-default' : tool === 'select' ? 'cursor-default' : 'cursor-crosshair')}
+        className={cn('relative touch-none select-none overflow-hidden rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring-default)]', readOnly ? 'cursor-default' : tool === 'select' ? 'cursor-default' : 'cursor-crosshair')}
       >
         {children}
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">

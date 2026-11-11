@@ -74,15 +74,16 @@ function useViewerCamera(initial: CameraTarget = SMALL_HOME) {
   };
 }
 
-function ViewerChromeFallbackList() {
+function ViewerChromeFallbackList({ limit = VIEWER_PARTS.length }: { limit?: number }) {
   return (
     <ul className="flex flex-col gap-1.5 rounded-lg bg-card-background p-3 text-sm">
-      {VIEWER_PARTS.map((part) => (
+      {VIEWER_PARTS.slice(0, limit).map((part) => (
         <li key={part.id} className="flex items-center justify-between gap-3">
           <span className="truncate text-base-foreground">{part.name}</span>
           <span className="shrink-0 font-mono text-xs text-muted-foreground">{part.tag}</span>
         </li>
       ))}
+      {limit < VIEWER_PARTS.length ? <li className="text-xs text-muted-foreground">and {VIEWER_PARTS.length - limit} more in the structure panel</li> : null}
     </ul>
   );
 }
@@ -334,7 +335,11 @@ function ViewerChromeSection() {
   );
 }
 
-const MEASURE_SEED = { points: [[-7.4, 3.7, 2.1], [4.4, 2.5, 0]] as readonly Vec3[] };
+const MEASURE_POINTS: readonly Vec3[] = [
+  [-7.4, 3.7, 2.1],
+  [4.4, 2.5, 0],
+];
+const MEASURE_SEED = { points: MEASURE_POINTS };
 
 function ViewerChromeMeasure() {
   const camera = useViewerCamera();
@@ -469,6 +474,8 @@ function ViewerChromeAutoRotate() {
 
 type Quality = 'low' | 'balanced' | 'high';
 
+const QUALITIES: readonly Quality[] = ['low', 'balanced', 'high'];
+
 const QUALITY_NOTES: Record<Quality, { label: string; pixels: string; edges: string; labels: string; target: string }> = {
   low: { label: 'Low', pixels: '1× pixel ratio', edges: 'No edge smoothing', labels: 'Labels only for the selection', target: 'Laptops without a graphics card' },
   balanced: { label: 'Balanced', pixels: 'Up to 1.5× pixel ratio', edges: 'Edge smoothing on', labels: 'Labels within 40 m', target: 'Most work machines' },
@@ -489,7 +496,7 @@ function ViewerChromeQuality() {
           }}
         >
           <SegmentedControlList aria-label="Rendering quality">
-            {(Object.keys(QUALITY_NOTES) as Quality[]).map((key) => (
+            {QUALITIES.map((key) => (
               <SegmentedControlButton key={key} value={key} tabContent="label-only">
                 {QUALITY_NOTES[key].label}
               </SegmentedControlButton>
@@ -786,8 +793,8 @@ function ViewerChromeLoading() {
 function ViewerChromeUnavailable() {
   return (
     <div className="flex w-full flex-col gap-4">
-      <div className="h-56 w-full overflow-hidden rounded-lg">
-        <SceneCanvas label="3D model of compressor module 23-KA-9101" forceFallback fallback={<ViewerChromeFallbackList />}>
+      <div className="h-72 w-full overflow-hidden rounded-lg">
+        <SceneCanvas label="3D model of compressor module 23-KA-9101" forceFallback fallback={<ViewerChromeFallbackList limit={3} />}>
           {null}
         </SceneCanvas>
       </div>

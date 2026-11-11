@@ -1,6 +1,6 @@
 import { cn } from '../../../lib/utils';
 
-import { CUBE_FACES, cubeTransform } from './viewCube';
+import { CUBE_FACES, cubeTransform, directionFromAngles, isFacingCamera } from './viewCube';
 import type { CubeFaceId, ViewAngles } from './viewCube';
 
 export type ViewCubeProps = {
@@ -30,11 +30,13 @@ const FACE_TRANSFORM: Record<CubeFaceId, string> = {
  * Pure DOM and CSS 3D, so it works on any viewer and needs no extra canvas.
  */
 export function ViewCube({ angles, active = null, onFace, className }: ViewCubeProps) {
+  const view = directionFromAngles(angles);
   return (
     <div role="group" aria-label="View cube" data-slot="view-cube" className={cn('size-16 [perspective:260px]', className)}>
       <div className="relative size-full [transform-style:preserve-3d]" style={{ transform: cubeTransform(angles) }}>
         {CUBE_FACES.map((face) => {
           const available = face.reachable && onFace !== undefined;
+          const facing = isFacingCamera(face.id, view);
           return (
             <button
               key={face.id}
@@ -44,7 +46,10 @@ export function ViewCube({ angles, active = null, onFace, className }: ViewCubeP
               aria-pressed={active === face.id}
               onClick={() => onFace?.(face.id)}
               data-face={face.id}
+              data-facing={facing}
               className={cn(
+                // Faces turned away are drawn invisible, not removed, so Tab still reaches them and a focused one shows itself.
+                !facing && 'opacity-0 focus-visible:opacity-100',
                 'absolute inset-0 flex items-center justify-center border text-xs font-medium [backface-visibility:hidden]',
                 'bg-[color-mix(in_oklab,var(--card-background)_90%,transparent)] text-base-foreground',
                 active === face.id ? 'border-2 border-[var(--primary-background)]' : 'border-default',

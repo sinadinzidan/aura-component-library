@@ -55,6 +55,15 @@ export function cubeTransform(angles: ViewAngles): string {
 /** Cosine of the largest angle at which a face still counts as the one being looked at. */
 const ACTIVE_FACE_COSINE = Math.cos((35 * Math.PI) / 180);
 
+/** The outward normal of each face of the cube, unlike `direction`, which is tilted a hair for stable orbit controls. */
+const FACE_NORMALS: Record<CubeFaceId, Vec3> = { front: [0, 0, 1], back: [0, 0, -1], left: [-1, 0, 0], right: [1, 0, 0], top: [0, 1, 0], bottom: [0, -1, 0] };
+
+/** Whether a face turns towards a camera in the given direction (from the subject to the camera). */
+export function isFacingCamera(face: CubeFaceId, direction: Vec3): boolean {
+  const normal = FACE_NORMALS[face];
+  return normal[0] * direction[0] + normal[1] * direction[1] + normal[2] * direction[2] > 0.05;
+}
+
 /** The face the camera looks at most squarely, or `null` when it is between faces (an oblique view). */
 export function activeFace(direction: Vec3): CubeFaceId | null {
   const unit = normalizeVec3(direction);

@@ -119,11 +119,31 @@ function PipelineFlyStationCard({ station, kp, stage }: { station: PipelineStati
 }
 
 function PipelineFlyFindings({ selectedId, onSelect }: { selectedId: string | null; onSelect: (id: string) => void }) {
-  const selected = PIPELINE_ANOMALIES.find((anomaly) => anomaly.id === selectedId);
+  const index = PIPELINE_ANOMALIES.findIndex((anomaly) => anomaly.id === selectedId);
+  const selected = index >= 0 ? PIPELINE_ANOMALIES[index] : null;
+  const neighbour = (offset: number) => PIPELINE_ANOMALIES[index + offset];
+
+  if (selected) {
+    return (
+      <HudPanel title="Finding" meta={`${index + 1} of ${PIPELINE_ANOMALIES.length}`} className="w-full min-h-0 flex-1">
+        <PipelineFlyAnomalyDetail anomaly={selected} />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" disabled={!neighbour(-1)} aria-label={neighbour(-1) ? `Previous finding, kilometre ${neighbour(-1).kp}` : 'Previous finding, this is the first'} onClick={() => onSelect(neighbour(-1).id)}>
+            <IconChevronLeft /> Previous
+          </Button>
+          <Button variant="outline" size="sm" disabled={!neighbour(1)} aria-label={neighbour(1) ? `Next finding, kilometre ${neighbour(1).kp}` : 'Next finding, this is the last'} onClick={() => onSelect(neighbour(1).id)}>
+            Next <IconChevronRight />
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onSelect(selected.id)}>
+            All findings
+          </Button>
+        </div>
+      </HudPanel>
+    );
+  }
 
   return (
-    <HudPanel title="Last inspection" meta={`${PIPELINE_ANOMALIES.length} findings`} className="w-full min-h-0 shrink">
-      {selected ? <PipelineFlyAnomalyDetail anomaly={selected} /> : null}
+    <HudPanel title="Last inspection" meta={`${PIPELINE_ANOMALIES.length} findings`} className="w-full min-h-0 flex-1">
       <ul className="flex flex-col">
         {PIPELINE_ANOMALIES.map((anomaly) => {
           const severity = anomalySeverity(anomaly);
@@ -132,9 +152,9 @@ function PipelineFlyFindings({ selectedId, onSelect }: { selectedId: string | nu
             <li key={anomaly.id}>
               <button
                 type="button"
-                aria-pressed={anomaly.id === selectedId}
+                aria-pressed={false}
                 onClick={() => onSelect(anomaly.id)}
-                className={`-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${PIPELINEFLY_FOCUS}`}
+                className={`-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-secondary-background ${PIPELINEFLY_FOCUS}`}
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <StatusDot tone={PIPELINEFLY_SEVERITY_TONE[severity]} shape={status.shape} size="sm" />
@@ -345,7 +365,7 @@ function PipelineFlyField({ initial = {}, still = false }: { initial?: PipelineF
               <PipelineFlyTransport kp={kp} running={running} onSeek={seek} onToggle={() => setRunning(!running)} onStep={step} />
             </div>
           </div>
-          <div className="pointer-events-auto flex min-h-0 w-72 shrink-0 flex-col gap-3 self-start max-h-full">
+          <div className="pointer-events-auto flex h-full min-h-0 w-72 shrink-0 flex-col gap-3">
             {station ? <PipelineFlyStationCard station={station} kp={kp} stage={stage} /> : null}
             <PipelineFlyFindings selectedId={anomalyId} onSelect={selectAnomaly} />
           </div>

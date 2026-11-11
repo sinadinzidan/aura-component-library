@@ -1,5 +1,6 @@
 import type { Tone } from '../../industrial/status';
 
+import { VIEWER_SYSTEMS } from './viewerModel';
 import type { ViewerPart, ViewerSystem } from './viewerModel';
 
 export type ColorMode = 'none' | 'status' | 'system' | 'health';
@@ -43,7 +44,7 @@ export const COLOR_KEY_BG: Record<ColorKey, string> = {
   sys5: 'bg-chart-5-450',
 };
 
-export const SYSTEM_ORDER: readonly ViewerSystem[] = ['separation', 'compression', 'cooling', 'piping', 'structure'];
+export const SYSTEM_ORDER: readonly ViewerSystem[] = VIEWER_SYSTEMS;
 
 const SYSTEM_KEYS: Record<ViewerSystem, ColorKey> = { separation: 'sys1', compression: 'sys2', cooling: 'sys3', piping: 'sys4', structure: 'sys5' };
 

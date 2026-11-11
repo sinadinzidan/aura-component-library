@@ -47,3 +47,15 @@ describe(ViewCube.name, () => {
     for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled();
   });
 });
+
+describe('ViewCube faces turned away', () => {
+  it('draws faces that look away invisible but keeps them in the tab order', () => {
+    render(<ViewCube angles={{ azimuth: 0, elevation: 0 }} onFace={() => undefined} />);
+
+    const back = screen.getByRole('button', { name: 'View from the back' });
+    expect(back).toHaveAttribute('data-facing', 'false');
+    expect(back).toHaveClass('opacity-0');
+    expect(back).not.toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('button', { name: 'View from the front' })).toHaveAttribute('data-facing', 'true');
+  });
+});

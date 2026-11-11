@@ -51,9 +51,9 @@ describe('legends', () => {
   });
 
   it('maps every key to a token and a swatch class', () => {
-    for (const key of Object.keys(COLOR_KEY_TOKENS) as (keyof typeof COLOR_KEY_TOKENS)[]) {
-      expect(COLOR_KEY_TOKENS[key]).not.toBe('');
-      expect(COLOR_KEY_BG[key]).toMatch(/^bg-/);
+    for (const [key, token] of Object.entries(COLOR_KEY_TOKENS)) {
+      expect(token).not.toBe('');
+      expect(Object.entries(COLOR_KEY_BG).find(([candidate]) => candidate === key)?.[1]).toMatch(/^bg-/);
     }
   });
 

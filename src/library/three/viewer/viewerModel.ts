@@ -3,7 +3,9 @@ import type { Bounds, CameraTarget, Vec3 } from '../cameraTargets';
 import type { AssemblyNode } from '../models/assemblyTree';
 import type { ExplodeSpec } from '../models/explodeOffsets';
 
-export type ViewerSystem = 'separation' | 'compression' | 'cooling' | 'piping' | 'structure';
+export const VIEWER_SYSTEMS = ['separation', 'compression', 'cooling', 'piping', 'structure'] as const;
+
+export type ViewerSystem = (typeof VIEWER_SYSTEMS)[number];
 
 /** `box`: size is x, y, z. `hcyl`: size is length along x, then diameter. `vcyl`: size is diameter, then height. */
 export type PartShape = 'box' | 'hcyl' | 'vcyl';
@@ -58,7 +60,7 @@ const SYSTEM_NAMES: Record<ViewerSystem, string> = { separation: 'Separation', c
 export const VIEWER_TREE: AssemblyNode = {
   id: 'module',
   name: 'Compressor module 23-KA-9101',
-  children: (Object.keys(SYSTEM_NAMES) as ViewerSystem[]).flatMap((system) => {
+  children: VIEWER_SYSTEMS.flatMap((system) => {
     const children = VIEWER_PARTS.filter((part) => part.system === system).map((part) => ({ id: part.id, name: part.name, detail: part.tag }));
     return children.length > 0 ? [{ id: `sys-${system}`, name: SYSTEM_NAMES[system], children }] : [];
   }),
