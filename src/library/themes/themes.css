@@ -3,7 +3,8 @@
  * Import after Aura's stylesheet, then set attributes on the root element:
  *   data-accent="mountain|fjord|sky|nordic|aurora|dusk|amber|pink"
  *   data-surface="neutral|tinted|deep"   data-shape="sharp|default|soft"   data-contrast="default|high"
- *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|technical"
+ *   data-density="compact|default|spacious"   data-typeface="inter|grotesk|manrope|plex|sora"
+ *   data-look="studio|console|poster|glass|editorial|soft|blueprint|signal" (styled by looks.css)
  * Light and dark come from Aura's own .dark class.
  */
 
@@ -507,6 +508,14 @@
   --font-inter: 'Space Grotesk', 'Inter', sans-serif;
 }
 
-[data-typeface='technical'] {
-  --font-inter: 'Source Code Pro', ui-monospace, monospace;
+[data-typeface='manrope'] {
+  --font-inter: 'Manrope Variable', 'Inter', sans-serif;
+}
+
+[data-typeface='plex'] {
+  --font-inter: 'IBM Plex Sans Variable', 'Inter', sans-serif;
+}
+
+[data-typeface='sora'] {
+  --font-inter: 'Sora Variable', 'Inter', sans-serif;
 }

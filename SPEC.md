@@ -14,6 +14,8 @@ data components — all on Aura tokens so everything picked from it looks like o
 4. As a builder of industrial apps, I want KPI tiles, gauges, trends, alarm lists, asset cards and dashboard blocks, so that operational screens share one visual language.
 5. As a reviewer, I want to see every variant in light and dark theme, so that I can trust it in both.
 7. As a product team, I want to pick a theme (accent, surface, shape, contrast) and see the whole library in it, so that different projects can look different while staying on Aura.
+8. As a product team, I want to pick a look — a design language that changes how screens are built, not only their colours — so that an operator console, a wall screen and a report each get a structure that suits them.
+9. As a reader, I want every label, tag and number in a readable sans typeface at a readable size, so that I never have to squint at tiny monospaced captions.
 6. As a teammate, I want to open a shared link and land on the same page, theme and variant, so that we can discuss one specific choice.
 
 ### Acceptance Scenarios
@@ -23,6 +25,9 @@ data components — all on Aura tokens so everything picked from it looks like o
 - Given a variant, when I select "View code", then I see the source of exactly that variant and can copy it.
 - Given a variant built on a reusable library component, when I view its code, then I can also open the source of that component.
 - Given any page, when I switch mode or pick a theme preset or option, then every variant re-renders in that theme and the choice survives a reload.
+- Given the theme menu, when I pick a look, then every kit-built screen and part rebuilds itself in that look (panel anatomy, figures, status, tables, charts, controls) and the choice survives a reload.
+- Given the plant overview, when I scroll it, then I see the same plant data as eight different compositions, one per look.
+- Given any specimen, when it is small, then its preview hugs it on a quiet patterned stage instead of floating in a tall empty box.
 - Given the search, when I type a term, then I get matching pages and variants and can jump straight to one.
 - Given a link copied from the address bar, when someone else opens it, then they see the same page, theme and open variant.
 - Given the app runs outside Fusion, when it starts, then it still works and keeps state in the URL.
@@ -48,8 +53,14 @@ data components — all on Aura tokens so everything picked from it looks like o
 - FR-008: The Industrial area MUST be separate from the general primitives and cover metrics, charts, operations and dashboard blocks, using one shared mock plant data set.
 - FR-009: The Patterns area MUST show compositions that mix several primitives.
 - FR-010: The Templates area MUST show the page layouts described in Aura's design guide.
-- FR-011: Users MUST be able to switch between light and dark, and choose a theme: accent (7), surface (neutral or tinted), shape (sharp, default, soft) and contrast (default or high), or one of the named presets. Every variant MUST render in every theme.
+- FR-011: Users MUST be able to switch between light and dark, and choose a theme: accent (7), surface (neutral or tinted), shape (sharp, default, soft), contrast (default or high), density, typeface and look, or one of the named presets. Every variant MUST render in every theme.
 - FR-016: Themes MUST be implemented only as overrides of Aura tokens in one stylesheet, applied with attributes on the root or on a region, and MUST keep text contrast at WCAG AA or better.
+- FR-024: The library MUST provide looks: structural design languages selected with `data-look` on the root or a region (`LookScope`). A look owns canvas treatment, panel anatomy (border, shadow, fill, header style, padding, radius), KPI anatomy, status anatomy, table anatomy, chart styling, control radius and spacing rhythm, and composes with the colour theme (mode, accent, shape, density, typeface). At least eight MUST ship — studio (default), console, poster, glass, editorial, soft, blueprint, signal — each recognisable from a blurred thumbnail.
+- FR-025: The library MUST provide a look-aware kit (`src/library/kit`: canvas, grid, panel, stat, status pill, delta, icon chip, meter, ring gauge, data table, list row, section header, legend, chart frame, trend, bars, donut, sparkline, heat strip, app frame, empty panel, tag id) whose parts read the active look, and rebuilt dashboard pages MUST be composed from it. `looks.css` MUST reference Aura tokens and ramp steps only.
+- FR-026: The look MUST be part of the theme settings: selectable in the theme menu, set by presets, synced like the other options, default studio. Dark-only looks (console, glass, signal) bring dark mode with them.
+- FR-027: Typography MUST be readable: monospace only inside code editors and code blocks; tag ids, numbers, timestamps, table cells and captions use the UI sans typeface with tabular figures; no text under 12px (including chart ticks and badges) and 12px only for secondary captions, with 14px body; labels in sentence case, never all-caps letter-spaced micro labels as the main labelling style; secondary text meets AA on its surface. Typeface options are sans families only (Inter, Space Grotesk, Manrope, IBM Plex Sans, Sora).
+- FR-028: A specimen preview MUST hug its content with comfortable padding on a muted, subtly patterned stage; cards in a row align at the top; full-screen specimens may bleed to the card edge.
+- FR-029: The Plant overview dashboard MUST show one plant data set as a full screen in every look, with a different composition per look (where the hero sits, how KPIs and state are shown, which chrome is used), followed by the kit parts.
 - FR-012: Users MUST be able to search pages and variants and jump to a result.
 - FR-013: Current page, theme, search text and open variant MUST be synced to the host so reload and shared links restore them; outside Fusion the same state MUST be kept in the URL.
 - FR-014: Pages MUST load on demand so opening the library does not load every page's code.
@@ -63,6 +74,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 - SC-004: No variant uses raw hex, rgb or hsl colour values.
 - SC-005: Every page renders without errors in both themes.
 - SC-006: The layout audit (`scripts/audit-layout.cjs`) reports no variant that is cut off, overflows its frame or crashes, in the default theme and in a dense dark theme.
+- SC-008: `looks.css` and the kit contain no raw colour values, no monospace UI font and no font size under 12px (checked by tests).
 - SC-007: Pages without WebGL hold 60 frames per second at rest on a machine with no GPU; continuous decorative animation that costs more than that is opt-in.
 
 ## Clarifications
@@ -72,6 +84,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 
 ## Assumptions
 
+- Light looks follow the surrounding mode, because Aura defines its light tokens only at the root; a region can force dark but not light.
 - The library is a reference app; it reads no customer data. All data shown is mock data.
 - Desktop is the primary target; pages stay usable down to tablet width.
 - Sharing the reusable components as an npm package is out of scope for v1; they are copied or imported from `src/library`.

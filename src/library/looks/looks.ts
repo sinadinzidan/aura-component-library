@@ -118,7 +118,7 @@ export const LOOK_DEFINITIONS: Record<LookId, LookDefinition> = {
     id: 'signal',
     label: 'Signal',
     description: 'Status first: every tile is filled with its state, giant state words and icons, built for wall screens.',
-    mode: 'any',
+    mode: 'dark',
     accent: 'mountain',
     typeface: 'inter',
     chrome: 'none',

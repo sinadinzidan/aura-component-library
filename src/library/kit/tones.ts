@@ -25,3 +25,12 @@ export function cx(...parts: Array<string | false | null | undefined>): string {
 export function formatNumber(value: number, decimals = 0): string {
   return value.toLocaleString('en-GB', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
+
+/** Round axis ticks from zero up to at least `max`: 0, 25, 50, 75, 100 rather than 0, 23.5, 47. */
+export function niceTicks(max: number, count = 4): number[] {
+  const rough = Math.max(max, Number.EPSILON) / count;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((candidate) => candidate >= rough) ?? rough;
+  const steps = Math.ceil(max / step - 1e-9);
+  return Array.from({ length: steps + 1 }, (_, index) => Number((index * step).toPrecision(12)));
+}

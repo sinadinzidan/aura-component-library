@@ -63,4 +63,13 @@ describe(parseCatalogState.name, () => {
 
     expect(parseCatalogState(serializeCatalogState(state))).toEqual(state);
   });
+
+  it('restores the look with the rest of the theme and defaults an unknown one', () => {
+    expect(parseCatalogState(JSON.stringify({ theme: { look: 'console', mode: 'dark' } })).theme).toEqual({
+      ...DEFAULT_THEME,
+      mode: 'dark',
+      look: 'console',
+    });
+    expect(parseCatalogState(JSON.stringify({ theme: { look: 'brutal' } })).theme.look).toBe('studio');
+  });
 });

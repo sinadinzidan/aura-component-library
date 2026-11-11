@@ -40,6 +40,7 @@ export const MANIFEST: readonly ManifestArea[] = [
           { id: 'elevation', title: 'Elevation', blurb: 'Shadows, focus rings and surfaces.' },
           { id: 'icons', title: 'Icons', blurb: 'System icons, sizes and pairing rules.' },
           { id: 'themes', title: 'Themes', blurb: 'Accent, surface, shape, contrast, density and typeface.' },
+          { id: 'looks', title: 'Looks', blurb: 'Eight design languages that change structure, not just colour.' },
         ],
       },
       {

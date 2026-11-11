@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
+import { Canvas } from '../kit/Canvas';
+
 import { DEFAULT_THEME } from './themes';
 import { ThemeScope } from './ThemeScope';
 
@@ -46,5 +48,15 @@ describe(ThemeScope.name, () => {
     );
 
     expect(screen.getByText('Sized')).toHaveClass('w-full');
+  });
+
+  it("gives kit components inside the preset's look", () => {
+    render(
+      <ThemeScope preset="control-room">
+        <Canvas>Board</Canvas>
+      </ThemeScope>
+    );
+
+    expect(screen.getByText('Board')).toHaveAttribute('data-look', 'console');
   });
 });

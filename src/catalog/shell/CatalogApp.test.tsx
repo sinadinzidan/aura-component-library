@@ -229,6 +229,47 @@ describe(CatalogApp.name, () => {
     expect(document.documentElement).toHaveAttribute('data-accent', 'dusk');
     expect(document.documentElement).toHaveAttribute('data-shape', 'soft');
   });
+
+  it('sets the studio look on the document root by default', () => {
+    renderApp(channel, deps);
+
+    expect(document.documentElement).toHaveAttribute('data-look', 'studio');
+  });
+
+  it('changes the look from the theme menu and syncs it', async () => {
+    renderApp(channel, deps);
+
+    await userEvent.click(screen.getByRole('button', { name: /Theme/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Blueprint look' }));
+
+    expect(document.documentElement).toHaveAttribute('data-look', 'blueprint');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
+    expect(lastSynced(channel)).toMatchObject({ theme: { look: 'blueprint' } });
+  });
+
+  it('switches to dark when a dark-only look is picked', async () => {
+    renderApp(channel, deps);
+
+    await userEvent.click(screen.getByRole('button', { name: /Theme/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Console look' }));
+
+    expect(document.documentElement).toHaveAttribute('data-look', 'console');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  it('restores the look from saved state', () => {
+    renderApp(createChannel(JSON.stringify({ theme: { look: 'poster' } })), deps);
+
+    expect(document.documentElement).toHaveAttribute('data-look', 'poster');
+  });
+
+  it('keeps the specimen hooks the audit and screenshot tools rely on', async () => {
+    renderApp(createChannel(JSON.stringify({ page: 'button' })), deps);
+
+    const card = (await screen.findByRole('heading', { name: 'Primary' })).closest('[data-specimen]');
+    expect(card).toHaveAttribute('data-specimen', 'ButtonPrimary');
+    expect(card?.querySelector('[data-specimen-preview]')).not.toBeNull();
+  });
 });
 
 function createChannel(initialState: string | undefined): HostChannel {

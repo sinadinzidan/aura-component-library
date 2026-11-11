@@ -140,6 +140,7 @@ export function ThemeMenu() {
                     <button
                       type="button"
                       aria-pressed={active}
+                      aria-label={`${definition.label} look`}
                       title={definition.description}
                       // A dark-only look brings its mode with it; the others keep the current one.
                       onClick={() => setTheme(definition.mode === 'dark' ? { look, mode: 'dark' } : { look })}

@@ -49,7 +49,8 @@
 }
 
 [data-look] {
-  --kit-line-accent: var(--primary-background);
+  /* The link colour is the accent that is still a colour in the neutral default theme. */
+  --kit-line-accent: var(--link-foreground);
   --kit-line-neutral: var(--mountain-500);
   --kit-line-blue: var(--fjord-600);
   --kit-line-teal: var(--nordic-600);
@@ -165,7 +166,8 @@
   --kit-rule: var(--emphasized);
   --kit-rule-strong: var(--base-foreground);
   --kit-canvas-bg: var(--base-background);
-  --kit-pad: calc(var(--spacing) * 12) calc(var(--spacing) * 14);
+  /* Wide margins that give way in a narrow column. */
+  --kit-pad: calc(var(--spacing) * 12) clamp(calc(var(--spacing) * 6), 5%, calc(var(--spacing) * 14));
   --kit-gap: calc(var(--spacing) * 10);
   --kit-radius: 0px;
   --kit-radius-sm: 0px;
@@ -285,9 +287,9 @@
 [data-tone='accent'],
 .kit-tone-accent {
   --t-line: var(--kit-line-accent);
-  --t-ink: var(--primary-background);
-  --t-soft: color-mix(in oklab, var(--primary-background) 12%, transparent);
-  --t-on-soft: var(--primary-background);
+  --t-ink: var(--link-foreground);
+  --t-soft: color-mix(in oklab, var(--link-foreground) 13%, transparent);
+  --t-on-soft: var(--link-foreground);
   --t-vivid: var(--primary-background);
   --t-on-vivid: var(--primary-foreground);
   --t-pop: var(--primary-background);
@@ -586,6 +588,14 @@
 
 /* ────────────────────────── 3. Kit anatomy ────────────────────────── */
 
+/* Sizing defaults live in a layer, so a page can override them with layout utilities. */
+@layer components {
+  .kit-panel,
+  .kit-stat {
+    height: 100%;
+  }
+}
+
 .kit-scope {
   color: var(--kit-text);
 }
@@ -635,7 +645,6 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-width: 0;
   background: var(--kit-panel-bg);
   border: var(--kit-panel-border);
@@ -687,16 +696,23 @@
   padding: var(--kit-panel-pad);
 }
 
-.kit-panel[data-pad='none'] > .kit-panel-body {
-  padding: 0;
+.kit-panel-head + .kit-panel-body {
+  padding-top: calc(var(--spacing) * 4);
 }
 
 .kit-panel[data-pad='tight'] > .kit-panel-body {
   padding: calc(var(--kit-panel-pad) * 0.6);
 }
 
-.kit-panel-head + .kit-panel-body {
-  padding-top: calc(var(--spacing) * 4);
+.kit-panel.kit-panel[data-pad='none'][data-look] > .kit-panel-body {
+  padding: 0;
+}
+
+.kit-panel[data-pad='none'][data-look='studio'] > .kit-panel-head,
+.kit-panel[data-pad='none'][data-look='soft'] > .kit-panel-head,
+.kit-panel[data-pad='none'][data-look='glass'] > .kit-panel-head,
+.kit-panel[data-pad='none'][data-look='signal'] > .kit-panel-head {
+  padding-bottom: calc(var(--spacing) * 4);
 }
 
 .kit-panel-foot {
@@ -1072,7 +1088,6 @@
   align-content: space-between;
   column-gap: calc(var(--spacing) * 4);
   row-gap: calc(var(--spacing) * 2);
-  height: 100%;
   min-width: 0;
   color: var(--kit-text);
 }
@@ -1089,6 +1104,10 @@
 .kit-stat[data-size='hero'] {
   --kit-fig: 4rem;
   row-gap: calc(var(--spacing) * 3);
+}
+
+.kit-stat[data-look='poster'][data-size='hero'] {
+  --kit-fig: 5.5rem;
 }
 
 /* large figures have room for the trend beside them */
@@ -1201,7 +1220,11 @@
     color: var(--kit-text-3);
   }
   .kit-stat-unit {
+    font-size: 0.875rem;
     color: var(--kit-text-3);
+  }
+  .kit-stat-figure {
+    flex-wrap: nowrap;
   }
 }
 
@@ -1265,6 +1288,7 @@
     'meta meta'
     'spark spark';
   row-gap: calc(var(--spacing) * 2);
+  align-content: start;
   .kit-stat-label {
     font-size: 0.875rem;
     font-weight: 600;
@@ -1606,6 +1630,12 @@
 .kit-pill[data-look='signal'][data-variant='filled'] {
   background: var(--t-vivid);
   color: var(--t-on-vivid);
+}
+
+/* on a tile that is already filled with the state, the pill becomes a quiet label */
+:is(.kit-row, .kit-panel, .kit-stat)[data-look='signal']:not([data-tone='neutral']) .kit-pill {
+  background: color-mix(in oklab, currentColor 16%, transparent);
+  color: inherit;
 }
 
 /* IconChip */
@@ -2254,9 +2284,6 @@
   color: var(--kit-text);
 }
 
-.kit-row:first-child {
-  border-top: 0;
-}
 
 .kit-row-leading {
   display: flex;
@@ -2417,6 +2444,10 @@
   color: var(--t-on-vivid);
 }
 
+.kit-row[data-look]:first-child {
+  border-top: 0;
+}
+
 /* Legend */
 .kit-legend {
   display: flex;
@@ -2524,7 +2555,7 @@
 .kit-chart-plot {
   position: relative;
   min-width: 0;
-  flex: 1;
+  flex: 1 0 auto;
 }
 
 .kit-chart-notes {
@@ -2581,9 +2612,14 @@
   grid-template-columns: minmax(0, 1fr) minmax(10rem, 15rem);
   column-gap: calc(var(--spacing) * 8);
   .kit-chart-top {
-    grid-column: 1 / -1;
+    grid-column: 1;
+  }
+  .kit-chart-plot {
+    grid-column: 1;
   }
   .kit-chart-notes {
+    grid-column: 2;
+    grid-row: 1 / span 2;
     align-self: start;
     padding-top: calc(var(--spacing) * 3);
     border-top: 1px solid var(--kit-rule-strong);

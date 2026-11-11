@@ -14,6 +14,8 @@ import {
   THEME_PRESETS,
   themeAttributes,
   tintedSurfaceTokens,
+  TYPEFACE_FAMILIES,
+  TYPEFACES,
   type Accent,
   type Mode,
 } from './themes';
@@ -149,6 +151,7 @@ describe(parseThemeSettings.name, () => {
       contrast: 'high',
       density: 'default',
       typeface: 'inter',
+      look: 'studio',
     });
   });
 });
@@ -163,7 +166,8 @@ describe(themeAttributes.name, () => {
         shape: 'soft',
         contrast: 'high',
         density: 'compact',
-        typeface: 'technical',
+        typeface: 'plex',
+        look: 'console',
       })
     ).toEqual({
       'data-accent': 'dusk',
@@ -171,8 +175,20 @@ describe(themeAttributes.name, () => {
       'data-shape': 'soft',
       'data-contrast': 'high',
       'data-density': 'compact',
-      'data-typeface': 'technical',
+      'data-typeface': 'plex',
+      'data-look': 'console',
     });
+  });
+});
+
+describe('typefaces', () => {
+  it('are readable sans families: no monospace as a UI font', () => {
+    expect(TYPEFACES).not.toContain('technical');
+    for (const family of Object.values(TYPEFACE_FAMILIES)) expect(family).not.toMatch(/mono|Code/i);
+  });
+
+  it('drops an unknown typeface and look back to the defaults', () => {
+    expect(parseThemeSettings({ typeface: 'technical', look: 'brutal' })).toEqual(DEFAULT_THEME);
   });
 });
 

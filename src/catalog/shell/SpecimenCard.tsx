@@ -61,7 +61,7 @@ export function SpecimenCard({ specimen, onViewCode }: SpecimenCardProps) {
           <Component />
         </SpecimenBoundary>
       </div>
-      <footer className="flex flex-1 items-start gap-3 border-t border-default px-4 py-3">
+      <footer className="flex min-h-20 items-start gap-3 border-t border-default px-4 py-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 id={`${id}-title`} className="truncate text-sm font-medium text-base-foreground">

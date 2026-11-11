@@ -36,12 +36,10 @@ export function Donut({ label, segments, centerValue, centerCaption, size = 148,
   const gap = segments.length > 1 ? (rounded ? stroke + 2.5 : look === 'poster' ? 0 : 1.6) : 0;
   const style: CSSProperties & Record<'--kit-donut-size', string> = { '--kit-donut-size': `${size}px` };
 
-  let offset = 0;
-  const arcs = segments.map((segment) => {
+  const arcs = segments.map((segment, index) => {
+    const before = segments.slice(0, index).reduce((sum, earlier) => sum + earlier.value, 0);
     const length = (segment.value / total) * CIRCUMFERENCE;
-    const arc = { segment, dash: Math.max(length - gap, 0.5), start: offset + gap / 2 };
-    offset += length;
-    return arc;
+    return { segment, dash: Math.max(length - gap, 0.5), start: (before / total) * CIRCUMFERENCE + gap / 2 };
   });
 
   return (

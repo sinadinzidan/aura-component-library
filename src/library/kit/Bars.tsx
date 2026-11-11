@@ -5,7 +5,7 @@ import { useLookDefinition } from '../looks/useLook';
 
 import { ChartFrame } from './ChartFrame';
 import type { LegendItem } from './Legend';
-import { formatNumber, toneLine, type Tone } from './tones';
+import { formatNumber, niceTicks, toneLine, type Tone } from './tones';
 
 export type BarSeries = { id: string; label: string; values: readonly number[]; tone?: Tone };
 
@@ -73,7 +73,10 @@ export function Bars({
   const longest = Math.max(...categories.map((category) => category.length), 2);
   const totals = categories.map((_, index) => series.reduce((sum, entry) => sum + (entry.values[index] ?? 0), 0));
   const peak = Math.max(...(stacked ? totals : series.flatMap((entry) => entry.values)), limit?.value ?? 0, 1);
-  const valueWidth = formatNumber(peak, decimals).length * 7.6 + 12;
+  const ticks = niceTicks(peak, horizontal ? 2 : 4);
+  const top = ticks[ticks.length - 1] ?? peak;
+  const valueWidth = formatNumber(top, decimals).length * 7.6 + 12;
+  const limitText = limit ? `${limit.label} ${formatNumber(limit.value, decimals)}${suffix}` : '';
   const radius = Math.min(chart.barRadius, 14);
   const legend: LegendItem[] = series.map((entry) => ({ label: entry.label, tone: entry.tone ?? 'accent' }));
   const axisLine = chart.axisLine ? { stroke: 'var(--kit-rule-strong)' } : false;
@@ -83,7 +86,8 @@ export function Bars({
     tick: TICK,
     tickLine: false,
     axisLine: false,
-    tickCount: 5,
+    ticks,
+    domain: [0, top],
     tickFormatter: (value: number) => formatNumber(value, decimals),
   } as const;
 
@@ -100,9 +104,10 @@ export function Bars({
         <BarChart
           data={rows}
           layout={horizontal ? 'vertical' : 'horizontal'}
-          barCategoryGap={`${Math.round((1 - chart.barFill) * 100)}%`}
+          // Recharts applies the gap on both sides of a band, so half the unfilled share goes on each.
+          barCategoryGap={`${Math.round((1 - chart.barFill) * 50)}%`}
           barGap={look === 'poster' ? 0 : 3}
-          margin={{ top: showValues && !horizontal ? 22 : 8, right: horizontal ? (showValues ? valueWidth + 28 : 12) : 8, bottom: 0, left: 0 }}
+          margin={{ top: limit ? 26 : showValues ? 22 : 8, right: horizontal ? (showValues ? valueWidth + 28 : 12) : 8, bottom: 0, left: 0 }}
         >
           {chart.grid === 'none' ? null : (
             <CartesianGrid
@@ -164,6 +169,9 @@ export function Bars({
                     fontSize={12}
                     fontWeight={600}
                     fill="var(--kit-text)"
+                    stroke="var(--kit-halo)"
+                    strokeWidth={4}
+                    paintOrder="stroke"
                     formatter={(value: unknown) => (typeof value === 'number' ? `${formatNumber(value, decimals)}${suffix}` : '')}
                   />
                 ) : null}
@@ -176,10 +184,13 @@ export function Bars({
               stroke={toneLine(limit.tone ?? 'neutral')}
               strokeWidth={look === 'poster' ? 2 : 1.25}
               strokeDasharray={look === 'blueprint' ? '10 3 2 3' : '5 4'}
-              ifOverflow="extendDomain"
               label={{
-                value: `${limit.label} ${formatNumber(limit.value, decimals)}${suffix}`,
-                position: horizontal ? 'insideTopRight' : 'insideTopLeft',
+                value: limitText,
+                position: horizontal ? 'top' : 'insideBottomRight',
+                // A halo in the surface colour keeps the label readable over bars and values.
+                stroke: 'var(--kit-halo)',
+                strokeWidth: 4,
+                paintOrder: 'stroke',
                 fontSize: 12,
                 fontWeight: 600,
                 fill: toneLine(limit.tone ?? 'neutral'),
