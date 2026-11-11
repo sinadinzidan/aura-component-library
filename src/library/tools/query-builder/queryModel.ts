@@ -221,6 +221,22 @@ function moveNode(group: Group, id: string, delta: number): Group {
   return { ...group, children: group.children.map((child) => (child.type === 'group' ? moveNode(child, id, delta) : child)) };
 }
 
+/** Condition numbers in reading order, by id: the first condition is 1. Used for accessible names. */
+export function conditionPositions(root: Group): Record<string, number> {
+  const positions: Record<string, number> = {};
+  let next = 1;
+  const visit = (node: QueryNode) => {
+    if (node.type === 'condition') {
+      positions[node.id] = next;
+      next += 1;
+    } else {
+      node.children.forEach(visit);
+    }
+  };
+  visit(root);
+  return positions;
+}
+
 export function countConditions(node: QueryNode): number {
   return node.type === 'condition' ? 1 : node.children.reduce((total, child) => total + countConditions(child), 0);
 }

@@ -4,7 +4,6 @@ import { CameraRig } from '../CameraRig';
 import type { CameraTarget, Vec3, ViewInsetsValue } from '../cameraTargets';
 import { EquipmentModel } from '../EquipmentModel';
 import { Ground } from '../Ground';
-import { pointAlong, polylineLength } from '../pipeGeometry';
 import { labelAnchor } from '../plantLayout';
 import type { PlantEquipment } from '../plantLayout';
 import { SceneLabel } from '../SceneLabel';
@@ -14,6 +13,7 @@ import { ViewInsets } from '../ViewInsets';
 import { FlowLine } from './FlowLine';
 import type { FlowLineEmphasis } from './FlowLine';
 import { FlowValveMarker } from './FlowValveMarker';
+import { pointOnRoute } from './pointOnRoute';
 
 /** One process line to draw: its route, the fluid colour, and how much flows. */
 export type FlowSceneLine = {
@@ -50,22 +50,21 @@ export type FlowPlantSceneProps = {
   insets?: ViewInsetsValue;
   /** Called with a line id when a line is clicked. Lines are not clickable without it. */
   onSelectLine?: (lineId: string) => void;
+  /** Label open valves too. By default only closed ones carry a label, to keep the scene quiet. */
+  labelOpenValves?: boolean;
+  /** Radius of the lines. */
+  lineRadius?: number;
   /** Hold every stream at this time (seconds): for stills. */
   time?: number;
   children?: ReactNode;
 };
-
-/** Position and direction of a point a fraction of the way along a route; `null` for a route without length. */
-export function pointOnRoute(route: readonly Vec3[], at: number): { position: Vec3; direction: Vec3 } | null {
-  return pointAlong(route, polylineLength(route) * Math.min(1, Math.max(0, at)));
-}
 
 /**
  * A plant where the lines are the subject: ghosted equipment, translucent tubes with a particle
  * stream whose speed and density follow the flow, and a P&ID-style valve on each switchable line.
  * Lines are picked by clicking anywhere along them. Render it inside `SceneCanvas`.
  */
-export function FlowPlantScene({ equipment, labelled = [], lines, valves = [], size, target, insets, onSelectLine, time, children }: FlowPlantSceneProps) {
+export function FlowPlantScene({ equipment, labelled = [], lines, valves = [], size, target, insets, onSelectLine, labelOpenValves = false, lineRadius = 0.4, time, children }: FlowPlantSceneProps) {
   const { top = 0, right = 0, bottom = 0, left = 0 } = insets ?? {};
   const span = Math.hypot(size[0], size[1]);
   const routeOf = (lineId: string): readonly Vec3[] => lines.find((line) => line.id === lineId)?.route ?? [];
@@ -85,7 +84,7 @@ export function FlowPlantScene({ equipment, labelled = [], lines, valves = [], s
       ))}
 
       {lines.map((line) => (
-        <FlowLine key={line.id} id={line.id} route={line.route} color={line.color} rate={line.rate} emphasis={line.emphasis} onSelect={onSelectLine} time={time} />
+        <FlowLine key={line.id} id={line.id} route={line.route} color={line.color} rate={line.rate} emphasis={line.emphasis} radius={lineRadius} onSelect={onSelectLine} time={time} />
       ))}
 
       {valves.map((valve) => {
@@ -94,6 +93,7 @@ export function FlowPlantScene({ equipment, labelled = [], lines, valves = [], s
         return (
           <group key={valve.id}>
             <FlowValveMarker position={point.position} direction={point.direction} open={valve.open} />
+            {valve.open && !labelOpenValves ? null : (
             <SceneLabel
               position={[point.position[0], point.position[1] + 1.2, point.position[2]]}
               tag={valve.tag}
@@ -102,6 +102,7 @@ export function FlowPlantScene({ equipment, labelled = [], lines, valves = [], s
               shape={valve.open ? undefined : 'square'}
               maxDistance={span * 1.05}
             />
+            )}
           </group>
         );
       })}

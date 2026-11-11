@@ -2,7 +2,7 @@ import type { InstancedMesh, Mesh, Object3D } from 'three';
 
 import { renderScene } from '../renderScene.fixture';
 
-import { FlowPlantScene, pointOnRoute } from './FlowPlantScene';
+import { FlowPlantScene } from './FlowPlantScene';
 import type { FlowSceneLine, FlowSceneValve } from './FlowPlantScene';
 
 function isMesh(object: Object3D): object is Mesh {
@@ -27,28 +27,6 @@ const VALVES: readonly FlowSceneValve[] = [{ id: 'v', tag: '23-XV-9103', lineId:
 const scene = (props: Partial<Parameters<typeof FlowPlantScene>[0]> = {}) => (
   <FlowPlantScene equipment={EQUIPMENT} lines={LINES} valves={VALVES} size={[100, 60]} target={TARGET} time={0} {...props} />
 );
-
-describe(pointOnRoute.name, () => {
-  const route = [
-    [0, 1, 0],
-    [10, 1, 0],
-    [10, 1, 10],
-  ] as const;
-
-  it('finds the middle of a route', () => {
-    expect(pointOnRoute(route, 0.5)?.position).toEqual([10, 1, 0]);
-  });
-
-  it('gives the direction of travel at that point', () => {
-    expect(pointOnRoute(route, 0.25)?.direction).toEqual([1, 0, 0]);
-    expect(pointOnRoute(route, 0.9)?.direction).toEqual([0, 0, 1]);
-  });
-
-  it('clamps outside 0–1 and returns null for a route without length', () => {
-    expect(pointOnRoute(route, 3)?.position).toEqual([10, 1, 10]);
-    expect(pointOnRoute([[0, 0, 0]], 0.5)).toBeNull();
-  });
-});
 
 describe(FlowPlantScene.name, () => {
   it('draws a particle stream only for lines that flow', async () => {
@@ -76,6 +54,21 @@ describe(FlowPlantScene.name, () => {
     expect(labels.some((text) => text.includes('23-XV-9103') && text.includes('Closed'))).toBe(true);
 
     await view.unmount();
+  });
+
+  it('leaves open valves unlabelled unless asked', async () => {
+    const open = [{ ...VALVES[0], open: true }];
+    const quiet = await renderScene(scene({ valves: open }));
+    await quiet.advance();
+    const quietCount = document.querySelectorAll('[data-slot="scene-label"]').length;
+    await quiet.unmount();
+    const loud = await renderScene(scene({ valves: open, labelOpenValves: true }));
+    await loud.advance();
+
+    expect(quietCount).toBe(0);
+    expect(document.querySelectorAll('[data-slot="scene-label"]')).toHaveLength(1);
+
+    await loud.unmount();
   });
 
   it('labels only the equipment asked for', async () => {

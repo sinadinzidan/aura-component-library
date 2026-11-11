@@ -164,8 +164,10 @@ describe(buildPipelineRoute.name, () => {
     expect(route.length).toBeGreaterThan(84 * 5);
   });
 
-  it('puts a chainage at the matching x', () => {
-    expect(positionAtKp(route, 42).position[0]).toBeCloseTo(210, 0);
+  it('puts a chainage at the matching share of the length, so the middle is the middle', () => {
+    expect(positionAtKp(route, 42).position[0]).toBeGreaterThan(190);
+    expect(positionAtKp(route, 42).position[0]).toBeLessThan(215);
+    expect(positionAtKp(route, 0).position[0]).toBe(0);
   });
 
   it('keeps the ground below the pipe along the whole line', () => {
@@ -173,11 +175,11 @@ describe(buildPipelineRoute.name, () => {
   });
 
   it('dips the ground at the river and the road', () => {
-    const [river, road] = pipelineDips();
-
-    expect(river.x).toBe(135);
-    expect(road.x).toBe(330);
+    const [river, road] = pipelineDips(route);
     const at = positionAtKp(route, 27).position;
+
+    expect(river.x).toBeCloseTo(at[0], 9);
+    expect(road.x).toBeCloseTo(positionAtKp(route, 66).position[0], 9);
 
     expect(pipelineGround(route, at[0], at[2])).toBeLessThan(at[1] - 5);
   });

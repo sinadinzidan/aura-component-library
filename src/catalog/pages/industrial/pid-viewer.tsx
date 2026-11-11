@@ -517,7 +517,7 @@ export default definePage({
           title: 'Layer switch',
           note: 'Pick it to let people strip the drawing down: lines, instruments, live values, alarms and annotations.',
           origin: 'custom',
-          size: 'sm',
+          size: 'md',
           uses: ['tools/pid/PidLayerToggles.tsx', 'actions/ToggleGroup.tsx'],
           Component: PidViewerLayerSwitch,
         },

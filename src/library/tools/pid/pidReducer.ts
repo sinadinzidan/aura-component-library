@@ -129,7 +129,7 @@ export function pidReducer(state: PidState, action: PidAction): PidState {
     case 'fit':
       return { ...state, viewport: fitRect(state.world, state.size, FIT_PADDING, state.limits), autoFit: true, message: 'Drawing fitted to view' };
     case 'select':
-      return { ...state, selection: action.selection, message: action.announce ?? (action.selection ? state.message : 'Selection cleared') };
+      return { ...state, selection: action.selection, autoFit: action.selection ? false : state.autoFit, message: action.announce ?? (action.selection ? state.message : 'Selection cleared') };
     case 'toggleLayer': {
       const on = !state.layers[action.layer];
       return { ...state, layers: { ...state.layers, [action.layer]: on }, message: `${layerLabel(action.layer)} ${on ? 'shown' : 'hidden'}` };

@@ -68,7 +68,8 @@ export function NodeInspector({ node, connections, readOnly = false, onRename, o
           </p>
         ) : null}
         <div className="flex flex-col gap-1">
-          <LayerSwitch label="Run state" value={node.state} options={RUN_OPTIONS} onValueChange={onRunState} />
+          <span className="text-xs font-medium text-muted-foreground">Run state</span>
+          <LayerSwitch label="Run state" hideLabel value={node.state} options={RUN_OPTIONS} onValueChange={onRunState} />
           {readOnly ? <p className="text-xs text-muted-foreground">Run state is set by the pipeline when it runs.</p> : null}
         </div>
         <section className="flex flex-col gap-1">

@@ -5,8 +5,8 @@ import { useState } from 'react';
 
 import { IconAction } from '../../patterns/collections/IconAction';
 
-import { QueryChips } from './QuerySummary';
 import type { QueryDataset, SavedQuery } from './queryModel';
+import { QueryChips } from './QuerySummary';
 
 type SavedQueriesProps = {
   queries: readonly SavedQuery[];

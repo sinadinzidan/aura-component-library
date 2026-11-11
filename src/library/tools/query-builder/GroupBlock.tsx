@@ -6,7 +6,7 @@ import { ToggleGroup } from '../../actions/ToggleGroup';
 import { IconAction } from '../../patterns/collections/IconAction';
 
 import { ConditionRow } from './ConditionRow';
-import { ROOT_ID, canAddGroup, describeCondition, groupDepth } from './queryModel';
+import { ROOT_ID, canAddGroup, conditionPositions, describeCondition, groupDepth } from './queryModel';
 import type { Group, QueryAction, QueryField } from './queryModel';
 
 type GroupBlockProps = {
@@ -20,8 +20,6 @@ type GroupBlockProps = {
   /** Allows groups inside groups. Turn off for a flat filter. */
   allowGroups?: boolean;
   readOnly?: boolean;
-  /** Counts conditions in reading order for accessible names. */
-  counter?: { next: number };
 };
 
 const COMBINATORS = [
@@ -34,11 +32,12 @@ const COMBINATORS = [
  * and a Not toggle that negates the whole group. Groups nest; at the depth limit the button is
  * disabled and the reason is written beside it.
  */
-export function GroupBlock({ group, root, fields, issues, dispatch, allowGroups = true, readOnly = false, counter = { next: 1 } }: GroupBlockProps) {
+export function GroupBlock({ group, root, fields, issues, dispatch, allowGroups = true, readOnly = false }: GroupBlockProps) {
   const isRoot = group.id === ROOT_ID;
   const depth = groupDepth(root, group.id) ?? 1;
   const groupCheck = canAddGroup(root, group.id);
   const problem = issues[group.id];
+  const positions = conditionPositions(root);
 
   return (
     <div
@@ -92,18 +91,16 @@ export function GroupBlock({ group, root, fields, issues, dispatch, allowGroups 
             if (child.type === 'group') {
               return (
                 <li key={child.id} className="min-w-0">
-                  <GroupBlock group={child} root={root} fields={fields} issues={issues} dispatch={dispatch} allowGroups={allowGroups} readOnly={readOnly} counter={counter} />
+                  <GroupBlock group={child} root={root} fields={fields} issues={issues} dispatch={dispatch} allowGroups={allowGroups} readOnly={readOnly} />
                 </li>
               );
             }
-            const position = counter.next;
-            counter.next += 1;
             return (
               <ConditionRow
                 key={child.id}
                 condition={child}
                 fields={fields}
-                position={position}
+                position={positions[child.id] ?? index + 1}
                 problem={issues[child.id]}
                 readOnly={readOnly}
                 summary={describeCondition(child, fields)}

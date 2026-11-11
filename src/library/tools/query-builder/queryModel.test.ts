@@ -5,6 +5,7 @@ import {
   changeField,
   changeOperator,
   chipsOf,
+  conditionPositions,
   countConditions,
   createCondition,
   createGroup,
@@ -437,5 +438,13 @@ describe('evaluation', () => {
 describe(createGroup.name, () => {
   it('starts as an un-negated and group', () => {
     expect(createGroup('g')).toMatchObject({ combinator: 'and', negated: false, children: [] });
+  });
+});
+
+describe('conditionPositions', () => {
+  it('numbers conditions in reading order through nested groups', () => {
+    const root = group(ROOT_ID, 'and', [cond('a', 'name', 'is-empty'), group('g', 'or', [cond('b', 'name', 'is-empty'), cond('c', 'name', 'is-empty')]), cond('d', 'name', 'is-empty')]);
+
+    expect(conditionPositions(root)).toEqual({ a: 1, b: 2, c: 3, d: 4 });
   });
 });

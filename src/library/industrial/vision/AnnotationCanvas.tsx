@@ -155,7 +155,7 @@ export function AnnotationCanvas({ state, dispatch, children, defaultLabel, read
             <TooltipContent>{item.label}</TooltipContent>
           </Tooltip>
         ))}
-        <span className="mx-1 h-4 w-px bg-border-default" aria-hidden="true" />
+        <span className="mx-1 h-4 border-l border-default" aria-hidden="true" />
         <Tooltip>
           <TooltipTrigger
             render={

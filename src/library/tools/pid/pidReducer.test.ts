@@ -110,6 +110,12 @@ describe('pidReducer', () => {
     expect(run(selected, { type: 'select', selection: null }).message).toBe('Selection cleared');
   });
 
+  it('stops refitting on resize once something is selected, so opening a panel does not rescale the drawing', () => {
+    const selected = run(start(), { type: 'select', selection: { kind: 'tag', id: 'pt' } });
+    expect(selected.autoFit).toBe(false);
+    expect(run(selected, { type: 'resize', size: { width: 300, height: 300 } }).viewport.k).toBe(selected.viewport.k);
+  });
+
   it('toggles a layer and says so', () => {
     const state = run(start(), { type: 'toggleLayer', layer: 'values' });
     expect(state.layers.values).toBe(false);

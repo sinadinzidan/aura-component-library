@@ -30,7 +30,8 @@ export function pathThrough(points: readonly (ScreenPoint | null)[], closed = fa
 /**
  * The path of one coastline or outline. Mercator draws three copies of the world a full turn
  * apart, so shapes that cross the antimeridian still close; equal-area densifies the edges so
- * they curve with the projection and drops a filled shape that straddles the disc's rim.
+ * they curve with the projection and any edge that still jumps across the disc is cut, which also
+ * drops the fill.
  */
 export function outlinePaths(projection: ProjectionId, view: MapView, size: Size, points: readonly LatLong[], closed: boolean): { d: string; filled: boolean }[] {
   if (projection === 'mercator') {
@@ -71,11 +72,11 @@ function unwrapJumps(points: readonly (ScreenPoint | null)[], limit: number): (S
 
 export type GraticuleLine = { id: string; kind: 'meridian' | 'parallel'; degrees: number; d: string };
 
-/** The spacing of graticule lines for a zoom: the coarsest step that still leaves lines far apart. */
+/** The spacing of graticule lines for a zoom: the finest step that still leaves them about 64 pixels apart. */
 export function graticuleStep(scale: number): number {
   const pixelsPerDegree = (scale * Math.PI) / 180;
-  const steps = [30, 15, 10, 5, 2, 1, 0.5];
-  return steps.find((step) => step * pixelsPerDegree >= 64) ?? 0.5;
+  const steps = [0.5, 1, 2, 5, 10, 15, 30];
+  return steps.find((step) => step * pixelsPerDegree >= 64) ?? 30;
 }
 
 /** Meridians and parallels as paths, every `step` degrees, limited to what Mercator can show. */

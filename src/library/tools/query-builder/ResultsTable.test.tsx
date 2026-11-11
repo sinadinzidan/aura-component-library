@@ -26,6 +26,12 @@ describe(ResultsTable.name, () => {
     expect(screen.getByText('9 Mar 2026')).toBeInTheDocument();
   });
 
+  it('shows enum cells by their option label', () => {
+    render(<ResultsTable columns={[{ key: 'tag', label: 'Tag' }, { key: 'state', label: 'State' }]} fields={TEST_DATASET.fields} rows={TEST_DATASET.records.slice(0, 1)} recordKey="tag" total={4} noun="assets" />);
+
+    expect(screen.getByText('Tripped')).toBeInTheDocument();
+  });
+
   it('says nothing matches and what to do', () => {
     setup([]);
 

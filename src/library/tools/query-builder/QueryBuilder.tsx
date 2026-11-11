@@ -5,9 +5,9 @@ import { useReducer, useState } from 'react';
 import { OptionSelect } from '../../patterns/data-entry/OptionSelect';
 
 import { GroupBlock } from './GroupBlock';
-import { QueryChips, QuerySentence } from './QuerySummary';
 import { ROOT_ID, countConditions, createGroup, createQueryState, filterRecords, queryReducer, validateQuery } from './queryModel';
 import type { Group, QueryDataset, SavedQuery } from './queryModel';
+import { QueryChips, QuerySentence } from './QuerySummary';
 import { ResultsTable } from './ResultsTable';
 import { SavedQueries } from './SavedQueries';
 
@@ -82,7 +82,7 @@ export function QueryBuilder({ datasets, initialDatasetId, initialRoot, savedQue
             )}
           </TabsList>
           <TabsPanel value="results">
-            <ResultsTable columns={dataset.columns} rows={matching} recordKey={dataset.recordKey} total={dataset.records.length} noun={dataset.noun} />
+            <ResultsTable fields={dataset.fields} columns={dataset.columns} rows={matching} recordKey={dataset.recordKey} total={dataset.records.length} noun={dataset.noun} />
           </TabsPanel>
           {compact ? null : (
             <TabsPanel value="saved">

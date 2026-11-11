@@ -106,7 +106,7 @@ export function anomalySeverity(anomaly: PipelineAnomaly): AnomalySeverity {
 }
 
 /** The leak the scenario button plays: where it is and the stage it has reached. */
-export const PIPELINE_LEAK = { kp: 58.4, drop: 14, reachKm: 9, settledPressure: 61 } as const;
+export const PIPELINE_LEAK = { kp: 58.4, drop: 20, reachKm: 9, settledPressure: 61 } as const;
 
 export type LeakStage = 'off' | 'detected' | 'isolated';
 
@@ -173,10 +173,10 @@ export function buildPipelineRoute(): Route {
   return buildRoute(waypoints, 14);
 }
 
-/** Where the ground dips under the line, in scene coordinates: the river and the road cutting. */
-export function pipelineDips(): CorridorDip[] {
+/** Where the ground dips under the line, in scene coordinates: the river and the road cutting, centred on their chainage. */
+export function pipelineDips(route: Route): CorridorDip[] {
   return PIPELINE_STATIONS.filter((station) => station.kind === 'crossing').map((station) => ({
-    x: station.kp * PIPELINE_UNITS_PER_KM,
+    x: positionAtKp(route, station.kp).position[0],
     width: station.crossing === 'river' ? 22 : 9,
     depth: station.crossing === 'river' ? 5.5 : 1.4,
   }));
@@ -186,7 +186,7 @@ export const PIPELINE_CLEARANCE = 1;
 
 /** Ground level of the corridor at a point, for a route. */
 export function pipelineGround(route: Route, x: number, z: number): number {
-  return corridorHeight(route, x, z, { clearance: PIPELINE_CLEARANCE, relief: 6, dips: pipelineDips() });
+  return corridorHeight(route, x, z, { clearance: PIPELINE_CLEARANCE, relief: 6, dips: pipelineDips(route) });
 }
 
 /** The scene position and direction of a chainage on a route. */

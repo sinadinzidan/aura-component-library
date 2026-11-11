@@ -1,4 +1,4 @@
-import type { Cell, QueryColumn, QueryRecord } from './queryModel';
+import type { Cell, QueryColumn, QueryField, QueryRecord } from './queryModel';
 
 type ResultsTableProps = {
   columns: readonly QueryColumn[];
@@ -10,6 +10,8 @@ type ResultsTableProps = {
   noun: string;
   /** Most rows to draw; the count above always shows every match. */
   limit?: number;
+  /** The data set's fields; enum cells are shown by option label. */
+  fields?: readonly QueryField[];
   /** Turns a cell into text. Defaults handle numbers, booleans, dates and nulls. */
   formatCell?: (cell: Cell, column: QueryColumn) => string;
 };
@@ -29,7 +31,11 @@ function defaultFormat(cell: Cell, column: QueryColumn): string {
  * monospace, numbers right-aligned. When nothing matches it says so and suggests loosening the
  * query instead of showing an empty grid.
  */
-export function ResultsTable({ columns, rows, recordKey, total, noun, limit = 12, formatCell = defaultFormat }: ResultsTableProps) {
+export function ResultsTable({ columns, rows, recordKey, total, noun, limit = 12, fields = [], formatCell = defaultFormat }: ResultsTableProps) {
+  const labelled = (cell: Cell, column: QueryColumn): string => {
+    const option = typeof cell === 'string' ? fields.find((field) => field.key === column.key && field.kind === 'enum')?.options?.find((entry) => entry.value === cell) : undefined;
+    return option ? option.label : formatCell(cell, column);
+  };
   const shown = rows.slice(0, limit);
   return (
     <div data-slot="results" className="flex w-full min-w-0 flex-col gap-2">
@@ -55,7 +61,7 @@ export function ResultsTable({ columns, rows, recordKey, total, noun, limit = 12
               {shown.map((row) => (
                 <tr key={String(row[recordKey])} className="border-b border-default last:border-b-0">
                   {columns.map((column, index) => {
-                    const text = formatCell(row[column.key] ?? null, column);
+                    const text = labelled(row[column.key] ?? null, column);
                     const mono = index === 0;
                     return index === 0 ? (
                       <th key={column.key} scope="row" className={`px-3 py-2 text-left font-normal whitespace-nowrap ${mono ? 'font-mono text-xs text-base-foreground' : ''}`}>

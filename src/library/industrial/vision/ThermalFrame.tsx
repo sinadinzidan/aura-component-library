@@ -50,8 +50,8 @@ export function ThermalFrame({ label, spots, min, max, ambient, readouts = [], h
           >
             <span className={cn('size-3 rounded-full border-2 border-base-foreground', highlightId === spot.id && 'size-4 outline-2 outline-offset-2 outline-[var(--primary-background)]')} />
             {readouts.includes(spot.id) ? (
-              <span className="rounded-xs bg-[color-mix(in_oklab,var(--card-background)_85%,transparent)] px-1 py-0.5 font-mono text-xs leading-none tabular-nums text-base-foreground">
-                {spot.label} {formatValue(spot.peak, 1)} °C
+              <span className="whitespace-nowrap rounded-xs bg-[color-mix(in_oklab,var(--card-background)_85%,transparent)] px-1 py-0.5 font-mono text-xs leading-none tabular-nums text-base-foreground">
+                {formatValue(spot.peak, 1)} °C
               </span>
             ) : null}
           </span>

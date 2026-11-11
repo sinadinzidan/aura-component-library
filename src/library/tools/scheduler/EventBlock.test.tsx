@@ -2,7 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { SchedEvent } from './conflicts';
-import { CREW_TONES, EventBlock } from './EventBlock';
+import { CREW_TONES } from './crewTones';
+import { EventBlock } from './EventBlock';
 
 const JOB: SchedEvent = { id: 'a', title: 'Inspect drive-end bearing', dayId: '2026-03-12', resourceId: 'mechanical', start: 480, end: 720, kind: 'job', reference: '23-KA-9103' };
 

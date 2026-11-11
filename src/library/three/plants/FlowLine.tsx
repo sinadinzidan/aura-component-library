@@ -89,7 +89,7 @@ export function FlowLine({ id, route, color, rate, emphasis = 'normal', radius =
             </mesh>
           ))
         : null}
-      {flowing ? <FlowParticles route={route} rate={rate} color={color} opacity={STREAM_OPACITY[emphasis]} size={radius * 0.62} time={time} options={options} /> : null}
+      {flowing ? <FlowParticles route={route} rate={rate} color={color} opacity={STREAM_OPACITY[emphasis]} size={radius * 0.8} time={time} options={options} /> : null}
       {onSelect
         ? segments.map((segment, index) => (
             <mesh
