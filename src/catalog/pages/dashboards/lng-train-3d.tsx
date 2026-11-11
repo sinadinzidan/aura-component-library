@@ -7,7 +7,6 @@ import type { ReactNode } from 'react';
 import { TONE_VALUE_TEXT, formatValue } from '../../../library/industrial/status';
 import type { Tone } from '../../../library/industrial/status';
 import { StatusDot } from '../../../library/industrial/StatusDot';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import { ThemeScope } from '../../../library/themes/ThemeScope';
 import { HudPanel } from '../../../library/three/HudPanel';
@@ -108,7 +107,7 @@ const LNGTRAIN3D_STAGES: readonly LngTrain3dStage[] = [
       { label: 'Tank 602 level', value: 92, unit: '%', decimals: 0, tone: 'warning' },
       { label: 'Boil-off rate', value: 0.05, unit: '%/d', decimals: 2 },
     ],
-    stop: { focus: [66, 10, -4], distance: 142, azimuth: 36, elevation: 26 },
+    stop: { focus: [66, 10, -4], distance: 215, azimuth: 36, elevation: 28 },
   },
   {
     id: 'loading',
@@ -460,7 +459,7 @@ function LngTrain3dStage({ label, children, hologram = true }: { label: string; 
 function LngTrain3dPartExchanger() {
   return (
     <LngTrain3dStage label="Main cryogenic heat exchanger, a tall insulated tower in a steel structure">
-      <TurntableStage subjectSize={CRYOGENIC_EXCHANGER_SIZE} padding={1.1}>
+      <TurntableStage subjectSize={CRYOGENIC_EXCHANGER_SIZE} padding={0.72}>
         <CryogenicExchanger />
       </TurntableStage>
     </LngTrain3dStage>
@@ -470,7 +469,7 @@ function LngTrain3dPartExchanger() {
 function LngTrain3dPartCoolers() {
   return (
     <LngTrain3dStage label="A bank of eight fin-fan air coolers on a pipe rack">
-      <TurntableStage subjectSize={airCoolerBankSize()} padding={1.05} view="isometric">
+      <TurntableStage subjectSize={airCoolerBankSize()} padding={0.62} view="isometric">
         <AirCoolerBank />
       </TurntableStage>
     </LngTrain3dStage>
@@ -480,7 +479,7 @@ function LngTrain3dPartCoolers() {
 function LngTrain3dPartSlugCatcher() {
   return (
     <LngTrain3dStage label="Finger-type slug catcher with six parallel pipes">
-      <TurntableStage subjectSize={slugCatcherSize()} padding={1.1} view="isometric">
+      <TurntableStage subjectSize={slugCatcherSize()} padding={0.7} view="isometric">
         <SlugCatcher />
       </TurntableStage>
     </LngTrain3dStage>
@@ -490,7 +489,7 @@ function LngTrain3dPartSlugCatcher() {
 function LngTrain3dPartCarrier() {
   return (
     <LngTrain3dStage label="LNG carrier with four spherical tanks at a berth with loading arms">
-      <TurntableStage subjectSize={lngCarrierSize()} padding={1}>
+      <TurntableStage subjectSize={lngCarrierSize()} padding={0.62}>
         <LngCarrier rotation={[0, Math.PI / 2, 0]} position={[0, 0, 0]} />
         <LoadingArms position={[-8, 0, 0]} rotation={[0, 0, 0]} connected={3} />
       </TurntableStage>
@@ -573,7 +572,6 @@ function LngTrain3dPartStepper() {
             {state.mode === 'free' ? 'Free view: the tour waits where you left it.' : `Following the tour: ${LNGTRAIN3D_STAGES[state.stageIndex]?.title ?? 'overview'}.`}
           </span>
         </div>
-        <StatusIndicator tone="neutral" shape="ring" label={state.mode === 'free' ? 'Tour paused' : 'Tour running'} size="sm" />
       </div>
     </ThemeScope>
   );

@@ -105,7 +105,7 @@ describe('indent and outdent', () => {
 
   it('moves a bare caret back with its line and never past the line start', () => {
     expect(show(outdentSelection(at('  a|')))).toBe('a|');
-    expect(show(outdentSelection(at(' | a')))).toBe('| a'.replace('| a', '|a'));
+    expect(show(outdentSelection(at(' | a')))).toBe('|a');
   });
 });
 

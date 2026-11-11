@@ -256,7 +256,7 @@ function RichEditorEmpty() {
         guidance={RICHEDIT_GUIDANCE}
         defaultMode="split"
         toolbar="compact"
-        heightClassName="h-48"
+        heightClassName="h-64"
         people={RICHEDIT_PEOPLE}
         renderPerson={richEditPerson}
         tags={RICHEDIT_TAGS}

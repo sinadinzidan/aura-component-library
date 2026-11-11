@@ -40,7 +40,7 @@ import { RefreshRow } from '../../../library/tools/mobile/RefreshRow';
 import { TwoPaneLayout } from '../../../library/tools/mobile/TwoPaneLayout';
 import { ALARMS, ASSETS, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
 import type { Alarm, Asset, WorkOrder } from '../../data/plant';
-import { formatAgo, formatDateTime } from '../../data/series';
+import { DAY, REFERENCE_NOW, formatAgo, formatDateTime } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './mobile-navigation.tsx?raw';
@@ -48,6 +48,15 @@ import source from './mobile-navigation.tsx?raw';
 const ACTIVE_ALARMS = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged');
 const EQUIPMENT: readonly Asset[] = ASSETS.filter((asset) => asset.parentId !== null && !ASSETS.some((other) => other.parentId === asset.id));
 const OPEN_ORDERS: readonly WorkOrder[] = WORK_ORDERS.filter((order) => order.status !== 'done');
+
+/** Older orders, so the large-title list is long enough to scroll. */
+const EARLIER_ORDERS: readonly WorkOrder[] = [
+  { id: 'WO-104402', title: 'Replace cooling water pump coupling', assetId: '40-pa-4001', type: 'corrective', priority: 'P3', status: 'done', assigneeId: 'tb', dueAt: REFERENCE_NOW - 6 * DAY, estimatedHours: 6, progress: 100 },
+  { id: 'WO-104395', title: 'Lubricate export pump bearings', assetId: '27-pa-2001a', type: 'preventive', priority: 'P4', status: 'done', assigneeId: 'tb', dueAt: REFERENCE_NOW - 8 * DAY, estimatedHours: 1, progress: 100 },
+  { id: 'WO-104388', title: 'Inspect interstage cooler tubes', assetId: '23-ha-9114', type: 'inspection', priority: 'P3', status: 'done', assigneeId: 'ms', dueAt: REFERENCE_NOW - 9 * DAY, estimatedHours: 3, progress: 100 },
+  { id: 'WO-104371', title: 'Calibrate suction pressure transmitter', assetId: '23-ka-9101', type: 'preventive', priority: 'P3', status: 'done', assigneeId: 'jn', dueAt: REFERENCE_NOW - 12 * DAY, estimatedHours: 2, progress: 100 },
+  { id: 'WO-104360', title: 'Test emergency shutdown loop, export', assetId: '27-pa-2001a', type: 'inspection', priority: 'P2', status: 'done', assigneeId: 'jn', dueAt: REFERENCE_NOW - 14 * DAY, estimatedHours: 4, progress: 100 },
+];
 
 const ROOTS: NavRoots = {
   alarms: { screen: 'alarms', title: 'Alarms' },
@@ -354,7 +363,7 @@ function MobileNavLargeTitle() {
   return (
     <Phone label="Large title that collapses on scroll">
       <LargeTitleScreen title="Work orders" actions={<IconAction label="Search work orders" size="icon"><IconSearch /></IconAction>}>
-        <div className="flex flex-col">{orderRows(WORK_ORDERS.concat(WORK_ORDERS.slice(0, 4)).map((order, index) => ({ ...order, id: `${order.id}${index > 7 ? ' (copy)' : ''}` })))}</div>
+        <div className="flex flex-col">{orderRows([...WORK_ORDERS, ...EARLIER_ORDERS])}</div>
       </LargeTitleScreen>
     </Phone>
   );

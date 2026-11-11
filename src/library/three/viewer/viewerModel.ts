@@ -1,5 +1,5 @@
-import { boundsFromFootprint, unionBounds } from '../cameraTargets';
-import type { Bounds, Vec3 } from '../cameraTargets';
+import { boundsFromFootprint, frameBounds, unionBounds } from '../cameraTargets';
+import type { Bounds, CameraTarget, Vec3 } from '../cameraTargets';
 import type { AssemblyNode } from '../models/assemblyTree';
 import type { ExplodeSpec } from '../models/explodeOffsets';
 
@@ -82,3 +82,6 @@ export const systemOf = (partId: string): ViewerSystem | undefined => findPart(p
 
 /** Leaf ids belonging to the given systems. */
 export const partIdsInSystems = (systems: readonly ViewerSystem[]): string[] => VIEWER_PARTS.filter((part) => systems.includes(part.system)).map((part) => part.id);
+
+/** The default home view: the whole module from the isometric corner. */
+export const VIEWER_HOME: CameraTarget = frameBounds(VIEWER_BOUNDS, { view: 'isometric', aspect: 1.3, padding: 1.05 });

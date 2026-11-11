@@ -210,9 +210,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
 
   return (
     <div className={`flex w-full min-w-0 flex-col ${fill ? 'h-full' : ''}`} data-slot="code-editor" data-language={language}>
-      <Label htmlFor={`${id}-field`} className={hideLabel ? 'sr-only' : undefined}>
-        {label}
-      </Label>
+      {hideLabel ? null : <Label htmlFor={`${id}-field`}>{label}</Label>}
       <div
         className={`flex min-w-0 overflow-hidden rounded-lg border bg-base-background focus-within:shadow-focus-ring ${error ? 'border-critical-foreground-strong' : 'border-default'} ${singleLine ? 'h-9' : fill ? 'min-h-0 flex-1' : heightClassName}`}
       >
@@ -263,6 +261,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
           <textarea
             ref={fieldRef}
             id={`${id}-field`}
+            aria-label={hideLabel ? label : undefined}
             className={`absolute inset-0 block size-full resize-none overflow-auto bg-transparent ${singleLine ? 'px-3 py-1.5 overflow-y-hidden' : 'p-3'} ${TEXT_METRICS} text-transparent caret-base-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed`}
             value={present.value}
             placeholder={placeholder}

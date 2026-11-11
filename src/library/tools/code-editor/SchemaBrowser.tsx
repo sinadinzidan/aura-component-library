@@ -1,5 +1,4 @@
 import { Input } from '@cognite/aura/components/input';
-import { Label } from '@cognite/aura/components/label';
 import { IconChevronDown, IconChevronRight } from '@cognite/aura/icons';
 import { useId, useState } from 'react';
 
@@ -42,12 +41,7 @@ export function SchemaBrowser({ database, onInsert, defaultOpen = [] }: SchemaBr
 
   return (
     <div className="flex min-h-0 min-w-0 flex-col gap-2" data-slot="schema-browser">
-      <div className="flex flex-col">
-        <Label htmlFor={`${id}-filter`} className="sr-only">
-          Filter tables and columns
-        </Label>
-        <Input id={`${id}-filter`} value={filter} placeholder="Filter tables and columns" onChange={(event) => setFilter(event.target.value)} />
-      </div>
+      <Input id={`${id}-filter`} aria-label="Filter tables and columns" value={filter} placeholder="Filter tables and columns" onChange={(event) => setFilter(event.target.value)} />
       {visible.length === 0 ? (
         <p className="px-1 text-sm text-muted-foreground">Nothing matches “{filter}”.</p>
       ) : (

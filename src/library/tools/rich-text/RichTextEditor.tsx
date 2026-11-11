@@ -276,9 +276,7 @@ export function RichTextEditor({
 
   return (
     <div className="flex w-full min-w-0 flex-col" data-slot="rich-text-editor" data-mode={mode}>
-      <Label htmlFor={`${id}-field`} className={hideLabel ? 'sr-only' : undefined}>
-        {label}
-      </Label>
+      {hideLabel ? null : <Label htmlFor={`${id}-field`}>{label}</Label>}
       <div
         className={`@container flex min-w-0 flex-col overflow-hidden rounded-lg border bg-base-background ${message ? 'border-critical-foreground-strong' : 'border-default'}`}
       >
@@ -330,6 +328,7 @@ export function RichTextEditor({
               <textarea
                 ref={fieldRef}
                 id={`${id}-field`}
+                aria-label={hideLabel ? label : undefined}
                 className={FIELD}
                 value={present.value}
                 placeholder={placeholder}

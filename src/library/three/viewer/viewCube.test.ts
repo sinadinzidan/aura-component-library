@@ -1,4 +1,3 @@
-import { VIEWER_BOUNDS } from './viewerModel';
 import {
   CUBE_FACES,
   VIEW_PRESETS,
@@ -14,6 +13,7 @@ import {
   frameFromDirection,
   presetTarget,
 } from './viewCube';
+import { VIEWER_BOUNDS } from './viewerModel';
 
 describe('angles and directions', () => {
   it('reads azimuth and elevation from a direction', () => {

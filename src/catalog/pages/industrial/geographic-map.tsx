@@ -226,7 +226,7 @@ function GeoMapDarkScope() {
           routes={GEOMAP_ROUTES}
           initialView={GEOMAP_SHELF}
           initialSize={{ width: 1000, height: 576 }}
-          initialSelectedId="tromsoflaket"
+          initialSelectedId="froya-vest"
           renderCard={geoMapSelectedCard}
           legend={GEOMAP_LEGEND}
         />
@@ -565,7 +565,7 @@ export default definePage({
         {
           id: 'GeoMapDarkScope',
           title: 'Dark control-room scope',
-          note: 'The same map in a dark theme scope, opened on a shut-in site.',
+          note: 'The same map in a dark theme scope, with a site selected.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',

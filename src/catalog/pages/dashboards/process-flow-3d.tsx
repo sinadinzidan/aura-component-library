@@ -233,10 +233,10 @@ function ProcessFlow3dValveList({ state, onToggle, onScenario }: { state: FlowSc
   );
 }
 
-function ProcessFlow3dBalance({ closed }: { closed: readonly string[] }) {
+function ProcessFlow3dBalance({ closed, className = 'w-80 shrink-0' }: { closed: readonly string[]; className?: string }) {
   const { rows, held, imbalance } = processFlow3dBalance(closed);
   return (
-    <HudPanel title="Mass balance" meta={PROCESSFLOW3D_UNIT} className="pointer-events-auto w-80 shrink-0">
+    <HudPanel title="Mass balance" meta={PROCESSFLOW3D_UNIT} className={`pointer-events-auto ${className}`}>
       <dl className="flex flex-col gap-1 text-sm">
         {rows.map((row, index) => (
           <div key={row.label} className={`flex items-baseline justify-between gap-3 ${index === 0 ? 'border-b border-default pb-1' : ''}`}>
@@ -552,7 +552,7 @@ function ProcessFlow3dPartRates() {
           <div className="h-60 w-full">
             <SceneCanvas label="Three lines with particle streams at low, medium and full flow">
               <StillScene>
-                <TurntableStage subjectSize={[34, 4, 12]} view="isometric" padding={1}>
+                <TurntableStage subjectSize={[34, 4, 12]} view="isometric" padding={0.6}>
                   {colors
                     ? rates.map((rate, index) => (
                         <FlowLine key={rate} id={`rate-${rate}`} route={[[-15, 1, (index - 1) * 4], [15, 1, (index - 1) * 4]]} color={colors.gas} rate={rate} time={3} />
@@ -578,7 +578,7 @@ function ProcessFlow3dPartValve() {
           <div className="h-60 w-full">
             <SceneCanvas label={`A line with a valve ${open ? 'open' : 'closed'}`}>
               <StillScene>
-                <TurntableStage subjectSize={[16, 3, 6]} view="isometric" padding={0.9}>
+                <TurntableStage subjectSize={[16, 3, 6]} view="isometric" padding={0.55}>
                   {colors ? <FlowLine id="a" route={[[-7, 1.4, 0], [7, 1.4, 0]]} color={colors.gas} rate={open ? 0.7 : 0} time={3} /> : null}
                   <FlowValveMarker position={[0, 1.4, 0]} direction={[1, 0, 0]} open={open} />
                 </TurntableStage>
@@ -599,7 +599,7 @@ function ProcessFlow3dPartChevrons() {
         <div className="h-64 w-full overflow-hidden rounded-xl border border-default bg-base-background">
           <SceneCanvas label="A line with still direction chevrons, as shown under reduced motion">
             <StillScene>
-              <TurntableStage subjectSize={[34, 4, 8]} view="isometric" padding={1}>
+              <TurntableStage subjectSize={[34, 4, 8]} view="isometric" padding={0.6}>
                 {colors ? <FlowLine id="c" route={[[-15, 1.4, 0], [15, 1.4, 0]]} color={colors.condensate} rate={0.6} /> : null}
               </TurntableStage>
             </StillScene>
@@ -623,14 +623,14 @@ function ProcessFlow3dPartLegend() {
 function ProcessFlow3dPartBalance() {
   return (
     <ThemeScope preset="tron" className="w-full">
-      <div className="flex w-full flex-col gap-4 rounded-xl border border-default bg-base-background p-4 md:flex-row">
+      <div className="flex w-full flex-col gap-4 rounded-xl border border-default bg-base-background p-4">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="text-xs text-muted-foreground">Normal line-up</span>
-          <ProcessFlow3dBalance closed={PROCESSFLOW3D_NORMAL} />
+          <ProcessFlow3dBalance closed={PROCESSFLOW3D_NORMAL} className="w-full" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <span className="text-xs text-muted-foreground">Recompressor tripped</span>
-          <ProcessFlow3dBalance closed={PROCESSFLOW3D_TRIPPED} />
+          <ProcessFlow3dBalance closed={PROCESSFLOW3D_TRIPPED} className="w-full" />
         </div>
       </div>
     </ThemeScope>

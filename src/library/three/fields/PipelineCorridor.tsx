@@ -93,7 +93,7 @@ export function PipelineCorridor({
 
   return (
     <>
-      <SeabedTerrain height={ground} size={terrainSize} center={terrainCentre} segments={segments} wire={0.22} />
+      <SeabedTerrain height={ground} size={terrainSize} center={terrainCentre} segments={segments} wire={0.12} />
 
       <mesh geometry={line} material={pipe} />
       {isolated ? <mesh geometry={isolated} material={warning} /> : null}
@@ -193,7 +193,7 @@ export function PipelineCorridor({
         </group>
       ) : null}
       {pigKp !== null && labels ? (
-        <SceneLabel position={[positionAtKp(route, pigKp).position[0], positionAtKp(route, pigKp).position[1] + 5, positionAtKp(route, pigKp).position[2]]} tag="ILI pig" value={`KP ${pigKp.toFixed(1)}`} selected />
+        <SceneLabel position={[positionAtKp(route, pigKp).position[0], positionAtKp(route, pigKp).position[1] + 5, positionAtKp(route, pigKp).position[2]]} tag="ILI pig" value={`KP ${pigKp.toFixed(1)}`} selected maxDistance={120} />
       ) : null}
 
       {cursorKp !== null ? (
