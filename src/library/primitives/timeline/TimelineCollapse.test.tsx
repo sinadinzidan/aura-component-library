@@ -60,7 +60,10 @@ describe(TimelineCollapse.name, () => {
   });
 
   it('accepts a count and custom labels', () => {
-    renderCollapse({ count: 8, showLabel: (count) => `Show ${count} more events` });
+    renderCollapse({
+      count: 8,
+      showLabel: (count) => `Show ${count} more events`,
+    });
 
     expect(screen.getByRole('button', { name: 'Show 8 more events' })).toBeInTheDocument();
   });

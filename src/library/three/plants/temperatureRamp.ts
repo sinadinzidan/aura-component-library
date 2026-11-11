@@ -40,7 +40,7 @@ export function temperatureAt(fraction: number, scale: TemperatureScale): number
   return scale.warm - Math.min(1, Math.max(0, fraction)) * (scale.warm - scale.cold);
 }
 
-/** Index of the ramp step a temperature falls in: 0 (warmest) to `steps − 1` (coldest). */
+/** Index of the ramp step a temperature falls in: 0 (warmest) to `steps \u2212 1` (coldest). */
 export function temperatureStep(temperature: number, scale: TemperatureScale, steps: number = TEMPERATURE_RAMP_KEYS.length): number {
   if (steps <= 1) return 0;
   return Math.min(steps - 1, Math.floor(temperatureFraction(temperature, scale) * steps));
@@ -68,9 +68,9 @@ export function temperatureGradient(direction = 'to bottom'): string {
   return `linear-gradient(${direction}, ${TEMPERATURE_RAMP_KEYS.map((key) => TEMPERATURE_RAMP_VARS[key]).join(', ')})`;
 }
 
-/** A temperature in words: "−162 °C", with a real minus sign. */
+/** A temperature in words: "\u2212162 °C", with a real minus sign. */
 export function formatTemperature(temperature: number, decimals = 0): string {
   const rounded = Math.abs(temperature).toFixed(decimals);
   const isZero = Number(rounded) === 0;
-  return `${temperature < 0 && !isZero ? '−' : ''}${rounded} °C`;
+  return `${temperature < 0 && !isZero ? '\u2212' : ''}${rounded}\u00a0\u00b0C`;
 }

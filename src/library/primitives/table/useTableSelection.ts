@@ -13,9 +13,17 @@ export type UseTableSelectionResult = {
   /** Some but not all rows are selected: the header checkbox is indeterminate. */
   someSelected: boolean;
   /** Spread onto the header's `TableSelectionCell`, next to its `label`. */
-  headerProps: { checked: boolean; indeterminate: boolean; disabled: boolean; onCheckedChange: (checked: boolean) => void };
+  headerProps: {
+    checked: boolean;
+    indeterminate: boolean;
+    disabled: boolean;
+    onCheckedChange: (checked: boolean) => void;
+  };
   /** Spread onto a row's `TableSelectionCell`, next to its `label`. */
-  rowProps: (id: string) => { checked: boolean; onCheckedChange: (checked: boolean) => void };
+  rowProps: (id: string) => {
+    checked: boolean;
+    onCheckedChange: (checked: boolean) => void;
+  };
 };
 
 /**
@@ -60,7 +68,15 @@ export function useTableSelection(ids: readonly string[], initial: readonly stri
     clear,
     allSelected,
     someSelected,
-    headerProps: { checked: allSelected, indeterminate: someSelected, disabled: ids.length === 0, onCheckedChange: toggleAll },
-    rowProps: (id: string) => ({ checked: selectedIds.includes(id), onCheckedChange: (checked: boolean) => toggle(id, checked) }),
+    headerProps: {
+      checked: allSelected,
+      indeterminate: someSelected,
+      disabled: ids.length === 0,
+      onCheckedChange: toggleAll,
+    },
+    rowProps: (id: string) => ({
+      checked: selectedIds.includes(id),
+      onCheckedChange: (checked: boolean) => toggle(id, checked),
+    }),
   };
 }

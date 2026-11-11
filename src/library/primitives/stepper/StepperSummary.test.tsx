@@ -29,7 +29,9 @@ describe(StepperSummary.name, () => {
   it('describes progress on the bar', () => {
     const { container } = render(<StepperSummary label="Create pipeline" steps={STEPS} bar />);
 
-    const bar = screen.getByRole('progressbar', { name: 'Create pipeline progress' });
+    const bar = screen.getByRole('progressbar', {
+      name: 'Create pipeline progress',
+    });
     expect(bar).toHaveAttribute('aria-valuenow', '2');
     expect(bar).toHaveAttribute('aria-valuemax', '4');
     expect(bar).toHaveAttribute('aria-valuetext', 'Step 2 of 4: Schedule');

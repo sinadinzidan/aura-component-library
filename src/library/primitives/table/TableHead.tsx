@@ -26,8 +26,16 @@ export type TableHeadProps = {
   children: ReactNode;
 };
 
-const ARIA_SORT = { asc: 'ascending', desc: 'descending', none: 'none' } as const;
-const SORT_ICON = { asc: IconArrowUp, desc: IconArrowDown, none: IconSelector } as const;
+const ARIA_SORT = {
+  asc: 'ascending',
+  desc: 'descending',
+  none: 'none',
+} as const;
+const SORT_ICON = {
+  asc: IconArrowUp,
+  desc: IconArrowDown,
+  none: IconSelector,
+} as const;
 
 /**
  * A column header. With `sortDirection` and `onSort` it becomes a button that announces the

@@ -6,7 +6,7 @@ import type { SceneTone } from '../scenePalette';
 
 /**
  * What a 3D scene shows at one moment of a replay. Everything here is a pure function of the
- * playhead: scrub back and the plant goes back with it. A scene is scripted as step tracks —
+ * playhead: scrub back and the plant goes back with it. A scene is scripted as step tracks \u2014
  * lists of keyframes, each holding from its time until the next.
  */
 export type Keyframe<T> = { t: number; value: T };

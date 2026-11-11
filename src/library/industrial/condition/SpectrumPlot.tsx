@@ -51,8 +51,11 @@ export type SpectrumPlotProps = {
 
 const LABEL = 'absolute -translate-x-1/2 whitespace-nowrap rounded-xs bg-base-background px-0.5 text-xs leading-none tabular-nums';
 
-function maskPoints(mask: readonly MaskSegment[], scale: PlotScale): string {
-  return mask.map((segment) => `${scale.x(segment.fromHz)},${scale.y(segment.limit)} ${scale.x(segment.toHz)},${scale.y(segment.limit)}`).join(' ');
+function maskPoints(mask: readonly MaskSegment[], scale: PlotScale, lastHz: number): string {
+  return mask
+    .filter((segment) => segment.fromHz < lastHz)
+    .map((segment) => `${scale.x(segment.fromHz)},${scale.y(segment.limit)} ${scale.x(Math.min(segment.toHz, lastHz))},${scale.y(segment.limit)}`)
+    .join(' ');
 }
 
 /**
@@ -106,7 +109,7 @@ export function SpectrumPlot({
         interactive={interactive}
         bare={bare}
         x={{ domain: [0, lastHz], title: runningHz ? undefined : 'Frequency, Hz', format: (value) => formatValue(value, 0) }}
-        y={{ domain: [0, top], title: `Amplitude, ${unit}`, format: (value) => formatValue(value, top < 1 ? 2 : top < 10 ? 1 : 0) }}
+        y={{ domain: [0, top], title: `Amplitude, ${unit}`, format: (value) => formatValue(value, Number.isInteger(value) ? 0 : top < 1 ? 2 : 1) }}
         heightClassName={heightClassName}
         gutterClassName={gutterClassName}
         overlay={(scale) => (
@@ -145,7 +148,7 @@ export function SpectrumPlot({
             ) : null}
             {fill ? <polygon data-slot="spectrum-area" points={areaPoints(xs, ys, scale, 0)} className="fill-chart-1-100" /> : null}
             <polyline data-slot="spectrum-line" points={polylinePoints(xs, ys, scale)} strokeWidth={1.5} strokeLinejoin="round" vectorEffect="non-scaling-stroke" className="stroke-chart-1-450" />
-            {mask ? <polyline data-slot="spectrum-mask" points={maskPoints(mask, scale)} strokeWidth={1.25} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" className="stroke-chart-warning-450" /> : null}
+            {mask ? <polyline data-slot="spectrum-mask" points={maskPoints(mask, scale, lastHz)} strokeWidth={1.25} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" className="stroke-chart-warning-450" /> : null}
             {over.map((line) => (
               <line key={line.frequencyHz} data-slot="spectrum-exceedance" x1={scale.x(line.frequencyHz)} x2={scale.x(line.frequencyHz)} y1={scale.y(Math.min(line.amplitude, top))} y2={scale.y(maskLimitAt(mask ?? [], line.frequencyHz) ?? 0)} strokeWidth={2.5} vectorEffect="non-scaling-stroke" className="stroke-chart-critical-450" />
             ))}

@@ -69,8 +69,8 @@ describe(DashboardEditor.name, () => {
   it('moves a widget with the keyboard and undoes it with Ctrl+Z', () => {
     setup();
 
-    fireEvent.keyDown(tile('Availability'), { key: 'ArrowDown' });
-    expect(tile('Availability')).toHaveAccessibleName('Availability widget, column 1, row 2, 4 wide by 2 tall');
+    fireEvent.keyDown(tile('Availability'), { key: 'ArrowRight' });
+    expect(tile('Availability')).toHaveAccessibleName('Availability widget, column 2, row 1, 4 wide by 2 tall');
 
     fireEvent.keyDown(tile('Availability'), { key: 'z', ctrlKey: true });
     expect(tile('Availability')).toHaveAccessibleName('Availability widget, column 1, row 1, 4 wide by 2 tall');

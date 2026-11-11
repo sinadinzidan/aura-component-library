@@ -12,11 +12,6 @@ export type ContainmentTankProps = EquipmentProps & {
   fill?: number;
 };
 
-/** Bounding size (x, y, z) of a tank, for framing a camera on it. */
-export function containmentTankSize(diameter = 34, height = 22): readonly [number, number, number] {
-  return [diameter + 3, height + diameter * 0.18 + 2.5, diameter + 3];
-}
-
 /**
  * A full-containment LNG storage tank: an opaque concrete outer wall under a shallow dome, with
  * the pump platform and rundown lines on the roof — everything enters and leaves over the top.

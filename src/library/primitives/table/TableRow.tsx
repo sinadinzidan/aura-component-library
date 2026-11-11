@@ -42,7 +42,10 @@ export function TableRow({ selected, current = false, interactive = false, disab
       className={cn(
         'group/row transition-colors',
         highlighted ? 'bg-secondary-background' : TABLE_SURFACE[surface].row,
-        inBody && !disabled && (hover || interactive) && (highlighted ? 'hover:bg-secondary-background-hover' : TABLE_SURFACE[surface].hover),
+        inBody &&
+          !disabled &&
+          (hover || interactive) &&
+          (highlighted ? 'hover:bg-secondary-background-hover' : TABLE_SURFACE[surface].hover),
         interactive && !disabled && 'relative cursor-pointer',
         disabled && 'text-base-foreground-disabled',
         section === 'foot' && 'font-medium text-base-foreground',

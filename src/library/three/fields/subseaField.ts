@@ -122,9 +122,9 @@ export function systemOf(layout: SubseaFieldLayout, id: string): SubseaSystem | 
 }
 
 const LEVEL_VIEW: Record<DepthLevel, { direction: Vec3; distance: number }> = {
-  surface: { direction: [-0.55, 0.42, 0.72], distance: 1.9 },
+  surface: { direction: [-0.35, 0.42, 0.85], distance: 2.7 },
   'water-column': { direction: [-0.18, 0.1, 1], distance: 2.9 },
-  seabed: { direction: [0.3, 0.46, 0.84], distance: 2.1 },
+  seabed: { direction: [0.3, 0.3, 0.9], distance: 1.35 },
 };
 
 /**
@@ -136,7 +136,7 @@ export function depthLevelTarget(layout: SubseaFieldLayout, level: DepthLevel): 
   const depth = layout.waterDepth;
   const lookAt: Vec3 =
     level === 'surface'
-      ? [layout.vessel.position[0], depth, layout.vessel.position[2]]
+      ? [layout.vessel.position[0] * 0.6 + layout.fieldCenter[0] * 0.4, depth * 0.8, layout.vessel.position[2] * 0.6 + layout.fieldCenter[1] * 0.4]
       : level === 'water-column'
         ? [(layout.vessel.position[0] + layout.fieldCenter[0]) / 2, depth * 0.48, (layout.vessel.position[2] + layout.fieldCenter[1]) / 2]
         : [layout.fieldCenter[0], depth * 0.04, layout.fieldCenter[1]];

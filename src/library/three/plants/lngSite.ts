@@ -1,11 +1,6 @@
 import type { Vec3 } from '../cameraTargets';
 
-import { airCoolerBankSize } from './AirCoolerBank';
-import { containmentTankSize } from './ContainmentTank';
-import { CRYOGENIC_EXCHANGER_SIZE } from './CryogenicExchanger';
-import { lngCarrierSize } from './LngCarrier';
-import { loadingArmsSize } from './LoadingArms';
-import { slugCatcherSize } from './SlugCatcher';
+import { CRYOGENIC_EXCHANGER_SIZE, airCoolerBankSize, containmentTankSize, lngCarrierSize, loadingArmsSize, slugCatcherSize } from './plantSizes';
 
 /** The models an LNG site can place. Each maps to one component, see `LngSite`. */
 export type LngUnitKind =

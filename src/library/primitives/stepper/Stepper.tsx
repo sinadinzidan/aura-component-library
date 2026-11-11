@@ -1,4 +1,4 @@
-import { Children, isValidElement, useMemo } from 'react';
+import { Children, isValidElement, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { cn } from '../../../lib/utils';
@@ -9,6 +9,9 @@ import type { StepperConnector, StepperLabelPlacement, StepperMarkers, StepperOr
 import { StepperSummary } from './StepperSummary';
 import { resolveStepState } from './stepState';
 import type { StepNavigation } from './stepState';
+
+/** Width of the container below which a collapsing stepper shows its one-line summary. */
+export const STEPPER_COLLAPSE_WIDTH = 448;
 
 export type StepperProps = {
   /** Accessible name: what the steps are for, such as "Create data set". */
@@ -57,9 +60,30 @@ export function Stepper({
   className,
   children,
 }: StepperProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!collapse || !element || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? STEPPER_COLLAPSE_WIDTH;
+      setNarrow(width < STEPPER_COLLAPSE_WIDTH);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [collapse]);
   const steps = Children.toArray(children).filter((child) => isValidElement<StepProps>(child));
   const context = useMemo(
-    () => ({ orientation, size, markers, connector, labelPlacement, current, navigation, onStepSelect }),
+    () => ({
+      orientation,
+      size,
+      markers,
+      connector,
+      labelPlacement,
+      current,
+      navigation,
+      onStepSelect,
+    }),
     [orientation, size, markers, connector, labelPlacement, current, navigation, onStepSelect]
   );
   const summarySteps = steps.map((step, index) => ({
@@ -79,7 +103,7 @@ export function Stepper({
       className={cn(
         'w-full min-w-0 list-none',
         orientation === 'vertical' ? 'flex-col' : labelPlacement === 'below' ? 'items-start' : 'items-center gap-3',
-        collapse ? 'hidden @md:flex' : 'flex',
+        'flex',
         !collapse && className
       )}
     >
@@ -96,9 +120,8 @@ export function Stepper({
   if (!collapse) return list;
 
   return (
-    <div data-slot="stepper-collapse" className={cn('@container w-full min-w-0', className)}>
-      {list}
-      <StepperSummary label={label} steps={summarySteps} bar className="@md:hidden" />
+    <div ref={wrapperRef} data-slot="stepper-collapse" data-narrow={narrow ? '' : undefined} className={cn('w-full min-w-0', className)}>
+      {narrow ? <StepperSummary label={label} steps={summarySteps} bar /> : list}
     </div>
   );
 }

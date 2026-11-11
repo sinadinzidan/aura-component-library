@@ -18,7 +18,11 @@ const connector = (container: HTMLElement) => container.querySelector('[data-slo
 
 describe(TimelineItem.name, () => {
   it('shows title, time, duration and description', () => {
-    renderItem({ time: '13:46', duration: '12 min', description: 'Recompressor tripped on high vibration' });
+    renderItem({
+      time: '13:46',
+      duration: '12 min',
+      description: 'Recompressor tripped on high vibration',
+    });
 
     expect(screen.getByText('Alarm raised')).toBeInTheDocument();
     expect(screen.getByText('13:46 · 12 min')).toBeInTheDocument();
@@ -40,7 +44,10 @@ describe(TimelineItem.name, () => {
   });
 
   it('puts an icon in a tile', () => {
-    const { container } = renderItem({ icon: <svg data-testid="bell" />, tone: 'warning' });
+    const { container } = renderItem({
+      icon: <svg data-testid="bell" />,
+      tone: 'warning',
+    });
 
     expect(marker(container)).toHaveAttribute('data-marker', 'icon');
     expect(marker(container)).toHaveClass('bg-warning-background');
@@ -48,7 +55,9 @@ describe(TimelineItem.name, () => {
   });
 
   it('uses an avatar as the marker', () => {
-    const { container } = renderItem({ avatar: <span aria-label="Ingrid Haugen">IH</span> });
+    const { container } = renderItem({
+      avatar: <span aria-label="Ingrid Haugen">IH</span>,
+    });
 
     expect(marker(container)).toHaveAttribute('data-marker', 'avatar');
     expect(screen.getByLabelText('Ingrid Haugen')).toBeInTheDocument();
@@ -85,7 +94,10 @@ describe(TimelineItem.name, () => {
   });
 
   it('renders rich content and trailing meta', () => {
-    renderItem({ meta: <span>P1</span>, children: <p>Work order WO-104482 created</p> });
+    renderItem({
+      meta: <span>P1</span>,
+      children: <p>Work order WO-104482 created</p>,
+    });
 
     expect(screen.getByText('P1')).toBeInTheDocument();
     expect(screen.getByText('Work order WO-104482 created')).toBeInTheDocument();

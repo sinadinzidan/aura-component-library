@@ -121,6 +121,7 @@ export function RichTextEditor({
   const [linkOpen, setLinkOpen] = useState(false);
   const [lookup, setLookup] = useState<{ key: string; index: number; dismissed: boolean }>({ key: '', index: 0, dismissed: false });
   const [announcement, setAnnouncement] = useState('');
+  const pendingSelection = useRef<TextState | null>(null);
 
   const present = state.history.present;
   const disabled = disabledReason !== undefined;
@@ -131,16 +132,20 @@ export function RichTextEditor({
   const empty = present.value.trim() === '';
 
   // Programmatic changes (commands, undo, picks) move the caret; typing leaves it to the browser.
+  // The target is kept in a ref because the browser reports the old caret in a select event
+  // between the new text and this effect, which would otherwise overwrite it.
   useLayoutEffect(() => {
     const field = fieldRef.current;
-    if (!field || state.revision === 0) return;
+    const target = pendingSelection.current;
+    pendingSelection.current = null;
+    if (!field || state.revision === 0 || !target) return;
     field.focus();
-    field.setSelectionRange(present.selectionStart, present.selectionEnd);
-    // Only a new revision should move the caret, not every keystroke.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    field.setSelectionRange(target.selectionStart, target.selectionEnd);
+    dispatch({ type: 'select', selectionStart: target.selectionStart, selectionEnd: target.selectionEnd });
   }, [state.revision]);
 
   const apply = (next: TextState, spoken?: string) => {
+    pendingSelection.current = next;
     dispatch({ type: 'apply', state: next });
     onChange?.(next.value);
     if (spoken) setAnnouncement(spoken);
@@ -157,6 +162,7 @@ export function RichTextEditor({
     const possible = direction === 'undo' ? canUndo(state.history) : canRedo(state.history);
     if (!possible) return;
     const target = direction === 'undo' ? state.history.past[state.history.past.length - 1] : state.history.future[0];
+    pendingSelection.current = target;
     dispatch({ type: direction });
     onChange?.(target.value);
     setAnnouncement(direction === 'undo' ? 'Undone' : 'Redone');
@@ -342,6 +348,7 @@ export function RichTextEditor({
                 }}
                 onSelect={(event) => {
                   const field = event.currentTarget;
+                  if (pendingSelection.current) return;
                   dispatch({ type: 'select', selectionStart: field.selectionStart, selectionEnd: field.selectionEnd });
                 }}
                 onKeyDown={onKeyDown}
@@ -383,7 +390,7 @@ export function RichTextEditor({
             {message ? <IconAlertTriangle className="size-3.5 shrink-0" aria-hidden="true" /> : null}
             {disabled || (readOnly && readOnlyReason) ? <IconLock className="size-3.5 shrink-0" aria-hidden="true" /> : null}
             <span className="min-w-0">
-              {message ?? disabledReason ?? (readOnly ? (readOnlyReason ?? 'Read only') : people || tags ? 'Markdown · @ to mention · # for an asset tag' : 'Markdown')}
+              {message ?? disabledReason ?? (readOnly ? (readOnlyReason ?? 'Read only') : people || tags ? 'Markdown · @ person · # tag' : 'Markdown')}
             </span>
           </span>
           <LengthCounter text={present.value} soft={softLimit} max={maxLength} words={words} />

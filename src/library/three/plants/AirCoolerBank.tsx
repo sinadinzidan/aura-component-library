@@ -13,11 +13,6 @@ export type AirCoolerBankProps = EquipmentProps & {
   height?: number;
 };
 
-/** Bounding size (x, y, z) of a bank for a number of bays, for framing a camera on it. */
-export function airCoolerBankSize(bays = 8, bayLength = 6, width = 9, height = 8): readonly [number, number, number] {
-  return [bays * bayLength, height + 1.4, width];
-}
-
 /**
  * A long row of fin-fan air coolers on top of a pipe rack: the refrigerant condensers of an LNG
  * train. One continuous deck of tube bundles with two fan rings under each bay and the rack's

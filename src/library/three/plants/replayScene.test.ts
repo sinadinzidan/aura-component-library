@@ -116,7 +116,7 @@ describe(tagReadingAt.name, () => {
     const reading = tagReadingAt(vibration, 5);
 
     expect(reading.value).toBe(6);
-    expect(reading.text).toBe('6.0 mm/s');
+    expect(reading.text).toBe('6.0\u00a0mm/s');
     expect(reading.tone).toBe('neutral');
   });
 
@@ -129,7 +129,7 @@ describe(tagReadingAt.name, () => {
     const reading = tagReadingAt(vibration, -1);
 
     expect(reading.value).toBeNull();
-    expect(reading.text).toBe('—');
+    expect(reading.text).toBe('\u2014');
     expect(reading.tone).toBe('neutral');
   });
 });

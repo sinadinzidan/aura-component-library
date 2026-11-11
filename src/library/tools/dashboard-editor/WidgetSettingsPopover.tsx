@@ -61,9 +61,9 @@ export function WidgetSettingsPopover({ value, sizes, ranges, onApply, defaultOp
       }}
     >
       <Tooltip>
-        <TooltipTrigger
+        <PopoverTrigger
           render={
-            <PopoverTrigger
+            <TooltipTrigger
               render={
                 <Button variant="ghost" size="icon-sm" aria-label={`Edit settings for ${value.title}`}>
                   <IconSettings />

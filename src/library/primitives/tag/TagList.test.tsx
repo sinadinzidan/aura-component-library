@@ -38,7 +38,10 @@ describe(TagList.name, () => {
   it('accepts items with their own id and colour', () => {
     render(<TagList label="Disciplines" tags={[{ id: 'mech', label: 'Mechanical', colorKey: 'mech' }]} />);
 
-    expect(screen.getByText('Mechanical').closest('[data-slot="tag"]')).toHaveAttribute('data-variant', expect.stringMatching(/^decorative-/));
+    expect(screen.getByText('Mechanical').closest('[data-slot="tag"]')).toHaveAttribute(
+      'data-variant',
+      expect.stringMatching(/^decorative-/)
+    );
   });
 
   it('reports the id of a removed tag', async () => {

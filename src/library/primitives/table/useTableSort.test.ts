@@ -21,7 +21,11 @@ describe(useTableSort.name, () => {
 
   it('applies the default sort', () => {
     const { result } = renderHook(() =>
-      useTableSort({ rows: ROWS, accessors: ACCESSORS, defaultSort: { columnId: 'hours', direction: 'desc' } })
+      useTableSort({
+        rows: ROWS,
+        accessors: ACCESSORS,
+        defaultSort: { columnId: 'hours', direction: 'desc' },
+      })
     );
 
     expect(result.current.rows.map((row) => row.hours)).toEqual([8, 4, 2]);

@@ -8,7 +8,12 @@ import type { TagGroupProps } from './TagGroup';
 const OPTIONS = [
   { value: 'corrective', label: 'Corrective' },
   { value: 'preventive', label: 'Preventive' },
-  { value: 'inspection', label: 'Inspection', disabled: true, disabledReason: 'No inspections this week' },
+  {
+    value: 'inspection',
+    label: 'Inspection',
+    disabled: true,
+    disabledReason: 'No inspections this week',
+  },
   { value: 'modification', label: 'Modification' },
 ];
 

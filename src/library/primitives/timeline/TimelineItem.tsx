@@ -57,7 +57,11 @@ const TILE: Record<TimelineTone, string> = {
   critical: 'bg-critical-background text-critical-foreground',
 };
 
-const STATE_TEXT: Record<TimelineState, string | null> = { done: null, current: 'Current', pending: 'Not yet' };
+const STATE_TEXT: Record<TimelineState, string | null> = {
+  done: null,
+  current: 'Current',
+  pending: 'Not yet',
+};
 
 function shapeClass(shape: TimelineShape, tone: TimelineTone): string {
   switch (shape) {
@@ -112,7 +116,14 @@ function TimelineMarker({
     );
   }
   if (state === 'pending') {
-    return <span aria-hidden="true" data-slot="timeline-marker" data-marker="pending" className="size-2.5 rounded-full border-2 border-emphasized" />;
+    return (
+      <span
+        aria-hidden="true"
+        data-slot="timeline-marker"
+        data-marker="pending"
+        className="size-2.5 rounded-full border-2 border-emphasized"
+      />
+    );
   }
   if (state === 'current' && tone === 'neutral') {
     return (
@@ -154,7 +165,11 @@ export function TimelineItem({
   const line = connector ?? (pending ? 'dashed' : 'solid');
   const stateText = STATE_TEXT[state];
   const marker = <TimelineMarker icon={icon} avatar={avatar} shape={shape} tone={tone} state={state} />;
-  const titleClass = cn('text-sm', row.leading, pending ? 'text-muted-foreground' : state === 'current' ? 'font-medium text-base-foreground' : 'text-base-foreground');
+  const titleClass = cn(
+    'text-sm',
+    row.leading,
+    pending ? 'text-muted-foreground' : state === 'current' ? 'font-medium text-base-foreground' : 'text-base-foreground'
+  );
   const titleNode = (
     <span data-slot="timeline-title" className={cn('min-w-0', titleClass)}>
       {title}
@@ -222,7 +237,13 @@ export function TimelineItem({
   if (layout === 'alternate') {
     return (
       <li {...itemProps} className="group/tl-item grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-x-3">
-        <div className={cn('flex min-w-0 flex-col group-odd/tl-item:items-end group-odd/tl-item:text-right group-even/tl-item:order-3', row.gap, 'group-last/tl-item:pb-0')}>
+        <div
+          className={cn(
+            'flex min-w-0 flex-col group-odd/tl-item:items-end group-odd/tl-item:text-right group-even/tl-item:order-3',
+            row.gap,
+            'group-last/tl-item:pb-0'
+          )}
+        >
           {titleNode}
           {descriptionNode}
           {children ? <div className="w-full min-w-0 pt-2 text-left">{children}</div> : null}
@@ -236,7 +257,10 @@ export function TimelineItem({
   return (
     <li {...itemProps} className="group/tl-item flex min-w-0 gap-3">
       {layout === 'time-start' ? (
-        <div data-slot="timeline-time-column" className={cn('flex flex-col text-xs text-muted-foreground tabular-nums', TIMELINE_TIME_COLUMN)}>
+        <div
+          data-slot="timeline-time-column"
+          className={cn('flex flex-col text-xs text-muted-foreground tabular-nums', TIMELINE_TIME_COLUMN)}
+        >
           <span data-slot="timeline-time" className={row.leading}>
             {time}
           </span>

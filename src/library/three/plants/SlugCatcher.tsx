@@ -14,11 +14,6 @@ export type SlugCatcherProps = EquipmentProps & {
   diameter?: number;
 };
 
-/** Bounding size (x, y, z) for a number of fingers, for framing a camera on it. */
-export function slugCatcherSize(fingers = 6, length = 36, pitch = 2.4): readonly [number, number, number] {
-  return [length + 4, 5.4, (fingers - 1) * pitch + 3];
-}
-
 /**
  * A finger-type slug catcher: parallel large-bore pipes that slope gently away from the inlet so
  * liquid slugs from the pipeline settle out, with a gas header across the top of the inlet end and

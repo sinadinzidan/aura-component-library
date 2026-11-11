@@ -31,4 +31,7 @@ export const StepperContext = createContext<StepperContextValue>({
 });
 
 /** Where a `Step` sits among its siblings. Set by `Stepper`. */
-export const StepPositionContext = createContext<{ index: number; count: number }>({ index: 0, count: 1 });
+export const StepPositionContext = createContext<{
+  index: number;
+  count: number;
+}>({ index: 0, count: 1 });

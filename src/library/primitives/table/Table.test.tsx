@@ -21,7 +21,10 @@ const ORDERS: readonly Order[] = [
   { id: 'WO-104479', hours: 3 },
   { id: 'WO-104471', hours: 16 },
 ];
-const ACCESSORS = { id: (order: Order) => order.id, hours: (order: Order) => order.hours };
+const ACCESSORS = {
+  id: (order: Order) => order.id,
+  hours: (order: Order) => order.hours,
+};
 const IDS = ORDERS.map((order) => order.id);
 
 describe(Table.name, () => {
@@ -48,7 +51,9 @@ describe(Table.name, () => {
       </Table>
     );
 
-    const region = screen.getByRole('region', { name: 'Work orders, scrollable' });
+    const region = screen.getByRole('region', {
+      name: 'Work orders, scrollable',
+    });
     expect(region).toHaveAttribute('tabindex', '0');
   });
 

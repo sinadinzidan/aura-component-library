@@ -72,9 +72,9 @@ export function LinkPopover({ label = 'Insert link', shortcut, disabled = false,
   return (
     <Popover open={isOpen} onOpenChange={changeOpen}>
       <Tooltip>
-        <TooltipTrigger
+        <PopoverTrigger
           render={
-            <PopoverTrigger
+            <TooltipTrigger
               render={
                 <Button type="button" variant={isOpen ? 'secondary' : 'ghost'} size="icon-sm" aria-label={label} disabled={disabled} tabIndex={tabIndex} data-tool="">
                   <IconLink />

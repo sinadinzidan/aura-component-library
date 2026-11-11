@@ -15,8 +15,8 @@ function setup(props: Partial<Parameters<typeof DashboardCanvas>[0]> = {}) {
   const view = render(
     <DashboardCanvas label="Compression dashboard" widgets={WIDGETS} editing onAction={onAction} renderWidget={(entry) => <p>{entry.title} body</p>} {...props} />,
   );
-  const grid = screen.getByRole('group', { name: 'Compression dashboard' });
-  vi.spyOn(grid, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, GRID_WIDTH, 600));
+  const grid = screen.queryByRole('group', { name: 'Compression dashboard' });
+  if (grid) vi.spyOn(grid, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, GRID_WIDTH, 600));
   return { onAction, grid, ...view };
 }
 

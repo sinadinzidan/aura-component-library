@@ -23,7 +23,11 @@ export function TableSectionRow({ colSpan, children, count }: TableSectionRowPro
       <th
         scope="colgroup"
         colSpan={colSpan}
-        className={cn('border-b border-default text-left text-xs font-medium text-medium-foreground', TABLE_CELL_DENSITY[density], 'h-7 py-1')}
+        className={cn(
+          'border-b border-default text-left text-xs font-medium text-medium-foreground',
+          TABLE_CELL_DENSITY[density],
+          'h-7 py-1'
+        )}
       >
         {children}
         {count !== undefined ? <span className="pl-2 font-normal text-muted-foreground tabular-nums">{count}</span> : null}

@@ -225,10 +225,11 @@ export function DashboardCanvas({
                 transform: follow && snapped ? `translate(${follow.dx - snapped.x}px, ${follow.dy - snapped.y}px)` : undefined,
               }}
               onFocus={(event) => {
-                if (editing && event.target === event.currentTarget && !selected) onAction({ type: 'select', id: widget.id });
+                if (editing && !pointer.current && event.target === event.currentTarget && !selected) onAction({ type: 'select', id: widget.id });
               }}
               onPointerDown={(event) => {
-                if (event.target instanceof Element && event.target.closest('[data-no-drag]')) return;
+                // Popovers render in a portal but their events still bubble through React.
+                if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target) || event.target.closest('[data-no-drag]')) return;
                 beginPointer(widget, 'move', 'both', event);
               }}
               onPointerMove={onPointerMove}

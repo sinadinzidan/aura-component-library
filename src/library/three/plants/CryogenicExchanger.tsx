@@ -12,9 +12,6 @@ export type CryogenicExchangerProps = EquipmentProps & {
   levels?: number;
 };
 
-/** Bounding size (x, y, z) at the default dimensions, for framing a camera on it. */
-export const CRYOGENIC_EXCHANGER_SIZE = [9, 46, 9] as const;
-
 /**
  * The main cryogenic heat exchanger of an LNG train: a tall insulated spiral-wound tower with a
  * wide warm bundle below a narrower cold bundle, standing inside an open steel structure with

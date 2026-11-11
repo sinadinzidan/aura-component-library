@@ -103,12 +103,12 @@ describe(temperatureGradient.name, () => {
 
 describe(formatTemperature.name, () => {
   it('uses a real minus sign and a non-breaking space', () => {
-    expect(formatTemperature(-162)).toBe('−162 °C');
-    expect(formatTemperature(28)).toBe('28 °C');
+    expect(formatTemperature(-162)).toBe('\u2212162\u00a0°C');
+    expect(formatTemperature(28)).toBe('28\u00a0°C');
   });
 
   it('rounds to the given decimals and never prints minus zero', () => {
-    expect(formatTemperature(-161.46, 1)).toBe('−161.5 °C');
-    expect(formatTemperature(-0.2)).toBe('0 °C');
+    expect(formatTemperature(-161.46, 1)).toBe('\u2212161.5\u00a0°C');
+    expect(formatTemperature(-0.2)).toBe('0\u00a0°C');
   });
 });

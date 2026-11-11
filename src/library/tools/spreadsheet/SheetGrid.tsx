@@ -568,7 +568,7 @@ export function SheetGrid(props: SheetGridProps) {
                               'relative scroll-mb-2 scroll-mr-2 scroll-mt-10 whitespace-nowrap border-b border-r border-default outline-none',
                               cellPad,
                               frozen ? 'sticky left-10 z-10 scroll-ml-10' : 'scroll-ml-44',
-                              selected && multiple && !isActive ? 'bg-accent-background' : locked && !state.readOnly ? 'bg-muted-background' : 'bg-base-background',
+                              selected && multiple && !isActive ? 'bg-active-muted-background' : locked && !state.readOnly ? 'bg-muted-background' : 'bg-base-background',
                               locked && !state.readOnly ? 'text-medium-foreground' : 'text-base-foreground',
                               numeric ? 'text-right tabular-nums' : 'text-left',
                               column.mono ? 'font-mono' : ''
@@ -634,9 +634,9 @@ export function SheetGrid(props: SheetGridProps) {
                                 />
                               )
                             ) : null}
-                            {selected ? <span aria-hidden="true" data-slot="sheet-selection" className={cn('pointer-events-none absolute -inset-px border-ring-default', multiple ? edges : 'border-2')} /> : null}
-                            {isActive && multiple ? <span aria-hidden="true" className="pointer-events-none absolute inset-0 border border-ring-default" /> : null}
-                            {inFill ? <span aria-hidden="true" data-slot="sheet-fill-preview" className="pointer-events-none absolute -inset-px border border-dashed border-ring-default" /> : null}
+                            {selected ? <span aria-hidden="true" data-slot="sheet-selection" className={cn('pointer-events-none absolute inset-0 z-10 border-primary-background', multiple ? edges : 'border-2')} /> : null}
+                            {isActive && multiple ? <span aria-hidden="true" className="pointer-events-none absolute inset-0 z-10 border border-primary-background" /> : null}
+                            {inFill ? <span aria-hidden="true" data-slot="sheet-fill-preview" className="pointer-events-none absolute inset-0 border border-dashed border-primary-background" /> : null}
                             {handle ? <span aria-hidden="true" data-sheet-fill="" className="absolute bottom-0 right-0 size-2 cursor-crosshair bg-primary-background" /> : null}
                           </td>
                         );

@@ -16,11 +16,6 @@ export type LoadingArmsProps = EquipmentProps & {
   reach?: number;
 };
 
-/** Bounding size (x, y, z) of the berth head with its arms, for framing a camera on it. */
-export function loadingArmsSize(arms = 4, spacing = 3.4, deck = 4): readonly [number, number, number] {
-  return [16, deck + 13, (arms - 1) * spacing + 6];
-}
-
 /**
  * A berth head with marine loading arms: articulated pipes on risers that reach out over the
  * water to a ship's manifold. Connected arms are extended towards +x; parked arms stand folded

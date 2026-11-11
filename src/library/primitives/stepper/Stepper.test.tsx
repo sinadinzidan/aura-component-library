@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 
@@ -104,11 +104,34 @@ describe(Stepper.name, () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuetext', 'Step 2 of 4: Schedule');
   });
 
-  it('renders both the row and the summary when it can collapse', () => {
+  it('shows the full row when the container is wide enough', () => {
     const { container } = renderStepper({ collapse: true });
 
-    expect(container.querySelector('[data-slot="stepper"]')).toHaveClass('hidden');
+    expect(container.querySelector('[data-slot="stepper"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-slot="stepper-summary"]')).not.toBeInTheDocument();
+  });
+
+  it('switches to the summary when the container is narrow', () => {
+    const observe = vi.fn();
+    let notify: ResizeObserverCallback = () => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          notify = callback;
+        }
+        observe = observe;
+        disconnect = () => {};
+        unobserve = () => {};
+      }
+    );
+    const { container } = renderStepper({ collapse: true });
+
+    act(() => notify([{ contentRect: { width: 300 } } as Partial<ResizeObserverEntry> as ResizeObserverEntry], {} as ResizeObserver));
+
     expect(container.querySelector('[data-slot="stepper-summary"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-slot="stepper"]')).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it('exposes the orientation', () => {

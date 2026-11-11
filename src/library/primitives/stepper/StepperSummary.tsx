@@ -51,7 +51,9 @@ export function StepperSummary({ label, steps, bar = false, className }: Stepper
               <span aria-current="step" className={cn('font-medium', current.state === 'error' && 'text-critical-foreground-strong')}>
                 {current.label}
               </span>
-              {attention ? <span className="pl-1.5 text-xs text-muted-foreground">({STEP_STATE_LABEL[current.state].toLowerCase()})</span> : null}
+              {attention ? (
+                <span className="pl-1.5 text-xs text-muted-foreground">({STEP_STATE_LABEL[current.state].toLowerCase()})</span>
+              ) : null}
             </>
           ) : null}
         </p>
@@ -72,7 +74,11 @@ export function StepperSummary({ label, steps, bar = false, className }: Stepper
               key={index}
               data-slot="stepper-segment"
               data-state={step.state}
-              className={cn('h-1 flex-1 rounded-full', SEGMENT[step.state], index === currentIndex && step.state === 'current' && 'opacity-60')}
+              className={cn(
+                'h-1 flex-1 rounded-full',
+                SEGMENT[step.state],
+                index === currentIndex && step.state === 'current' && 'opacity-60'
+              )}
             />
           ))}
         </div>

@@ -56,7 +56,11 @@ export function TagInput({
 
   const helper =
     error ??
-    (maxTags === undefined ? null : full ? `${tags.length} of ${maxTags} tags. Remove one to add another.` : `${tags.length} of ${maxTags} tags`);
+    (maxTags === undefined
+      ? null
+      : full
+        ? `${tags.length} of ${maxTags} tags. Remove one to add another.`
+        : `${tags.length} of ${maxTags} tags`);
 
   return (
     <div className="flex w-full min-w-0 flex-col" data-slot="tag-input">
@@ -129,7 +133,10 @@ export function TagInput({
       <p
         id={helperId}
         role={error !== null ? 'alert' : undefined}
-        className={cn('pt-1.5 text-xs tabular-nums empty:hidden', error !== null ? 'text-critical-foreground-strong' : 'text-muted-foreground')}
+        className={cn(
+          'pt-1.5 text-xs tabular-nums empty:hidden',
+          error !== null ? 'text-critical-foreground-strong' : 'text-muted-foreground'
+        )}
       >
         {helper}
       </p>

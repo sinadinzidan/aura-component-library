@@ -19,7 +19,10 @@ export const TAG_VARIANT: Record<TagVariant, { rest: string; hover: string }> = 
     rest: 'border-transparent bg-secondary-background text-secondary-foreground',
     hover: 'hover:bg-secondary-background-hover',
   },
-  outline: { rest: 'border-default bg-transparent text-medium-foreground', hover: 'hover:bg-accent-background' },
+  outline: {
+    rest: 'border-default bg-transparent text-medium-foreground',
+    hover: 'hover:bg-accent-background',
+  },
   'decorative-1': {
     rest: 'border-transparent bg-decorative-1-background text-decorative-1-foreground',
     hover: 'hover:bg-decorative-1-background-hover',
@@ -61,9 +64,24 @@ export const TAG_STATUS: Record<TagStatus, string> = {
 
 /** Heights 20, 24 and 28 px: `sm` matches Badge, `lg` matches a small Button. */
 export const TAG_SIZE: Record<TagSize, { root: string; main: string; icon: string; remove: string }> = {
-  sm: { root: 'h-5 text-xs', main: 'gap-1 px-1', icon: '[&>svg]:size-3', remove: 'w-4' },
-  md: { root: 'h-6 text-sm', main: 'gap-1 px-1.5', icon: '[&>svg]:size-3.5', remove: 'w-5' },
-  lg: { root: 'h-7 text-sm', main: 'gap-1.5 px-2', icon: '[&>svg]:size-4', remove: 'w-6' },
+  sm: {
+    root: 'h-5 text-xs',
+    main: 'gap-1 px-1',
+    icon: '[&>svg]:size-3',
+    remove: 'w-4',
+  },
+  md: {
+    root: 'h-6 text-sm',
+    main: 'gap-1 px-1.5',
+    icon: '[&>svg]:size-3.5',
+    remove: 'w-5',
+  },
+  lg: {
+    root: 'h-7 text-sm',
+    main: 'gap-1.5 px-2',
+    icon: '[&>svg]:size-4',
+    remove: 'w-6',
+  },
 };
 
 /**

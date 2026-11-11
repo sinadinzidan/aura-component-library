@@ -9,13 +9,13 @@ import { IconArrowBackUp, IconLock, IconMapPinPlus, IconTrash } from '@cognite/a
 import { useEffect, useId, useMemo, useReducer, useRef, useState } from 'react';
 import type { KeyboardEvent, MouseEvent, PointerEvent } from 'react';
 
+import { cn } from '../../../lib/utils';
 import { polylinePath } from '../../industrial/diagrams/diagramGeometry';
 import { valvePositionStatus } from '../../industrial/diagrams/symbolState';
 import { formatReading, runStateStatus } from '../../industrial/status';
 import type { StatusDescriptor } from '../../industrial/status';
 import { ViewerToolbar } from '../../industrial/workflows/ViewerToolbar';
 import { SidePanel } from '../../patterns/structure/SidePanel';
-import { cn } from '../../../lib/utils';
 
 import { PidCanvas } from './PidCanvas';
 import { PidLayerToggles } from './PidLayerToggles';
@@ -405,11 +405,9 @@ export function PidViewer({
       <div className="flex min-h-0 flex-1">
         <div className="relative min-h-0 min-w-0 flex-1 bg-muted-background">
           {/* A canvas tool: pointer and key handlers live on the focusable group, with every action also on a button. */}
-          {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
           <div
             ref={canvasRef}
             role="group"
-            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
             tabIndex={0}
             aria-label={`${drawing.number}, ${drawing.title}. Arrow keys pan, plus and minus zoom, zero fits the drawing.`}
             data-slot="pid-viewport"

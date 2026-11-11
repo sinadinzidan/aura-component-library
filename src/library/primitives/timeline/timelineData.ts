@@ -16,7 +16,11 @@ export function groupTimelineItems<Item>(items: readonly Item[], keyOf: (item: I
   return groups;
 }
 
-export type TimelineSplit<Item> = { head: Item[]; middle: Item[]; tail: Item[] };
+export type TimelineSplit<Item> = {
+  head: Item[];
+  middle: Item[];
+  tail: Item[];
+};
 
 /**
  * Splits a long timeline into the first `head` items, the last `tail` items and the middle that

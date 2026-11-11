@@ -29,7 +29,10 @@ describe(useTableSelection.name, () => {
     act(() => result.current.headerProps.onCheckedChange(true));
 
     expect(result.current.allSelected).toBe(true);
-    expect(result.current.headerProps).toMatchObject({ checked: true, indeterminate: false });
+    expect(result.current.headerProps).toMatchObject({
+      checked: true,
+      indeterminate: false,
+    });
   });
 
   it('clears every row from the header', () => {
@@ -43,7 +46,10 @@ describe(useTableSelection.name, () => {
   it('reports the header as indeterminate when only some rows are selected', () => {
     const { result } = renderHook(() => useTableSelection(IDS, ['a']));
 
-    expect(result.current.headerProps).toMatchObject({ checked: false, indeterminate: true });
+    expect(result.current.headerProps).toMatchObject({
+      checked: false,
+      indeterminate: true,
+    });
   });
 
   it('ignores selected ids that are no longer in the list', () => {

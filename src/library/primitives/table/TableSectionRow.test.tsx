@@ -12,7 +12,9 @@ describe(TableSectionRow.name, () => {
       </table>
     );
 
-    const header = screen.getByRole('columnheader', { name: 'Gas compression' });
+    const header = screen.getByRole('columnheader', {
+      name: 'Gas compression',
+    });
     expect(header).toHaveAttribute('scope', 'colgroup');
     expect(header).toHaveAttribute('colspan', '4');
   });

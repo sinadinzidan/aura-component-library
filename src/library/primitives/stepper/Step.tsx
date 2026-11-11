@@ -62,16 +62,45 @@ const LABEL_TONE: Record<StepState, string> = {
   disabled: 'text-base-foreground-disabled',
 };
 
-const LINE_HEIGHT: Record<StepperSize, string> = { sm: 'leading-5', md: 'leading-6', lg: 'leading-7' };
+const LINE_HEIGHT: Record<StepperSize, string> = {
+  sm: 'leading-5',
+  md: 'leading-6',
+  lg: 'leading-7',
+};
 /** Connector offsets that follow the marker size: past the marker, and through its centre. */
-const VERTICAL_LINE: Record<StepperSize, string> = { sm: 'top-6 left-2.5', md: 'top-7 left-3', lg: 'top-8 left-3.5' };
-const HORIZONTAL_LINE: Record<StepperSize, string> = { sm: 'top-2.5 left-7', md: 'top-3 left-8', lg: 'top-3.5 left-9' };
+const VERTICAL_LINE: Record<StepperSize, string> = {
+  sm: 'top-6 left-2.5',
+  md: 'top-7 left-3',
+  lg: 'top-8 left-3.5',
+};
+const HORIZONTAL_LINE: Record<StepperSize, string> = {
+  sm: 'top-2.5 left-7',
+  md: 'top-3 left-8',
+  lg: 'top-3.5 left-9',
+};
 
-function StepMarker({ state, number, markers, size, icon }: { state: StepState; number: number; markers: StepperMarkers; size: StepperSize; icon: ReactNode }) {
+function StepMarker({
+  state,
+  number,
+  markers,
+  size,
+  icon,
+}: {
+  state: StepState;
+  number: number;
+  markers: StepperMarkers;
+  size: StepperSize;
+  icon: ReactNode;
+}) {
   const sizes = MARKER_SIZE[size];
   if (markers === 'dot') {
     return (
-      <span aria-hidden="true" data-slot="step-marker" data-state={state} className={cn('flex shrink-0 items-center justify-center', sizes.box)}>
+      <span
+        aria-hidden="true"
+        data-slot="step-marker"
+        data-state={state}
+        className={cn('flex shrink-0 items-center justify-center', sizes.box)}
+      >
         <span className={cn('flex items-center justify-center', DOT_TONE[state])}>
           {state === 'current' ? <span className="size-1.5 rounded-full bg-primary-background" /> : null}
         </span>
@@ -123,7 +152,10 @@ export function Step({ label, description, state: explicitState, optional = fals
   const last = index === count - 1;
   const navigable = onStepSelect !== undefined && canNavigateToStep(state, navigation);
   const isCurrent = state === 'current';
-  const lineTone = cn(isStepPassed(state) ? 'border-emphasized' : 'border-default', connector === 'dashed' && !isStepPassed(state) && 'border-dashed');
+  const lineTone = cn(
+    isStepPassed(state) ? 'border-emphasized' : 'border-default',
+    connector === 'dashed' && !isStepPassed(state) && 'border-dashed'
+  );
 
   const text = (
     <span className={cn('flex min-w-0 flex-col text-left', (vertical || below) && 'flex-1')}>
@@ -133,14 +165,20 @@ export function Step({ label, description, state: explicitState, optional = fals
         {optional ? <span className="font-normal text-muted-foreground"> (optional)</span> : null}
       </span>
       {description ? (
-        <span data-slot="step-description" className={cn('text-xs leading-4 text-muted-foreground', state === 'disabled' && 'text-base-foreground-disabled')}>
+        <span
+          data-slot="step-description"
+          className={cn('text-xs leading-4 text-muted-foreground', state === 'disabled' && 'text-base-foreground-disabled')}
+        >
           {description}
         </span>
       ) : null}
     </span>
   );
 
-  const bodyClass = cn('flex min-w-0 rounded-md', below ? 'flex-col gap-2' : cn('gap-2', vertical ? 'items-start gap-3' : description ? 'items-start' : 'items-center'));
+  const bodyClass = cn(
+    'flex min-w-0 rounded-md',
+    below ? 'flex-col gap-2' : cn('gap-2', vertical ? 'items-start gap-3' : description ? 'items-start' : 'items-center')
+  );
   const marker = <StepMarker state={state} number={index + 1} markers={markers} size={size} icon={icon} />;
 
   const body = navigable ? (
@@ -174,7 +212,11 @@ export function Step({ label, description, state: explicitState, optional = fals
         )}
         <div className="flex min-w-0 items-start gap-3">
           <div className="flex min-w-0 flex-1">{body}</div>
-          {meta ? <div className={cn('flex shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums', LINE_HEIGHT[size])}>{meta}</div> : null}
+          {meta ? (
+            <div className={cn('flex shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums', LINE_HEIGHT[size])}>
+              {meta}
+            </div>
+          ) : null}
         </div>
         {children ? <div className={cn('min-w-0 pt-3', size === 'sm' ? 'pl-8' : size === 'md' ? 'pl-9' : 'pl-10')}>{children}</div> : null}
       </li>
@@ -190,7 +232,11 @@ export function Step({ label, description, state: explicitState, optional = fals
         className={cn('relative flex min-w-0 flex-col pr-3', last ? 'flex-none pr-0' : 'flex-1')}
       >
         {last || connector === 'none' ? null : (
-          <span aria-hidden="true" data-slot="step-connector" className={cn('absolute right-2 border-t', HORIZONTAL_LINE[size], lineTone)} />
+          <span
+            aria-hidden="true"
+            data-slot="step-connector"
+            className={cn('absolute right-2 border-t', HORIZONTAL_LINE[size], lineTone)}
+          />
         )}
         {body}
       </li>
@@ -205,7 +251,9 @@ export function Step({ label, description, state: explicitState, optional = fals
       className={cn('flex min-w-0 items-center gap-3', !last && 'flex-auto')}
     >
       {body}
-      {last || connector === 'none' ? null : <span aria-hidden="true" data-slot="step-connector" className={cn('min-w-4 flex-1 border-t', lineTone)} />}
+      {last || connector === 'none' ? null : (
+        <span aria-hidden="true" data-slot="step-connector" className={cn('min-w-4 flex-1 border-t', lineTone)} />
+      )}
     </li>
   );
 }

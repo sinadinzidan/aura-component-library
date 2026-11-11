@@ -19,12 +19,18 @@ export function splitTagText(text: string): string[] {
 export function addTags(
   tags: readonly string[],
   incoming: readonly string[],
-  options: { maxTags?: number; validate?: (tag: string, tags: readonly string[]) => string | null } = {}
+  options: {
+    maxTags?: number;
+    validate?: (tag: string, tags: readonly string[]) => string | null;
+  } = {}
 ): { tags: string[]; error: string | null } {
   const next = [...tags];
   for (const tag of incoming) {
     if (options.maxTags !== undefined && next.length >= options.maxTags) {
-      return { tags: next, error: `Up to ${options.maxTags} tags. Remove one to add another.` };
+      return {
+        tags: next,
+        error: `Up to ${options.maxTags} tags. Remove one to add another.`,
+      };
     }
     if (next.some((current) => current.toLowerCase() === tag.toLowerCase())) {
       return { tags: next, error: `“${tag}” is already added.` };

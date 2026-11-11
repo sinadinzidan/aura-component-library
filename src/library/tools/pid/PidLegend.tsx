@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { cn } from '../../../lib/utils';
 import { SvgStatusMark } from '../../experiences/drilldown/SvgStatusMark';
 import { DiagramCanvas } from '../../industrial/diagrams/DiagramCanvas';
 import { EquipmentSymbol } from '../../industrial/diagrams/EquipmentSymbol';
@@ -7,7 +8,6 @@ import { InstrumentBubble } from '../../industrial/diagrams/InstrumentBubble';
 import { PipeLine } from '../../industrial/diagrams/PipeLine';
 import { ValueTag } from '../../industrial/diagrams/ValueTag';
 import { ValveSymbol } from '../../industrial/diagrams/ValveSymbol';
-import { cn } from '../../../lib/utils';
 
 export type PidLegendGroup = 'lines' | 'symbols' | 'states';
 

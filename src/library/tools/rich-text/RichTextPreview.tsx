@@ -79,7 +79,7 @@ export function RichTextPreview({ source, mentions, emptyText = 'Nothing to prev
       <li key={index} className={checks ? 'flex! flex-wrap items-start gap-x-2 pl-0!' : undefined}>
         {item.checked !== null && checks ? <CheckMark checked={item.checked} /> : null}
         <span className={checks ? 'min-w-0 flex-1' : undefined}>{inline(item.text)}</span>
-        {item.children.length > 0 ? <div className="w-full">{list(item.children, item.children[0].ordered)}</div> : null}
+        {item.children.length > 0 ? <div className="w-full pl-6">{list(item.children, item.children[0].ordered)}</div> : null}
       </li>
     ));
     if (checks) {

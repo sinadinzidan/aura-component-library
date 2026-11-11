@@ -14,7 +14,7 @@ export function AlertDialogFooter({ className, children, ...props }: AlertDialog
   const { error } = useAlertDialogContext();
 
   return (
-    <div data-slot="alert-dialog-footer" className="flex flex-col pt-3">
+    <div data-slot="alert-dialog-footer" className="flex flex-col gap-2 pt-3">
       {error ? (
         <HelperText isError role="alert">
           {error}

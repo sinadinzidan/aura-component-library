@@ -55,5 +55,10 @@ export function stepProgress(states: readonly StepState[]): StepProgress {
   const attention = states.findIndex((state) => state === 'error' || state === 'warning');
   const firstOpen = states.findIndex((state) => !isStepPassed(state));
   const currentIndex = current >= 0 ? current : attention >= 0 ? attention : firstOpen;
-  return { total, passed, currentIndex, percent: total === 0 ? 0 : Math.round((passed / total) * 100) };
+  return {
+    total,
+    passed,
+    currentIndex,
+    percent: total === 0 ? 0 : Math.round((passed / total) * 100),
+  };
 }

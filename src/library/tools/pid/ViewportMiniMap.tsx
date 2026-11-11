@@ -1,7 +1,7 @@
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 
-import type { PlanRect } from '../../experiences/drilldown/planLayout';
 import { cn } from '../../../lib/utils';
+import type { PlanRect } from '../../experiences/drilldown/planLayout';
 
 import { clipRect, overviewPoint } from './viewport';
 import type { ViewPoint } from './viewport';
@@ -70,7 +70,7 @@ export function ViewportMiniMap({ world, viewport, label, onRecentre, children, 
         className
       )}
     >
-      <svg viewBox={`${world.x} ${world.y} ${world.width} ${world.height}`} preserveAspectRatio="none" aria-hidden="true" className="pointer-events-none block w-full" style={{ aspectRatio: `${world.width} / ${world.height}` }}>
+      <svg viewBox={`${world.x} ${world.y} ${world.width} ${world.height}`} preserveAspectRatio="none" fill="none" aria-hidden="true" className="pointer-events-none block w-full" style={{ aspectRatio: `${world.width} / ${world.height}` }}>
         {children}
         <rect
           data-slot="viewport-mini-map-frame"

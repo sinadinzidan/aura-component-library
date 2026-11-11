@@ -69,8 +69,9 @@ export function Table({
           data-slot="table"
           data-density={density}
           aria-label={label}
+          style={{ borderSpacing: 0 }}
           className={cn(
-            'w-full border-separate border-spacing-0 text-sm leading-5 text-medium-foreground',
+            'w-full border-separate text-sm leading-5 text-medium-foreground',
             layout === 'fixed' && 'table-fixed',
             tableClassName
           )}

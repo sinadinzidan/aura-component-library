@@ -31,15 +31,26 @@ describe(splitTimelineMiddle.name, () => {
   const items = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
   it('keeps the head and the tail and folds the rest', () => {
-    expect(splitTimelineMiddle(items, 1, 1)).toEqual({ head: [1], middle: [2, 3, 4, 5, 6, 7, 8, 9], tail: [10] });
+    expect(splitTimelineMiddle(items, 1, 1)).toEqual({
+      head: [1],
+      middle: [2, 3, 4, 5, 6, 7, 8, 9],
+      tail: [10],
+    });
   });
 
   it('folds nothing when fewer than two items would be hidden', () => {
-    expect(splitTimelineMiddle([1, 2, 3, 4], 2, 1)).toEqual({ head: [1, 2, 3, 4], middle: [], tail: [] });
+    expect(splitTimelineMiddle([1, 2, 3, 4], 2, 1)).toEqual({
+      head: [1, 2, 3, 4],
+      middle: [],
+      tail: [],
+    });
   });
 
   it('can keep only the tail', () => {
-    expect(splitTimelineMiddle(items, 0, 2)).toMatchObject({ head: [], tail: [9, 10] });
+    expect(splitTimelineMiddle(items, 0, 2)).toMatchObject({
+      head: [],
+      tail: [9, 10],
+    });
   });
 
   it('treats negative counts as zero', () => {

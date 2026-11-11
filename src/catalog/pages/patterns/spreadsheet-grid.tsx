@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
 import { ShortcutHint } from '../../../library/actions/ShortcutHint';
+import type { SheetColumn } from '../../../library/tools/spreadsheet/columns';
 import { evaluateSheet } from '../../../library/tools/spreadsheet/formula';
 import { selectionStats } from '../../../library/tools/spreadsheet/selectionStats';
 import { SheetFormulaBar } from '../../../library/tools/spreadsheet/SheetFormulaBar';
 import { SheetGrid } from '../../../library/tools/spreadsheet/SheetGrid';
 import type { SheetClipboard } from '../../../library/tools/spreadsheet/SheetGrid';
-import type { SheetColumn } from '../../../library/tools/spreadsheet/columns';
 import { SheetStatusBar } from '../../../library/tools/spreadsheet/SheetStatusBar';
 import { SENSORS, findAsset } from '../../data/plant';
 import { definePage } from '../../types';

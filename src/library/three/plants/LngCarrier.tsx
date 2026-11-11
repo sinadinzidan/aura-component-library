@@ -13,11 +13,6 @@ export type LngCarrierProps = EquipmentProps & {
   freeboard?: number;
 };
 
-/** Bounding size (x, y, z) above the waterline, for framing a camera on it. */
-export function lngCarrierSize(length = 84, beam = 14, freeboard = 4): readonly [number, number, number] {
-  return [length, freeboard + beam * 0.9, beam];
-}
-
 /**
  * An LNG carrier of the spherical-tank type: a long hull with the domes of its cargo spheres
  * standing proud of the deck, accommodation and funnel aft. Place its origin on the waterline.

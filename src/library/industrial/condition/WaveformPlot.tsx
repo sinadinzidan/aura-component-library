@@ -39,7 +39,7 @@ export function WaveformPlot({ label, samples, sampleRateHz, unit, runningHz, le
       className={className}
       overlay={(scale) =>
         level ? (
-          <span className="absolute right-0 -translate-y-full pb-0.5 text-xs leading-none text-muted-foreground tabular-nums" style={{ top: `${scale.y(level.value)}%` }}>
+          <span className="absolute right-1 -translate-y-full rounded-xs bg-base-background px-1 py-0.5 text-xs leading-none text-muted-foreground tabular-nums" style={{ top: `${scale.y(level.value)}%` }}>
             {level.label}
           </span>
         ) : null

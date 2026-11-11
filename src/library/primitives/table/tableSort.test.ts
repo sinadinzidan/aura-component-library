@@ -20,7 +20,10 @@ describe(compareSortValues.name, () => {
 
 describe(nextTableSort.name, () => {
   it('starts ascending on a new column', () => {
-    expect(nextTableSort(null, 'due')).toEqual({ columnId: 'due', direction: 'asc' });
+    expect(nextTableSort(null, 'due')).toEqual({
+      columnId: 'due',
+      direction: 'asc',
+    });
   });
 
   it('switches to ascending when another column was sorted', () => {

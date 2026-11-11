@@ -1,6 +1,9 @@
 export type TableSortValue = string | number | null | undefined;
 
-export type TableSort<ColumnId extends string = string> = { columnId: ColumnId; direction: 'asc' | 'desc' };
+export type TableSort<ColumnId extends string = string> = {
+  columnId: ColumnId;
+  direction: 'asc' | 'desc';
+};
 
 /** `tri-state` goes ascending → descending → unsorted; `toggle` only flips between the two orders. */
 export type TableSortCycle = 'tri-state' | 'toggle';
@@ -11,7 +14,10 @@ const isMissing = (value: TableSortValue): value is null | undefined => value ==
 export function compareSortValues(a: TableSortValue, b: TableSortValue): number {
   if (isMissing(a) || isMissing(b)) return 0;
   if (typeof a === 'number' && typeof b === 'number') return a - b;
-  return String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' });
+  return String(a).localeCompare(String(b), 'en', {
+    numeric: true,
+    sensitivity: 'base',
+  });
 }
 
 /** The sort that follows a click on `columnId`'s header. */

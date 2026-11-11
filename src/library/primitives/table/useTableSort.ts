@@ -7,7 +7,7 @@ export type UseTableSortOptions<Row, ColumnId extends string> = {
   rows: readonly Row[];
   /** How to read the sortable value of each sortable column. Columns left out are not sortable. */
   accessors: Record<ColumnId, (row: Row) => TableSortValue>;
-  defaultSort?: TableSort<ColumnId>;
+  defaultSort?: TableSort<NoInfer<ColumnId>>;
   cycle?: TableSortCycle;
 };
 
@@ -18,7 +18,10 @@ export type UseTableSortResult<Row, ColumnId extends string> = {
   setSort: (sort: TableSort<ColumnId> | null) => void;
   toggleSort: (columnId: ColumnId) => void;
   /** Spread onto the column's `TableHead`. */
-  headProps: (columnId: ColumnId) => { sortDirection: 'asc' | 'desc' | 'none'; onSort: () => void };
+  headProps: (columnId: ColumnId) => {
+    sortDirection: 'asc' | 'desc' | 'none';
+    onSort: () => void;
+  };
 };
 
 /**
@@ -33,10 +36,7 @@ export function useTableSort<Row, ColumnId extends string>({
 }: UseTableSortOptions<Row, ColumnId>): UseTableSortResult<Row, ColumnId> {
   const [sort, setSort] = useState<TableSort<ColumnId> | null>(defaultSort ?? null);
 
-  const sorted = useMemo(
-    () => (sort ? sortTableRows(rows, accessors[sort.columnId], sort.direction) : rows),
-    [rows, accessors, sort]
-  );
+  const sorted = useMemo(() => (sort ? sortTableRows(rows, accessors[sort.columnId], sort.direction) : rows), [rows, accessors, sort]);
 
   const toggleSort = useCallback((columnId: ColumnId) => setSort((current) => nextTableSort(current, columnId, cycle)), [cycle]);
 

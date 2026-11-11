@@ -73,13 +73,17 @@ describe(Step.name, () => {
   });
 
   it('dashes the connector for the part still ahead', () => {
-    const { container } = renderStep(<Step label="Schedule" />, { context: { ...BASE, connector: 'dashed' } });
+    const { container } = renderStep(<Step label="Schedule" />, {
+      context: { ...BASE, connector: 'dashed' },
+    });
 
     expect(container.querySelector('[data-slot="step-connector"]')).toHaveClass('border-dashed');
   });
 
   it('uses the step icon in icon markers', () => {
-    renderStep(<Step label="Schedule" icon={<svg data-testid="clock" />} />, { context: { ...BASE, markers: 'icon' } });
+    renderStep(<Step label="Schedule" icon={<svg data-testid="clock" />} />, {
+      context: { ...BASE, markers: 'icon' },
+    });
 
     expect(screen.getByTestId('clock')).toBeInTheDocument();
   });

@@ -105,10 +105,12 @@ describe(systemOf.name, () => {
 });
 
 describe(depthLevelTarget.name, () => {
-  it('looks at the vessel from above at the surface', () => {
+  it('looks from above at the vessel and the field behind it at the surface', () => {
     const target = depthLevelTarget(LAYOUT, 'surface');
 
-    expect(target.lookAt).toEqual([50, 40, 0]);
+    expect(target.lookAt[0]).toBeGreaterThan(-40);
+    expect(target.lookAt[0]).toBeLessThan(50);
+    expect(target.lookAt[1]).toBeGreaterThan(25);
     expect(target.position[1]).toBeGreaterThan(40);
   });
 

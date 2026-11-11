@@ -16,7 +16,10 @@ describe(splitTagText.name, () => {
 
 describe(addTags.name, () => {
   it('adds new tags', () => {
-    expect(addTags(['a'], ['b', 'c'])).toEqual({ tags: ['a', 'b', 'c'], error: null });
+    expect(addTags(['a'], ['b', 'c'])).toEqual({
+      tags: ['a', 'b', 'c'],
+      error: null,
+    });
   });
 
   it('refuses a duplicate and says which', () => {
@@ -34,7 +37,9 @@ describe(addTags.name, () => {
   });
 
   it('refuses a tag the validator rejects', () => {
-    const result = addTags([], ['x'], { validate: (tag) => (tag.length < 2 ? 'Use at least 2 characters.' : null) });
+    const result = addTags([], ['x'], {
+      validate: (tag) => (tag.length < 2 ? 'Use at least 2 characters.' : null),
+    });
 
     expect(result).toEqual({ tags: [], error: 'Use at least 2 characters.' });
   });

@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { ALL_LAYERS_ON } from './pidModel';
 import { PidLayerToggles } from './PidLayerToggles';
+import { ALL_LAYERS_ON } from './pidModel';
 
 describe(PidLayerToggles.name, () => {
   it('shows one pressed toggle per visible layer in a named group', () => {

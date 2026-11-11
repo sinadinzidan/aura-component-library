@@ -30,7 +30,7 @@ const SPOKES = [0, 90, 180, 270] as const;
  */
 export function PolarPlot({ label, points, unit, labelSpeeds = [], range, size = 220, className }: PolarPlotProps) {
   const reach = range ?? niceCeiling(Math.max(0, ...points.map((point) => point.amplitude)), 1.1);
-  const padding = 24;
+  const padding = 30;
   const centre = size / 2;
   const radius = centre - padding;
   // Phase lag grows against the direction of rotation: drawn clockwise from 0° at the right.

@@ -15,7 +15,11 @@ export type TimelineContextValue = {
   density: TimelineDensity;
 };
 
-export const TimelineContext = createContext<TimelineContextValue>({ orientation: 'vertical', layout: 'plain', density: 'default' });
+export const TimelineContext = createContext<TimelineContextValue>({
+  orientation: 'vertical',
+  layout: 'plain',
+  density: 'default',
+});
 
 /** Width of the time column in the `time-start` layout: enough for "13:46" or "12 Mar". */
 export const TIMELINE_TIME_COLUMN = 'w-14 shrink-0 text-right';

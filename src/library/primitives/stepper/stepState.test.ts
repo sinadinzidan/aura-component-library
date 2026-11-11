@@ -68,10 +68,18 @@ describe(stepProgress.name, () => {
   });
 
   it('reports -1 and 100% when every step is passed', () => {
-    expect(stepProgress(['complete', 'complete'])).toMatchObject({ currentIndex: -1, percent: 100 });
+    expect(stepProgress(['complete', 'complete'])).toMatchObject({
+      currentIndex: -1,
+      percent: 100,
+    });
   });
 
   it('handles no steps', () => {
-    expect(stepProgress([])).toEqual({ total: 0, passed: 0, currentIndex: -1, percent: 0 });
+    expect(stepProgress([])).toEqual({
+      total: 0,
+      passed: 0,
+      currentIndex: -1,
+      percent: 0,
+    });
   });
 });
