@@ -7,7 +7,7 @@ import type { CatalogPage } from './types';
 export type CatalogPageResult =
   | { status: 'planned' }
   | { status: 'loading' }
-  | { status: 'error'; retry: () => void }
+  | { status: 'error'; retry: () => void; message: string }
   | { status: 'ready'; page: CatalogPage };
 
 /** Loads a page module on demand. `planned` means the page is in the manifest but not built yet. */
@@ -26,7 +26,10 @@ export function useCatalogPage(location: PageLocation): CatalogPageResult {
   });
 
   if (!loader) return { status: 'planned' };
-  if (query.isError) return { status: 'error', retry: () => void query.refetch() };
+  if (query.isError) {
+    const message = query.error instanceof Error ? query.error.message : String(query.error);
+    return { status: 'error', retry: () => void query.refetch(), message };
+  }
   if (!query.data) return { status: 'loading' };
   return { status: 'ready', page: query.data };
 }

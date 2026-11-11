@@ -131,6 +131,7 @@ export function PageView({ location }: PageViewProps) {
           <Alert variant="error">
             <AlertDescription>This page could not be loaded.</AlertDescription>
           </Alert>
+          <p className="mt-3 text-sm text-muted-foreground">Details: {result.message}</p>
           <div className="mt-3">
             <Button variant="outline" onClick={result.retry}>
               Try again

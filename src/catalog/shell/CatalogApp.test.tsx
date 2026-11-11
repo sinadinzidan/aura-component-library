@@ -149,6 +149,7 @@ describe(CatalogApp.name, () => {
     renderApp(createChannel(JSON.stringify({ page: 'button' })), deps);
 
     expect(await screen.findByText('This page could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByText('Details: chunk failed')).toBeInTheDocument();
   });
 
   it('retries a page that fails to load once and then shows it', async () => {
