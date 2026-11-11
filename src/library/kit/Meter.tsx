@@ -9,8 +9,11 @@ type MeterProps = {
   max: number;
   unit?: string;
   decimals?: number;
-  /** A marker on the track, with its name: `{ value: 97.5, label: 'Target' }`. */
-  target?: { value: number; label: string };
+  /**
+   * A marker on the track, with its name: `{ value: 97.5, label: 'Target' }`. The caption under
+   * the bar is the label alone; add `showValue` to append the figure.
+   */
+  target?: { value: number; label: string; showValue?: boolean };
   /** Start of the high-limit zone: everything above is shaded as out of range. */
   high?: number;
   /** End of the low-limit zone: everything below is shaded as out of range. */
@@ -53,7 +56,7 @@ export function Meter({ label, value, min = 0, max, unit, decimals = 0, target, 
           <span>{formatNumber(min, decimals)}</span>
           {target ? (
             <span>
-              {target.label} {formatNumber(target.value, decimals)}
+              {target.showValue ? `${target.label} ${formatNumber(target.value, decimals)}` : target.label}
             </span>
           ) : null}
           <span>{formatNumber(max, decimals)}</span>

@@ -25,7 +25,11 @@ type SparkLineProps = {
   variant?: SparkVariant;
   /** Marks the latest value with a dot (line and area only). */
   highlightLast?: boolean;
-  /** Layout classes: a width or height such as `h-8 w-24`. */
+  /** Width of the trend, as px or any CSS length. It fills its container by default. */
+  width?: number | string;
+  /** Height of the trend, as px or any CSS length. */
+  height?: number | string;
+  /** Layout classes: a width, height or visibility utility such as `h-8 w-24` or `hidden lg:block`. */
   className?: string;
 };
 
@@ -34,7 +38,7 @@ const HEIGHT = 32;
 const PAD = 3;
 
 /** A word-sized trend with no axes: the shape of the recent past next to a figure. */
-export function SparkLine({ values, label, tone = 'accent', variant, highlightLast = true, className }: SparkLineProps) {
+export function SparkLine({ values, label, tone = 'accent', variant, highlightLast = true, width, height, className }: SparkLineProps) {
   const look = useLook();
   const kind = variant ?? LOOK_VARIANT[look];
   const min = Math.min(...values);
@@ -47,7 +51,15 @@ export function SparkLine({ values, label, tone = 'accent', variant, highlightLa
   const band = WIDTH / Math.max(values.length, 1);
 
   return (
-    <span role="img" aria-label={label} data-look={look} data-tone={tone} data-variant={kind} className={cx('kit-spark', className)}>
+    <span
+      role="img"
+      aria-label={label}
+      data-look={look}
+      data-tone={tone}
+      data-variant={kind}
+      style={width !== undefined || height !== undefined ? { width, height } : undefined}
+      className={cx('kit-spark', className)}
+    >
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
         {kind === 'bars'
           ? values.map((value, index) => {

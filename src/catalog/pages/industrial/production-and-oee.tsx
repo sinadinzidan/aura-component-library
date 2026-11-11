@@ -553,7 +553,6 @@ function ProductionOeeOverview() {
             label="Daily gas export against the 4.50 plan, week 11"
             categories={OEE_DAYS}
             series={[{ id: 'export', label: 'Export', values: OEE_DAILY_EXPORT, tone: 'accent' }]}
-            unit="MSm³/d"
             decimals={2}
             limit={{ value: OEE_PLAN, label: 'Plan', tone: 'warning' }}
             showValues
@@ -569,6 +568,9 @@ function ProductionOeeOverview() {
               .map((loss) => (
                 <Meter key={loss.label} label={loss.label} value={loss.value} max={10} unit="pts" decimals={1} tone={loss.tone} hideScale />
               ))}
+          </div>
+          <div className="mt-5 border-t border-(--kit-rule) pt-4">
+            <Stat variant="plain" size="lg" label="Deferred production" value={0.83} decimals={2} unit="MSm³" delta={{ value: 0.21, decimals: 2, good: 'down', caption: 'vs week 10' }} target="10.2 h of stops in 6 events" />
           </div>
         </Panel>
       </Grid>
@@ -759,7 +761,7 @@ export default definePage({
           title: 'Downtime log',
           note: 'Pick it as the record behind the availability figure: planned and unplanned told apart in words.',
           origin: 'custom',
-          size: 'lg',
+          size: 'full',
           bleed: true,
           uses: ['kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx', 'kit/Panel.tsx'],
           Component: ProductionOeeDowntimeLog,
@@ -769,7 +771,7 @@ export default definePage({
           title: 'Ongoing stop to code',
           note: 'Pick it where the operator codes a stop while it happens; the panel calms down once a cause is set.',
           origin: 'custom',
-          size: 'sm',
+          size: 'md',
           bleed: true,
           uses: ['kit/Panel.tsx', 'kit/Stat.tsx', 'kit/IconChip.tsx'],
           Component: ProductionOeeUncodedStop,

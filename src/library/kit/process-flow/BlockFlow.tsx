@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 
 import { useLook } from '../../looks/useLook';
@@ -6,6 +5,7 @@ import { cx, type Tone } from '../tones';
 
 import { LINE_WEIGHT, svgBlockPaint } from './anatomy';
 import { arrowHead, blockBox, metricsFor, routeBetween, routePath } from './blockRoute';
+import { useElementWidth } from './useElementWidth';
 
 export type FlowBlock = {
   id: string;
@@ -50,23 +50,13 @@ export function BlockFlow({ label, blocks, edges, selectedId = null, onSelect, c
   const look = useLook();
   const paint = svgBlockPaint(look);
   const weight = LINE_WEIGHT[look];
-  const frame = useRef<HTMLDivElement>(null);
-  const [available, setAvailable] = useState(0);
+  const [frame, available] = useElementWidth<HTMLDivElement>();
   const cols = Math.max(...blocks.map((block) => block.col)) + 1;
   const rows = Math.max(...blocks.map((block) => block.row)) + 1;
   const metrics = metricsFor(available, cols);
   const width = cols * metrics.cellWidth;
   const height = rows * metrics.cellHeight;
 
-  useEffect(() => {
-    const element = frame.current;
-    if (!element) return undefined;
-    const measure = () => setAvailable(element.getBoundingClientRect().width);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
   const byId = new Map(blocks.map((block) => [block.id, block]));
 
   const activate = (event: KeyboardEvent<SVGGElement>, id: string) => {
@@ -92,7 +82,7 @@ export function BlockFlow({ label, blocks, edges, selectedId = null, onSelect, c
             <path d={routePath(route.points)} fill="none" style={{ stroke: color }} strokeWidth={utility ? Math.max(1.25, weight - 0.75) : weight} strokeDasharray={stopped ? '3 5' : utility ? '7 4' : undefined} strokeLinejoin={paint.radius > 0 ? 'round' : 'miter'} />
             {stopped ? null : <path d={arrowHead(route.points[route.points.length - 1], route.heading, 6 + weight)} style={{ fill: color }} />}
             {edge.label ? (
-              <text x={route.label.x} y={route.label.y - 7} textAnchor="middle" fontSize={12} fontWeight={600} style={{ fill: 'var(--kit-text-2)', stroke: 'var(--kit-halo)', strokeWidth: 4, paintOrder: 'stroke', fontVariantNumeric: 'tabular-nums' }}>
+              <text x={route.label.x} y={route.label.y < 24 ? route.label.y + 17 : route.label.y - 7} textAnchor="middle" fontSize={12} fontWeight={600} style={{ fill: 'var(--kit-text-2)', stroke: 'var(--kit-halo)', strokeWidth: 4, paintOrder: 'stroke', fontVariantNumeric: 'tabular-nums' }}>
                 {edge.label}
               </text>
             ) : null}

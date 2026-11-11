@@ -290,7 +290,7 @@ function InspectionRoundsReading() {
         subtitle="Checkpoint 7 of 8 · Cooler deck"
         actions={<TagId variant="chip">23-TT-91141</TagId>}
         footer={
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex w-full items-center justify-between gap-3">
             <Button variant="ghost" size="sm">
               <IconCamera />
               Add photo
@@ -482,7 +482,7 @@ function InspectionRoundsSignOff() {
         icon={<IconClipboardCheck />}
         actions={<StatusPill tone={signed ? 'success' : 'neutral'}>{signed ? 'Signed' : 'Not signed'}</StatusPill>}
         footer={
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex w-full items-center justify-between gap-3">
             <span className="text-sm text-(--kit-text-2)">{signed ? 'Signed by Jonas Nyberg at 11:44. Sent to Liv Wold.' : 'Signing sends the round to the shift supervisor.'}</span>
             <Button size="sm" disabled={!confirmed || signed} onClick={() => setSigned(true)}>
               Sign off
@@ -714,7 +714,7 @@ function InspectionRoundsFieldScreen() {
           subtitle={`Checkpoint ${index + 1} of ${checkpoints.length} · ${current.location}`}
           actions={<TagId variant="chip">{current.tag}</TagId>}
           footer={
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex w-full flex-wrap items-center justify-between gap-3">
               <Button variant="ghost" size="sm" onClick={() => record('skipped', undefined, 'Skipped: no safe access')}>
                 <IconPlayerSkipForward />
                 Skip with a reason

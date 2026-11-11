@@ -55,6 +55,6 @@ describe('annotations', () => {
 
   it('draws steps and curves when asked', () => {
     expect(linePath([0, 10], [0, 10], 'stepAfter')).toBe('M0.00,100.00H100.00V0.00');
-    expect(linePath([0, 10], [0, 10], 'monotone')).toContain('C50.00,100.00 50.00,0.00 100.00,0.00');
+    expect(linePath([0, 10], [0, 10], 'monotone')).toBe('M0.00,100.00C16.67,83.33 83.33,16.67 100.00,0.00');
   });
 });

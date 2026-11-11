@@ -50,9 +50,9 @@ export function Pareto({ label, items, unit = '', decimals = 0, threshold = 80, 
       ]}
     >
       <div className="grid h-full text-xs leading-4 text-(--kit-text-2) tabular-nums" style={{ gridTemplateColumns: 'auto minmax(0, 1fr) auto', gridTemplateRows: 'auto minmax(0, 1fr) auto' }}>
-        <span className="pb-2 font-medium">{unit}</span>
+        <span className="mb-4 font-medium">{unit}</span>
         <span />
-        <span className="pb-2 text-right font-medium">Running %</span>
+        <span className="mb-4 text-right font-medium">Running %</span>
 
         <div className="relative w-9">
           {ticks.map((tick) => (

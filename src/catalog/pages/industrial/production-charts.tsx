@@ -1,592 +1,642 @@
-import { chartSeriesColor } from '@cognite/aura/chart';
-import { Button } from '@cognite/aura/components/button';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
+import { IconCalendarStats, IconChartBar, IconClock, IconFlame } from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { ChartCard } from '../../../library/data/ChartCard';
-import { CategoryChart } from '../../../library/industrial/charts/CategoryChart';
-import type { CategoryRow } from '../../../library/industrial/charts/CategoryChart';
-import { ChartPlaceholder } from '../../../library/industrial/charts/ChartPlaceholder';
-import { HeatMapGrid } from '../../../library/industrial/charts/HeatMapGrid';
-import { ParetoChart } from '../../../library/industrial/charts/ParetoChart';
-import { TimeRangeSwitch } from '../../../library/industrial/charts/TimeRangeSwitch';
-import { TrendCard } from '../../../library/industrial/charts/TrendCard';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { formatReading } from '../../../library/industrial/status';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ASSETS, PLANT_KPIS } from '../../data/plant';
-import { DAY, HOUR, REFERENCE_NOW, formatDate, makeSeries, makeValues } from '../../data/series';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Donut } from '../../../library/kit/Donut';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Panel } from '../../../library/kit/Panel';
+import { CalendarGrid } from '../../../library/kit/production-charts/CalendarGrid';
+import { DeviationBars } from '../../../library/kit/production-charts/DeviationBars';
+import { Pareto } from '../../../library/kit/production-charts/Pareto';
+import { paretoRows, type CalendarDay } from '../../../library/kit/production-charts/pareto';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
+import { makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './production-charts.tsx?raw';
 
-const NOW = REFERENCE_NOW;
-const TARGET = PLANT_KPIS.gasExport.target;
-const SOFT_BAR = 'var(--color-chart-1-200)';
-const PLAN_LINE = 'var(--color-chart-neutral-450)';
-const SHORTFALL = 'var(--color-chart-warning-450)';
+const CHARTS_PLAN = 4.5;
 
-const round = (value: number, decimals = 2): number => Math.round(value * 10 ** decimals) / 10 ** decimals;
-const sum = (values: readonly number[]): number => values.reduce((total, value) => total + value, 0);
+const CHARTS_TOLERANCE = 0.05;
 
-/** Gas export per day for the last 28 days, MSm³. The recompressor trip on 8 March cost most of a day. */
-const DAILY_EXPORT: readonly number[] = makeValues({ seed: 51, points: 28, base: 4.5, noise: 0.14, stepMs: DAY, decimals: 2 }).map((value, index) =>
-  index === 23 ? 3.62 : index === 24 ? 4.05 : index === 27 ? PLANT_KPIS.gasExport.value : value
-);
-const DAY_LABELS: readonly string[] = DAILY_EXPORT.map((_, index) => formatDate(NOW - (27 - index) * DAY));
+/** Gas export per day in March 2026, MSm³/d. Day 12 is in progress and has no result yet. */
+const CHARTS_MARCH = [4.53, 4.56, 4.51, 4.48, 4.57, 4.52, 4.49, 4.55, 4.47, 4.41, 4.21];
 
-const LAST_14: CategoryRow[] = DAILY_EXPORT.slice(14).map((actual, index) => ({ category: DAY_LABELS[14 + index], actual, deviation: round(actual - TARGET) }));
-const LAST_7 = LAST_14.slice(7);
-const daysOnTarget = (days: readonly number[]): number => days.filter((value) => value >= TARGET).length;
-const MET_14 = daysOnTarget(DAILY_EXPORT.slice(14));
-const MONTH_ACTUAL = round(sum(DAILY_EXPORT.slice(16)), 1);
-const MONTH_GAP = round(TARGET * 12 - MONTH_ACTUAL, 1);
+const CHARTS_DAYS: CalendarDay[] = Array.from({ length: 31 }, (_, index) => ({ day: index + 1, value: CHARTS_MARCH[index] }));
 
-/** March so far: running total against a plan of 4.5 MSm³ per day. */
-const MONTH_TO_DATE: CategoryRow[] = Array.from({ length: 31 }, (_, index) => ({
-  category: String(index + 1),
-  plan: round(TARGET * (index + 1), 1),
-  actual: index < 12 ? round(sum(DAILY_EXPORT.slice(16, 17 + index)), 1) : null,
-}));
+const CHARTS_WEEK_LABELS = ['Thu 5', 'Fri 6', 'Sat 7', 'Sun 8', 'Mon 9', 'Tue 10', 'Wed 11'];
 
-/** Hourly gas throughput, kSm³/h, against the 210 kSm³/h design capacity of the compression train. */
-const THROUGHPUT = makeSeries({ seed: 16, points: 97, base: 184, amplitude: 14, noise: 4, cycles: 2, stepMs: HOUR / 4, max: 207, decimals: 0 }).map((point) => ({ t: point.t, v: point.v }));
+const CHARTS_WEEK = CHARTS_MARCH.slice(4);
 
-const STREAMS: CategoryRow[] = [
-  [2.4, 1.3, 0.5],
-  [2.5, 1.4, 0.5],
-  [2.0, 1.2, 0.4],
-  [2.2, 1.4, 0.5],
-  [2.7, 1.3, 0.5],
-  [2.5, 1.4, 0.5],
-  [2.5, 1.4, 0.5],
-].map(([pipeline, lng, local], index) => ({ category: String(LAST_7[index].category), pipeline, lng, local }));
+function chartsDayTone(value: number): Tone {
+  return value >= CHARTS_PLAN - CHARTS_TOLERANCE ? 'success' : value >= CHARTS_PLAN - 0.15 ? 'warning' : 'critical';
+}
 
-const SHIFTS: CategoryRow[] = [
-  [1.52, 1.47, 1.43],
-  [1.2, 1.31, 1.11],
-  [1.38, 1.36, 1.31],
-  [1.55, 1.5, 1.46],
-  [1.49, 1.48, 1.41],
-].map(([day, evening, night], index) => ({ category: String(LAST_7[index + 2].category), day, evening, night }));
+const CHARTS_DAY_WORD: Partial<Record<Tone, string>> = { success: 'Met plan', warning: 'Just under plan', critical: 'Missed plan' };
 
-/** Share of planned output delivered over the last 30 days, per piece of equipment. */
-const ATTAINMENT: CategoryRow[] = ASSETS.filter((asset) => ['compressor', 'pump', 'turbine', 'exchanger'].includes(asset.type))
-  .map((asset) => ({ category: asset.name, attainment: round(70 + asset.healthScore * 0.31, 1) }))
-  .sort((a, b) => b.attainment - a.attainment);
+const CHARTS_DAY_NOTES: Record<number, string> = {
+  10: 'Reduced rate for six hours while the interstage cooler outlet temperature was high.',
+  11: 'Cooler fouling stop from 16:20, 3 h 05 min. Evening shift lost 0.28 MSm³.',
+};
 
-const ENERGY: CategoryRow[] = makeValues({ seed: 57, points: 14, base: 31.6, noise: 0.7, drift: -1.2, stepMs: DAY, decimals: 1 }).map((intensity, index) => ({
-  category: DAY_LABELS[14 + index],
-  intensity: index === 9 ? 35.8 : index === 13 ? PLANT_KPIS.energyIntensity.value : intensity,
-}));
-
-const DOWNTIME_CAUSES = [
-  { label: 'Compressor trip', value: 41 },
-  { label: 'Planned maintenance', value: 26 },
-  { label: 'Instrument fault', value: 14 },
-  { label: 'Cooling water loss', value: 9 },
-  { label: 'Power dip', value: 6 },
-  { label: 'Operator stop', value: 4 },
-  { label: 'Other', value: 3 },
-];
-const DOWNTIME_TOTAL = sum(DOWNTIME_CAUSES.map((cause) => cause.value));
-
-const DOWNTIME_WEEKS: CategoryRow[] = [
-  { category: 'Week 6', planned: 8, unplanned: 5 },
-  { category: 'Week 7', planned: 4, unplanned: 9 },
-  { category: 'Week 8', planned: 12, unplanned: 3 },
-  { category: 'Week 9', planned: 2, unplanned: 7 },
-  { category: 'Week 10', planned: 6, unplanned: 4 },
-  { category: 'Week 11', planned: 0, unplanned: 31 },
+const CHARTS_CAUSES = [
+  { label: 'Cooler fouling', value: 9.4 },
+  { label: 'Vibration trip', value: 7.8 },
+  { label: 'Planned inspection', value: 4.0 },
+  { label: 'Instrument fault', value: 2.1 },
+  { label: 'Power dip', value: 1.3 },
+  { label: 'Other', value: 0.9 },
 ];
 
-/** OEE as a bridge from planned time to effective output, in percent of planned production time. */
-const OEE_BRIDGE: CategoryRow[] = [
-  { category: 'Planned time', span: [0, 100] },
-  { category: 'Availability loss', span: [96.4, 100] },
-  { category: 'Performance loss', span: [87, 96.4] },
-  { category: 'Quality loss', span: [82.7, 87] },
-  { category: 'OEE', span: [0, 82.7] },
+const CHARTS_MONTHS = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+
+const CHARTS_MONTHLY = [136.2, 131.4, 138.9, 137.1, 124.6, 49.3];
+
+const CHARTS_MONTHLY_PLAN = [139.5, 135, 139.5, 139.5, 126, 49.5];
+
+const CHARTS_DAILY_30 = makeValues({ seed: 512, points: 30, base: 4.46, amplitude: 0.07, noise: 0.05, cycles: 2, decimals: 2 });
+
+function chartsRolling(values: readonly number[], window: number): number[] {
+  return values.map((_, index) => {
+    const slice = values.slice(Math.max(0, index - window + 1), index + 1);
+    return Math.round((slice.reduce((sum, value) => sum + value, 0) / slice.length) * 100) / 100;
+  });
+}
+
+const CHARTS_30_LABELS = Array.from({ length: 30 }, (_, index) => (index < 18 ? `${index + 11} Feb` : `${index - 17} Mar`));
+
+const CHARTS_OEE_WEEKS = ['W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11'];
+
+const CHARTS_UNITS = ['1st stage compressor', '2nd stage compressor', 'Recompressor', 'Interstage cooler', 'Export pump A', 'Gas turbine'];
+
+const CHARTS_UNIT_OUTPUT = [99.1, 97.8, 88.4, 91.2, 98.9, 96.6];
+
+const CHARTS_STOP_HOURS = [
+  { label: 'Recompressor', values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 42, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { label: 'Interstage cooler', values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 60, 60, 25, 0, 0, 0, 0] },
+  { label: '2nd stage compressor', values: [0, 0, 0, 0, 0, 60, 30, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { label: 'Export pump A', values: [0, 0, 38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
 ];
 
-const OEE_WEEKS: CategoryRow[] = [
-  { category: 'Week 6', availability: 97.8, performance: 91.2, quality: 95.9 },
-  { category: 'Week 7', availability: 97.1, performance: 90.4, quality: 96.3 },
-  { category: 'Week 8', availability: 98.0, performance: 92.1, quality: 95.2 },
-  { category: 'Week 9', availability: 97.4, performance: 91.6, quality: 96.0 },
-  { category: 'Week 10', availability: 97.1, performance: 90.9, quality: 95.8 },
-  { category: 'Week 11', availability: 96.4, performance: 90.2, quality: 95.5 },
-];
+const CHARTS_RANGES = {
+  '7 d': { labels: CHARTS_WEEK_LABELS, values: CHARTS_WEEK, caption: 'Last 7 finished days' },
+  '11 d': { labels: CHARTS_MARCH.map((_, index) => `${index + 1}`), values: CHARTS_MARCH, caption: 'March to date' },
+} as const;
 
-const AVAILABILITY: CategoryRow[] = [98.2, 97.9, 98.4, 97.6, 98.1, 97.8, 98.3, 97.7, 98.0, 91.4, 94.8, 97.2, 97.5, 96.4].map((availability, index) => ({
-  category: DAY_LABELS[14 + index],
-  availability,
-}));
+type ChartsRange = keyof typeof CHARTS_RANGES;
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTHLY_2025 = [136, 124, 138, 131, 118, 129, 137, 135, 126, 139, 133, 138];
-const MONTHLY: CategoryRow[] = MONTHS.map((month, index) => ({
-  category: month,
-  monthly: MONTHLY_2025[index],
-  ytd: sum(MONTHLY_2025.slice(0, index + 1)),
-  ytdPlan: Math.round((1620 / 12) * (index + 1)),
-}));
+function isChartsRange(value: string): value is ChartsRange {
+  return value in CHARTS_RANGES;
+}
 
-const ROLLING: CategoryRow[] = DAILY_EXPORT.map((actual, index) => ({
-  category: DAY_LABELS[index],
-  actual,
-  average: index < 6 ? null : round(sum(DAILY_EXPORT.slice(index - 6, index + 1)) / 7),
-}));
+function chartsMean(values: readonly number[]): number {
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
 
-/** Today's bar only covers the 14 hours so far. */
-const IN_PROGRESS: CategoryRow[] = LAST_7.map((row, index) => (index === 6 ? { category: 'Today', actual: 2.58 } : { category: row.category, actual: row.actual }));
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-/** 16 February was a Monday, so the 28 days fill four whole weeks ending on Sunday 15 March; the last three days have no data yet. */
-const CALENDAR_WEEKS = ['16 Feb', '23 Feb', '2 Mar', '9 Mar'];
-const CALENDAR_VALUES: (number | null)[][] = CALENDAR_WEEKS.map((_, week) =>
-  WEEKDAYS.map((_day, day) => {
-    const index = week * 7 + day + 3;
-    return index < DAILY_EXPORT.length ? round((DAILY_EXPORT[index] / TARGET) * 100, 0) : null;
-  })
-);
-
-function ProductionChartDailyVsTarget() {
-  return (
-    <CategoryChart
-      label={`Gas export per day for the last 14 days against the 4.5 million cubic metre target; ${MET_14} days met it and 8 March fell to 3.62 after the recompressor trip`}
-      rows={LAST_14}
-      series={[{ key: 'actual', label: 'Gas export' }]}
-      references={[{ value: TARGET, label: 'Target 4.5' }]}
-      domain={[0, 5]}
-      ticks={[0, 1, 2, 3, 4, 5]}
-      labelEvery={2}
-      unit="MSm³"
-      decimals={2}
-      summary={`${MET_14} of 14 days met the 4.5 MSm³ target; the low on 8 March follows the recompressor trip.`}
-    />
+/** One sheet of the page: a look scope with its canvas. Without a look it follows the app's look. */
+function ChartsSheet({ look, children }: { look?: LookId; children: ReactNode }) {
+  const canvas = <Canvas className="h-full">{children}</Canvas>;
+  return look ? (
+    <LookScope look={look} className="h-full w-full">
+      {canvas}
+    </LookScope>
+  ) : (
+    <div className="h-full w-full">{canvas}</div>
   );
 }
 
-function ProductionChartDeviation() {
+function ProductionChartsDailyTarget() {
   return (
-    <CategoryChart
-      label="Deviation of daily gas export from target for the last 14 days; the largest shortfall is 0.88 million cubic metres on 8 March"
-      rows={LAST_14}
-      series={[{ key: 'deviation', label: 'Deviation from target' }]}
-      colorOf={(row) => (typeof row.deviation === 'number' && row.deviation < -0.3 ? SHORTFALL : undefined)}
-      references={[{ value: 0, label: 'Target', align: 'left' }]}
-      domain={[-1, 0.5]}
-      ticks={[-1, -0.5, 0, 0.5]}
-      labelEvery={2}
-      unit="MSm³"
-      decimals={2}
-      summary="Bars above the line beat the target. Shortfalls of more than 0.3 MSm³ are marked."
-    />
+    <ChartsSheet>
+      <Panel title="Daily export against plan" subtitle="MSm³ per day, 5–11 March" className="h-full">
+        <Bars
+          label="Gas export per day against the 4.50 plan, 5 to 11 March"
+          categories={CHARTS_WEEK_LABELS}
+          series={[{ id: 'export', label: 'Export', values: CHARTS_WEEK }]}
+          tones={CHARTS_WEEK.map((value) => (chartsDayTone(value) === 'critical' ? 'critical' : 'accent'))}
+          decimals={2}
+          limit={{ value: CHARTS_PLAN, label: 'Plan', tone: 'warning' }}
+          showValues
+          showLegend={false}
+          height={270}
+          notes="Five of seven days met plan. Only Wednesday, which missed by more than the tolerance, takes a status colour."
+        />
+      </Panel>
+    </ChartsSheet>
   );
 }
 
-function ProductionChartCumulative() {
+function ProductionChartsDeviation() {
   return (
-    <CategoryChart
-      legend
-      label={`Cumulative gas export in March against plan; after 12 days the total is ${MONTH_ACTUAL} against a plan of 54 million cubic metres`}
-      rows={MONTH_TO_DATE}
-      series={[
-        { key: 'actual', label: 'Actual', type: 'area' },
-        { key: 'plan', label: 'Plan', type: 'line', dashed: true, color: PLAN_LINE },
-      ]}
-      domain={[0, 150]}
-      ticks={[0, 50, 100, 150]}
-      labelEvery={5}
-      unit="MSm³"
-      decimals={1}
-      summary={`${MONTH_GAP} MSm³ behind plan on day 12 of 31; most of the gap opened on 8 and 9 March.`}
-    />
+    <ChartsSheet>
+      <Panel title="Deviation from plan" subtitle="MSm³ per day above or below 4.50" className="h-full">
+        <DeviationBars
+          label="Daily gas export minus plan, 5 to 11 March"
+          categories={CHARTS_WEEK_LABELS}
+          values={CHARTS_WEEK.map((value) => Math.round((value - CHARTS_PLAN) * 100) / 100)}
+          reference="Plan 4.50"
+          decimals={2}
+          tolerance={CHARTS_TOLERANCE}
+          step={0.1}
+          height={270}
+          notes="The same week with the plan as the zero line: the detail near the top of the bars becomes the whole chart."
+        />
+      </Panel>
+    </ChartsSheet>
   );
 }
 
-function ProductionChartThroughputCapacity() {
+function ProductionChartsCalendar() {
+  const [selected, setSelected] = useState(11);
+  const value = CHARTS_MARCH[selected - 1];
+  const tone = chartsDayTone(value);
   return (
-    <TrendChart
-      label="Gas throughput over the last 24 hours against the 210 thousand cubic metre per hour capacity; peak use is 98 percent"
-      series={[{ key: 'throughput', label: 'Throughput', points: THROUGHPUT, variant: 'area', color: chartSeriesColor(2) }]}
-      limits={[{ value: 210, label: 'Capacity 210', tone: 'neutral' }]}
-      yDomain={[0, 240]}
-      yTicks={[0, 60, 120, 180, 240]}
-      unit="kSm³/h"
-      decimals={0}
-      summary="Running at 81 to 98 % of capacity; no headroom around the two daily peaks."
-    />
+    <ChartsSheet>
+      <Grid>
+        <Panel
+          title="March 2026"
+          subtitle="Gas export per day, MSm³ · select a day"
+          icon={
+            <IconChip tone="blue">
+              <IconCalendarStats />
+            </IconChip>
+          }
+          className="col-span-8"
+        >
+          <CalendarGrid label="Gas export per day, March 2026" days={CHARTS_DAYS} firstWeekday={6} toneOf={chartsDayTone} decimals={2} today={12} selected={selected} onSelect={setSelected} />
+        </Panel>
+        <Panel title={`${selected} March`} subtitle="Selected day" tone={tone} className="col-span-4" footer="Green met plan within 0.05, amber is up to 0.15 under, red is further under.">
+          <Stat variant="plain" size="hero" label="Gas export" value={value} decimals={2} unit="MSm³/d" delta={{ value: value - CHARTS_PLAN, decimals: 2, caption: 'vs plan 4.50' }} />
+          <div className="mt-4">
+            <StatusPill tone={tone} size="lg">
+              {CHARTS_DAY_WORD[tone]}
+            </StatusPill>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-(--kit-text-2)">{CHARTS_DAY_NOTES[selected] ?? 'No stops or rate reductions logged on this day.'}</p>
+        </Panel>
+      </Grid>
+    </ChartsSheet>
   );
 }
 
-function ProductionChartStackedByStream() {
+function ProductionChartsStacked() {
   return (
-    <CategoryChart
-      legend
-      label="Gas export per day by stream for the last 7 days against plan; pipeline is the largest share and all three dipped on 8 March"
-      rows={STREAMS}
-      series={[
-        { key: 'pipeline', label: 'Pipeline', stack: 'export' },
-        { key: 'lng', label: 'LNG', stack: 'export' },
-        { key: 'local', label: 'Local grid', stack: 'export' },
-      ]}
-      references={[{ value: TARGET, label: 'Plan 4.5' }]}
-      domain={[0, 5]}
-      ticks={[0, 1, 2, 3, 4, 5]}
-      unit="MSm³"
-      decimals={1}
-    />
+    <ChartsSheet>
+      <Panel title="Output by stream" subtitle="kSm³ oil equivalent per day" className="h-full">
+        <Bars
+          label="Daily output stacked by stream: gas, condensate and NGL"
+          categories={CHARTS_WEEK_LABELS}
+          stacked
+          series={[
+            { id: 'gas', label: 'Gas', values: [4.57, 4.52, 4.49, 4.55, 4.47, 4.41, 4.21], tone: 'blue' },
+            { id: 'condensate', label: 'Condensate', values: [1.12, 1.1, 1.09, 1.13, 1.08, 1.05, 0.98], tone: 'teal' },
+            { id: 'ngl', label: 'NGL', values: [0.61, 0.6, 0.6, 0.62, 0.59, 0.57, 0.52], tone: 'purple' },
+          ]}
+          decimals={1}
+          height={270}
+          notes="Three parts that add up to total output. All three fall together on Wednesday: the cause is upstream of the split."
+        />
+      </Panel>
+    </ChartsSheet>
   );
 }
 
-function ProductionChartShiftComparison() {
+function ProductionChartsRanking() {
+  const order = CHARTS_UNITS.map((unit, index) => ({ unit, value: CHARTS_UNIT_OUTPUT[index] })).sort((a, b) => b.value - a.value);
   return (
-    <CategoryChart
-      legend
-      label="Gas export per shift for 5 days; the night shift is lowest every day and all shifts dropped on 8 March"
-      rows={SHIFTS}
-      series={[
-        { key: 'day', label: 'Day shift' },
-        { key: 'evening', label: 'Evening shift' },
-        { key: 'night', label: 'Night shift' },
-      ]}
-      domain={[0, 2]}
-      ticks={[0, 0.5, 1, 1.5, 2]}
-      unit="MSm³"
-      decimals={2}
-    />
+    <ChartsSheet>
+      <Panel title="Availability by unit" subtitle="Week 11, best first" className="h-full">
+        <Bars
+          label="Availability per unit in week 11, ranked"
+          orientation="horizontal"
+          categories={order.map((row) => row.unit)}
+          series={[{ id: 'availability', label: 'Availability', values: order.map((row) => row.value) }]}
+          tones={order.map((row) => (row.value < 90 ? 'critical' : row.value < 95 ? 'warning' : 'accent'))}
+          unit="%"
+          decimals={1}
+          limit={{ value: 95, label: 'Target', tone: 'neutral' }}
+          showValues
+          showLegend={false}
+          height={270}
+          notes="Ranked lists run sideways so the unit names stay readable. Two units sit under the 95 % target."
+        />
+      </Panel>
+    </ChartsSheet>
   );
 }
 
-function ProductionChartTopBottom() {
+function ProductionChartsPareto() {
   return (
-    <CategoryChart
-      layout="rows"
-      valueLabels
-      hideValueAxis
-      label="Plan attainment by equipment for the last 30 days, best first; the recompressor is lowest at 82.7 percent"
-      rows={ATTAINMENT}
-      series={[{ key: 'attainment', label: 'Plan attainment' }]}
-      colorOf={(row) => (typeof row.attainment === 'number' && row.attainment < 90 ? SHORTFALL : undefined)}
-      domain={[0, 100]}
-      unit="%"
-      decimals={1}
-      heightClassName="h-64"
-      barSize={14}
-      summary="Ranked best to worst. Equipment below 90 % attainment is marked."
-    />
+    <ChartsSheet>
+      <Panel title="Downtime by cause" subtitle="March to date, hours · 25.5 h in total" className="h-full">
+        <Pareto
+          label="Pareto of downtime hours by cause, March to date"
+          items={CHARTS_CAUSES}
+          unit="h"
+          decimals={1}
+          height={320}
+          notes="Three causes make up 83 % of the downtime. Cooler fouling and the vibration trips are both on the compression train."
+        />
+      </Panel>
+    </ChartsSheet>
   );
 }
 
-function ProductionChartEnergyPerUnit() {
+function ProductionChartsPlannedSplit() {
   return (
-    <CategoryChart
-      label="Energy used per barrel of oil equivalent for the last 14 days against the target of 30 kilowatt hours; it peaked at 35.8 on 8 March and is 31.2 today"
-      rows={ENERGY}
-      series={[{ key: 'intensity', label: 'Energy intensity', type: 'line', color: chartSeriesColor(3) }]}
-      references={[{ value: PLANT_KPIS.energyIntensity.target, label: 'Target 30', align: 'left', below: true }]}
-      domain={[28, 36]}
-      ticks={[28, 30, 32, 34, 36]}
-      labelEvery={2}
-      unit="kWh/boe"
-      decimals={1}
-      summary="Lower is better. Energy per unit rises when output falls, as on 8 March."
-    />
-  );
-}
-
-function ProductionChartDowntimeByCause() {
-  return (
-    <CategoryChart
-      layout="rows"
-      valueLabels
-      hideValueAxis
-      label="Downtime by cause for the last 30 days; compressor trips lead with 41 of 103 hours"
-      rows={DOWNTIME_CAUSES.map((cause) => ({ category: cause.label, hours: cause.value }))}
-      series={[{ key: 'hours', label: 'Downtime' }]}
-      unit="h"
-      heightClassName="h-64"
-      barSize={14}
-    />
-  );
-}
-
-function ProductionChartPareto() {
-  return <ParetoChart legend wrapLabels label="Pareto of downtime by cause, last 30 days" rows={DOWNTIME_CAUSES} unit="h" valueLabel="Downtime" />;
-}
-
-function ProductionChartPlannedUnplanned() {
-  return (
-    <CategoryChart
-      legend
-      label="Planned and unplanned downtime per week for 6 weeks; week 11 has 31 unplanned hours from the recompressor trip"
-      rows={DOWNTIME_WEEKS}
-      series={[
-        { key: 'planned', label: 'Planned', stack: 'downtime', color: 'var(--color-chart-neutral-300)' },
-        { key: 'unplanned', label: 'Unplanned', stack: 'downtime', color: chartSeriesColor(1) },
-      ]}
-      domain={[0, 40]}
-      ticks={[0, 10, 20, 30, 40]}
-      unit="h"
-    />
-  );
-}
-
-function ProductionChartOeeBridge() {
-  return (
-    <CategoryChart
-      valueLabels
-      wrapLabels
-      label="OEE loss breakdown: from 100 percent planned time, availability losses take 3.6, performance losses 9.4 and quality losses 4.3 points, leaving an OEE of 82.7 percent"
-      rows={OEE_BRIDGE}
-      series={[{ key: 'span', label: 'Share of planned time' }]}
-      colorOf={(row) => (String(row.category).endsWith('loss') ? SOFT_BAR : undefined)}
-      domain={[0, 100]}
-      ticks={[0, 25, 50, 75, 100]}
-      unit="%"
-      decimals={1}
-      summary="Performance is the largest loss: 9.4 of the 17.3 points between planned time and OEE."
-    />
-  );
-}
-
-function ProductionChartOeeComponents() {
-  return (
-    <CategoryChart
-      legend
-      label="Availability, performance and quality per week for 6 weeks; all three are slightly down in week 11"
-      rows={OEE_WEEKS}
-      series={[
-        { key: 'availability', label: 'Availability', type: 'line' },
-        { key: 'performance', label: 'Performance', type: 'line' },
-        { key: 'quality', label: 'Quality', type: 'line' },
-      ]}
-      domain={[85, 100]}
-      ticks={[85, 90, 95, 100]}
-      unit="%"
-      decimals={1}
-    />
-  );
-}
-
-function ProductionChartAvailability() {
-  return (
-    <CategoryChart
-      label="Plant availability per day for the last 14 days against the 97.5 percent target; it fell to 91.4 on 8 March and is 96.4 today"
-      rows={AVAILABILITY}
-      series={[{ key: 'availability', label: 'Availability', type: 'line' }]}
-      references={[{ value: PLANT_KPIS.availability.target, label: 'Target 97.5', align: 'left', below: true }]}
-      domain={[90, 100]}
-      ticks={[90, 92.5, 95, 97.5, 100]}
-      labelEvery={2}
-      unit="%"
-      decimals={1}
-      summary="Above target on 9 of 14 days; four days below since the trip on 8 March."
-    />
-  );
-}
-
-function ProductionChartMonthlyYtd() {
-  return (
-    <CategoryChart
-      legend
-      label="Monthly gas export for 2025 on the left axis with the year-to-date total and plan on the right axis; the year closed at 1,584 against a plan of 1,620 million cubic metres"
-      rows={MONTHLY}
-      series={[
-        { key: 'monthly', label: 'Monthly export', color: SOFT_BAR },
-        { key: 'ytd', label: 'Year to date', type: 'line', axis: 'right', color: chartSeriesColor(1) },
-        { key: 'ytdPlan', label: 'Year-to-date plan', type: 'line', dashed: true, axis: 'right', color: PLAN_LINE },
-      ]}
-      domain={[0, 160]}
-      ticks={[0, 40, 80, 120, 160]}
-      rightDomain={[0, 1800]}
-      unit="MSm³ per month"
-      rightUnit="MSm³ to date"
-      summary="2025 closed 36 MSm³ (2.2 %) under plan; the gap opened during the May turnaround."
-    />
-  );
-}
-
-function ProductionChartRollingAverage() {
-  return (
-    <CategoryChart
-      legend
-      label="Gas export per day for the last 28 days with a 7-day rolling average; the average dips after the trip on 8 March"
-      rows={ROLLING}
-      series={[
-        { key: 'actual', label: 'Daily export', color: SOFT_BAR },
-        { key: 'average', label: '7-day average', type: 'line', color: chartSeriesColor(1) },
-      ]}
-      references={[{ value: TARGET, label: 'Target 4.5', align: 'left' }]}
-      domain={[0, 5]}
-      ticks={[0, 1, 2, 3, 4, 5]}
-      labelEvery={7}
-      unit="MSm³"
-      decimals={2}
-    />
-  );
-}
-
-function ProductionChartCalendar() {
-  return (
-    <HeatMapGrid
-      showValues
-      label="Daily gas export as percent of target for the four weeks from 16 February; most days are between 96 and 102 percent, 8 March is lowest at 80"
-      rows={CALENDAR_WEEKS}
-      columns={WEEKDAYS}
-      values={CALENDAR_VALUES}
-      domain={[88, 104]}
-      unit="%"
-      cellClassName="h-9"
-      rowLabelClassName="w-14"
-      legend={{ title: 'Percent of daily target', low: '88 or less', high: '104', empty: 'Not yet reported' }}
-      summary="Rows are weeks starting on the date shown. The dip on Sunday 8 March is the recompressor trip."
-    />
-  );
-}
-
-function ProductionChartInProgress() {
-  return (
-    <CategoryChart
-      valueLabels
-      label="Gas export per day for the last 7 days; today shows 2.58 million cubic metres after 14 of 24 hours"
-      rows={IN_PROGRESS}
-      series={[{ key: 'actual', label: 'Gas export' }]}
-      colorOf={(row) => (row.category === 'Today' ? SOFT_BAR : undefined)}
-      references={[{ value: TARGET, label: 'Target 4.5', below: true }]}
-      domain={[0, 5]}
-      ticks={[0, 1, 2, 3, 4, 5]}
-      decimals={2}
-      unit="MSm³"
-      summary="Today is still filling: 2.58 MSm³ by 14:00, on pace for 4.4 MSm³."
-    />
-  );
-}
-
-function ProductionChartValueLabels() {
-  return (
-    <CategoryChart
-      valueLabels
-      hideValueAxis
-      label="Gas export per day for the last 5 days in million cubic metres, between 3.62 and 4.52"
-      rows={LAST_7.slice(2)}
-      series={[{ key: 'actual', label: 'Gas export' }]}
-      domain={[0, 5]}
-      decimals={2}
-      heightClassName="h-44"
-    />
-  );
-}
-
-function ProductionChartLoading() {
-  return <ChartPlaceholder state="loading" title="Loading production figures" heightClassName="h-44" />;
-}
-
-function ProductionChartEmpty() {
-  return (
-    <ChartPlaceholder
-      state="empty"
-      heightClassName="h-52"
-      title="No production reported"
-      description="Nothing is booked for 13 March yet."
-      action={
-        <Button variant="secondary" size="sm">
-          Show last week
-        </Button>
-      }
-    />
-  );
-}
-
-function ProductionChartWithHeader() {
-  const kpi = PLANT_KPIS.gasExport;
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex items-end justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground">Gas export · today</span>
-          <ValueReadout value={kpi.value} unit={kpi.unit} decimals={2} size="lg" />
+    <ChartsSheet>
+      <Panel title="Planned and unplanned" subtitle="March to date" className="h-full" footer="Never report the total without the split.">
+        <div className="flex h-full flex-col items-center justify-center gap-4">
+          <Donut
+            label="Downtime split into planned and unplanned hours"
+            segments={[
+              { label: 'Unplanned', value: 21.5, tone: 'critical' },
+              { label: 'Planned', value: 4, tone: 'neutral' },
+            ]}
+            centerValue="25.5 h"
+            centerCaption="stopped"
+            legend="bottom"
+            decimals={1}
+            unit="h"
+            size={168}
+          />
         </div>
-        <TrendDelta value={kpi.value} reference={kpi.target} decimals={2} unit={kpi.unit} goodDirection="up" caption="vs target" />
-      </div>
-      <CategoryChart
-        label="Gas export per day for the last 14 days against the 4.5 million cubic metre target, latest 4.38"
-        rows={LAST_14}
-        series={[{ key: 'actual', label: 'Gas export' }]}
-        references={[{ value: TARGET, label: 'Target 4.5', align: 'left' }]}
-        domain={[0, 5]}
-        ticks={[0, 2.5, 5]}
-        labelEvery={2}
-        decimals={2}
-        heightClassName="h-40"
-      />
-    </div>
+      </Panel>
+    </ChartsSheet>
   );
 }
 
-function ProductionChartDowntimeCard() {
+function ProductionChartsOeeOverTime() {
   return (
-    <TrendCard
-      title="Downtime"
-      description="Nordkapp plant · last 30 days"
-      reading={{ value: DOWNTIME_TOTAL, unit: 'h', decimals: 0 }}
-      delta={{ reference: 71, caption: 'vs previous 30 days', goodDirection: 'down', decimals: 0 }}
-      summary="Compressor trips and planned maintenance make up 65 % of the 103 hours."
-    >
-      <CategoryChart
-        layout="rows"
-        valueLabels
-        hideValueAxis
-        label="Downtime by cause for the last 30 days; compressor trips lead with 41 hours"
-        rows={DOWNTIME_CAUSES.slice(0, 5).map((cause) => ({ category: cause.label, hours: cause.value }))}
-        series={[{ key: 'hours', label: 'Downtime' }]}
-        unit="h"
-        heightClassName="h-44"
-        barSize={12}
-      />
-    </TrendCard>
+    <ChartsSheet>
+      <Panel title="OEE components over time" subtitle="Weekly, percent" className="h-full">
+        <TrendLine
+          label="Availability, performance and quality per week, weeks 4 to 11"
+          labels={CHARTS_OEE_WEEKS}
+          unit="%"
+          decimals={1}
+          height={270}
+          yDomain={[84, 100]}
+          series={[
+            { id: 'availability', label: 'Availability', values: [95.8, 96.1, 94.9, 95.4, 93.2, 94.6, 91.7, 93.6], tone: 'teal' },
+            { id: 'performance', label: 'Performance', values: [92.4, 92.9, 93.1, 92.2, 92.8, 92.6, 92.5, 91.2], tone: 'blue' },
+            { id: 'quality', label: 'Quality', values: [97.8, 97.5, 97.9, 97.2, 97.4, 96.8, 96.7, 96.9], tone: 'purple' },
+          ]}
+          notes="Availability is the factor that moves; performance and quality drift slowly. The value axis starts at 84 %."
+        />
+      </Panel>
+    </ChartsSheet>
   );
 }
 
-const OVERVIEW_RANGES = [
-  { value: '7d', label: '7 d', name: 'Last 7 days' },
-  { value: '14d', label: '14 d', name: 'Last 14 days' },
-  { value: '28d', label: '28 d', name: 'Last 28 days' },
+function ProductionChartsStopHeat() {
+  return (
+    <ChartsSheet>
+      <Panel title="When the stops happened" subtitle="Minutes stopped per hour of the day, week 11" className="h-full" footer="Dark cells are full hours lost. The evening block is the cooler stop.">
+        <HeatStrip
+          label="Minutes stopped per hour of the day and unit, week 11"
+          rows={CHARTS_STOP_HOURS}
+          axis={['00:00', '24:00']}
+          ticks={['00', '04', '08', '12', '16', '20', '24']}
+          scale={{ label: 'Minutes stopped per hour', low: '0', high: '60' }}
+          max={60}
+          tone="critical"
+          size="lg"
+        />
+      </Panel>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsMonthly() {
+  return (
+    <ChartsSheet>
+      <Panel title="Monthly export against plan" subtitle="MSm³ per month · March is to date" className="h-full">
+        <Bars
+          label="Gas export per month against plan, October to March"
+          categories={CHARTS_MONTHS}
+          series={[
+            { id: 'plan', label: 'Plan', values: CHARTS_MONTHLY_PLAN, tone: 'neutral' },
+            { id: 'actual', label: 'Actual', values: CHARTS_MONTHLY, tone: 'accent' },
+          ]}
+          decimals={0}
+          height={250}
+          headline={<Stat variant="plain" size="lg" label="Gas year to date" value={717.5} decimals={1} unit="MSm³" delta={{ value: -11.5, caption: 'vs plan 729.0' }} />}
+          notes="March shows eleven finished days against the plan for the same eleven days, so the pair stays comparable."
+        />
+      </Panel>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsRolling() {
+  return (
+    <ChartsSheet>
+      <Panel title="Daily export with rolling average" subtitle="Last 30 days, MSm³/d" className="h-full">
+        <TrendLine
+          label="Daily gas export and its seven-day rolling average, last 30 days"
+          labels={CHARTS_30_LABELS}
+          unit="MSm³/d"
+          decimals={2}
+          height={300}
+          series={[
+            { id: 'daily', label: 'Daily', values: CHARTS_DAILY_30, tone: 'neutral', dashed: true },
+            { id: 'rolling', label: '7-day average', values: chartsRolling(CHARTS_DAILY_30, 7), tone: 'accent' },
+          ]}
+          limits={[{ value: CHARTS_PLAN, label: 'Plan', tone: 'warning' }]}
+          notes="The average takes the day-to-day noise out; judge the trend on the solid line and single days on the dashed one."
+        />
+      </Panel>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsConsole() {
+  return (
+    <ChartsSheet look="console">
+      <Grid>
+        <Panel title="Export against plan" subtitle="MSm³/d · 5–11 March" className="col-span-5">
+          <DeviationBars
+            label="Daily export minus plan, console"
+            categories={CHARTS_WEEK_LABELS}
+            values={CHARTS_WEEK.map((value) => Math.round((value - CHARTS_PLAN) * 100) / 100)}
+            reference="Plan 4.50"
+            decimals={2}
+            tolerance={CHARTS_TOLERANCE}
+            step={0.1}
+            height={280}
+          />
+        </Panel>
+        <Panel title="Downtime Pareto" subtitle="Hours · March to date" className="col-span-7">
+          <Pareto label="Pareto of downtime by cause, console" items={CHARTS_CAUSES} unit="h" decimals={1} height={280} />
+        </Panel>
+      </Grid>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsPoster() {
+  return (
+    <ChartsSheet look="poster">
+      <SectionHeader size="lg" title="One bad day cost the week." description="Gas export, 5–11 March. Plan is 4.50 MSm³ a day." />
+      <Grid className="mt-6">
+        <Panel title="Export per day" subtitle="MSm³/d" className="col-span-8">
+          <Bars
+            label="Gas export per day against plan, poster"
+            categories={CHARTS_WEEK_LABELS}
+            series={[{ id: 'export', label: 'Export', values: CHARTS_WEEK }]}
+            tones={CHARTS_WEEK.map((value) => (chartsDayTone(value) === 'critical' ? 'pink' : 'blue'))}
+            decimals={2}
+            limit={{ value: CHARTS_PLAN, label: 'Plan' }}
+            showValues
+            showLegend={false}
+            height={300}
+          />
+        </Panel>
+        <div className="col-span-4 flex flex-col gap-(--kit-gap)">
+          <Stat className="flex-1" size="hero" tone="pink" emphasis="strong" label="Wednesday 11" value={4.21} decimals={2} unit="MSm³" target="0.29 under plan" />
+          <Stat className="flex-1" size="lg" tone="green" emphasis="strong" label="Days on plan" value="5 of 7" target="Within 0.05 of 4.50" />
+        </div>
+      </Grid>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsBlueprint() {
+  return (
+    <ChartsSheet look="blueprint">
+      <Grid>
+        <Panel title="Rolling average" subtitle="MSm³/d · 30 days" className="col-span-7">
+          <TrendLine
+            label="Seven-day rolling average of gas export on a blueprint"
+            labels={CHARTS_30_LABELS}
+            unit="MSm³/d"
+            decimals={2}
+            height={280}
+            series={[
+              { id: 'daily', label: 'Daily', values: CHARTS_DAILY_30, tone: 'neutral', dashed: true },
+              { id: 'rolling', label: '7-day average', values: chartsRolling(CHARTS_DAILY_30, 7), tone: 'accent' },
+            ]}
+            limits={[{ value: CHARTS_PLAN, label: 'Plan', tone: 'warning' }]}
+          />
+        </Panel>
+        <Panel title="Deviation" subtitle="From plan 4.50" className="col-span-5">
+          <DeviationBars
+            label="Daily export minus plan, blueprint"
+            categories={CHARTS_WEEK_LABELS.map((day) => day.slice(0, 3))}
+            values={CHARTS_WEEK.map((value) => Math.round((value - CHARTS_PLAN) * 100) / 100)}
+            reference="Plan"
+            decimals={2}
+            tolerance={CHARTS_TOLERANCE}
+            step={0.1}
+            height={280}
+          />
+        </Panel>
+      </Grid>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsSoft() {
+  return (
+    <ChartsSheet look="soft">
+      <Grid>
+        <Panel title="March so far" subtitle="Export per day, MSm³" tone="blue" className="col-span-7">
+          <CalendarGrid label="Gas export per day, March 2026, soft" days={CHARTS_DAYS} firstWeekday={6} toneOf={chartsDayTone} decimals={2} today={12} />
+        </Panel>
+        <Panel title="Where the hours went" subtitle="Downtime by cause" tone="pink" className="col-span-5">
+          <Donut
+            label="Downtime hours by cause, March to date"
+            segments={[
+              { label: 'Cooler fouling', value: 9.4, tone: 'pink' },
+              { label: 'Vibration trip', value: 7.8, tone: 'purple' },
+              { label: 'Planned inspection', value: 4, tone: 'teal' },
+              { label: 'All other', value: 4.3, tone: 'amber' },
+            ]}
+            centerValue="25.5 h"
+            centerCaption="stopped"
+            legend="bottom"
+            decimals={1}
+            unit="h"
+            size={184}
+          />
+        </Panel>
+      </Grid>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsGlass() {
+  return (
+    <ChartsSheet look="glass">
+      <Grid>
+        <Panel title="Gas export" subtitle="Seven-day average, last 30 days" className="col-span-8">
+          <TrendLine
+            label="Seven-day average of gas export, glass"
+            labels={CHARTS_30_LABELS}
+            unit="MSm³/d"
+            decimals={2}
+            height={290}
+            fill
+            series={[{ id: 'rolling', label: '7-day average', values: chartsRolling(CHARTS_DAILY_30, 7), tone: 'accent' }]}
+            limits={[{ value: CHARTS_PLAN, label: 'Plan', tone: 'warning' }]}
+            headline={<Stat variant="plain" size="hero" label="March to date" value={chartsMean(CHARTS_MARCH)} decimals={2} unit="MSm³/d" delta={{ value: chartsMean(CHARTS_MARCH) - CHARTS_PLAN, decimals: 2, caption: 'vs plan' }} />}
+          />
+        </Panel>
+        <Panel title="Stops by cause" subtitle="Share of 25.5 h" className="col-span-4">
+          <Donut
+            label="Downtime hours by cause, glass"
+            segments={[
+              { label: 'Cooler fouling', value: 9.4, tone: 'pink' },
+              { label: 'Vibration trip', value: 7.8, tone: 'amber' },
+              { label: 'Planned inspection', value: 4, tone: 'teal' },
+              { label: 'All other', value: 4.3, tone: 'neutral' },
+            ]}
+            centerValue="25.5 h"
+            centerCaption="stopped"
+            legend="bottom"
+            decimals={1}
+            unit="h"
+            size={176}
+          />
+        </Panel>
+      </Grid>
+    </ChartsSheet>
+  );
+}
+
+type ChartsCauseRow = { label: string; value: number; share: number; cumulative: number; vital: boolean };
+
+const CHARTS_CAUSE_COLUMNS: DataTableColumn<ChartsCauseRow>[] = [
+  { id: 'cause', header: 'Cause', cell: (row) => <span className="font-medium">{row.label}</span> },
+  { id: 'hours', header: 'Hours', numeric: true, cell: (row) => row.value.toFixed(1) },
+  { id: 'share', header: 'Share', numeric: true, cell: (row) => `${row.share.toFixed(0)} %` },
+  { id: 'focus', header: 'Focus', nowrap: true, cell: (row) => (row.vital ? <StatusPill tone="accent">Fix first</StatusPill> : <StatusPill tone="neutral">Later</StatusPill>) },
 ];
 
-function ProductionChartOverviewCard() {
-  const [range, setRange] = useState('14d');
-  const days = range === '7d' ? 7 : range === '14d' ? 14 : 28;
-  const window = DAILY_EXPORT.slice(-days);
-  const rows = window.map((actual, index) => ({ category: DAY_LABELS[DAY_LABELS.length - days + index], actual }));
-  const met = daysOnTarget(window);
-
+function ProductionChartsDowntimeCard() {
   return (
-    <ChartCard
-      title="Gas export"
-      description={`Nordkapp plant · last ${days} days`}
-      actions={<TimeRangeSwitch options={OVERVIEW_RANGES} value={range} onValueChange={setRange} />}
-      series={[
-        { key: 'actual', label: 'Daily export', color: chartSeriesColor(1) },
-        { key: 'plan', label: 'Plan, 4.5 MSm³ per day', color: PLAN_LINE },
-      ]}
-      summary={`${formatReading(sum(window), 'MSm³', 1)} exported against a plan of ${formatReading(TARGET * days, 'MSm³', 1)}; ${met} of ${days} days met the daily target.`}
-    >
-      <CategoryChart
-        label={`Gas export per day for the last ${days} days against the plan of 4.5 million cubic metres per day; ${met} days met it`}
-        rows={rows}
-        series={[{ key: 'actual', label: 'Daily export' }]}
-        references={[{ value: TARGET, label: 'Plan 4.5' }]}
-        domain={[0, 5]}
-        ticks={[0, 1, 2, 3, 4, 5]}
-        labelEvery={days === 28 ? 3 : 1}
-        unit="MSm³"
-        decimals={2}
-        heightClassName="h-64"
+    <ChartsSheet>
+      <Grid>
+        <Panel
+          title="Downtime, March to date"
+          subtitle="Hours by cause, largest first"
+          icon={
+            <IconChip tone="amber">
+              <IconClock />
+            </IconChip>
+          }
+          className="col-span-6"
+        >
+          <Pareto label="Pareto of downtime by cause with the vital few marked" items={CHARTS_CAUSES} unit="h" decimals={1} height={300} />
+        </Panel>
+        <Panel title="Causes" subtitle="The first three reach 80 %" padding="none" className="col-span-6" footer="6 causes · 25.5 h · 21.5 h unplanned">
+          <DataTable label="Downtime causes with share and running share" columns={CHARTS_CAUSE_COLUMNS} rows={paretoRows(CHARTS_CAUSES)} rowKey={(row) => row.label} rowTone={(row) => (row.vital ? 'accent' : undefined)} flush />
+        </Panel>
+      </Grid>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsOverviewCard() {
+  const [range, setRange] = useState<ChartsRange>('7 d');
+  const { labels, values, caption } = CHARTS_RANGES[range];
+  const mean = chartsMean(values);
+  const met = values.filter((value) => chartsDayTone(value) === 'success').length;
+  return (
+    <ChartsSheet>
+      <Panel
+        title="Gas export"
+        subtitle={`${caption} · MSm³ per day against plan 4.50`}
+        icon={
+          <IconChip tone="accent">
+            <IconFlame />
+          </IconChip>
+        }
+        actions={
+          <SegmentedControl
+            value={range}
+            onValueChange={(value: string) => {
+              if (isChartsRange(value)) setRange(value);
+            }}
+          >
+            <SegmentedControlList aria-label="Range">
+              <SegmentedControlButton value="7 d">7 days</SegmentedControlButton>
+              <SegmentedControlButton value="11 d">Month to date</SegmentedControlButton>
+            </SegmentedControlList>
+          </SegmentedControl>
+        }
+      >
+        <StatGroup joined columns={4} label="Period summary">
+          <Stat variant="plain" label="Average" value={mean} decimals={2} unit="MSm³/d" delta={{ value: mean - CHARTS_PLAN, decimals: 2, caption: 'vs plan' }} />
+          <Stat variant="plain" label="Days on plan" value={`${met} of ${values.length}`} target="Within 0.05 of plan" />
+          <Stat variant="plain" label="Best day" value={Math.max(...values)} decimals={2} unit="MSm³" target={`Day ${labels[values.indexOf(Math.max(...values))]}`} />
+          <Stat variant="plain" label="Worst day" value={Math.min(...values)} decimals={2} unit="MSm³" target={`Day ${labels[values.indexOf(Math.min(...values))]}`} />
+        </StatGroup>
+        <Bars
+          className="mt-5"
+          label={`Gas export per day against plan, ${caption.toLowerCase()}`}
+          categories={labels}
+          series={[{ id: 'export', label: 'Export', values }]}
+          tones={values.map((value) => (chartsDayTone(value) === 'critical' ? 'critical' : 'accent'))}
+          decimals={2}
+          limit={{ value: CHARTS_PLAN, label: 'Plan', tone: 'warning' }}
+          showValues
+          showLegend={false}
+          height={280}
+        />
+      </Panel>
+    </ChartsSheet>
+  );
+}
+
+function ProductionChartsReviewBoard() {
+  return (
+    <ChartsSheet look="editorial">
+      <SectionHeader
+        size="lg"
+        eyebrow="Production review, week 11"
+        title="Export held plan for five days, then the cooler fouled"
+        description="Deviation from the 4.50 MSm³/d plan per day, and what the stops were made of."
+        actions={
+          <IconChip tone="neutral">
+            <IconChartBar />
+          </IconChip>
+        }
       />
-    </ChartCard>
+      <Grid className="mt-8">
+        <div className="col-span-6">
+          <DeviationBars
+            label="Daily export minus plan, review"
+            categories={CHARTS_WEEK_LABELS}
+            values={CHARTS_WEEK.map((value) => Math.round((value - CHARTS_PLAN) * 100) / 100)}
+            reference="Plan 4.50"
+            decimals={2}
+            tolerance={CHARTS_TOLERANCE}
+            step={0.1}
+            height={280}
+          />
+          <p className="mt-3 text-sm leading-6 text-(--kit-text-2)">Figure 1. Wednesday alone accounts for the weekly shortfall of 0.28 MSm³.</p>
+        </div>
+        <div className="col-span-6">
+          <Pareto label="Pareto of downtime by cause, review" items={CHARTS_CAUSES} unit="h" decimals={1} height={280} />
+          <p className="mt-3 text-sm leading-6 text-(--kit-text-2)">Figure 2. Two causes on the compression train make up two thirds of all downtime.</p>
+        </div>
+      </Grid>
+    </ChartsSheet>
   );
 }
 
@@ -594,7 +644,7 @@ export default definePage({
   id: 'production-charts',
   title: 'Production charts',
   summary:
-    'Output, losses and downtime per day, shift, stream and cause. Bars for amounts per period, lines for rates and running totals, and a dashed line for whatever the result is measured against.',
+    'Output, losses and downtime per day, shift, stream and cause. Bars for amounts per period, lines for rates and running averages, a dashed line for whatever the result is measured against, and colour only on the periods that need explaining.',
   guidance: {
     use: [
       'Start bars at zero and draw the target, plan or capacity as a dashed, labelled line.',
@@ -605,7 +655,7 @@ export default definePage({
     avoid: [
       'Colouring every bar green or red against target; the eye should land on the exceptions.',
       'Stacking more than four parts, or stacking parts that do not add up to a meaningful total.',
-      'Truncating the value axis of a bar chart; switch to a line when the detail is near the top.',
+      'Truncating the value axis of a bar chart; switch to deviation bars or a line when the detail is near the top.',
       'Comparing an unfinished day with full days without marking it as in progress.',
     ],
   },
@@ -614,279 +664,232 @@ export default definePage({
     {
       id: 'against-target',
       title: 'Output against target',
-      description: 'What was produced, and how that compares with the plan or the capacity.',
+      description: 'The same days as amounts, as deviation from plan and as a calendar.',
       specimens: [
         {
-          id: 'ProductionChartDailyVsTarget',
-          title: 'Daily bars with target line',
-          note: 'Pick it as the default production view: one bar per day and the daily target as a line.',
+          id: 'ProductionChartsDailyTarget',
+          title: 'Daily bars with plan line',
+          note: 'Pick it for a week or two of daily results measured against one plan.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartDailyVsTarget,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsDailyTarget,
         },
         {
-          id: 'ProductionChartDeviation',
-          title: 'Deviation from target',
-          note: 'Pick it when the gap is the message: bars grow up or down from the target line.',
+          id: 'ProductionChartsDeviation',
+          title: 'Deviation from plan',
+          note: 'Pick it when every bar is close to the plan and the difference is the message.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartDeviation,
+          bleed: true,
+          uses: ['kit/production-charts/DeviationBars.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsDeviation,
         },
         {
-          id: 'ProductionChartCumulative',
-          title: 'Cumulative actual and plan',
-          note: 'Pick it for month and year targets, where the question is whether the total will be reached.',
+          id: 'ProductionChartsCalendar',
+          title: 'Production calendar',
+          note: 'Pick it for a month: weekends, runs of bad days and the day in progress read at a glance, and a day opens its detail.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartCumulative,
-        },
-        {
-          id: 'ProductionChartThroughputCapacity',
-          title: 'Throughput against capacity',
-          note: 'Pick it to show how much headroom is left; capacity is a neutral line, not an alarm limit.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ProductionChartThroughputCapacity,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/production-charts/CalendarGrid.tsx', 'kit/Stat.tsx', 'kit/StatusPill.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsCalendar,
         },
       ],
     },
     {
       id: 'breakdowns',
       title: 'Breakdowns and comparisons',
-      description: 'The same output split by stream, shift or equipment.',
+      description: 'Parts of a total and units against each other.',
       specimens: [
         {
-          id: 'ProductionChartStackedByStream',
+          id: 'ProductionChartsStacked',
           title: 'Stacked by stream',
-          note: 'Pick it when the parts add up to the total and both the total and the mix matter.',
+          note: 'Pick it when the parts add up to a total people care about and there are four or fewer.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartStackedByStream,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsStacked,
         },
         {
-          id: 'ProductionChartShiftComparison',
-          title: 'Shift comparison',
-          note: 'Pick grouped bars to compare two or three groups side by side within each day.',
+          id: 'ProductionChartsRanking',
+          title: 'Ranked units',
+          note: 'Pick it to rank units with long names against a common target.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartShiftComparison,
-        },
-        {
-          id: 'ProductionChartTopBottom',
-          title: 'Top and bottom performers',
-          note: 'Pick a sorted row chart for rankings; long names fit and the worst performers are marked.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartTopBottom,
-        },
-        {
-          id: 'ProductionChartEnergyPerUnit',
-          title: 'Energy per unit produced',
-          note: 'Pick a line for an intensity or rate, where the level matters more than the amount.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartEnergyPerUnit,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsRanking,
         },
       ],
     },
     {
       id: 'downtime-and-losses',
       title: 'Downtime and losses',
-      description: 'Where the output went: stops, their causes and the OEE losses.',
+      description: 'What stopped production, how much of it was planned, and when it happened.',
       specimens: [
         {
-          id: 'ProductionChartDowntimeByCause',
-          title: 'Downtime by cause',
-          note: 'Pick it to answer "what stopped us" at a glance, with the hours printed on each bar.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartDowntimeByCause,
-        },
-        {
-          id: 'ProductionChartPareto',
+          id: 'ProductionChartsPareto',
           title: 'Pareto',
-          note: 'Pick it to decide what to fix first: the causes behind the first 80 % are drawn strongest.',
+          note: 'Pick it to decide what to fix first: sorted bars, running share and the vital few marked.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/ParetoChart.tsx', 'industrial/charts/stats.ts'],
-          Component: ProductionChartPareto,
+          size: 'lg',
+          bleed: true,
+          uses: ['kit/production-charts/Pareto.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsPareto,
         },
         {
-          id: 'ProductionChartPlannedUnplanned',
-          title: 'Planned and unplanned downtime',
-          note: 'Pick it to separate maintenance that was chosen from stops that were not.',
+          id: 'ProductionChartsPlannedSplit',
+          title: 'Planned and unplanned',
+          note: 'Pick it beside any downtime total so the split is never left out.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartPlannedUnplanned,
+          size: 'sm',
+          bleed: true,
+          uses: ['kit/Donut.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsPlannedSplit,
         },
         {
-          id: 'ProductionChartOeeBridge',
-          title: 'OEE loss breakdown',
-          note: 'Pick it to walk from planned time to OEE; each floating bar is one kind of loss.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartOeeBridge,
-        },
-        {
-          id: 'ProductionChartOeeComponents',
+          id: 'ProductionChartsOeeOverTime',
           title: 'OEE components over time',
-          note: 'Pick it to see which of availability, performance and quality is moving the OEE.',
+          note: 'Pick it to see which factor moves from week to week.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartOeeComponents,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsOeeOverTime,
         },
         {
-          id: 'ProductionChartAvailability',
-          title: 'Availability over time',
-          note: 'Pick it for a percentage near 100, where a zoomed line shows what bars would hide.',
+          id: 'ProductionChartsStopHeat',
+          title: 'Stops by hour',
+          note: 'Pick it to see whether stops cluster at a time of day or on one unit.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartAvailability,
+          bleed: true,
+          uses: ['kit/HeatStrip.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsStopHeat,
         },
       ],
     },
     {
       id: 'longer-periods',
       title: 'Longer periods',
-      description: 'Months, rolling averages, calendars and the day that is not over yet.',
+      description: 'Months against plan and a noisy daily series with its average.',
       specimens: [
         {
-          id: 'ProductionChartMonthlyYtd',
+          id: 'ProductionChartsMonthly',
           title: 'Monthly with year to date',
-          note: 'Pick it for a yearly review: monthly bars on one axis, the running total and its plan on the other.',
+          note: 'Pick it for a management view: months against plan with the running total as the headline.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartMonthlyYtd,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsMonthly,
         },
         {
-          id: 'ProductionChartRollingAverage',
+          id: 'ProductionChartsRolling',
           title: 'Rolling average',
-          note: 'Pick it when daily bars are noisy and the trend underneath is what people need.',
+          note: 'Pick it when daily values are noisy and the question is the trend.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartRollingAverage,
-        },
-        {
-          id: 'ProductionChartCalendar',
-          title: 'Production calendar strip',
-          note: 'Pick it to spot weekday patterns and single bad days across several weeks.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx'],
-          Component: ProductionChartCalendar,
-        },
-        {
-          id: 'ProductionChartInProgress',
-          title: 'Day in progress',
-          note: 'Pick it whenever the last period is unfinished; a lighter bar keeps it from reading as a miss.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartInProgress,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsRolling,
         },
       ],
     },
     {
-      id: 'compact-and-states',
-      title: 'Compact and states',
-      description: 'Small footprints and what to show when there is nothing to draw.',
+      id: 'looks',
+      title: 'In other looks',
+      description: 'The same charts drawn as console panels, poster blocks, drawings, soft cards and glass.',
       specimens: [
         {
-          id: 'ProductionChartValueLabels',
-          title: 'Labelled bars, no axis',
-          note: 'Pick it for five to seven bars in a narrow column, where printed values replace the axis.',
-          origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartValueLabels,
-        },
-        {
-          id: 'ProductionChartLoading',
-          title: 'Loading',
-          note: 'Pick it while figures load; the skeleton holds the place of the chart.',
-          origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/ChartPlaceholder.tsx'],
-          Component: ProductionChartLoading,
-        },
-        {
-          id: 'ProductionChartEmpty',
-          title: 'No data',
-          note: 'Pick it when nothing is booked for the period, and point to a period that has data.',
-          origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/ChartPlaceholder.tsx'],
-          Component: ProductionChartEmpty,
-        },
-      ],
-    },
-    {
-      id: 'cards',
-      title: 'In a card',
-      description: 'The charts above with a headline figure, controls and a summary.',
-      specimens: [
-        {
-          id: 'ProductionChartWithHeader',
-          title: 'With headline figure',
-          note: 'Pick it when today’s number is the headline and the bars give it context.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx', 'industrial/ValueReadout.tsx', 'industrial/TrendDelta.tsx'],
-          Component: ProductionChartWithHeader,
-        },
-        {
-          id: 'ProductionChartDowntimeCard',
-          title: 'Downtime card',
-          note: 'Pick it on a production dashboard: total downtime, its change and the top causes.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendCard.tsx', 'industrial/charts/CategoryChart.tsx'],
-          Component: ProductionChartDowntimeCard,
-        },
-        {
-          id: 'ProductionChartOverviewCard',
-          title: 'Production overview card',
-          note: 'Pick it as the main chart of a production page: range switch, plan line, legend and a computed summary.',
+          id: 'ProductionChartsConsole',
+          title: 'Console',
+          note: 'Pick it for the control room: square bars, both grids, axis lines and edge-to-edge panels.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          uses: ['data/ChartCard.tsx', 'industrial/charts/CategoryChart.tsx', 'industrial/charts/TimeRangeSwitch.tsx'],
-          Component: ProductionChartOverviewCard,
+          bleed: true,
+          uses: ['kit/production-charts/DeviationBars.tsx', 'kit/production-charts/Pareto.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionChartsConsole,
+        },
+        {
+          id: 'ProductionChartsPoster',
+          title: 'Poster',
+          note: 'Pick it for a review screen: outlined solid bars, the finding as the headline and the bad day as a block.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/Stat.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionChartsPoster,
+        },
+        {
+          id: 'ProductionChartsBlueprint',
+          title: 'Blueprint',
+          note: 'Pick it for an engineering pack: line-only charts with point markers in title-block panels.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/production-charts/DeviationBars.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionChartsBlueprint,
+        },
+        {
+          id: 'ProductionChartsSoft',
+          title: 'Soft',
+          note: 'Pick it for a friendly team page: a pastel calendar and a thick donut in tinted, rounded cards.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/production-charts/CalendarGrid.tsx', 'kit/Donut.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionChartsSoft,
+        },
+        {
+          id: 'ProductionChartsGlass',
+          title: 'Glass',
+          note: 'Pick it for a showpiece screen: one glowing trend as the hero with a ring beside it.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Donut.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionChartsGlass,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions that can be dropped into a product.',
+      specimens: [
+        {
+          id: 'ProductionChartsOverviewCard',
+          title: 'Export card with range switch',
+          note: 'Pick it as the main card of a production page: summary figures, the bars and a period switch.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/StatGroup.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsOverviewCard,
+        },
+        {
+          id: 'ProductionChartsDowntimeCard',
+          title: 'Downtime analysis',
+          note: 'Pick it for the downtime review: the Pareto with the same rows as a table beside it.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/production-charts/Pareto.tsx', 'kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/Panel.tsx'],
+          Component: ProductionChartsDowntimeCard,
+        },
+        {
+          id: 'ProductionChartsReviewBoard',
+          title: 'Weekly review spread',
+          note: 'Pick it for the written review: two numbered figures under a headline that states the finding.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/production-charts/DeviationBars.tsx', 'kit/production-charts/Pareto.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionChartsReviewBoard,
         },
       ],
     },

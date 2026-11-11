@@ -34,6 +34,13 @@ type AppFrameProps = {
   actions?: ReactNode;
   /** Padding of the canvas inside the frame. */
   padding?: 'look' | 'none';
+  /**
+   * Take the height of the parent and scroll the canvas inside the frame, so the chrome stays put.
+   * The parent needs a height (`h-screen`, `h-[40rem]`, a flex child with `min-h-0`).
+   */
+  fill?: boolean;
+  /** Layout classes for the canvas inside the frame. */
+  canvasClassName?: string;
   className?: string;
   children: ReactNode;
 };
@@ -55,14 +62,19 @@ export function AppFrame({
   status,
   actions,
   padding = 'look',
+  fill = false,
+  canvasClassName,
   className,
   children,
 }: AppFrameProps) {
   const { id: look, chrome } = useLookDefinition();
   const hasBar = Boolean(title || status || actions);
+  const resolved = variant ?? chrome;
+  // In a rail the label is hidden, so the button names itself and shows the label as a tooltip.
+  const rail = resolved === 'rail';
 
   return (
-    <div data-look={look} data-variant={variant ?? chrome} className={cx('kit-frame', className)}>
+    <div data-look={look} data-variant={resolved} data-fill={fill ? 'true' : undefined} className={cx('kit-frame', className)}>
       <nav aria-label={brand.name} className="kit-frame-nav">
         <div className="kit-frame-brand">
           {brand.mark ? (
@@ -83,6 +95,8 @@ export function AppFrame({
                   type="button"
                   className="kit-frame-link"
                   aria-current={item.id === current ? 'page' : undefined}
+                  aria-label={rail ? (item.badge ? `${item.label}, ${item.badge}` : item.label) : undefined}
+                  title={rail ? item.label : undefined}
                   onClick={() => onNavigate?.(item.id)}
                 >
                   {item.icon}
@@ -106,7 +120,9 @@ export function AppFrame({
             {actions ? <div className="kit-frame-actions">{actions}</div> : null}
           </header>
         ) : null}
-        <Canvas padding={padding}>{children}</Canvas>
+        <Canvas padding={padding} fill={fill} className={canvasClassName}>
+          {children}
+        </Canvas>
       </div>
     </div>
   );

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Canvas } from '../../../library/kit/Canvas';
-import { AnnotatedTrend, type EventMark, type RegionMark } from '../../../library/kit/chart-annotations/AnnotatedTrend';
+import { AnnotatedTrend, type AnnotatedSeries, type EventMark, type LimitMark, type RegionMark } from '../../../library/kit/chart-annotations/AnnotatedTrend';
 import { findCrossings, findExtremes, summarizeRange } from '../../../library/kit/chart-annotations/annotations';
 import { EventBadge } from '../../../library/kit/chart-annotations/EventBadge';
 import { FilterPills } from '../../../library/kit/dashboard-blocks/FilterPills';
@@ -89,14 +89,14 @@ const CA_LAYERS = [
 
 const CA_TEMPERATURE_SERIES = [{ id: 'temperature', label: 'Discharge temperature', values: CA_TEMPERATURE }];
 
-const CA_PRESSURE_PAIR = [
+const CA_PRESSURE_PAIR: AnnotatedSeries[] = [
   { id: 'discharge', label: 'Discharge pressure', values: CA_PRESSURE },
-  { id: 'interstage', label: 'Interstage pressure', values: CA_INTERSTAGE, tone: 'teal' as const },
+  { id: 'interstage', label: 'Interstage pressure', values: CA_INTERSTAGE, tone: 'teal' },
 ];
 
-const CA_TEMPERATURE_LIMITS = [
-  { value: 145, label: 'High', tone: 'warning' as const },
-  { value: 155, label: 'Trip', tone: 'critical' as const },
+const CA_TEMPERATURE_LIMITS: LimitMark[] = [
+  { value: 145, label: 'High', tone: 'warning' },
+  { value: 155, label: 'Trip', tone: 'critical' },
 ];
 
 const CA_KIND_ICON: Record<CaEvent['kind'], ReactNode> = { Alarm: <IconBell />, 'Work order': <IconTool />, Operator: <IconFlag /> };
@@ -351,7 +351,7 @@ function ChartAnnotationAnomaly() {
         }
       >
         <AnnotatedTrend
-          label="Drive-end vibration over the last 24 hours with an anomaly between 15:00 and 17:00"
+          label="Drive-end vibration over the last 24 hours with a shaded anomaly and its peak"
           series={[{ id: 'vibration', label: 'Vibration', values: CA_VIBRATION }]}
           labels={CA_LABELS}
           tickEvery={8}
@@ -359,7 +359,7 @@ function ChartAnnotationAnomaly() {
           fill
           yDomain={[4, 9]}
           limits={[{ value: 7.1, label: 'High', tone: 'warning' }]}
-          regions={[{ id: 'anomaly', from: 29, to: 35, label: 'Anomaly · score 0.91', tone: 'pink' }]}
+          regions={[{ id: 'anomaly', from: 29, to: 35, label: 'Anomaly · score 0.91', tone: 'pink', labelAt: 'bottom' }]}
           points={CA_VIBRATION_PEAK ? [{ id: 'peak', at: CA_VIBRATION_PEAK.maxIndex, text: `Peak ${formatNumber(CA_VIBRATION_PEAK.max, 1)} mm/s`, tone: 'pink' }] : []}
         />
       </Panel>
@@ -506,6 +506,9 @@ function ChartAnnotationCompare() {
   const rows: CaCompareRow[] = [
     { id: 'discharge', label: 'Discharge pressure', a: CA_PRESSURE[pinA], b: CA_PRESSURE[pinB], unit: 'bar' },
     { id: 'interstage', label: 'Interstage pressure', a: CA_INTERSTAGE[pinA], b: CA_INTERSTAGE[pinB], unit: 'bar' },
+    { id: 'temperature', label: 'Discharge temperature', a: CA_TEMPERATURE[pinA], b: CA_TEMPERATURE[pinB], unit: '°C' },
+    { id: 'vibration', label: 'Drive-end vibration', a: CA_VIBRATION[pinA], b: CA_VIBRATION[pinB], unit: 'mm/s' },
+    { id: 'cooler', label: 'Cooler outlet temperature', a: CA_COOLER[pinA], b: CA_COOLER[pinB], unit: '°C' },
   ];
   return (
     <CaSheet look="console">
@@ -526,7 +529,7 @@ function ChartAnnotationCompare() {
             onCursor={(index) => (index === null ? undefined : setPinB(index))}
           />
         </Panel>
-        <Panel className="col-span-4" title={`A ${CA_LABELS[pinA]} · B ${CA_LABELS[pinB]}`} subtitle={`${Math.abs(pinB - pinA) / 2} h apart`} padding="none">
+        <Panel className="col-span-4" title={`A ${CA_LABELS[pinA]} · B ${CA_LABELS[pinB]}`} subtitle={`${Math.abs(pinB - pinA) / 2} h apart`} padding="none" footer="The first two signals are plotted; the others are read at the same two moments.">
           <DataTable label="Values at cursor A and cursor B" flush columns={CA_COMPARE_COLUMNS} rows={rows} rowKey={(row) => row.id} />
         </Panel>
       </Grid>
@@ -577,6 +580,8 @@ function ChartAnnotationKey() {
               { label: 'Trip limit', tone: 'critical', mark: 'dashed', value: 'labelled on the line' },
               { label: 'Planned stop', tone: 'info', mark: 'swatch', value: 'shaded period' },
               { label: 'Anomaly', tone: 'pink', mark: 'swatch', value: 'shaded period' },
+              { label: 'Maintenance', tone: 'teal', mark: 'swatch', value: 'shaded or hatched period' },
+              { label: 'Selection', tone: 'accent', mark: 'swatch', value: 'dragged by the reader' },
             ]}
           />
         </Panel>

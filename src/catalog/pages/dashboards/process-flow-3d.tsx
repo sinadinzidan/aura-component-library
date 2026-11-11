@@ -152,7 +152,7 @@ const PROCESSFLOW3D_EQUIPMENT: readonly PlantEquipment[] = [
 
 const PROCESSFLOW3D_LABELLED: readonly string[] = ['20-va-1001', '23-ka-9101', '23-ka-9102', '23-ka-9103', '23-ha-9114', '27-vg-2001', 'flare'];
 
-const PROCESSFLOW3D_TARGET = frameBounds({ min: [-76, 0, -42], max: [76, 10, 30] }, { view: 'perspective', fov: 40, aspect: 1.5, padding: 0.7 });
+const PROCESSFLOW3D_TARGET = frameBounds({ min: [-76, 0, -42], max: [76, 10, 30] }, { view: 'perspective', fov: 40, aspect: 1.05, padding: 0.76 });
 
 function processFlow3dLine(id: string): ProcessFlow3dLine | undefined {
   return PROCESSFLOW3D_LINES.find((line) => line.id === id);
@@ -305,7 +305,6 @@ function processFlow3dColumns(onSelect: (lineId: string) => void): DataTableColu
       ),
     },
     { id: 'flow', header: `Flow, ${PROCESSFLOW3D_UNIT}`, cell: (row) => (row.flow > 0 ? formatNumber(row.flow, 1) : 'No flow'), numeric: true },
-    { id: 'share', header: 'Of feed', cell: (row) => `${formatNumber(normalizeRate(row.flow, PROCESSFLOW3D_SUPPLY) * 100)} %`, numeric: true, muted: true },
     { id: 'pressure', header: 'barg', cell: (row) => (row.flow > 0 ? formatNumber(row.line.pressure, row.line.pressure < 10 ? 1 : 0) : '–'), numeric: true },
     { id: 'temperature', header: '°C', cell: (row) => (row.flow > 0 ? formatNumber(row.line.temperature) : '–'), numeric: true },
   ];
@@ -315,7 +314,7 @@ function processFlow3dColumns(onSelect: (lineId: string) => void): DataTableColu
 function ProcessFlow3dStreamTable({ state, onSelect }: { state: FlowScenarioState; onSelect: (lineId: string) => void }) {
   return (
     <DataTable
-      label="Stream table: every line with its fluid, flow, share of the feed, pressure and temperature"
+      label="Stream table: every line with its fluid, flow, pressure and temperature"
       columns={processFlow3dColumns(onSelect)}
       rows={processFlow3dRows(state)}
       rowKey={(row) => row.line.id}
@@ -521,7 +520,7 @@ function ProcessFlow3dBalance({ closed, direction = 'column', className }: { clo
       <dl className={direction === 'row' ? 'grid grid-cols-5 gap-5' : 'flex flex-1 flex-col justify-between gap-3'}>
         {rows.map((row) => (
           <div key={row.label} className="flex min-w-0 flex-col gap-1.5">
-            <dt className="truncate text-xs text-[color:var(--kit-text-2)]">{row.label}</dt>
+            <dt className="min-h-8 text-xs leading-4 text-[color:var(--kit-text-2)]">{row.label}</dt>
             <dd className="flex items-baseline gap-1">
               <span className="text-2xl font-medium tabular-nums text-[color:var(--kit-text)]">{formatNumber(row.value, 1)}</span>
               <span className="text-xs text-[color:var(--kit-text-2)]">{PROCESSFLOW3D_UNIT}</span>

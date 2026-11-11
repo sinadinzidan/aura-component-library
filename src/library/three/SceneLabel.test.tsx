@@ -11,7 +11,7 @@ describe(SceneLabel.name, () => {
     await view.advance();
 
     expect(label()).toHaveTextContent('23-KA-9103RecompressorTripped');
-    expect(label()?.querySelector('.font-mono')).toHaveTextContent('23-KA-9103');
+    expect(label()?.querySelector('[data-slot="scene-label-tag"]')).toHaveTextContent('23-KA-9103');
 
     await view.unmount();
   });
@@ -44,6 +44,15 @@ describe(SceneLabel.name, () => {
     await view.advance();
 
     expect(label()).toBeNull();
+
+    await view.unmount();
+  });
+
+  it('uses the UI typeface, never monospace or capitals', async () => {
+    const view = await renderScene(<SceneLabel position={[0, 2, 0]} tag="23-KA-9103" name="Recompressor" />);
+    await view.advance();
+
+    expect(label()?.innerHTML).not.toMatch(/font-mono|uppercase/);
 
     await view.unmount();
   });

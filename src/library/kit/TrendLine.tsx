@@ -37,6 +37,11 @@ export type TrendLineProps = {
   /** Mark the latest value of the first series with a dot and its figure. */
   highlightLast?: boolean;
   height?: number;
+  /**
+   * A vertical marker at one point in time, with the first series' value there: pass the index or
+   * the x label. For a replay position, a selected event or a hovered row elsewhere on the page.
+   */
+  cursor?: number | string;
   /** Fixed y range; otherwise it fits the data and the limits. */
   yDomain?: readonly [number, number];
   showLegend?: boolean;
@@ -69,6 +74,7 @@ export function TrendLine({
   fill = false,
   highlightLast = true,
   height = 240,
+  cursor,
   yDomain,
   showLegend,
   headline,
@@ -94,7 +100,12 @@ export function TrendLine({
   const all = [...series.flatMap((entry) => entry.values), ...limits.map((limit) => limit.value)];
   const widest = Math.max(...all.map((value) => formatNumber(value, decimals).length), 2);
   const step = Math.max(1, Math.ceil(count / 7));
-  const ticks = Array.from({ length: count }, (_, index) => index).filter((index) => (count - 1 - index) % step === 0);
+  const indices = Array.from({ length: count }, (_, index) => index);
+  // Sparse labels are the author's own tick choice: keep every one of them.
+  const sparse = labels.some((text) => text === '');
+  const ticks = sparse ? indices.filter((index) => (labels[index] ?? '') !== '') : indices.filter((index) => (count - 1 - index) % step === 0);
+  const cursorIndex = typeof cursor === 'string' ? labels.indexOf(cursor) : (cursor ?? -1);
+  const cursorValue = lead?.values[cursorIndex];
   const suffix = unit ? ` ${unit}` : '';
   const dash = look === 'blueprint' ? '10 3 2 3' : look === 'console' ? '2 3' : '5 4';
   const withLegend = showLegend ?? series.length > 1;
@@ -137,6 +148,7 @@ export function TrendLine({
             tick={TICK}
             tickLine={false}
             tickMargin={8}
+            interval={sparse ? 0 : undefined}
             axisLine={chart.axisLine ? { stroke: 'var(--kit-rule-strong)' } : false}
             padding={{ left: 4, right: 4 }}
           />
@@ -220,6 +232,24 @@ export function TrendLine({
               }}
             />
           ))}
+          {cursorValue !== undefined ? (
+            <ReferenceLine
+              x={cursorIndex}
+              stroke="var(--kit-text)"
+              strokeWidth={1.25}
+              label={{
+                value: `${labels[cursorIndex] ? `${labels[cursorIndex]} · ` : ''}${formatNumber(cursorValue, decimals)}${suffix}`,
+                position: cursorIndex > count / 2 ? 'insideTopRight' : 'insideTopLeft',
+                fontSize: 12,
+                fontWeight: 600,
+                fill: 'var(--kit-text)',
+                stroke: 'var(--kit-halo)',
+                strokeWidth: 4,
+                paintOrder: 'stroke',
+                offset: 6,
+              }}
+            />
+          ) : null}
           {highlightLast && lead && lastValue !== undefined ? (
             <ReferenceDot
               x={lastIndex}

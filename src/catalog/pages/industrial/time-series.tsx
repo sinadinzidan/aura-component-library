@@ -1,586 +1,1028 @@
-import { chartSeriesColor } from '@cognite/aura/chart';
 import { Button } from '@cognite/aura/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardHeaderCenter, CardTitle } from '@cognite/aura/components/card';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
+import { IconAlertOctagon, IconAlertTriangle, IconCircleCheck, IconCloudOff, IconDatabaseOff, IconDownload, IconRefresh } from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { ChartPlaceholder } from '../../../library/industrial/charts/ChartPlaceholder';
-import { SeriesLegend } from '../../../library/industrial/charts/SeriesLegend';
-import { summarize } from '../../../library/industrial/charts/stats';
-import { DEFAULT_TIME_RANGES, findTimeRange } from '../../../library/industrial/charts/timeRanges';
-import { TimeRangeSwitch } from '../../../library/industrial/charts/TimeRangeSwitch';
-import { TrendCard } from '../../../library/industrial/charts/TrendCard';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import type { TrendLimit, TrendSeries, TrendState } from '../../../library/industrial/charts/TrendChart';
-import { aggregatePoints } from '../../../library/industrial/charts/trendData';
-import type { TrendPoint } from '../../../library/industrial/charts/trendData';
-import { formatReading, toneFromLimits } from '../../../library/industrial/status';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { SENSORS } from '../../data/plant';
-import type { Sensor } from '../../data/plant';
-import { DAY, HOUR, MINUTE, REFERENCE_NOW, makeSeries } from '../../data/series';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { Legend } from '../../../library/kit/Legend';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { aggregate, summarise } from '../../../library/kit/time-series/plotMath';
+import { PlotState } from '../../../library/kit/time-series/PlotState';
+import { SeriesLegend } from '../../../library/kit/time-series/SeriesLegend';
+import { SeriesPlot, type PlotLimit, type PlotSeries } from '../../../library/kit/time-series/SeriesPlot';
+import { StateBand, type StateSegment } from '../../../library/kit/time-series/StateBand';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
+import { PLANT_KPIS, SENSORS, type Sensor } from '../../data/plant';
+import { HOUR, MINUTE, REFERENCE_NOW, formatDate, formatTime, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './time-series.tsx?raw';
 
-const NOW = REFERENCE_NOW;
+const TS_POINTS = 49;
 
-function timeSeriesSensor(id: string): Sensor {
-  const sensor = SENSORS.find((candidate) => candidate.id === id);
-  if (!sensor) throw new Error(`Unknown sensor ${id}`);
-  return sensor;
+const TS_BY_ID = new Map(SENSORS.map((sensor) => [sensor.id, sensor]));
+
+function tsSensor(id: string): Sensor {
+  return TS_BY_ID.get(id) ?? SENSORS[0];
 }
 
-type TimeSeriesWindow = { hours?: number; stepMs?: number; drift?: number; cycles?: number; end?: number };
+const TS_PRESSURE = tsSensor('pt-92531');
 
-/** A trend for a sensor that ends on its current value. `drift` is the total move across the window. */
-function timeSeriesTrend(sensor: Sensor, { hours = 24, stepMs = 10 * MINUTE, drift = 0, cycles = 2, end = NOW }: TimeSeriesWindow = {}): TrendPoint[] {
-  const span = sensor.highLimit - sensor.lowLimit;
-  const history = makeSeries({
-    seed: sensor.seed,
-    points: Math.round((hours * HOUR) / stepMs),
-    base: sensor.value - drift,
-    drift,
-    amplitude: span * 0.06,
-    noise: span * 0.02,
-    cycles,
-    stepMs,
-    end: end - stepMs,
-    decimals: sensor.decimals,
+const TS_SUCTION = tsSensor('pt-92530');
+
+const TS_TEMPERATURE = tsSensor('tt-92532');
+
+const TS_VIBRATION = tsSensor('vt-92540');
+
+const TS_SPEED = tsSensor('st-92501');
+
+const TS_FLOW = tsSensor('ft-92510');
+
+const TS_LEVEL = tsSensor('lt-10012');
+
+const TS_COOLER = tsSensor('tt-91141');
+
+const TS_TRAIN = [TS_PRESSURE, TS_TEMPERATURE, TS_VIBRATION, TS_SPEED, TS_SUCTION, TS_COOLER];
+
+function tsLabels(points: number = TS_POINTS, stepMs: number = 30 * MINUTE): string[] {
+  return Array.from({ length: points }, (_, index) => {
+    const at = REFERENCE_NOW - (points - 1 - index) * stepMs;
+    return stepMs >= 3 * HOUR ? formatDate(at) : formatTime(at);
   });
-  return [...history.map((point) => ({ t: point.t, v: point.v })), { t: end, v: sensor.value }];
 }
 
-const values = (points: readonly TrendPoint[]): number[] => points.flatMap((point) => (point.v === null ? [] : [point.v]));
+const TS_LABELS = tsLabels();
 
-const PRESSURE = timeSeriesSensor('pt-92531');
-const SUCTION = timeSeriesSensor('pt-92530');
-const TEMPERATURE = timeSeriesSensor('tt-92532');
-const VIBRATION = timeSeriesSensor('vt-92540');
-const LEVEL = timeSeriesSensor('lt-10012');
-const EXPORT_FLOW = timeSeriesSensor('ft-20011');
-const COOLER = timeSeriesSensor('tt-91141');
+/** A day of readings for a tag that ends on the tag's current value. */
+function tsTrend(sensor: Sensor, points: number = TS_POINTS, wave = 0.14, seedOffset = 0): number[] {
+  const span = sensor.highLimit - sensor.lowLimit;
+  const raw = makeValues({ seed: sensor.seed + seedOffset, points, base: sensor.value, amplitude: span * wave, noise: span * 0.035, cycles: 2, decimals: sensor.decimals + 1 });
+  const offset = sensor.value - raw[raw.length - 1];
+  return raw.map((value) => Number((value + offset).toFixed(sensor.decimals + 1)));
+}
 
-const PRESSURE_24H = timeSeriesTrend(PRESSURE);
-const SUCTION_24H = timeSeriesTrend(SUCTION);
-const TEMPERATURE_24H = timeSeriesTrend(TEMPERATURE, { drift: 5 });
-const VIBRATION_24H = timeSeriesTrend(VIBRATION, { drift: 0.9 });
-const LEVEL_24H = timeSeriesTrend(LEVEL);
-const FLOW_24H = timeSeriesTrend(EXPORT_FLOW);
+const TS_PRESSURE_DAY = tsTrend(TS_PRESSURE, TS_POINTS, 0.2);
 
-const PRESSURE_SERIES: TrendSeries = { key: 'pressure', label: 'Discharge pressure', points: PRESSURE_24H };
+const TS_TEMPERATURE_DAY = tsTrend(TS_TEMPERATURE, TS_POINTS, 0.07);
 
-const PRESSURE_LIMITS: readonly TrendLimit[] = [
-  { value: PRESSURE.highLimit, label: 'High 52', tone: 'warning' },
-  { value: PRESSURE.lowLimit, label: 'Low 40', tone: 'warning' },
-];
+const TS_VIBRATION_DAY = tsTrend(TS_VIBRATION, TS_POINTS, 0.05);
 
-/** Recompressor vibration over 8 hours, climbing through its high limit into the trip limit. */
-const TRIP_VIBRATION: TrendPoint[] = [
-  ...makeSeries({ seed: 41, points: 43, base: 5.0, drift: 2.6, noise: 0.22, stepMs: 10 * MINUTE, end: NOW - 60 * MINUTE }).map((point) => ({ t: point.t, v: point.v })),
-  ...[8.4, 9.1, 9.9, 10.4, 11.2, 11.6].map((v, index) => ({ t: NOW - (50 - index * 10) * MINUTE, v })),
-];
+const TS_SPEED_DAY = tsTrend(TS_SPEED, TS_POINTS, 0.05);
 
-/** Anti-surge valve command: only changes when the controller moves it. */
-const VALVE_POSITION: TrendPoint[] = [0, 0, 0, 0, 15, 15, 15, 40, 40, 40, 40, 25, 25, 10, 10, 0, 0, 0, 0, 20, 20, 20, 5, 0, 0].map((v, index) => ({
-  t: NOW - (24 - index) * HOUR,
-  v,
-}));
+const TS_SUCTION_DAY = tsTrend(TS_SUCTION);
 
-/** Level setpoint moved twice during the shift; the level follows with a lag. */
-const LEVEL_SETPOINT: TrendPoint[] = Array.from({ length: 49 }, (_, index) => ({
-  t: NOW - (48 - index) * 10 * MINUTE,
-  v: index < 14 ? 50 : index < 32 ? 58 : 54,
-}));
+const TS_COOLER_DAY = tsTrend(TS_COOLER, TS_POINTS, 0.08);
 
-const LEVEL_NOISE = makeSeries({ seed: 17, points: 49, base: 0, noise: 0.5, stepMs: 10 * MINUTE });
+const TS_INTERSTAGE_DAY = makeValues({ seed: 58, points: TS_POINTS, base: 27.4, amplitude: 2.2, noise: 0.5, cycles: 2, decimals: 1 });
 
-const LEVEL_ACTUAL: TrendPoint[] = LEVEL_SETPOINT.reduce<TrendPoint[]>((points, setpoint, index) => {
-  const previous = points[index - 1]?.v ?? 50;
-  const next = previous + ((setpoint.v ?? previous) - previous) * 0.28;
-  return [...points, { t: setpoint.t, v: Math.round((next + LEVEL_NOISE[index].v * 0.4) * 10) / 10 }];
-}, []);
+const TS_FLOW_DAY = tsTrend(TS_FLOW, TS_POINTS, 0.2).map((value) => Math.round(value / 100) / 10);
 
-/** Discharge temperature of the three compressors. */
-const STAGE_TEMPERATURES: readonly TrendSeries[] = [
-  { key: 'first', label: '1st stage', points: TEMPERATURE_24H },
-  { key: 'second', label: '2nd stage', points: makeSeries({ seed: 31, points: 145, base: 128, amplitude: 3, noise: 0.8, stepMs: 10 * MINUTE }).map((point) => ({ t: point.t, v: point.v })) },
-  { key: 'recompressor', label: 'Recompressor', points: makeSeries({ seed: 47, points: 145, base: 119, amplitude: 4, noise: 0.9, drift: -5, stepMs: 10 * MINUTE }).map((point) => ({ t: point.t, v: point.v })) },
-];
+const TS_LEVEL_DAY = tsTrend(TS_LEVEL, TS_POINTS, 0.16);
 
-/** Export pump run state over 24 hours and the flow that goes with it. */
-const RUN_STATES: readonly TrendState[] = [
-  { from: NOW - 24 * HOUR, to: NOW - 15 * HOUR, label: 'Running', tone: 'neutral' },
-  { from: NOW - 15 * HOUR, to: NOW - 12.5 * HOUR, label: 'Standby', tone: 'info' },
-  { from: NOW - 12.5 * HOUR, to: NOW - 3 * HOUR, label: 'Running', tone: 'neutral' },
-  { from: NOW - 3 * HOUR, to: NOW - 2 * HOUR, label: 'Tripped', tone: 'critical' },
-  { from: NOW - 2 * HOUR, to: NOW, label: 'Running', tone: 'neutral' },
-];
-
-const RUN_STATE_FLOW: TrendPoint[] = FLOW_24H.map((point) => {
-  const state = RUN_STATES.find((candidate) => point.t >= candidate.from && point.t < candidate.to);
-  return { t: point.t, v: state && state.label !== 'Running' ? 0 : point.v };
-});
-
-/** Yesterday's pressure moved forward 24 hours so it lines up with today's. */
-const PRESSURE_PREVIOUS: TrendPoint[] = makeSeries({ seed: 71, points: 145, base: 47.4, amplitude: 1.1, noise: 0.3, cycles: 2, stepMs: 10 * MINUTE }).map((point) => ({
-  t: point.t,
-  v: point.v,
-}));
-
-/** Five-minute raw values for 48 hours and their hourly minimum, maximum and average. */
-const PRESSURE_RAW_48H = timeSeriesTrend(PRESSURE, { hours: 48, stepMs: 5 * MINUTE, cycles: 3 });
-const PRESSURE_HOURLY = aggregatePoints(PRESSURE_RAW_48H, HOUR);
-
-/** One-minute raw values for 3 hours and their 10-minute average. */
-const TEMPERATURE_RAW_3H = makeSeries({ seed: 13, points: 181, base: 140.4, amplitude: 1.2, noise: 1.1, drift: 0.8, stepMs: MINUTE }).map((point) => ({ t: point.t, v: point.v }));
-const TEMPERATURE_10MIN = aggregatePoints(TEMPERATURE_RAW_3H, 10 * MINUTE).map((point) => ({ t: point.t, v: Math.round(point.avg * 10) / 10 }));
-
-/** Bearing temperature with five hours missing while the transmitter was disconnected. */
-const GAP_FROM = NOW - 14 * HOUR;
-const GAP_TO = NOW - 9 * HOUR;
-const BEARING_GAPPED: TrendPoint[] = makeSeries({ seed: 22, points: 145, base: 61, amplitude: 4, noise: 0.6, stepMs: 10 * MINUTE }).map((point) => ({
-  t: point.t,
-  v: point.t > GAP_FROM && point.t < GAP_TO ? null : point.v,
-}));
-
-/** Cooler outlet temperature: the last four hours are flagged uncertain by the transmitter. */
-const UNCERTAIN_FROM = NOW - 4 * HOUR;
-const COOLER_24H = timeSeriesTrend(COOLER, { drift: 2.5 });
-const COOLER_GOOD = COOLER_24H.map((point) => ({ t: point.t, v: point.t <= UNCERTAIN_FROM ? point.v : null }));
-const COOLER_UNCERTAIN = COOLER_24H.map((point) => ({ t: point.t, v: point.t >= UNCERTAIN_FROM ? point.v : null }));
-
-const RANGE_DATA: Record<string, TrendPoint[]> = {
-  '1h': timeSeriesTrend(PRESSURE, { hours: 1, stepMs: MINUTE, cycles: 0.5 }),
-  '8h': timeSeriesTrend(PRESSURE, { hours: 8, stepMs: 5 * MINUTE, cycles: 1 }),
-  '24h': PRESSURE_24H,
-  '7d': timeSeriesTrend(PRESSURE, { hours: 168, stepMs: HOUR, cycles: 7 }),
+const TS_TRAIN_DAY: Record<string, number[]> = {
+  [TS_PRESSURE.id]: TS_PRESSURE_DAY,
+  [TS_TEMPERATURE.id]: TS_TEMPERATURE_DAY,
+  [TS_VIBRATION.id]: TS_VIBRATION_DAY,
+  [TS_SPEED.id]: TS_SPEED_DAY,
+  [TS_SUCTION.id]: TS_SUCTION_DAY,
+  [TS_COOLER.id]: TS_COOLER_DAY,
 };
 
-function TimeSeriesSingle() {
+const TS_TRAIN_TONE: Record<string, Tone> = {
+  [TS_PRESSURE.id]: 'blue',
+  [TS_TEMPERATURE.id]: 'amber',
+  [TS_VIBRATION.id]: 'purple',
+  [TS_SPEED.id]: 'teal',
+  [TS_SUCTION.id]: 'sky',
+  [TS_COOLER.id]: 'pink',
+};
+
+/** Recompressor vibration through its trip at 13:46: a climb, the trip, the rundown. */
+const TS_TRIP_DAY = makeValues({ seed: 44, points: TS_POINTS, base: 6.1, amplitude: 0.5, noise: 0.25, cycles: 3, decimals: 2 }).map((value, index) => {
+  if (index < 37) return value;
+  if (index <= 47) return Number((value + ((index - 37) / 10) ** 2 * 5.6).toFixed(2));
+  return 3.9;
+});
+
+const TS_TRIP_STATES: StateSegment[] = [
+  { from: 0, to: 41, label: 'Running', tone: 'success' },
+  { from: 41, to: 47, label: 'Running, alarm', tone: 'warning' },
+  { from: 47, to: 48, label: 'Tripped', tone: 'critical' },
+];
+
+/** Level controller setpoint: operator steps during the day. */
+const TS_SETPOINT_DAY = Array.from({ length: TS_POINTS }, (_, index) => (index < 12 ? 50 : index < 30 ? 58 : 54));
+
+const TS_LEVEL_ACTUAL = makeValues({ seed: 71, points: TS_POINTS, base: 0, noise: 0.9, decimals: 1 }).map((wobble, index) => {
+  const target = TS_SETPOINT_DAY[index];
+  const since = index < 12 ? index + 8 : index < 30 ? index - 12 : index - 30;
+  const from = index < 12 ? 50 : index < 30 ? 50 : 58;
+  return Number((target + (from - target) * Math.exp(-since / 2.4) + wobble).toFixed(1));
+});
+
+/** Anti-surge valve position: a stepped signal. */
+const TS_VALVE_DAY = Array.from({ length: TS_POINTS }, (_, index) => (index < 9 ? 12 : index < 17 ? 28 : index < 26 ? 20 : index < 35 ? 46 : index < 41 ? 34 : 18));
+
+const TS_RAW_MINUTES = makeValues({ seed: 91, points: 240, base: 141.2, amplitude: 2.6, noise: 1.5, cycles: 3, decimals: 1 });
+
+const TS_BUCKETS = aggregate(TS_RAW_MINUTES, 10);
+
+const TS_BUCKET_LABELS = tsLabels(TS_BUCKETS.length, 10 * MINUTE);
+
+const TS_WEEK_LABELS = tsLabels(57, 3 * HOUR);
+
+function tsState(sensor: Sensor, value: number = sensor.value): { tone: Tone; word: string } {
+  if (sensor.quality === 'bad') return { tone: 'neutral', word: 'No signal' };
+  if (sensor.highHighLimit !== undefined && value >= sensor.highHighLimit) return { tone: 'critical', word: 'Trip' };
+  if (value > sensor.highLimit) return { tone: 'critical', word: 'High' };
+  if (value < sensor.lowLimit) return { tone: 'info', word: 'Low' };
+  if (value >= sensor.highLimit - (sensor.highLimit - sensor.lowLimit) * 0.12) return { tone: 'warning', word: 'Near limit' };
+  return { tone: 'success', word: 'Normal' };
+}
+
+function TsStateIcon({ tone }: { tone: Tone }) {
+  if (tone === 'critical') return <IconAlertOctagon aria-hidden="true" />;
+  if (tone === 'warning') return <IconAlertTriangle aria-hidden="true" />;
+  return <IconCircleCheck aria-hidden="true" />;
+}
+
+function TsStatePill({ sensor, value }: { sensor: Sensor; value?: number }) {
+  const state = tsState(sensor, value);
   return (
-    <TrendChart
-      label="Discharge pressure of the 1st stage compressor over the last 24 hours, between 46 and 51 barg, latest 48.6 barg"
-      series={[PRESSURE_SERIES]}
-      unit="barg"
-      summary="23-PT-92531 · last 24 hours · steady between 46 and 51 barg."
-    />
+    <StatusPill tone={state.tone} icon={<TsStateIcon tone={state.tone} />}>
+      {state.word}
+    </StatusPill>
   );
 }
 
-function TimeSeriesCompact() {
+function tsLimits(sensor: Sensor, low = false): PlotLimit[] {
+  const limits: PlotLimit[] = [{ value: sensor.highLimit, label: `High ${formatNumber(sensor.highLimit, sensor.decimals)}`, tone: 'warning' }];
+  if (sensor.highHighLimit !== undefined) limits.push({ value: sensor.highHighLimit, label: `Trip ${formatNumber(sensor.highHighLimit, sensor.decimals)}`, tone: 'critical' });
+  if (low) limits.push({ value: sensor.lowLimit, label: `Low ${formatNumber(sensor.lowLimit, sensor.decimals)}`, tone: 'info' });
+  return limits;
+}
+
+function TsSummary({ values, unit, decimals }: { values: ReadonlyArray<number | null>; unit: string; decimals: number }) {
+  const summary = summarise(values);
+  const cells: Array<[string, number]> = [
+    ['Minimum', summary.min],
+    ['Average', summary.mean],
+    ['Maximum', summary.max],
+    ['Change', summary.change],
+  ];
   return (
-    <Card className="w-full max-w-xs self-center">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>Separator level</CardTitle>
-          <CardDescription>20-LT-10012 · last 24 hours</CardDescription>
-        </CardHeaderCenter>
-      </CardHeader>
-      <CardContent>
-        <ValueReadout value={LEVEL.value} unit={LEVEL.unit} decimals={1} />
-        <TrendChart
-          compact
-          showLast
-          heightClassName="h-16"
-          label="Separator level over the last 24 hours inside its normal band of 45 to 62 percent, latest 54.3 percent"
-          series={[{ key: 'level', label: 'Separator level', points: LEVEL_24H }]}
-          band={{ low: 45, high: 62 }}
+    <dl className="m-0 grid w-full grid-cols-4 gap-4">
+      {cells.map(([name, value]) => (
+        <div key={name}>
+          <dt className="text-xs text-(--kit-text-3)">{name}</dt>
+          <dd className="m-0 text-sm font-semibold text-(--kit-text) tabular-nums">
+            {name === 'Change' && value > 0 ? '+' : ''}
+            {formatNumber(value, decimals)} <span className="text-xs font-medium text-(--kit-text-3)">{unit}</span>
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function TsSheet({ title, subtitle, actions, footer, children }: { title: string; subtitle: string; actions?: ReactNode; footer?: ReactNode; children: ReactNode }) {
+  return (
+    <Canvas>
+      <Panel title={title} subtitle={subtitle} actions={actions} footer={footer}>
+        {children}
+      </Panel>
+    </Canvas>
+  );
+}
+
+function TimeSeriesSingle() {
+  const [range, setRange] = useState('24h');
+  const week = tsTrend(TS_PRESSURE, 57, 0.2, 5);
+  const values = range === '8h' ? TS_PRESSURE_DAY.slice(-17) : range === '7d' ? week : TS_PRESSURE_DAY;
+  const labels = range === '8h' ? TS_LABELS.slice(-17) : range === '7d' ? TS_WEEK_LABELS : TS_LABELS;
+  return (
+    <TsSheet
+      title="Discharge pressure"
+      subtitle="23-PT-92531 · 1st stage compressor"
+      actions={
+        <SegmentedControl value={range} onValueChange={(next) => setRange(String(next))}>
+          <SegmentedControlList size="small" aria-label="Time range">
+            <SegmentedControlButton value="8h">8 h</SegmentedControlButton>
+            <SegmentedControlButton value="24h">24 h</SegmentedControlButton>
+            <SegmentedControlButton value="7d">7 d</SegmentedControlButton>
+          </SegmentedControlList>
+        </SegmentedControl>
+      }
+      footer={<TsSummary values={values} unit="barg" decimals={1} />}
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-4">
+          <Stat variant="plain" size="lg" label="Now" value={TS_PRESSURE.value} decimals={1} unit="barg" delta={{ value: values[values.length - 1] - values[0], unit: ' barg', good: 'none', caption: 'over the range' }} />
+          <TsStatePill sensor={TS_PRESSURE} />
+        </div>
+        <SeriesPlot
+          label={`Discharge pressure, ${range === '8h' ? 'last 8 hours' : range === '7d' ? 'last 7 days' : 'last 24 hours'}, against its high and trip limits`}
+          series={[{ id: 'pressure', label: 'Discharge pressure', values, tone: 'accent', fill: true }]}
+          labels={labels}
+          unit="barg"
+          limits={tsLimits(TS_PRESSURE)}
+          xTicks={range === '7d' ? 8 : 7}
+          height={280}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </TsSheet>
   );
 }
 
 function TimeSeriesArea() {
   return (
-    <TrendChart
-      label="Export flow over the last 24 hours, between 390 and 440 cubic metres per hour"
-      series={[{ key: 'flow', label: 'Export flow', points: FLOW_24H, variant: 'area', color: chartSeriesColor(2) }]}
-      yDomain={[0, 600]}
-      unit="m³/h"
-      decimals={0}
-    />
+    <TsSheet title="Gas flow" subtitle="23-FT-92510 · area from zero, last 24 hours" footer={<TsSummary values={TS_FLOW_DAY} unit="kSm³/h" decimals={1} />}>
+      <SeriesPlot
+        label="Gas flow in thousand standard cubic metres per hour, last 24 hours"
+        series={[{ id: 'flow', label: 'Gas flow', values: TS_FLOW_DAY, tone: 'teal', fill: true }]}
+        labels={TS_LABELS}
+        unit="kSm³/h"
+        yDomain={[0, 250]}
+        xTicks={5}
+        height={220}
+      />
+    </TsSheet>
   );
 }
 
 function TimeSeriesStep() {
   return (
-    <TrendChart
-      label="Anti-surge valve position over the last 24 hours; it opened to 40 percent around 21:00 and is closed now"
-      series={[{ key: 'position', label: 'Valve position', points: VALVE_POSITION, variant: 'step', color: chartSeriesColor(4) }]}
-      yDomain={[0, 50]}
-      yTicks={[0, 10, 20, 30, 40, 50]}
-      unit="%"
-      decimals={0}
-    />
+    <TsSheet title="Anti-surge valve position" subtitle="23-FV-92520 · a stepped signal holds its value" footer={<TsSummary values={TS_VALVE_DAY} unit="%" decimals={0} />}>
+      <SeriesPlot
+        label="Anti-surge valve position in percent open, last 24 hours"
+        series={[{ id: 'valve', label: 'Valve position', values: TS_VALVE_DAY, tone: 'purple', curve: 'step', fill: true }]}
+        labels={TS_LABELS}
+        unit="% open"
+        decimals={0}
+        yDomain={[0, 60]}
+        xTicks={5}
+        height={220}
+      />
+    </TsSheet>
   );
 }
 
-function TimeSeriesHighLowLimits() {
+function TimeSeriesCompact() {
   return (
-    <TrendChart
-      label="Discharge pressure over the last 24 hours against its low limit of 40 and high limit of 52 barg; it stays inside both"
-      series={[PRESSURE_SERIES]}
-      limits={PRESSURE_LIMITS}
-      yDomain={[36, 56]}
-      yTicks={[36, 40, 44, 48, 52, 56]}
-      unit="barg"
-      summary="Inside the 40 to 52 barg operating limits for the whole period; closest approach to the high limit is 1.2 barg."
-    />
+    <Canvas>
+      <Grid>
+        {[TS_PRESSURE, TS_TEMPERATURE, TS_VIBRATION].map((sensor) => (
+          <Panel key={sensor.id} className="col-span-4" title={sensor.name} subtitle={sensor.tag} actions={<TsStatePill sensor={sensor} />}>
+            <div className="flex flex-col gap-3">
+              <Stat variant="plain" size="md" label="Now" value={sensor.value} decimals={sensor.decimals} unit={sensor.unit} target={`High limit ${formatNumber(sensor.highLimit, sensor.decimals)} ${sensor.unit}`} />
+              <SeriesPlot
+                bare
+                label={`${sensor.name}, last 24 hours`}
+                series={[{ id: sensor.id, label: sensor.name, values: TS_TRAIN_DAY[sensor.id], tone: tsState(sensor).tone, fill: true }]}
+                labels={TS_LABELS}
+                unit={sensor.unit}
+                decimals={sensor.decimals}
+                limits={[{ value: sensor.highLimit, label: 'High', tone: 'warning' }]}
+                height={84}
+              />
+              <div className="flex justify-between text-xs text-(--kit-text-3) tabular-nums">
+                <span>{TS_LABELS[0]} yesterday</span>
+                <span>Now</span>
+              </div>
+            </div>
+          </Panel>
+        ))}
+      </Grid>
+    </Canvas>
   );
 }
 
-function TimeSeriesOperatingBand() {
+function TimeSeriesLimits() {
   return (
-    <TrendChart
-      label="Separator level over the last 24 hours with its normal operating band of 45 to 62 percent shaded; the level stays inside it"
-      series={[{ key: 'level', label: 'Separator level', points: LEVEL_24H }]}
-      band={{ low: 45, high: 62, label: 'Normal band' }}
-      yDomain={[30, 80]}
-      yTicks={[30, 40, 50, 60, 70, 80]}
-      unit="%"
-    />
+    <TsSheet title="Suction pressure" subtitle="23-PT-92530 · high and low limit lines" actions={<TsStatePill sensor={TS_SUCTION} />}>
+      <SeriesPlot
+        label="Suction pressure against its low and high limits, last 24 hours"
+        series={[{ id: 'suction', label: 'Suction pressure', values: TS_SUCTION_DAY, tone: 'blue' }]}
+        labels={TS_LABELS}
+        unit="barg"
+        limits={tsLimits(TS_SUCTION, true)}
+        yDomain={[8, 16]}
+        xTicks={5}
+        height={240}
+      />
+    </TsSheet>
   );
 }
 
-function TimeSeriesTripLimit() {
+function TimeSeriesBand() {
   return (
-    <TrendChart
-      label="Recompressor drive-end vibration over the last 8 hours, rising through the high limit of 7.1 at 11:30 and reaching the trip limit of 11 millimetres per second at 13:40"
-      series={[{ key: 'vibration', label: 'Drive-end vibration', points: TRIP_VIBRATION }]}
-      highlight={{ seriesKey: 'vibration', above: 7.1, tone: 'warning' }}
-      limits={[
-        { value: 11, label: 'Trip 11', tone: 'critical', align: 'left' },
-        { value: 7.1, label: 'High 7.1', tone: 'warning', align: 'left' },
-      ]}
-      events={[{ t: NOW - 14 * MINUTE, label: 'Tripped', tone: 'critical' }]}
-      yDomain={[2, 14]}
-      yTicks={[2, 5, 8, 11, 14]}
-      unit="mm/s"
-      summary="Above the high limit since 11:30; the machine tripped at 13:46 when vibration passed 11 mm/s."
-    />
+    <TsSheet
+      title="Separator level"
+      subtitle="20-LT-10012 · operating band shaded"
+      actions={<TsStatePill sensor={TS_LEVEL} />}
+    >
+      <div className="flex flex-col gap-3">
+        <SeriesPlot
+          label="Separator level inside its 30 to 70 percent operating band, last 24 hours"
+          series={[{ id: 'level', label: 'Separator level', values: TS_LEVEL_DAY, tone: 'blue' }]}
+          labels={TS_LABELS}
+          unit="%"
+          bands={[{ from: TS_LEVEL.lowLimit, to: TS_LEVEL.highLimit, tone: 'success' }]}
+          yDomain={[20, 80]}
+          xTicks={5}
+          height={216}
+        />
+        <Legend
+          items={[
+            { label: 'Level', tone: 'blue', mark: 'line' },
+            { label: 'Operating band 30–70 %', tone: 'success' },
+          ]}
+        />
+      </div>
+    </TsSheet>
+  );
+}
+
+function TimeSeriesTrip() {
+  return (
+    <TsSheet
+      title="Recompressor drive-end vibration"
+      subtitle="23-VT-92740 · excursion and trip at 13:46"
+      actions={
+        <StatusPill tone="critical" icon={<IconAlertOctagon aria-hidden="true" />}>
+          Tripped
+        </StatusPill>
+      }
+      footer={<span>Vibration passed the 7.1 mm/s high limit at 10:30 and reached the 11.0 mm/s trip limit 3 h 16 min later. The machine is running down.</span>}
+    >
+      <div className="flex flex-col gap-2">
+        <SeriesPlot
+          label="Recompressor vibration climbing through the high limit to the trip limit, last 24 hours"
+          series={[{ id: 'vibration', label: 'Drive-end vibration', values: TS_TRIP_DAY, tone: 'accent' }]}
+          labels={TS_LABELS}
+          unit="mm/s"
+          limits={[
+            { value: 7.1, label: 'High 7.1', tone: 'warning' },
+            { value: 11, label: 'Trip 11.0', tone: 'critical' },
+          ]}
+          regions={[{ from: 41, to: 47, label: 'Above high limit', tone: 'warning' }]}
+          events={[
+            { index: 41, label: 'Alarm 10:30', tone: 'warning' },
+            { index: 47, label: 'Trip 13:46', tone: 'critical' },
+          ]}
+          yDomain={[0, 14]}
+          xTicks={7}
+          height={280}
+          highlightLast={false}
+          gutters={{ left: 48, right: 80 }}
+        />
+        <StateBand label="Run state of the recompressor" caption="State" count={TS_POINTS} segments={TS_TRIP_STATES} inset={{ left: 48, right: 80 }} size="lg" />
+      </div>
+    </TsSheet>
   );
 }
 
 function TimeSeriesSetpoint() {
   return (
-    <TrendChart
-      legend
-      label="Separator level against its setpoint over the last 8 hours; the level settles within about an hour of each setpoint change"
-      series={[
-        { key: 'setpoint', label: 'Setpoint', points: LEVEL_SETPOINT, variant: 'step', dashed: true, color: 'var(--color-chart-neutral-450)' },
-        { key: 'actual', label: 'Level', points: LEVEL_ACTUAL, color: chartSeriesColor(1) },
-      ]}
-      yDomain={[46, 62]}
-      yTicks={[46, 50, 54, 58, 62]}
-      unit="%"
-    />
+    <TsSheet title="Level controller" subtitle="20-LIC-10012 · setpoint and actual">
+      <div className="flex flex-col gap-3">
+        <SeriesPlot
+          label="Separator level following three setpoint changes, last 24 hours"
+          series={[
+            { id: 'actual', label: 'Level', values: TS_LEVEL_ACTUAL, tone: 'blue' },
+            { id: 'setpoint', label: 'Setpoint', values: TS_SETPOINT_DAY, tone: 'neutral', curve: 'step', dashed: true },
+          ]}
+          labels={TS_LABELS}
+          unit="%"
+          yDomain={[44, 62]}
+          xTicks={5}
+          height={216}
+        />
+        <Legend
+          items={[
+            { label: 'Level', tone: 'blue', mark: 'line', value: `${formatNumber(TS_LEVEL_ACTUAL[TS_POINTS - 1], 1)} %` },
+            { label: 'Setpoint', tone: 'neutral', mark: 'dashed', value: '54.0 %' },
+          ]}
+        />
+      </div>
+    </TsSheet>
   );
 }
 
 function TimeSeriesOverlay() {
+  const [hidden, setHidden] = useState<string[]>([]);
+  const all: PlotSeries[] = [
+    { id: 'discharge', label: 'Discharge pressure', values: TS_PRESSURE_DAY, tone: 'blue' },
+    { id: 'suction', label: 'Suction pressure', values: TS_SUCTION_DAY, tone: 'teal' },
+    { id: 'interstage', label: 'Interstage pressure', values: TS_INTERSTAGE_DAY, tone: 'purple' },
+  ];
+  const toggle = (id: string) => setHidden((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : current.length < all.length - 1 ? [...current, id] : current));
   return (
-    <TrendChart
-      legend
-      label="Discharge temperature of the three compressors over the last 24 hours; the 1st stage is hottest and has risen 5 degrees"
-      series={STAGE_TEMPERATURES}
-      limits={[{ value: 145, label: 'High 145', tone: 'warning' }]}
-      yDomain={[100, 160]}
-      yTicks={[100, 115, 130, 145, 160]}
-      unit="°C"
-    />
+    <TsSheet title="Pressures across the train" subtitle="Three tags in one unit on a shared axis · select a series to hide it">
+      <div className="grid grid-cols-[minmax(0,1fr)_17rem] items-start gap-6">
+        <SeriesPlot
+          label="Discharge, interstage and suction pressure on a shared axis, last 24 hours"
+          series={all.filter((entry) => !hidden.includes(entry.id))}
+          labels={TS_LABELS}
+          unit="barg"
+          yDomain={[0, 60]}
+          xTicks={7}
+          height={280}
+          highlightLast={false}
+        />
+        <SeriesLegend
+          direction="column"
+          hidden={hidden}
+          onToggle={toggle}
+          items={[
+            { id: 'discharge', label: 'Discharge', detail: '23-PT-92531', tone: 'blue', value: '48.6 barg' },
+            { id: 'interstage', label: 'Interstage', detail: '23-PT-92535', tone: 'purple', value: `${formatNumber(TS_INTERSTAGE_DAY[TS_POINTS - 1], 1)} barg` },
+            { id: 'suction', label: 'Suction', detail: '23-PT-92530', tone: 'teal', value: '12.4 barg' },
+            
+          ]}
+        />
+      </div>
+    </TsSheet>
   );
 }
 
 function TimeSeriesDualAxis() {
   return (
-    <TrendChart
-      legend
-      label="Discharge pressure in barg on the left axis and discharge temperature in degrees Celsius on the right axis over the last 24 hours; temperature rises while pressure holds"
-      series={[
-        { key: 'pressure', label: 'Discharge pressure (barg, left)', points: PRESSURE_24H },
-        { key: 'temperature', label: 'Discharge temperature (°C, right)', points: TEMPERATURE_24H, axis: 'right' },
-      ]}
-      yDomain={[40, 56]}
-      yTicks={[40, 44, 48, 52, 56]}
-      rightDomain={[120, 152]}
-      unit="barg"
-      rightUnit="°C"
-    />
+    <TsSheet title="Speed and vibration" subtitle="Two units, one axis each">
+      <div className="flex flex-col gap-3">
+        <SeriesPlot
+          label="Drive-end vibration on the left axis and shaft speed on the right axis, last 24 hours"
+          series={[
+            { id: 'vibration', label: 'Vibration', values: TS_VIBRATION_DAY, tone: 'purple' },
+            { id: 'speed', label: 'Shaft speed', values: TS_SPEED_DAY, tone: 'teal', axis: 'right' },
+          ]}
+          labels={TS_LABELS}
+          unit="mm/s"
+          rightUnit="rpm"
+          rightDecimals={0}
+          yDomain={[4, 8]}
+          rightDomain={[9000, 10200]}
+          xTicks={5}
+          height={216}
+          highlightLast={false}
+        />
+        <Legend
+          items={[
+            { label: 'Vibration, left axis', tone: 'purple', mark: 'line', value: '6.8 mm/s' },
+            { label: 'Shaft speed, right axis', tone: 'teal', mark: 'line', value: '9,840 rpm' },
+          ]}
+        />
+      </div>
+    </TsSheet>
   );
 }
 
 function TimeSeriesSmallMultiples() {
-  const rows = [
-    { sensor: SUCTION, points: SUCTION_24H },
-    { sensor: PRESSURE, points: PRESSURE_24H },
-    { sensor: TEMPERATURE, points: TEMPERATURE_24H },
-    { sensor: VIBRATION, points: VIBRATION_24H },
-  ];
+  const [cursor, setCursor] = useState<number | null>(null);
+  const rows = [TS_PRESSURE, TS_TEMPERATURE, TS_VIBRATION];
   return (
-    <div className="flex w-full flex-col gap-3">
-      {rows.map(({ sensor, points }, index) => (
-        <div key={sensor.id} className="flex flex-col gap-1">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-xs text-muted-foreground">{sensor.name}</span>
-            <ValueReadout size="xs" value={sensor.value} unit={sensor.unit} decimals={sensor.decimals} />
+    <TsSheet title="Compressor readings" subtitle="One row per unit on a shared time axis · the cursor reads all three">
+      <div className="flex flex-col gap-7">
+        {rows.map((sensor, index) => (
+          <div key={sensor.id} className="grid grid-cols-[11rem_minmax(0,1fr)] items-center gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-(--kit-text)">{sensor.name}</span>
+              <span className="text-xl font-semibold text-(--kit-text) tabular-nums">
+                {formatNumber(cursor === null ? sensor.value : TS_TRAIN_DAY[sensor.id][cursor], sensor.decimals)} <span className="text-xs font-medium text-(--kit-text-3)">{sensor.unit}</span>
+              </span>
+            </div>
+            <SeriesPlot
+              label={`${sensor.name}, last 24 hours`}
+              series={[{ id: sensor.id, label: sensor.name, values: TS_TRAIN_DAY[sensor.id], tone: TS_TRAIN_TONE[sensor.id] }]}
+              labels={TS_LABELS}
+              decimals={sensor.decimals}
+              limits={[{ value: sensor.highLimit, label: `High ${formatNumber(sensor.highLimit, sensor.decimals)}`, tone: 'warning' }]}
+              xTicks={7}
+              height={96}
+              gutters={{ left: 48, right: 84 }}
+              cursor={cursor}
+              onCursorChange={setCursor}
+              hideTime={index < rows.length - 1}
+              highlightLast={false}
+            />
           </div>
-          <TrendChart
-            heightClassName={index === rows.length - 1 ? 'h-24' : 'h-16'}
-            hideXAxis={index < rows.length - 1}
-            label={`${sensor.name} over the last 24 hours, latest ${formatReading(sensor.value, sensor.unit, sensor.decimals)}`}
-            series={[{ key: 'value', label: sensor.name, points }]}
-            limits={[{ value: sensor.highLimit, label: `High ${sensor.highLimit}`, tone: 'warning', align: 'left' }]}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TimeSeriesRunState() {
-  return (
-    <TrendChart
-      label="Export flow over the last 24 hours with the pump run state underneath; flow is zero during standby from 23:00 to 01:30 and during the trip from 11:00 to 12:00"
-      series={[{ key: 'flow', label: 'Export flow', points: RUN_STATE_FLOW, variant: 'area', color: chartSeriesColor(2) }]}
-      states={RUN_STATES}
-      statesLabel="Export pump A run state"
-      yDomain={[0, 600]}
-      unit="m³/h"
-      decimals={0}
-    />
-  );
-}
-
-function TimeSeriesLegendToggles() {
-  const [hidden, setHidden] = useState<readonly string[]>(['recompressor']);
-  const toggle = (key: string) =>
-    setHidden((current) => (current.includes(key) ? current.filter((entry) => entry !== key) : current.length < STAGE_TEMPERATURES.length - 1 ? [...current, key] : current));
-
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <TrendChart
-        label="Discharge temperature of the compressors over the last 24 hours; series can be switched off in the legend"
-        series={STAGE_TEMPERATURES.map((series) => ({ ...series, hidden: hidden.includes(series.key) }))}
-        yDomain={[100, 160]}
-        yTicks={[100, 115, 130, 145, 160]}
-        unit="°C"
-      />
-      <SeriesLegend
-        label="Compressors"
-        hiddenKeys={hidden}
-        onToggle={toggle}
-        items={STAGE_TEMPERATURES.map((series, index) => ({ key: series.key, label: series.label, color: chartSeriesColor(index + 1) }))}
-      />
-    </div>
+        ))}
+      </div>
+    </TsSheet>
   );
 }
 
 function TimeSeriesPreviousPeriod() {
+  const yesterday = tsTrend(TS_TEMPERATURE, TS_POINTS, 0.07, 9).map((value) => Number((value - 2.4).toFixed(1)));
   return (
-    <TrendChart
-      legend
-      label="Discharge pressure over the last 24 hours compared with the 24 hours before; today runs about 1 barg higher"
-      series={[
-        { key: 'previous', label: 'Previous 24 hours', points: PRESSURE_PREVIOUS, ghost: true },
-        { key: 'pressure', label: 'Last 24 hours', points: PRESSURE_24H, color: chartSeriesColor(1) },
-      ]}
-      yDomain={[42, 54]}
-      yTicks={[42, 45, 48, 51, 54]}
-      unit="barg"
-      summary="Today averages 48.4 barg against 47.4 barg in the previous period."
-    />
+    <TsSheet title="Discharge temperature" subtitle="Today against the same hours yesterday">
+      <div className="flex flex-col gap-3">
+        <SeriesPlot
+          label="Discharge temperature today with yesterday as a ghost line"
+          series={[
+            { id: 'today', label: 'Today', values: TS_TEMPERATURE_DAY, tone: 'amber' },
+            { id: 'yesterday', label: 'Yesterday', values: yesterday, tone: 'neutral', ghost: true },
+          ]}
+          labels={TS_LABELS}
+          unit="°C"
+          limits={[{ value: 145, label: 'High 145', tone: 'warning' }]}
+          xTicks={5}
+          height={216}
+        />
+        <Legend
+          items={[
+            { label: 'Today', tone: 'amber', mark: 'line', value: '141.2 °C' },
+            { label: 'Yesterday', tone: 'neutral', mark: 'dashed', value: `${formatNumber(yesterday[TS_POINTS - 1], 1)} °C` },
+          ]}
+        />
+      </div>
+    </TsSheet>
   );
 }
 
 function TimeSeriesEnvelope() {
   return (
-    <TrendChart
-      legend
-      label="Hourly average discharge pressure over the last 48 hours inside its hourly minimum to maximum envelope; the spread stays under 2 barg"
-      series={[{ key: 'average', label: 'Hourly average', points: PRESSURE_HOURLY.map((point) => ({ t: point.t, v: Math.round(point.avg * 10) / 10 })) }]}
-      envelopes={[{ key: 'range', label: 'Hourly min to max', points: PRESSURE_HOURLY.map((point) => ({ t: point.t, low: point.min, high: point.max })), color: 'var(--color-chart-1-200)' }]}
-      yDomain={[42, 54]}
-      yTicks={[42, 45, 48, 51, 54]}
-      unit="barg"
-    />
-  );
-}
-
-function TimeSeriesRawVsAggregated() {
-  return (
-    <TrendChart
-      legend
-      label="Discharge temperature over the last 3 hours as one-minute raw values and as a 10-minute average; the average removes the measurement noise"
-      series={[
-        { key: 'raw', label: 'Raw, 1 min', points: TEMPERATURE_RAW_3H, color: 'var(--color-chart-1-200)' },
-        { key: 'average', label: '10 min average', points: TEMPERATURE_10MIN, connectNulls: true, color: chartSeriesColor(1) },
-      ]}
-      yDomain={[136, 146]}
-      yTicks={[136, 138, 140, 142, 144, 146]}
-      unit="°C"
-    />
-  );
-}
-
-function TimeSeriesGaps() {
-  return (
-    <TrendChart
-      label="Bearing temperature over the last 24 hours with no data between 00:00 and 05:00"
-      series={[{ key: 'temperature', label: 'Bearing temperature', points: BEARING_GAPPED }]}
-      regions={[{ from: GAP_FROM, to: GAP_TO, label: 'No data', tone: 'neutral' }]}
-      yDomain={[50, 70]}
-      yTicks={[50, 55, 60, 65, 70]}
-      unit="°C"
-      summary="No signal from 40-TT-40015 between 00:00 and 05:00; the line is not bridged across the gap."
-    />
-  );
-}
-
-function TimeSeriesBadQuality() {
-  return (
-    <TrendChart
-      legend
-      label="Cooler outlet temperature over the last 24 hours; values since 10:00 are flagged uncertain and drawn dashed"
-      series={[
-        { key: 'good', label: 'Good quality', points: COOLER_GOOD, color: chartSeriesColor(1) },
-        { key: 'uncertain', label: 'Uncertain quality', points: COOLER_UNCERTAIN, dashed: true, color: chartSeriesColor(1) },
-      ]}
-      regions={[{ from: UNCERTAIN_FROM, to: NOW, label: 'Uncertain', tone: 'warning' }]}
-      limits={[{ value: 40, label: 'High 40', tone: 'warning', align: 'left' }]}
-      yDomain={[30, 45]}
-      yTicks={[30, 35, 40, 45]}
-      unit="°C"
-    />
-  );
-}
-
-function TimeSeriesRanges() {
-  const [range, setRange] = useState('8h');
-  const option = findTimeRange(DEFAULT_TIME_RANGES, range);
-  const points = RANGE_DATA[range] ?? PRESSURE_24H;
-  const stats = summarize(values(points));
-
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium text-base-foreground">Discharge pressure</span>
-        <TimeRangeSwitch value={range} onValueChange={setRange} />
+    <TsSheet title="Discharge temperature" subtitle="10-minute average with the min–max envelope of 240 raw samples">
+      <div className="flex flex-col gap-3">
+        <SeriesPlot
+          label="Ten-minute average of discharge temperature with its minimum and maximum, last 4 hours"
+          series={[
+            {
+              id: 'average',
+              label: 'Average',
+              values: TS_BUCKETS.map((bucket) => Number(bucket.mean.toFixed(1))),
+              tone: 'amber',
+              envelope: { min: TS_BUCKETS.map((bucket) => bucket.min), max: TS_BUCKETS.map((bucket) => bucket.max) },
+            },
+          ]}
+          labels={TS_BUCKET_LABELS}
+          unit="°C"
+          xTicks={5}
+          height={216}
+        />
+        <Legend
+          items={[
+            { label: '10 min average', tone: 'amber', mark: 'line' },
+            { label: 'Min to max in each bucket', tone: 'amber' },
+          ]}
+        />
       </div>
-      <TrendChart
-        label={`Discharge pressure, ${option?.name?.toLowerCase() ?? range}`}
-        series={[{ key: 'pressure', label: 'Discharge pressure', points }]}
-        limits={[{ value: PRESSURE.highLimit, label: 'High 52', tone: 'warning', align: 'left' }]}
-        yDomain={[42, 54]}
-        yTicks={[42, 45, 48, 51, 54]}
-        unit="barg"
-        summary={stats ? `${option?.name ?? range}: ${formatReading(stats.min, 'barg', 1)} to ${formatReading(stats.max, 'barg', 1)}, average ${formatReading(stats.mean, 'barg', 1)}.` : undefined}
-      />
-    </div>
+    </TsSheet>
   );
 }
 
-function TimeSeriesCurrentValue() {
-  const reference = PRESSURE_24H[0].v ?? PRESSURE.value;
+function TimeSeriesGap() {
+  const values = TS_COOLER_DAY.map((value, index) => (index >= 20 && index <= 27 ? null : value));
   return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex items-end justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground">Discharge pressure · 23-PT-92531</span>
-          <ValueReadout value={PRESSURE.value} unit={PRESSURE.unit} decimals={1} size="lg" />
-        </div>
-        <TrendDelta value={PRESSURE.value} reference={reference} unit="barg" caption="in 24 h" />
-      </div>
-      <TrendChart
-        showLast
-        label="Discharge pressure over the last 24 hours, latest 48.6 barg"
-        series={[PRESSURE_SERIES]}
-        yDomain={[42, 54]}
-        yTicks={[42, 45, 48, 51, 54]}
-      />
-    </div>
-  );
-}
-
-function TimeSeriesLoading() {
-  return <ChartPlaceholder state="loading" title="Loading discharge pressure trend" />;
-}
-
-function TimeSeriesNoData() {
-  return (
-    <ChartPlaceholder
-      state="empty"
-      title="No data in this period"
-      description="40-TT-40015 has no datapoints in the last 8 hours."
-      action={
-        <Button variant="secondary" size="sm">
-          Show last 7 days
-        </Button>
-      }
-    />
-  );
-}
-
-function TimeSeriesError() {
-  return (
-    <ChartPlaceholder
-      state="error"
-      title="Could not load the trend"
-      description="The time series service did not answer."
-      action={
-        <Button variant="secondary" size="sm">
-          Try again
-        </Button>
-      }
-    />
-  );
-}
-
-function TimeSeriesTagTrendCard() {
-  const [range, setRange] = useState('24h');
-  const option = findTimeRange(DEFAULT_TIME_RANGES, range);
-  const span = option?.spanMs ?? DAY;
-  const points = (range === '24h' ? TEMPERATURE_24H : timeSeriesTrend(TEMPERATURE, { hours: span / HOUR, stepMs: span / 144, drift: range === '7d' ? 8 : range === '8h' ? 3 : 1, cycles: span / (12 * HOUR) })).map(
-    (point, index, all) => (index === all.length - 1 ? { t: point.t, v: 146.3 } : point)
-  );
-  const stats = summarize(values(points));
-  const limits = { high: TEMPERATURE.highLimit, highHigh: TEMPERATURE.highHighLimit };
-  const tone = toneFromLimits(146.3, limits);
-  const alarmAt = NOW - 38 * MINUTE;
-
-  return (
-    <TrendCard
-      title="Discharge temperature"
-      description="23-TT-92532 · 1st stage compressor"
-      reading={{ value: 146.3, unit: '°C', decimals: 1, tone }}
-      delta={{ reference: points[0].v ?? 146.3, caption: `in ${option?.label ?? '24 h'}`, goodDirection: 'down' }}
-      status={{ tone: 'warning', label: 'Above high limit', shape: 'square' }}
-      actions={<TimeRangeSwitch value={range} onValueChange={setRange} />}
-      summary={
-        stats
-          ? `${option?.name ?? 'Last 24 hours'}: ${formatReading(stats.min, '°C', 1)} to ${formatReading(stats.max, '°C', 1)}, average ${formatReading(stats.mean, '°C', 1)}. Above the 145 °C high limit since 13:22; the trip limit is 155 °C.`
-          : undefined
+    <TsSheet
+      title="Cooler outlet temperature"
+      subtitle="23-TT-91141 · the line stops where the data stops"
+      actions={
+        <StatusPill tone="warning" icon={<IconAlertTriangle aria-hidden="true" />}>
+          Uncertain
+        </StatusPill>
       }
     >
-      <TrendChart
-        heightClassName="h-72"
-        label={`Discharge temperature of the 1st stage compressor, ${option?.name?.toLowerCase() ?? 'last 24 hours'}, rising through the high limit of 145 to 146.3 degrees Celsius`}
-        series={[{ key: 'temperature', label: 'Discharge temperature', points }]}
-        highlight={{ seriesKey: 'temperature', above: 145, tone: 'warning' }}
-        band={{ low: 120, high: 145 }}
-        limits={[
-          { value: 155, label: 'Trip 155', tone: 'critical', align: 'left' },
-          { value: 145, label: 'High 145', tone: 'warning', align: 'left' },
-        ]}
-        events={alarmAt > NOW - span ? [{ t: alarmAt, label: 'Alarm', tone: 'warning' }] : []}
-        yDomain={[115, 160]}
-        yTicks={[115, 130, 145, 160]}
-        maxTicks={8}
-        unit="°C"
-        showLast
-      />
-    </TrendCard>
+      <div className="flex flex-col gap-3">
+        <SeriesPlot
+          label="Cooler outlet temperature with a four-hour gap in the data"
+          series={[{ id: 'cooler', label: 'Cooler outlet', values, tone: 'pink' }]}
+          labels={TS_LABELS}
+          unit="°C"
+          regions={[{ from: 19, to: 28, label: 'No data, 4 h', pattern: 'hatch' }]}
+          limits={[{ value: 40, label: 'High 40', tone: 'warning' }]}
+          xTicks={5}
+          height={216}
+        />
+        <Legend
+          items={[
+            { label: 'Cooler outlet', tone: 'pink', mark: 'line' },
+            { label: 'Transmitter offline 23:30–03:30', tone: 'neutral' },
+          ]}
+        />
+      </div>
+    </TsSheet>
+  );
+}
+
+function TimeSeriesUncertain() {
+  const good = TS_COOLER_DAY.map((value, index) => (index > 36 ? null : value));
+  const doubtful = TS_COOLER_DAY.map((value, index) => (index < 36 ? null : value));
+  return (
+    <TsSheet title="Cooler outlet temperature" subtitle="Readings flagged uncertain are kept, but drawn as doubtful">
+      <div className="flex flex-col gap-3">
+        <SeriesPlot
+          label="Cooler outlet temperature, the last six hours flagged as uncertain quality"
+          series={[
+            { id: 'good', label: 'Good quality', values: good, tone: 'pink' },
+            { id: 'uncertain', label: 'Uncertain quality', values: doubtful, tone: 'pink', dashed: true },
+          ]}
+          labels={TS_LABELS}
+          unit="°C"
+          regions={[{ from: 36, to: 48, label: 'Uncertain', tone: 'warning' }]}
+          xTicks={5}
+          height={216}
+          highlightLast={false}
+        />
+        <Legend
+          items={[
+            { label: 'Good quality', tone: 'pink', mark: 'line' },
+            { label: 'Uncertain since 08:00', tone: 'pink', mark: 'dashed' },
+          ]}
+        />
+      </div>
+    </TsSheet>
+  );
+}
+
+function TimeSeriesStates() {
+  return (
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-4" title="Loading" subtitle="23-PT-92531 · last 7 days">
+          <PlotState state="loading" title="Loading 7 days of data" description="10,080 points from the historian." height={200} />
+        </Panel>
+        <Panel className="col-span-4" title="No data" subtitle="40-TT-40015 · last 24 hours">
+          <PlotState
+            state="empty"
+            icon={<IconDatabaseOff />}
+            title="No data in this range"
+            description="The transmitter has reported bad quality since 05:00."
+            action={
+              <Button variant="outline" size="sm">
+                Show last good day
+              </Button>
+            }
+            height={200}
+          />
+        </Panel>
+        <Panel className="col-span-4" title="Failed to load" subtitle="23-TT-92532 · last 24 hours">
+          <PlotState
+            state="error"
+            icon={<IconCloudOff />}
+            title="Could not load the trend"
+            description="The time series service did not answer."
+            action={
+              <Button variant="outline" size="sm">
+                <IconRefresh aria-hidden="true" />
+                Try again
+              </Button>
+            }
+            height={200}
+          />
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+type TsReadingRow = { sensor: Sensor };
+
+const TS_READING_COLUMNS: DataTableColumn<TsReadingRow>[] = [
+  { id: 'tag', header: 'Tag', cell: (row) => <TagId>{row.sensor.tag}</TagId>, nowrap: true },
+  { id: 'value', header: 'Value', numeric: true, nowrap: true, cell: (row) => `${formatNumber(row.sensor.value, row.sensor.decimals)} ${row.sensor.unit}` },
+  { id: 'limit', header: 'High', numeric: true, muted: true, cell: (row) => formatNumber(row.sensor.highLimit, row.sensor.decimals) },
+  { id: 'state', header: 'State', cell: (row) => <TsStatePill sensor={row.sensor} /> },
+];
+
+function TimeSeriesLookConsole() {
+  const [cursor, setCursor] = useState<number | null>(null);
+  const rows = [TS_PRESSURE, TS_TEMPERATURE, TS_VIBRATION];
+  return (
+    <LookScope look="console">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-7" title="Compression train" subtitle="23-KA-9101 · last 24 h · shared cursor">
+            <div className="flex flex-col gap-3">
+              {rows.map((sensor, index) => (
+                <SeriesPlot
+                  key={sensor.id}
+                  label={`${sensor.name}, last 24 hours`}
+                  series={[{ id: sensor.id, label: sensor.name, values: TS_TRAIN_DAY[sensor.id], tone: TS_TRAIN_TONE[sensor.id] }]}
+                  labels={TS_LABELS}
+                  caption={sensor.name}
+                  unit={sensor.unit}
+                  decimals={sensor.decimals}
+                  gutters={{ left: 44, right: 64 }}
+                  limits={[{ value: sensor.highLimit, label: `H ${formatNumber(sensor.highLimit, sensor.decimals)}`, tone: 'warning' }]}
+                  xTicks={7}
+                  height={104}
+                  cursor={cursor}
+                  onCursorChange={setCursor}
+                  hideTime={index < rows.length - 1}
+                />
+              ))}
+            </div>
+          </Panel>
+          <Panel className="col-span-5" title="Readings" subtitle="Live" padding="none">
+            <DataTable flush label="Compressor readings" columns={TS_READING_COLUMNS} rows={TS_TRAIN.map((sensor) => ({ sensor }))} rowKey={(row) => row.sensor.id} rowTone={(row) => (tsState(row.sensor).tone === 'success' ? undefined : tsState(row.sensor).tone)} />
+            <div className="flex flex-col gap-4 p-3.5">
+              <span className="text-xs font-medium text-(--kit-text-2)">Share of the range used</span>
+              {rows.map((sensor) => (
+                <Meter key={sensor.id} label={sensor.name} value={sensor.value} min={sensor.rangeMin} max={sensor.rangeMax} unit={sensor.unit} decimals={sensor.decimals} high={sensor.highLimit} tone={tsState(sensor).tone} hideScale />
+              ))}
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TimeSeriesLookGlass() {
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-8" title="Gas flow and discharge pressure" subtitle="1st stage compressor · last 24 hours">
+            <div className="flex flex-col gap-3">
+              <SeriesPlot
+                label="Gas flow on the left axis and discharge pressure on the right axis, last 24 hours"
+                series={[
+                  { id: 'flow', label: 'Gas flow', values: TS_FLOW_DAY, tone: 'sky', fill: true },
+                  { id: 'pressure', label: 'Discharge pressure', values: TS_PRESSURE_DAY, tone: 'pink', axis: 'right' },
+                ]}
+                labels={TS_LABELS}
+                unit="kSm³/h"
+                rightUnit="barg"
+                yDomain={[120, 220]}
+                rightDomain={[40, 56]}
+                xTicks={7}
+                height={260}
+              />
+              <Legend
+                items={[
+                  { label: 'Gas flow', tone: 'sky', mark: 'line', value: '182.4 kSm³/h' },
+                  { label: 'Discharge pressure', tone: 'pink', mark: 'line', value: '48.6 barg' },
+                ]}
+              />
+            </div>
+          </Panel>
+          <Panel className="col-span-4" title="Time in band" subtitle="Share of the day inside limits">
+            <div className="grid flex-1 grid-cols-2 items-center justify-items-center gap-4">
+              <RingGauge label="Pressure" value={97} tone="pink" size={104} />
+              <RingGauge label="Flow" value={100} tone="sky" size={104} />
+              <RingGauge label="Temperature" value={88} tone="amber" size={104} />
+              <RingGauge label="Vibration" value={92} tone="purple" size={104} />
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TimeSeriesLookBlueprint() {
+  const hourly = TS_PRESSURE_DAY.filter((_, index) => index % 2 === 0);
+  const labels = TS_LABELS.filter((_, index) => index % 2 === 0);
+  const summary = summarise(hourly);
+  return (
+    <LookScope look="blueprint">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-8" title="Discharge pressure" subtitle="23-PT-92531 · hourly samples, each one marked">
+            <SeriesPlot
+              label="Hourly discharge pressure samples against the operating band and trip limit"
+              series={[{ id: 'pressure', label: 'Discharge pressure', values: hourly, tone: 'accent' }]}
+              labels={labels}
+              unit="barg"
+              limits={tsLimits(TS_PRESSURE, true)}
+              bands={[{ from: 40, to: 52, tone: 'accent' }]}
+              yDomain={[36, 58]}
+              xTicks={7}
+              height={280}
+            />
+          </Panel>
+          <Panel className="col-span-4" title="Record" subtitle="Sheet 1 of 1" padding="none">
+            <DataTable
+              flush
+              label="Statistics of the plotted samples"
+              columns={[
+                { id: 'name', header: 'Quantity', cell: (row: { name: string; value: string }) => row.name },
+                { id: 'value', header: 'Value', numeric: true, nowrap: true, cell: (row: { name: string; value: string }) => row.value },
+              ]}
+              rows={[
+                { name: 'Samples', value: String(summary.count) },
+                { name: 'Minimum', value: `${formatNumber(summary.min, 1)} barg` },
+                { name: 'Average', value: `${formatNumber(summary.mean, 1)} barg` },
+                { name: 'Maximum', value: `${formatNumber(summary.max, 1)} barg` },
+                { name: 'Range', value: `${formatNumber(summary.max - summary.min, 1)} barg` },
+                { name: 'First sample', value: `${formatNumber(summary.first, 1)} barg` },
+                { name: 'Last sample', value: `${formatNumber(summary.last, 1)} barg` },
+                { name: 'Margin to high', value: `${formatNumber(52 - summary.max, 1)} barg` },
+                { name: 'Margin to trip', value: `${formatNumber(55 - summary.max, 1)} barg` },
+              ]}
+              rowKey={(row) => row.name}
+            />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TimeSeriesLookEditorial() {
+  return (
+    <LookScope look="editorial">
+      <Canvas>
+        <div className="flex flex-col gap-6">
+          <SectionHeader eyebrow="Nordkapp · daily report" title="Export held at 97 % of plan through the recompressor trip" description="Gas export over the last 24 hours against the daily plan." size="lg" />
+          <div className="grid grid-cols-[13rem_minmax(0,1fr)_14rem] items-start gap-8">
+            <div className="flex flex-col gap-5">
+              <Stat variant="plain" size="hero" label="Gas export" value={PLANT_KPIS.gasExport.value} decimals={2} unit="MSm³/d" />
+              <Stat variant="plain" size="md" label="Against plan" value={-0.12} decimals={2} unit="MSm³/d" />
+            </div>
+            <SeriesPlot
+              label="Gas export over the last 24 hours against the 4.50 plan"
+              series={[
+                { id: 'today', label: 'Today', values: makeValues({ seed: 31, points: TS_POINTS, base: 4.36, amplitude: 0.12, noise: 0.03, cycles: 1.5, decimals: 2 }), tone: 'accent' },
+                { id: 'yesterday', label: 'Yesterday', values: makeValues({ seed: 32, points: TS_POINTS, base: 4.24, amplitude: 0.09, noise: 0.03, cycles: 1.5, decimals: 2 }), tone: 'neutral', ghost: true },
+              ]}
+              labels={TS_LABELS}
+              unit="MSm³/d"
+              decimals={2}
+              limits={[{ value: 4.5, label: 'Plan 4.50', tone: 'amber' }]}
+              events={[{ index: 47, label: 'Trip 13:46', tone: 'critical' }]}
+              xTicks={7}
+              height={280}
+              highlightLast={false}
+            />
+            <ol className="m-0 flex list-none flex-col gap-4 p-0 text-sm text-(--kit-text-2)">
+              <li>
+                <strong className="block text-(--kit-text)">1 · Night peak</strong>
+                Export ran above plan between 02:00 and 05:00 on cooler ambient air.
+              </li>
+              <li>
+                <strong className="block text-(--kit-text)">2 · Morning dip</strong>
+                Suction pressure fell with the test separator in service.
+              </li>
+              <li>
+                <strong className="block text-(--kit-text)">3 · Trip</strong>
+                The recompressor tripped at 13:46; the two main stages carried the load.
+              </li>
+            </ol>
+          </div>
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TimeSeriesLookPoster() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Grid>
+          <Stat className="col-span-4" size="hero" tone="amber" label="Discharge temperature" value={TS_TEMPERATURE.value} decimals={1} unit="°C" target="3.8 °C under the 145 limit" />
+          <Panel className="col-span-8" title="24 hours, one line, one limit" subtitle="23-TT-92532">
+            <SeriesPlot
+              label="Discharge temperature as a solid area against its high limit, last 24 hours"
+              series={[{ id: 'temperature', label: 'Discharge temperature', values: TS_TEMPERATURE_DAY, tone: 'amber', fill: true }]}
+              labels={TS_LABELS}
+              unit="°C"
+              limits={[{ value: 145, label: 'High 145', tone: 'critical' }]}
+              yDomain={[130, 150]}
+              xTicks={5}
+              height={240}
+            />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TimeSeriesInvestigation() {
+  const [selected, setSelected] = useState(TS_VIBRATION.id);
+  const sensor = tsSensor(selected);
+  const values = TS_TRAIN_DAY[sensor.id];
+  return (
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-5" title="Tags" subtitle="1st stage compressor · select one to trend" padding="tight">
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
+            {TS_TRAIN.map((entry) => {
+              const state = tsState(entry);
+              const active = entry.id === selected;
+              return (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setSelected(entry.id)}
+                    className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_4.5rem_auto] items-center gap-3 px-3 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-(--kit-rule-strong)"
+                    style={{
+                      borderRadius: 'var(--kit-radius-sm)',
+                      background: active ? 'color-mix(in oklab, var(--kit-accent) 9%, transparent)' : 'transparent',
+                      boxShadow: active ? 'inset 0 0 0 1px var(--kit-rule-strong)' : undefined,
+                    }}
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-sm font-medium text-(--kit-text)">{entry.name}</span>
+                      <TagId>{entry.tag}</TagId>
+                    </span>
+                    <SeriesPlot bare interactive={false} label={`${entry.name} trend`} series={[{ id: entry.id, label: entry.name, values: TS_TRAIN_DAY[entry.id], tone: state.tone === 'success' ? 'accent' : state.tone }]} labels={TS_LABELS} height={28} />
+                    <span className="w-20 text-right text-sm font-semibold text-(--kit-text) tabular-nums">
+                      {formatNumber(entry.value, entry.decimals)} <span className="text-xs font-medium text-(--kit-text-3)">{entry.unit}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+        <Panel
+          className="col-span-7"
+          title={sensor.name}
+          subtitle={`${sensor.tag} · last 24 hours`}
+          actions={
+            <>
+              <TsStatePill sensor={sensor} />
+              <Button variant="outline" size="sm">
+                <IconDownload aria-hidden="true" />
+                Export
+              </Button>
+            </>
+          }
+          footer={<TsSummary values={values} unit={sensor.unit} decimals={sensor.decimals} />}
+        >
+          <div className="flex flex-col gap-2">
+            <SeriesPlot
+              label={`${sensor.name} against its limits with the day's events, last 24 hours`}
+              series={[{ id: sensor.id, label: sensor.name, values, tone: 'accent', fill: true }]}
+              labels={TS_LABELS}
+              unit={sensor.unit}
+              decimals={sensor.decimals}
+              limits={tsLimits(sensor)}
+              events={[
+                { index: 16, label: 'Night shift', tone: 'neutral' },
+                { index: 32, label: 'Day shift', tone: 'neutral' },
+              ]}
+              xTicks={5}
+              height={260}
+              gutters={{ left: 48, right: 76 }}
+            />
+            <StateBand
+              label="Run state of the 1st stage compressor"
+              caption="State"
+              count={TS_POINTS}
+              inset={{ left: 48, right: 76 }}
+              segments={[
+                { from: 0, to: 20, label: 'Running', tone: 'success' },
+                { from: 20, to: 23, label: 'Recycle', tone: 'info' },
+                { from: 23, to: 48, label: 'Running', tone: 'success' },
+              ]}
+            />
+          </div>
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function TimeSeriesTrainBoard() {
+  return (
+    <LookScope look="soft">
+      <Canvas>
+        <div className="flex flex-col gap-5">
+          <SectionHeader title="Compression train today" description="Six readings, each with its day and its nearest limit." actions={<StatusPill tone="warning">2 near a limit</StatusPill>} />
+          <Grid>
+            {TS_TRAIN.map((sensor) => {
+              const state = tsState(sensor);
+              return (
+                <Panel key={sensor.id} className="col-span-4" tone={TS_TRAIN_TONE[sensor.id]} title={sensor.name} subtitle={sensor.tag}>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <Stat variant="plain" size="md" label="Now" value={sensor.value} decimals={sensor.decimals} unit={sensor.unit} target={`${formatNumber(((sensor.highLimit - sensor.value) / sensor.highLimit) * 100, 0)} % below the high limit`} />
+                      <TsStatePill sensor={sensor} />
+                    </div>
+                    <SeriesPlot
+                      bare
+                      label={`${sensor.name}, last 24 hours`}
+                      series={[{ id: sensor.id, label: sensor.name, values: TS_TRAIN_DAY[sensor.id], tone: state.tone === 'success' ? TS_TRAIN_TONE[sensor.id] : state.tone, fill: true }]}
+                      labels={TS_LABELS}
+                      unit={sensor.unit}
+                      decimals={sensor.decimals}
+                      height={72}
+                    />
+                  </div>
+                </Panel>
+              );
+            })}
+          </Grid>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -588,19 +1030,19 @@ export default definePage({
   id: 'time-series',
   title: 'Time series',
   summary:
-    'Sensor trends on a time axis, read against what matters in operations: limits, the normal band, setpoints, run state and data quality. One chart component covers them all, so every trend on a screen behaves the same.',
+    'Sensor trends drawn for reading, not decoration: one tag against its limits, several tags on shared or separate axes, aggregated envelopes, gaps and doubtful data, and the loading, empty and failed states around them. Every plot takes its line weight, fill, grid and markers from the look it sits in.',
   guidance: {
     use: [
-      'Draw limits as dashed, labelled lines in warning or critical colour; keep the series itself in a chart colour.',
-      'Fix the y range to the operating window so a small wobble does not look like an excursion.',
-      'Leave gaps as gaps and mark uncertain data; never bridge missing values with a straight line.',
-      'Put a one-line summary under key charts so the finding does not depend on reading the plot.',
+      'Draw the limits the alarm system uses, named at the end of the line, so the chart and the alarm list agree.',
+      'Break the line at a gap and say why; a straight line across missing hours is a false reading.',
+      'Give each unit its own axis or its own row; share an axis only between tags in the same unit.',
+      'Write the latest value on the plot or beside it, with its unit and its state in a word.',
     ],
     avoid: [
-      'More than four series on one axis; use small multiples on a shared time axis.',
-      'Two y axes unless the two measurements are read together, and say which axis each one uses.',
-      'Colouring a normal series green; colour is for the part that is outside its limits.',
-      'Smoothing or averaging without saying so in the legend.',
+      'More than four lines in one plot; split into rows on a shared time axis instead.',
+      'A y axis that starts at zero when the story is a few percent of movement near a limit.',
+      'Colour as the only difference between series; add the legend with values and vary the line style.',
+      'Smoothing that hides spikes; show the min–max envelope when you aggregate.',
     ],
   },
   source,
@@ -608,284 +1050,272 @@ export default definePage({
     {
       id: 'basics',
       title: 'One series',
-      description: 'The mark follows the signal: a line for a measurement, an area for a quantity, steps for a command.',
+      description: 'A single tag over time: as a line with limits, as an area from zero, as a stepped signal and as a compact card.',
       specimens: [
         {
           id: 'TimeSeriesSingle',
           title: 'Single sensor trend',
-          note: 'Pick it as the default view of one measurement: a line, a time axis, a value axis and a summary.',
+          note: 'Pick it as the default view of one tag: current value, state, range switch, limits and the statistics of the range.',
           origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/time-series/plotMath.ts', 'kit/Panel.tsx', 'kit/Stat.tsx', 'kit/StatusPill.tsx'],
           Component: TimeSeriesSingle,
-        },
-        {
-          id: 'TimeSeriesCompact',
-          title: 'Compact trend in a card',
-          note: 'Pick it on an overview card where the shape supports the value and nobody reads values off the plot.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/ValueReadout.tsx'],
-          Component: TimeSeriesCompact,
         },
         {
           id: 'TimeSeriesArea',
           title: 'Area from zero',
-          note: 'Pick it for flows and rates, where the filled amount means something and the axis starts at zero.',
+          note: 'Pick it for a quantity where the amount matters, such as flow or power, and keep the axis at zero.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Panel.tsx'],
           Component: TimeSeriesArea,
         },
         {
           id: 'TimeSeriesStep',
           title: 'Step series',
-          note: 'Pick it for values that jump and hold, such as valve commands, setpoints and modes.',
+          note: 'Pick it for signals that hold a value until they change: valve positions, setpoints, modes and counters.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Panel.tsx'],
           Component: TimeSeriesStep,
+        },
+        {
+          id: 'TimeSeriesCompact',
+          title: 'Compact trend cards',
+          note: 'Pick it for a row of tags on an overview, where the shape of the day and the nearest limit are enough.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx', 'kit/StatusPill.tsx'],
+          Component: TimeSeriesCompact,
         },
       ],
     },
     {
       id: 'limits',
       title: 'Limits, bands and setpoints',
-      description: 'What the value is judged against, drawn on the same axis.',
+      description: 'What the reading is measured against, drawn on the plot and named.',
       specimens: [
         {
-          id: 'TimeSeriesHighLowLimits',
+          id: 'TimeSeriesLimits',
           title: 'High and low limit lines',
-          note: 'Pick it when the question is how much margin the value has to its operating limits.',
+          note: 'Pick it when the tag has alarm limits on both sides and the distance to each is what the reader checks.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: TimeSeriesHighLowLimits,
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/StatusPill.tsx'],
+          Component: TimeSeriesLimits,
         },
         {
-          id: 'TimeSeriesOperatingBand',
+          id: 'TimeSeriesBand',
           title: 'Operating band shaded',
-          note: 'Pick it for controlled values that should stay inside a band, where a band reads faster than two lines.',
+          note: 'Pick it when being inside a range is the goal, so the eye checks the band and not two separate lines.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: TimeSeriesOperatingBand,
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Legend.tsx'],
+          Component: TimeSeriesBand,
         },
         {
-          id: 'TimeSeriesTripLimit',
+          id: 'TimeSeriesTrip',
           title: 'Trip limit and excursion',
-          note: 'Pick it to explain a trip: the part above the high limit is coloured and the trip is marked in time.',
+          note: 'Pick it to explain an event: the excursion is shaded, the alarm and the trip are flagged, and the run state sits underneath.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: TimeSeriesTripLimit,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/time-series/StateBand.tsx', 'kit/StatusPill.tsx'],
+          Component: TimeSeriesTrip,
         },
         {
           id: 'TimeSeriesSetpoint',
           title: 'Setpoint and actual',
-          note: 'Pick it to judge a control loop: the setpoint is a dashed step line, the measurement a solid one.',
+          note: 'Pick it for a controlled value, where how fast and how closely the reading follows the setpoint is the story.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Legend.tsx'],
           Component: TimeSeriesSetpoint,
+        },
+        {
+          id: 'TimeSeriesPreviousPeriod',
+          title: 'Previous period as ghost',
+          note: 'Pick it to answer "is today different?" without a second chart: yesterday is a quiet dotted line behind today.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Legend.tsx'],
+          Component: TimeSeriesPreviousPeriod,
         },
       ],
     },
     {
       id: 'several-series',
       title: 'Several series',
-      description: 'Overlay what shares a unit, split what does not, and always share the time axis.',
+      description: 'More than one tag: overlaid, on two axes, or stacked on a shared time axis with a linked cursor.',
       specimens: [
         {
           id: 'TimeSeriesOverlay',
-          title: 'Overlay on a shared axis',
-          note: 'Pick it for two to four sensors with the same unit that are compared directly.',
+          title: 'Overlay with legend toggles',
+          note: 'Pick it for up to four tags in the same unit; the legend carries the values and switches series off.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/time-series/SeriesLegend.tsx'],
           Component: TimeSeriesOverlay,
         },
         {
           id: 'TimeSeriesDualAxis',
           title: 'Dual axis',
-          note: 'Pick it only for two measurements that are read together, such as pressure and temperature of one machine.',
+          note: 'Pick it for exactly two tags in different units whose relationship is the point, such as speed and vibration.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Legend.tsx'],
           Component: TimeSeriesDualAxis,
         },
         {
-          id: 'TimeSeriesSmallMultiples',
-          title: 'Stacked small multiples',
-          note: 'Pick it for a machine with readings in different units; one time axis lets the eye line up events.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/ValueReadout.tsx'],
-          Component: TimeSeriesSmallMultiples,
-        },
-        {
-          id: 'TimeSeriesRunState',
-          title: 'With run state band',
-          note: 'Pick it when a discrete state explains the trend: the strip shares the time axis with the plot.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: TimeSeriesRunState,
-        },
-        {
-          id: 'TimeSeriesLegendToggles',
-          title: 'Legend toggles',
-          note: 'Pick it when people need to isolate one series; the last visible series cannot be switched off.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/SeriesLegend.tsx'],
-          Component: TimeSeriesLegendToggles,
-        },
-        {
-          id: 'TimeSeriesPreviousPeriod',
-          title: 'Previous period as ghost',
-          note: 'Pick it to answer "is this normal for this time of day" without a second chart.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: TimeSeriesPreviousPeriod,
-        },
-      ],
-    },
-    {
-      id: 'aggregation-and-quality',
-      title: 'Aggregation and data quality',
-      description: 'Say what was averaged, and show where the data is missing or not to be trusted.',
-      specimens: [
-        {
           id: 'TimeSeriesEnvelope',
           title: 'Min, max and average',
-          note: 'Pick it for long ranges, where each pixel covers many samples and the spread must not be lost.',
+          note: 'Pick it whenever you aggregate: the band keeps the spikes that an average alone would hide.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/trendData.ts'],
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/time-series/plotMath.ts', 'kit/Legend.tsx'],
           Component: TimeSeriesEnvelope,
         },
         {
-          id: 'TimeSeriesRawVsAggregated',
-          title: 'Raw and aggregated',
-          note: 'Pick it when people need to trust the average: the raw samples stay visible behind it.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/trendData.ts'],
-          Component: TimeSeriesRawVsAggregated,
-        },
-        {
-          id: 'TimeSeriesGaps',
-          title: 'Gap in the data',
-          note: 'Pick it whenever samples are missing: the line breaks and the period is shaded and named.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: TimeSeriesGaps,
-        },
-        {
-          id: 'TimeSeriesBadQuality',
-          title: 'Uncertain quality segment',
-          note: 'Pick it when the transmitter flags its own values: the doubtful part is dashed and its period marked.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: TimeSeriesBadQuality,
-        },
-      ],
-    },
-    {
-      id: 'range-and-states',
-      title: 'Range, value and states',
-      description: 'The controls and conditions around the plot.',
-      specimens: [
-        {
-          id: 'TimeSeriesRanges',
-          title: 'Range switch',
-          note: 'Pick it when people move between this hour, this shift, this day and this week; the y range stays put.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/TimeRangeSwitch.tsx', 'industrial/charts/timeRanges.ts', 'industrial/charts/stats.ts'],
-          Component: TimeSeriesRanges,
-        },
-        {
-          id: 'TimeSeriesCurrentValue',
-          title: 'Current value header',
-          note: 'Pick it when the latest reading is the headline and the trend is the evidence.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/ValueReadout.tsx', 'industrial/TrendDelta.tsx'],
-          Component: TimeSeriesCurrentValue,
-        },
-        {
-          id: 'TimeSeriesLoading',
-          title: 'Loading',
-          note: 'Pick it while the query runs; the skeleton keeps the height of the chart it stands in for.',
-          origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/ChartPlaceholder.tsx'],
-          Component: TimeSeriesLoading,
-        },
-        {
-          id: 'TimeSeriesNoData',
-          title: 'No data',
-          note: 'Pick it when the range has no points; name the tag and the period and offer a wider range.',
-          origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/ChartPlaceholder.tsx'],
-          Component: TimeSeriesNoData,
-        },
-        {
-          id: 'TimeSeriesError',
-          title: 'Failed to load',
-          note: 'Pick it when the query failed, which is different from an empty result, and offer a retry.',
-          origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/ChartPlaceholder.tsx'],
-          Component: TimeSeriesError,
-        },
-      ],
-    },
-    {
-      id: 'cards',
-      title: 'Tag trend card',
-      description: 'Everything above in the frame a dashboard uses.',
-      specimens: [
-        {
-          id: 'TimeSeriesTagTrendCard',
-          title: 'Tag trend card',
-          note: 'Pick it as the standard trend on a dashboard: tag, current value and state, range switch, limits and a summary.',
+          id: 'TimeSeriesSmallMultiples',
+          title: 'Stacked rows, linked cursor',
+          note: 'Pick it for tags in different units: one row each on a shared time axis, read together by one cursor.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          uses: [
-            'industrial/charts/TrendCard.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'industrial/charts/TimeRangeSwitch.tsx',
-            'industrial/status.ts',
-          ],
-          Component: TimeSeriesTagTrendCard,
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx'],
+          Component: TimeSeriesSmallMultiples,
+        },
+      ],
+    },
+    {
+      id: 'quality-and-states',
+      title: 'Data quality and states',
+      description: 'What the chart shows when the data is missing, doubtful, still loading or failed to arrive.',
+      specimens: [
+        {
+          id: 'TimeSeriesGap',
+          title: 'Gap in the data',
+          note: 'Pick it whenever samples are missing: the line breaks, the stretch is hatched and the reason is written.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/StatusPill.tsx', 'kit/Legend.tsx'],
+          Component: TimeSeriesGap,
+        },
+        {
+          id: 'TimeSeriesUncertain',
+          title: 'Uncertain quality segment',
+          note: 'Pick it when readings exist but are flagged: keep them, draw them dashed and shade the stretch.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Legend.tsx'],
+          Component: TimeSeriesUncertain,
+        },
+        {
+          id: 'TimeSeriesStates',
+          title: 'Loading, no data and failed',
+          note: 'Pick the placeholder that matches: a skeleton at the plot size, a reason with a way forward, or the failure with a retry.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/PlotState.tsx', 'kit/Panel.tsx'],
+          Component: TimeSeriesStates,
+        },
+      ],
+    },
+    {
+      id: 'looks',
+      title: 'The same trends in five looks',
+      description: 'Line weight, fill, grid, markers and the layout around the plot all belong to the look.',
+      specimens: [
+        {
+          id: 'TimeSeriesLookConsole',
+          title: 'Console: stacked strips and a readings table',
+          note: 'Pick it for an operator who watches the same train all shift: hairline grids, square panels, one cursor for all rows.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/DataTable.tsx', 'kit/Panel.tsx', 'looks/LookScope.tsx'],
+          Component: TimeSeriesLookConsole,
+        },
+        {
+          id: 'TimeSeriesLookGlass',
+          title: 'Glass: glowing lines and rings',
+          note: 'Pick it for a showcase or a dark overview, where two glowing series and a few rings carry the screen.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/RingGauge.tsx', 'kit/Panel.tsx', 'looks/LookScope.tsx'],
+          Component: TimeSeriesLookGlass,
+        },
+        {
+          id: 'TimeSeriesLookBlueprint',
+          title: 'Blueprint: marked samples and a record table',
+          note: 'Pick it for engineering documents: every sample is a point, limits are dimensioned and the statistics sit in a title block.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/time-series/plotMath.ts', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: TimeSeriesLookBlueprint,
+        },
+        {
+          id: 'TimeSeriesLookEditorial',
+          title: 'Editorial: headline figure and annotations',
+          note: 'Pick it for a report: the conclusion is the headline, the figure is huge and the notes beside the chart explain its shape.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/SectionHeader.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: TimeSeriesLookEditorial,
+        },
+        {
+          id: 'TimeSeriesLookPoster',
+          title: 'Poster: one solid area, one limit',
+          note: 'Pick it for a team screen where one tag and its limit must land from across the room.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx', 'looks/LookScope.tsx'],
+          Component: TimeSeriesLookPoster,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions ready to drop into a product.',
+      specimens: [
+        {
+          id: 'TimeSeriesInvestigation',
+          title: 'Tag explorer',
+          note: 'Pick it as the trend view of an asset page: a list of tags with their day, and the selected tag in full with limits, events and run state.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/time-series/StateBand.tsx', 'kit/time-series/plotMath.ts', 'kit/Panel.tsx', 'kit/TagId.tsx'],
+          Component: TimeSeriesInvestigation,
+        },
+        {
+          id: 'TimeSeriesTrainBoard',
+          title: 'Train board in soft cards',
+          note: 'Pick it for a friendly overview for people outside the control room: one tinted card per reading with its day.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/time-series/SeriesPlot.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: TimeSeriesTrainBoard,
         },
       ],
     },

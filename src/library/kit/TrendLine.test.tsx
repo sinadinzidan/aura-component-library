@@ -35,4 +35,19 @@ describe(TrendLine.name, () => {
     expect(screen.getByText('4.38 now')).toBeInTheDocument();
     expect(screen.getByText('Dip after the trip.')).toBeInTheDocument();
   });
+
+  // happy-dom has no layout, so the plot itself is not drawn; these guard the prop handling.
+  it('accepts a cursor by index, by label, or one that is not on the axis', () => {
+    const { rerender } = render(<TrendLine label="Gas export" labels={LABELS} series={SERIES} unit="MSm³/d" decimals={2} cursor={1} />);
+    rerender(<TrendLine label="Gas export" labels={LABELS} series={SERIES} cursor="12:00" />);
+    rerender(<TrendLine label="Gas export" labels={LABELS} series={SERIES} cursor="09:00" />);
+
+    expect(screen.getByRole('img', { name: 'Gas export' })).toBeInTheDocument();
+  });
+
+  it('accepts sparse x labels', () => {
+    render(<TrendLine label="Gas export" labels={['10:00', '', '', '13:00']} series={SERIES} highlightLast={false} />);
+
+    expect(screen.getByRole('img', { name: 'Gas export' })).toBeInTheDocument();
+  });
 });

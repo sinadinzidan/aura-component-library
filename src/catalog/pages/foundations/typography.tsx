@@ -209,7 +209,7 @@ function TypographyFamilyMono() {
       <p className="font-mono text-4xl font-semibold text-base-foreground">Source Code Pro</p>
       <p className="font-mono text-base text-base-foreground">Aa Bb Cc 0123456789 {'{ }'} =&gt;</p>
       <p className="text-xs text-muted-foreground">
-        <span className="font-mono">font-mono</span> · code, tags, IDs and technical strings
+        <span className="font-mono">font-mono</span> · code blocks and code editors only; tags, IDs and numbers use the UI sans
       </p>
     </div>
   );
@@ -451,7 +451,7 @@ export default definePage({
   id: 'typography',
   title: 'Typography',
   summary:
-    'Inter for product UI, Space Grotesk for marketing display, Source Code Pro for technical strings. The scale is tight on purpose: it keeps dense operational data scannable while body copy stays readable at 16px.',
+    'Inter for product UI, Space Grotesk for marketing display, Source Code Pro for code only — tags, IDs, numbers and captions stay in the UI sans with tabular figures where they align. The scale is tight on purpose: it keeps dense operational data scannable while body copy stays readable at 16px.',
   guidance: {
     use: [
       'text-sm for most UI, text-xs for labels and metadata, text-base for body copy.',

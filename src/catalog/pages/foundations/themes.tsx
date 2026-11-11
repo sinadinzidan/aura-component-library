@@ -33,7 +33,7 @@ const APPLY_SNIPPET = `/* styles.css */
 
 <!-- index.html: pick any combination -->
 <html class="dark" data-accent="nordic" data-surface="tinted" data-shape="sharp"
-      data-contrast="high" data-density="compact" data-typeface="technical">`;
+      data-contrast="high" data-density="compact" data-typeface="plex" data-look="console">`;
 
 const SCOPE_SNIPPET = `import { themeAttributes } from '@/library/themes/themes';
 
@@ -588,7 +588,7 @@ export default definePage({
         {
           id: 'ThemesPresetTron',
           title: 'Tron',
-          note: 'Near-black surfaces, cyan lines and monospaced type for futuristic command screens.',
+          note: 'Near-black surfaces, cyan lines and glass panels for futuristic command screens.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -618,7 +618,7 @@ export default definePage({
         {
           id: 'ThemesPresetNightVision',
           title: 'Night vision',
-          note: 'Green on black, sharp and monospaced, for surveillance-style monitoring.',
+          note: 'Green on black, sharp and dense, for surveillance-style monitoring.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
@@ -640,7 +640,7 @@ export default definePage({
     {
       id: 'options',
       title: 'Options',
-      description: 'The six axes behind the presets. Any combination is valid: 8 accents × 3 surfaces × 3 shapes × 2 contrasts × 3 densities × 3 typefaces × 2 modes. Deep surfaces exist in dark mode only.',
+      description: 'The six axes behind the presets. Any combination is valid: 8 accents × 3 surfaces × 3 shapes × 2 contrasts × 3 densities × 5 typefaces × 2 modes. Deep surfaces exist in dark mode only.',
       specimens: [
         {
           id: 'ThemesAccentOptions',
@@ -695,7 +695,7 @@ export default definePage({
         {
           id: 'ThemesTypefaceOptions',
           title: 'Typeface',
-          note: 'Inter for product UI, Grotesk for editorial and marketing surfaces, Technical for tag-heavy and developer tools.',
+          note: 'Inter for product UI, Grotesk for editorial surfaces, Manrope for friendly tools, Plex Sans for engineering screens, Sora for bold display. All are sans: monospace is for code only.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',

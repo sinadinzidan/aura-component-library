@@ -34,4 +34,18 @@ describe(SparkLine.name, () => {
 
     expect(container.querySelectorAll('.kit-spark-bar')).toHaveLength(5);
   });
+
+  it('takes a width and height without a wrapper', () => {
+    render(<SparkLine values={VALUES} label="Trend" width={96} height="2rem" />);
+
+    const spark = screen.getByRole('img', { name: 'Trend' });
+    expect(spark.style.width).toBe('96px');
+    expect(spark.style.height).toBe('2rem');
+  });
+
+  it('accepts layout utilities', () => {
+    render(<SparkLine values={VALUES} label="Trend" className="hidden" />);
+
+    expect(screen.getByRole('img', { name: 'Trend' })).toHaveClass('kit-spark', 'hidden');
+  });
 });

@@ -45,4 +45,10 @@ describe(Stat.name, () => {
     expect(stat).toHaveAttribute('data-size', 'hero');
     expect(stat).toHaveAttribute('data-variant', 'plain');
   });
+
+  it('renders the state icon at every size', () => {
+    render(<Stat label="Recompressor" value="23-KA-9103" size="sm" state="Tripped" stateIcon={<svg data-testid="state-icon" />} />);
+
+    expect(screen.getByTestId('state-icon')).toBeInTheDocument();
+  });
 });

@@ -76,7 +76,7 @@ export function PriorityMatrix({ label, rows, columns, rowHeader, columnHeader, 
                   )}
                 >
                   <span className={cx('font-semibold', size === 'sm' ? 'text-xs' : 'text-sm')}>{item.label}</span>
-                  {item.count === undefined ? null : <span className="text-xs tabular-nums">{item.count} alarms</span>}
+                  {item.count === undefined ? null : <span className="text-xs tabular-nums">{size === 'sm' ? item.count : `${item.count} alarms`}</span>}
                 </button>
               );
             })}

@@ -26,4 +26,10 @@ describe(Canvas.name, () => {
 
     expect(screen.getByText('Board')).toHaveAttribute('data-pad', 'none');
   });
+
+  it('can fill its parent', () => {
+    render(<Canvas fill>Board</Canvas>);
+
+    expect(screen.getByText('Board')).toHaveAttribute('data-fill', 'true');
+  });
 });

@@ -60,7 +60,7 @@ export function TagValueRow({ tag, name, value, unit, decimals = 1, limits, rang
         </p>
       </div>
       {trend ? (
-        <div className="w-24 shrink-0">
+        <div className="w-24 shrink-0" style={{ visibility: trusted ? undefined : 'hidden' }}>
           <SparkLine values={trend} label={`${name}, recent trend`} tone={judgement.tone === 'success' ? 'accent' : judgement.tone} className="h-8" />
         </div>
       ) : null}

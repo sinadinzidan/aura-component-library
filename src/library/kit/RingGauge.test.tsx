@@ -24,4 +24,18 @@ describe(RingGauge.name, () => {
     expect(screen.queryByText('Health')).toBeNull();
     expect(screen.getByRole('meter', { name: 'Health' })).toBeInTheDocument();
   });
+
+  it('sets its diameter in px by default', () => {
+    render(<RingGauge label="Health" value={50} size={64} />);
+
+    expect(screen.getByRole('meter', { name: 'Health' }).style.getPropertyValue('--kit-ring-size')).toBe('64px');
+  });
+
+  it('can fill its container instead', () => {
+    render(<RingGauge label="Health" value={50} size="fill" />);
+
+    const gauge = screen.getByRole('meter', { name: 'Health' });
+    expect(gauge).toHaveAttribute('data-fill', 'true');
+    expect(gauge.style.getPropertyValue('--kit-ring-size')).toBe('');
+  });
 });

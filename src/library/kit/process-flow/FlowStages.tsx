@@ -88,8 +88,13 @@ export function FlowStages({ label, stages, links = [], bottleneckId, selectedId
               <span className="text-sm font-semibold text-(--kit-text)">{stage.name}</span>
               {stage.tag ? <TagId className="text-xs">{stage.tag}</TagId> : null}
             </div>
-            {reading}
-            {state}
+            <div className="flex shrink-0 flex-col items-end gap-0.5">
+              {reading}
+              <span className="flex items-center gap-1.5 text-xs font-semibold" style={{ color: solid ? 'currentColor' : 'var(--t-ink)' }}>
+                <span aria-hidden="true" className="size-2 rounded-full" style={{ background: 'currentColor' }} />
+                {stage.state}
+              </span>
+            </div>
           </>
         ) : (
           <>

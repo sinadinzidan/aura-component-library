@@ -7,7 +7,7 @@ describe(ZoneBar.name, () => {
     const { container } = render(<ZoneBar label="Pump drive end" value={5.2} />);
 
     expect(screen.getByRole('meter', { name: 'Pump drive end' })).toHaveAttribute('aria-valuetext', '5.2 mm/s, zone C, Alert');
-    expect(screen.getByText('C · Alert')).toBeInTheDocument();
+    expect(screen.getByText('Alert')).toBeInTheDocument();
     expect(container.querySelectorAll('[data-active="true"]')).toHaveLength(1);
   });
 
@@ -15,6 +15,6 @@ describe(ZoneBar.name, () => {
     render(<ZoneBar label="Motor" value={1.2} boundaries={[1.4, 2.8, 4.5]} max={8} />);
 
     expect(screen.getByText('2.8')).toBeInTheDocument();
-    expect(screen.getByText('A · Good')).toBeInTheDocument();
+    expect(screen.getByText('Good')).toBeInTheDocument();
   });
 });

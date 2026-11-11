@@ -12,6 +12,7 @@ import {
   IconStack2,
   IconTool,
 } from '@cognite/aura/icons';
+import { useThree } from '@react-three/fiber';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -162,10 +163,20 @@ function ctwinPartCount(layerId: CtwinLayerId): number {
 /** From the front and a little towards the driver, so the shaft runs across the screen. */
 const CTWIN_VIEW_DIRECTION: Vec3 = [0.3, 0.46, 0.84];
 
-function ctwinCamera(bounds: Bounds, zoom: number): CameraTarget {
+function ctwinCamera(bounds: Bounds, zoom: number, aspect: number): CameraTarget {
   const lookAt = boundsCenter(bounds);
-  const distance = distanceToFit(boundsRadius(bounds), 40, 1) * zoom;
+  const distance = distanceToFit(boundsRadius(bounds), 40, aspect) * zoom;
   return { position: addVec3(lookAt, scaleVec3(normalizeVec3(CTWIN_VIEW_DIRECTION), distance)), lookAt };
+}
+
+/** Frames the train for the shape of the canvas it is in, so a narrow stage pulls the camera back instead of cropping the machine. */
+function CtwinCameraRig({ bounds, zoom }: { bounds: Bounds; zoom: number }) {
+  const size = useThree((state) => state.size);
+  const aspect = size.height > 0 ? Math.round(Math.min(1.1, Math.max(0.5, size.width / size.height)) * 20) / 20 : 1;
+  // The pinned readouts need room beside the machine, and a tall stage has less of it.
+  const margin = 1 + Math.max(0, 1 - aspect) * 0.8;
+
+  return <CameraRig target={ctwinCamera(bounds, zoom * margin, aspect)} minDistance={5} maxDistance={90} />;
 }
 
 type CtwinView = { layers: CtwinLayers; readouts: boolean; sectionCut: boolean; exploded: boolean; sensorId: string };
@@ -181,11 +192,10 @@ type CtwinSceneProps = {
   still?: boolean;
 };
 
-function CtwinScene({ view, onSelectSensor, insets = {}, zoom = 1.04, still = false }: CtwinSceneProps) {
+function CtwinScene({ view, onSelectSensor, insets = {}, zoom = 0.92, still = false }: CtwinSceneProps) {
   const amount = view.exploded ? 0.85 : 0;
   const activeIds = ctwinActiveIds(view.layers);
   const bounds = explodedBounds(COMPRESSOR_TRAIN_BOUNDS, COMPRESSOR_TRAIN_EXPLODE, amount);
-  const target = bounds ? ctwinCamera(bounds, zoom) : null;
   const shown = TRAIN_ASSEMBLY_IDS.length - (activeIds ? TRAIN_ASSEMBLY_IDS.length - activeIds.length : 0);
 
   return (
@@ -195,7 +205,7 @@ function CtwinScene({ view, onSelectSensor, insets = {}, zoom = 1.04, still = fa
     >
       <StillScene still={still}>
         <SceneLights />
-        {target ? <CameraRig target={target} minDistance={5} maxDistance={90} /> : null}
+        {bounds ? <CtwinCameraRig bounds={bounds} zoom={zoom} /> : null}
         <ViewInsets top={insets.top ?? 0} right={insets.right ?? 0} bottom={insets.bottom ?? 0} left={insets.left ?? 0} />
         <Ground size={[56, 32]} cell={2} majorEvery={4} center={[1, 0]} />
         <CompressorTrain explode={amount} sectionCut={view.sectionCut} activeIds={activeIds} />
@@ -447,7 +457,7 @@ function CtwinTwin({ initial = CTWIN_INITIAL, still = false }: { initial?: Ctwin
                 </div>
               }
             >
-              <CtwinScene view={view} onSelectSensor={(sensorId) => setView({ ...view, sensorId })} insets={{ top: 100, bottom: 110, left: 70 }} still={still} />
+              <CtwinScene view={view} onSelectSensor={(sensorId) => setView({ ...view, sensorId })} insets={{ top: 100, bottom: 110, left: 96 }} still={still} />
             </SceneStage>
           </CtwinStageFrame>
 

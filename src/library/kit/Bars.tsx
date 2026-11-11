@@ -23,6 +23,8 @@ type BarsProps = {
   decimals?: number;
   /** A target or limit drawn across the bars. */
   limit?: { value: number; label: string; tone?: Tone };
+  /** Fixed range of the value axis; otherwise it runs from zero to a round number above the data. */
+  yDomain?: readonly [number, number];
   /** Write each value at the end of its bar. */
   showValues?: boolean;
   height?: number;
@@ -55,6 +57,7 @@ export function Bars({
   unit = '',
   decimals = 0,
   limit,
+  yDomain,
   showValues = false,
   height = 240,
   showLegend,
@@ -69,16 +72,19 @@ export function Bars({
     for (const entry of series) row[entry.id] = entry.values[index] ?? 0;
     return row;
   });
-  const suffix = unit ? ` ${unit}` : '';
+  // A no-break space keeps the unit on the line of its value in labels.
+  const suffix = unit ? `\u00a0${unit}` : '';
   const longest = Math.max(...categories.map((category) => category.length), 2);
   const totals = categories.map((_, index) => series.reduce((sum, entry) => sum + (entry.values[index] ?? 0), 0));
   const peak = Math.max(...(stacked ? totals : series.flatMap((entry) => entry.values)), limit?.value ?? 0, 1);
-  const ticks = niceTicks(peak, horizontal ? 2 : 4);
-  const top = ticks[ticks.length - 1] ?? peak;
+  const autoTicks = niceTicks(peak, horizontal ? 2 : 4);
+  const ticks = yDomain ? undefined : autoTicks;
+  const top = yDomain ? yDomain[1] : (autoTicks[autoTicks.length - 1] ?? peak);
+  const bottom = yDomain ? yDomain[0] : 0;
   const valueWidth = formatNumber(top, decimals).length * 7.6 + 12;
   const limitText = limit ? `${limit.label} ${formatNumber(limit.value, decimals)}${suffix}` : '';
-  // With values written on the bars, the limit label moves to the right margin, level with its line.
-  const limitOutside = Boolean(limit) && showValues && !horizontal;
+  // The limit label sits in the right margin, level with its line, so it never crosses a bar or a value.
+  const limitOutside = Boolean(limit) && !horizontal;
   const limitWidth = limitOutside ? limitText.length * 7 + 14 : 0;
   const radius = Math.min(chart.barRadius, 14);
   const legend: LegendItem[] = series.map((entry) => ({ label: entry.label, tone: entry.tone ?? 'accent' }));
@@ -90,7 +96,9 @@ export function Bars({
     tickLine: false,
     axisLine: false,
     ticks,
-    domain: [0, top],
+    domain: [bottom, top],
+    tickCount: 5,
+    allowDataOverflow: yDomain !== undefined,
     tickFormatter: (value: number) => formatNumber(value, decimals),
   } as const;
 

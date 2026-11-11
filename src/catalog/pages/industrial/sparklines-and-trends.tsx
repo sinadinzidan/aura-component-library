@@ -1,448 +1,643 @@
-import { ChartContainer, ChartTooltip, ChartTooltipContent, chartSeriesColor } from '@cognite/aura/chart';
-import type { ChartConfig } from '@cognite/aura/chart';
-import { Card, CardContent, CardDescription, CardHeader, CardHeaderCenter, CardHeaderEnd, CardTitle } from '@cognite/aura/components/card';
-import { CartesianGrid, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
+import { IconAlertOctagon, IconAlertTriangle, IconBolt, IconCircleCheck, IconFlame, IconGauge, IconPlugConnectedX, IconSnowflake } from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { qualityStatus, toneFromLimits } from '../../../library/industrial/status';
-import type { Limits } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { PLANT_KPIS, SENSORS, sensorsOf } from '../../data/plant';
-import type { Sensor } from '../../data/plant';
-import { DAY, HOUR, formatTime, makeSeries, makeValues } from '../../data/series';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Delta } from '../../../library/kit/Delta';
+import { Grid } from '../../../library/kit/Grid';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Panel } from '../../../library/kit/Panel';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { MicroTrend, type MicroTrendVariant } from '../../../library/kit/sparklines-and-trends/MicroTrend';
+import { changeOf, extremes, isFrozen, shareAbove } from '../../../library/kit/sparklines-and-trends/sparkMath';
+import { StateTicks, type StateTick } from '../../../library/kit/sparklines-and-trends/StateTicks';
+import { TrendTile } from '../../../library/kit/sparklines-and-trends/TrendTile';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { SeriesPlot } from '../../../library/kit/time-series/SeriesPlot';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
+import { PLANT_KPIS, SENSORS, type Sensor } from '../../data/plant';
+import { DAY, HOUR, REFERENCE_NOW, formatDate, formatTime, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './sparklines-and-trends.tsx?raw';
 
-function findSensor(id: string): Sensor {
-  const sensor = SENSORS.find((candidate) => candidate.id === id);
-  if (!sensor) throw new Error(`Unknown sensor ${id}`);
-  return sensor;
+const SPARK_POINTS = 25;
+
+/** A day of hourly readings for a tag, ending on its current value. */
+function sparkDay(sensor: Sensor, points: number = SPARK_POINTS, wave = 0.14): number[] {
+  const span = sensor.highLimit - sensor.lowLimit;
+  const raw = makeValues({ seed: sensor.seed * 3 + points, points, base: sensor.value, amplitude: span * wave, noise: span * 0.04, cycles: 2, decimals: sensor.decimals + 1 });
+  const offset = sensor.value - raw[raw.length - 1];
+  return raw.map((value) => Number((value + offset).toFixed(sensor.decimals + 1)));
 }
 
-const limitsOf = (sensor: Sensor): Limits => ({
-  low: sensor.lowLimit > sensor.rangeMin ? sensor.lowLimit : undefined,
-  high: sensor.highLimit,
-  highHigh: sensor.highHighLimit,
-});
+function sparkSensor(id: string): Sensor {
+  return SENSORS.find((sensor) => sensor.id === id) ?? SENSORS[0];
+}
 
-/** Hourly values that end on the sensor's current value. `drift` is the total move across the window. */
-const sensorTrend = (sensor: Sensor, points = 48, drift = 0): number[] => [
-  ...makeValues({
-    seed: sensor.seed,
-    points: points - 1,
-    base: sensor.value - drift,
-    drift,
-    amplitude: (sensor.highLimit - sensor.lowLimit) * 0.05,
-    noise: (sensor.highLimit - sensor.lowLimit) * 0.03,
-    cycles: 2,
-    decimals: sensor.decimals,
-  }),
-  sensor.value,
+const SPARK_PRESSURE = sparkSensor('pt-92531');
+
+const SPARK_TEMPERATURE = sparkSensor('tt-92532');
+
+const SPARK_VIBRATION = sparkSensor('vt-92540');
+
+const SPARK_SPEED = sparkSensor('st-92501');
+
+const SPARK_LEVEL = sparkSensor('lt-10012');
+
+const SPARK_COOLER = sparkSensor('tt-91141');
+
+const SPARK_LIVE = SENSORS.filter((sensor) => sensor.quality !== 'bad');
+
+const SPARK_DAYS = new Map(SENSORS.map((sensor) => [sensor.id, sensor.id === 'tt-92532' ? sparkDay(sensor, SPARK_POINTS, 0.07) : sensor.id === 'vt-92540' ? sparkDay(sensor, SPARK_POINTS, 0.05) : sparkDay(sensor)]));
+
+function sparkValues(sensor: Sensor): number[] {
+  return SPARK_DAYS.get(sensor.id) ?? [];
+}
+
+const SPARK_PRESSURE_DAY = sparkValues(SPARK_PRESSURE);
+
+/** Recompressor vibration running into its trip limit. */
+const SPARK_TRIP = Array.from({ length: SPARK_POINTS }, (_, index) => Number((6.2 + Math.sin(index / 2) * 0.3 + Math.max(0, index - 14) ** 1.75 * 0.095).toFixed(1)));
+
+const SPARK_FROZEN = Array.from({ length: SPARK_POINTS }, () => 38.9);
+
+const SPARK_GAPPED = sparkValues(SPARK_COOLER).map((value, index) => (index >= 9 && index <= 13 ? null : value));
+
+const SPARK_NONE: Array<number | null> = Array.from({ length: SPARK_POINTS }, () => null);
+
+/** Daily flaring for 14 days against the 15 kSm³/d permit. */
+const SPARK_FLARING = [11.8, 12.6, 13.1, 16.4, 14.2, 12.9, 11.4, 10.8, 15.6, 17.9, 14.8, 13.2, 12.9, 12.4];
+
+const SPARK_FLARING_DAYS = SPARK_FLARING.map((_, index) => formatDate(REFERENCE_NOW - (SPARK_FLARING.length - 1 - index) * DAY));
+
+const SPARK_FLARING_TICKS: StateTick[] = SPARK_FLARING.map((value, index) => ({
+  label: SPARK_FLARING_DAYS[index],
+  tone: value >= 15 ? 'critical' : value >= 14 ? 'warning' : 'success',
+  word: value >= 15 ? 'Over permit' : value >= 14 ? 'Near permit' : 'Within permit',
+}));
+
+const SPARK_KPI_WEEKS = {
+  availability: makeValues({ seed: 201, points: 14, base: 96.8, amplitude: 0.6, noise: 0.25, drift: -0.5, decimals: 1 }),
+  export: makeValues({ seed: 202, points: 14, base: 4.3, amplitude: 0.1, noise: 0.04, drift: 0.12, decimals: 2 }),
+  energy: makeValues({ seed: 203, points: 14, base: 32, amplitude: 0.6, noise: 0.3, drift: -1.2, decimals: 1 }),
+  flaring: SPARK_FLARING,
+};
+
+function sparkState(sensor: Sensor, value: number = sensor.value): { tone: Tone; word: string } {
+  if (sensor.quality === 'bad') return { tone: 'neutral', word: 'No signal' };
+  if (sensor.highHighLimit !== undefined && value >= sensor.highHighLimit) return { tone: 'critical', word: 'Trip' };
+  if (value > sensor.highLimit) return { tone: 'critical', word: 'High' };
+  if (value >= sensor.highLimit - (sensor.highLimit - sensor.lowLimit) * 0.12) return { tone: 'warning', word: 'Near limit' };
+  return { tone: 'success', word: 'Normal' };
+}
+
+function SparkStateIcon({ tone }: { tone: Tone }) {
+  if (tone === 'critical') return <IconAlertOctagon aria-hidden="true" />;
+  if (tone === 'warning') return <IconAlertTriangle aria-hidden="true" />;
+  if (tone === 'neutral') return <IconPlugConnectedX aria-hidden="true" />;
+  return <IconCircleCheck aria-hidden="true" />;
+}
+
+function SparkPill({ tone, children }: { tone: Tone; children: string }) {
+  return (
+    <StatusPill tone={tone} icon={<SparkStateIcon tone={tone} />}>
+      {children}
+    </StatusPill>
+  );
+}
+
+function sparkTrendTone(sensor: Sensor): Tone {
+  const state = sparkState(sensor);
+  return state.tone === 'success' ? 'accent' : state.tone;
+}
+
+function SparkSheet({ title, subtitle, actions, footer, children }: { title: string; subtitle: string; actions?: ReactNode; footer?: ReactNode; children: ReactNode }) {
+  return (
+    <Canvas>
+      <Panel title={title} subtitle={subtitle} actions={actions} footer={footer}>
+        {children}
+      </Panel>
+    </Canvas>
+  );
+}
+
+/** One labelled sample inside a sheet: a caption over the trend, a reading under it. */
+function SparkSample({ caption, reading, children }: { caption: string; reading?: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <span className="text-sm font-medium text-(--kit-text)">{caption}</span>
+      {children}
+      {reading ? <span className="text-xs text-(--kit-text-2) tabular-nums">{reading}</span> : null}
+    </div>
+  );
+}
+
+const SPARK_FORMS: Array<{ variant: MicroTrendVariant; caption: string; reading: string }> = [
+  { variant: 'line', caption: 'Line', reading: 'The default: shape only' },
+  { variant: 'area', caption: 'Area', reading: 'More weight in a card' },
+  { variant: 'bars', caption: 'Bars', reading: 'Counts and totals per period' },
+  { variant: 'step', caption: 'Step', reading: 'Signals that hold a value' },
+  { variant: 'dots', caption: 'Dots', reading: 'Separate samples, not a flow' },
 ];
 
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2 align-middle';
-
-const KPI = PLANT_KPIS;
-const DISCHARGE_PRESSURE = findSensor('pt-92531');
-const SUCTION_PRESSURE = findSensor('pt-92530');
-const DISCHARGE_TEMPERATURE = findSensor('tt-92532');
-const VIBRATION = findSensor('vt-92540');
-const SEPARATOR_LEVEL = findSensor('lt-10012');
-const EXPORT_FLOW = findSensor('ft-20011');
-const MOTOR_CURRENT = findSensor('it-20013');
-
-const PRESSURE_TREND = sensorTrend(DISCHARGE_PRESSURE);
-const LEVEL_TREND = sensorTrend(SEPARATOR_LEVEL);
-const FLOW_TREND = sensorTrend(EXPORT_FLOW);
-const HOT_TEMPERATURE_TREND = [...sensorTrend(DISCHARGE_TEMPERATURE, 48, 10).slice(0, -1), 146.3];
-const TRIP_VIBRATION_TREND = [...makeValues({ seed: 41, points: 40, base: 5.2, drift: 2.4, noise: 0.25, decimals: 1 }), 8.4, 9.1, 9.9, 10.4, 11.2, 11.6];
-const ALARMS_PER_HOUR = [2, 1, 0, 3, 2, 4, 7, 9, 5, 3, 2, 1, 1, 0, 2, 3, 6, 8, 4, 2, 1, 2, 3, 4];
-const FLARING_PER_DAY = makeValues({ seed: 43, points: 14, base: 13, noise: 3.2, stepMs: DAY, min: 6, decimals: 1 });
-
-function SparklineLine() {
-  return <Sparkline width={160} values={PRESSURE_TREND} label="Discharge pressure, last 48 hours" unit="barg" />;
-}
-
-function SparklineArea() {
-  return <Sparkline width={160} variant="area" values={FLOW_TREND} label="Export flow, last 48 hours" unit="m³/h" decimals={0} />;
-}
-
-function SparklineBar() {
-  return <Sparkline width={160} variant="bar" values={ALARMS_PER_HOUR} label="Alarms per hour, last 24 hours" decimals={0} />;
-}
-
-function SparklineLastPoint() {
-  return <Sparkline width={160} showLast values={LEVEL_TREND} label="Separator level, last 48 hours" unit="%" />;
-}
-
-function SparklineWithLimit() {
+function SparklineForms() {
   return (
-    <Sparkline
-      width={160}
-      height={40}
-      showLast
-      values={PRESSURE_TREND}
-      limit={DISCHARGE_PRESSURE.highLimit}
-      label="Discharge pressure against its high limit of 52 barg, last 48 hours"
-      unit="barg"
-    />
-  );
-}
-
-function SparklineWithBand() {
-  return (
-    <Sparkline
-      width={160}
-      height={40}
-      showLast
-      values={LEVEL_TREND}
-      band={{ low: 45, high: 62 }}
-      label="Separator level against its normal band of 45 to 62 %, last 48 hours"
-      unit="%"
-    />
-  );
-}
-
-function SparklineHeights() {
-  return (
-    <div className="flex items-end gap-6">
-      {[16, 24, 32, 48].map((height) => (
-        <div key={height} className="flex flex-col items-start gap-2">
-          <Sparkline width={96} height={height} values={PRESSURE_TREND} label={`Discharge pressure at ${height} pixels high`} unit="barg" />
-          <span className="text-xs text-muted-foreground tabular-nums">{height} px</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SparklineFluid() {
-  return (
-    <div className="flex w-full flex-col gap-2 self-center">
-      <Sparkline variant="area" height={48} values={sensorTrend(DISCHARGE_PRESSURE, 96)} label="Discharge pressure, last 4 days" unit="barg" />
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>4 d ago</span>
-        <span>Now</span>
+    <SparkSheet title="Discharge pressure, last 24 hours" subtitle="23-PT-92531 · the same 25 readings in five forms">
+      <div className="grid grid-cols-5 gap-8">
+        {SPARK_FORMS.map((form) => (
+          <SparkSample key={form.variant} caption={form.caption} reading={form.reading}>
+            <MicroTrend className="h-16 w-full" variant={form.variant} values={SPARK_PRESSURE_DAY} label={`Discharge pressure as ${form.caption.toLowerCase()}, last 24 hours`} />
+          </SparkSample>
+        ))}
       </div>
-    </div>
+    </SparkSheet>
   );
 }
 
-function SparklineSharedDomain() {
+function SparklineMarkers() {
+  const ends = extremes(SPARK_PRESSURE_DAY);
   return (
-    <div className="flex w-full max-w-xs flex-col gap-3 self-center">
-      {[SUCTION_PRESSURE, DISCHARGE_PRESSURE].map((sensor) => (
-        <div key={sensor.id} className="flex items-center gap-3">
-          <span className="w-32 shrink-0 text-xs text-muted-foreground">{sensor.name}</span>
-          <div className="min-w-0 flex-1">
-            <Sparkline height={28} values={sensorTrend(sensor)} domain={[0, 60]} label={`${sensor.name} on a shared 0 to 60 barg scale`} unit={sensor.unit} />
+    <SparkSheet title="Markers" subtitle="Which point the eye should land on">
+      <div className="grid grid-cols-3 gap-6">
+        <SparkSample caption="Latest value" reading="48.6 barg now">
+          <MicroTrend className="h-14 w-full" variant="line" values={SPARK_PRESSURE_DAY} label="Discharge pressure with the latest value marked" />
+        </SparkSample>
+        <SparkSample caption="Lowest and highest" reading={ends ? `${formatNumber(SPARK_PRESSURE_DAY[ends.min], 1)} to ${formatNumber(SPARK_PRESSURE_DAY[ends.max], 1)} barg` : undefined}>
+          <MicroTrend className="h-14 w-full" variant="line" marker="extremes" values={SPARK_PRESSURE_DAY} label="Discharge pressure with its lowest and highest value marked" />
+        </SparkSample>
+        <SparkSample caption="No marker" reading="When a figure sits beside it">
+          <MicroTrend className="h-14 w-full" variant="line" marker="none" values={SPARK_PRESSURE_DAY} label="Discharge pressure without markers" />
+        </SparkSample>
+      </div>
+    </SparkSheet>
+  );
+}
+
+function SparklineLimitAndBand() {
+  return (
+    <SparkSheet title="Limit and band" subtitle="What the trend is measured against">
+      <div className="grid grid-cols-3 gap-6">
+        <SparkSample caption="High limit line" reading="High 7.1 mm/s">
+          <MicroTrend className="h-14 w-full" variant="line" tone="warning" overTone="warning" limit={SPARK_VIBRATION.highLimit} values={sparkValues(SPARK_VIBRATION)} label="Drive-end vibration against its high limit" />
+        </SparkSample>
+        <SparkSample caption="Normal band" reading="Band 30–70 %">
+          <MicroTrend className="h-14 w-full" variant="line" tone="blue" band={[30, 70]} domain={[24, 76]} values={sparkValues(SPARK_LEVEL)} label="Separator level inside its normal band" />
+        </SparkSample>
+        <SparkSample caption="Bars over a limit" reading="Permit 15 kSm³/d">
+          <MicroTrend className="h-14 w-full" variant="bars" tone="neutral" limit={15} domain={[0, 18]} values={SPARK_FLARING} label="Daily flaring against the permit, two days over" />
+        </SparkSample>
+      </div>
+    </SparkSheet>
+  );
+}
+
+function SparklineSizes() {
+  const dense = makeValues({ seed: 77, points: 200, base: 48.6, amplitude: 1.6, noise: 0.5, cycles: 3, decimals: 1 });
+  return (
+    <SparkSheet title="Size and density" subtitle="From a table cell to the hero of a card, from 12 points to 200">
+      <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-end gap-x-10 gap-y-6">
+        <SparkSample caption="In a table cell" reading="20 px high">
+          <MicroTrend className="h-5 w-24" variant="line" values={SPARK_PRESSURE_DAY} label="Discharge pressure, table size" />
+        </SparkSample>
+        <SparkSample caption="Beside a figure" reading="32 px high">
+          <MicroTrend className="h-8 w-36" variant="line" values={SPARK_PRESSURE_DAY} label="Discharge pressure, row size" />
+        </SparkSample>
+        <SparkSample caption="Fills a card" reading="72 px high, full width">
+          <MicroTrend className="h-[72px] w-full" variant="area" values={SPARK_PRESSURE_DAY} label="Discharge pressure, card size" />
+        </SparkSample>
+        <SparkSample caption="12 points" reading="2-hour averages">
+          <MicroTrend className="h-8 w-24" variant="line" values={SPARK_PRESSURE_DAY.filter((_, index) => index % 2 === 0).slice(0, 12)} label="Discharge pressure, 12 points" />
+        </SparkSample>
+        <SparkSample caption="25 points" reading="Hourly">
+          <MicroTrend className="h-8 w-36" variant="line" values={SPARK_PRESSURE_DAY} label="Discharge pressure, 25 points" />
+        </SparkSample>
+        <SparkSample caption="200 points" reading="Raw samples keep the spikes; give them width">
+          <MicroTrend className="h-8 w-full" variant="line" values={dense} label="Discharge pressure, 200 points" />
+        </SparkSample>
+      </div>
+    </SparkSheet>
+  );
+}
+
+function SparklineSharedScale() {
+  const tags = [sparkSensor('pt-92530'), sparkSensor('pt-10010'), SPARK_PRESSURE];
+  return (
+    <SparkSheet title="Own scale or shared scale" subtitle="Three pressures: the same data reads differently">
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-6 gap-y-4">
+        <span className="text-xs font-medium text-(--kit-text-2)">Tag</span>
+        <span className="text-xs font-medium text-(--kit-text-2)">Own scale: shape</span>
+        <span className="text-xs font-medium text-(--kit-text-2)">Shared 0–60 barg: size</span>
+        {tags.map((sensor) => (
+          <div key={sensor.id} className="contents">
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-(--kit-text)">{sensor.name}</span>
+              <span className="text-xs text-(--kit-text-2) tabular-nums">
+                {formatNumber(sensor.value, 1)} {sensor.unit}
+              </span>
+            </span>
+            <MicroTrend className="h-9 w-full" variant="line" tone="blue" values={sparkValues(sensor)} label={`${sensor.name} on its own scale`} />
+            <MicroTrend className="h-9 w-full" variant="line" tone="teal" domain={[0, 60]} values={sparkValues(sensor)} label={`${sensor.name} on a shared 0 to 60 barg scale`} />
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </SparkSheet>
   );
 }
 
-function SparklineDensity() {
+function SparklineStates() {
   return (
-    <div className="flex flex-col gap-4">
-      {[12, 48, 168].map((points) => (
-        <div key={points} className="flex items-center gap-3">
-          <Sparkline width={160} height={24} values={sensorTrend(SEPARATOR_LEVEL, points)} label={`Separator level, ${points} hourly points`} unit="%" />
-          <span className="text-xs text-muted-foreground tabular-nums">{points} points</span>
-        </div>
-      ))}
-    </div>
+    <Canvas>
+      <Grid>
+        <TrendTile className="col-span-4" label="Normal" detail="Discharge pressure" value={48.6} decimals={1} unit="barg" aside={<SparkPill tone="success">Normal</SparkPill>} trend={<MicroTrend className="h-12 w-full" tone="success" values={SPARK_PRESSURE_DAY} limit={52} overTone="warning" label="Discharge pressure, normal" />} footnote="3.4 barg under the high limit" />
+        <TrendTile className="col-span-4" label="Near limit" detail="Drive-end vibration" value={6.8} decimals={1} unit="mm/s" aside={<SparkPill tone="warning">Near limit</SparkPill>} trend={<MicroTrend className="h-12 w-full" tone="warning" values={sparkValues(SPARK_VIBRATION)} limit={7.1} overTone="warning" label="Drive-end vibration, near its limit" />} footnote={`0.3 mm/s under the limit · ${formatNumber(shareAbove(sparkValues(SPARK_VIBRATION), 7.1) * 100, 0)} % of the day above it`} />
+        <TrendTile className="col-span-4" label="Trip" detail="Recompressor vibration" value={11.6} decimals={1} unit="mm/s" aside={<SparkPill tone="critical">Trip</SparkPill>} trend={<MicroTrend className="h-12 w-full" tone="critical" values={SPARK_TRIP} limit={11} label="Recompressor vibration reaching the trip limit" />} footnote="Trip limit 11.0 mm/s reached at 13:46" />
+        <TrendTile className="col-span-4" label="Frozen signal" detail="Cooler outlet temperature" value={38.9} decimals={1} unit="°C" aside={<SparkPill tone="warning">Frozen</SparkPill>} trend={<MicroTrend className="h-12 w-full" tone="neutral" variant="line" values={SPARK_FROZEN} label="Cooler outlet temperature, unchanged for 24 hours" />} footnote={isFrozen(SPARK_FROZEN) ? 'No change in 24 h: check the transmitter' : 'Moving'} />
+        <TrendTile className="col-span-4" label="Gap" detail="Cooler outlet temperature" value={38.9} decimals={1} unit="°C" aside={<SparkPill tone="warning">Uncertain</SparkPill>} trend={<MicroTrend className="h-12 w-full" tone="pink" variant="line" values={SPARK_GAPPED} label="Cooler outlet temperature with a five-hour gap" />} footnote="No samples 23:00–03:00" />
+        <TrendTile className="col-span-4" label="No data" detail="Bearing temperature" value="—" aside={<SparkPill tone="neutral">No signal</SparkPill>} trend={<MicroTrend className="h-12 w-full" values={SPARK_NONE} label="Bearing temperature" />} footnote="Bad quality since 05:00" />
+      </Grid>
+    </Canvas>
   );
 }
 
 function SparklineInText() {
   return (
-    <p className="max-w-xs text-sm text-base-foreground">
-      Export flow has held steady{' '}
-      <Sparkline width={56} height={16} values={FLOW_TREND.slice(-24)} label="Export flow, last 24 hours" unit="m³/h" decimals={0} className="inline-block align-middle" /> at{' '}
-      <span className="font-medium tabular-nums">412 m³/h</span> since the pump swap on Tuesday.
-    </p>
-  );
-}
-
-function SparklineWarning() {
-  return (
-    <Sparkline
-      width={160}
-      height={40}
-      showLast
-      tone="warning"
-      values={HOT_TEMPERATURE_TREND}
-      limit={DISCHARGE_TEMPERATURE.highLimit}
-      label="Discharge temperature, above its high limit of 145 °C"
-      unit="°C"
-    />
-  );
-}
-
-function SparklineCritical() {
-  return (
-    <Sparkline
-      width={160}
-      height={40}
-      showLast
-      variant="area"
-      tone="critical"
-      values={TRIP_VIBRATION_TREND}
-      limit={11}
-      label="Recompressor vibration, at its trip limit of 11 mm/s"
-      unit="mm/s"
-    />
-  );
-}
-
-function SparklineBarOverLimit() {
-  return <Sparkline width={160} height={40} variant="bar" values={ALARMS_PER_HOUR} limit={6} label="Alarms per hour against the target of 6, last 24 hours" decimals={0} />;
-}
-
-function SparklineFlat() {
-  return <Sparkline width={160} values={[38.9, 38.9, 38.9, 38.9, 38.9, 38.9, 38.9, 38.9]} label="Cooler outlet temperature, frozen signal" unit="°C" tone="warning" />;
-}
-
-function SparklineNoData() {
-  return (
-    <div className="flex flex-col items-start gap-2">
-      <Sparkline width={160} values={[]} label="Bearing temperature, last 48 hours" />
-      <span className="text-xs text-muted-foreground">No data in the last 48 h</span>
-    </div>
-  );
-}
-
-function SparklineDeltaUpGood() {
-  return <TrendDelta size="md" value={KPI.oee.value} reference={KPI.oee.previous} unit="%" goodDirection="up" caption="vs last week" />;
-}
-
-function SparklineDeltaUpBad() {
-  return <TrendDelta size="md" value={146.3} reference={141.2} unit="°C" goodDirection="down" caption="in 1 h" />;
-}
-
-function SparklineDeltaDownGood() {
-  return <TrendDelta size="md" value={KPI.flaring.value} reference={KPI.flaring.previous} unit={KPI.flaring.unit} goodDirection="down" caption="vs last week" />;
-}
-
-function SparklineDeltaNeutral() {
-  return <TrendDelta size="md" value={9840} reference={9790} decimals={0} unit="rpm" caption="vs 1 h ago" />;
-}
-
-function SparklineDeltaPercent() {
-  return <TrendDelta size="md" value={KPI.mtbf.value} reference={KPI.mtbf.previous} format="percent" goodDirection="up" caption="vs last quarter" />;
-}
-
-function SparklineDeltaNoChange() {
-  return <TrendDelta size="md" value={KPI.daysSinceIncident.value} reference={KPI.daysSinceIncident.value} decimals={0} unit="d" goodDirection="up" caption="vs yesterday" />;
-}
-
-function SparklineDeltaSizes() {
-  return (
-    <div className="flex flex-col items-start gap-3">
-      <TrendDelta size="sm" value={KPI.gasExport.value} reference={KPI.gasExport.previous} decimals={2} goodDirection="up" caption="vs yesterday" />
-      <TrendDelta size="md" value={KPI.gasExport.value} reference={KPI.gasExport.previous} decimals={2} goodDirection="up" caption="vs yesterday" />
-    </div>
-  );
-}
-
-function SparklineWithValue() {
-  return (
-    <div className="flex w-full max-w-xs items-center justify-between gap-4 self-center">
-      <div className="flex flex-col gap-2">
-        <span className="text-xs text-muted-foreground">{DISCHARGE_PRESSURE.name}</span>
-        <ValueReadout value={DISCHARGE_PRESSURE.value} unit={DISCHARGE_PRESSURE.unit} decimals={1} />
-        <TrendDelta value={DISCHARGE_PRESSURE.value} reference={PRESSURE_TREND[PRESSURE_TREND.length - 25]} unit="barg" caption="in 24 h" />
+    <SparkSheet title="In a sentence" subtitle="A trend the size of a word, in the colour of the text">
+      <div className="flex flex-col gap-4 text-base leading-8 text-(--kit-text)">
+        <p className="m-0">
+          Discharge pressure held steady <MicroTrend ink className="mx-1 h-5 w-16" variant="line" marker="none" values={SPARK_PRESSURE_DAY} label="Discharge pressure trend" /> at <strong className="font-semibold tabular-nums">48.6 barg</strong>, while recompressor vibration climbed{' '}
+          <MicroTrend ink className="mx-1 h-5 w-16" variant="line" marker="none" values={SPARK_TRIP} label="Recompressor vibration trend" /> to its <strong className="font-semibold tabular-nums">11.0 mm/s</strong> trip limit.
+        </p>
+        <p className="m-0 text-sm leading-7 text-(--kit-text-2)">
+          Flaring was over the permit on two of the last 14 days <StateTicks className="mx-1 w-36" size="sm" label="Daily flaring against the permit, last 14 days" ticks={SPARK_FLARING_TICKS} />.
+        </p>
       </div>
-      <Sparkline showLast className="max-w-32" height={40} values={PRESSURE_TREND} label="Discharge pressure, last 48 hours" unit="barg" />
-    </div>
+    </SparkSheet>
   );
 }
 
-function SparklineReadingList() {
-  const sensors = sensorsOf('23-ka-9101').slice(0, 5);
+function SparklineStateTicks() {
   return (
-    <Card className="w-full max-w-md self-center">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>1st stage compressor</CardTitle>
-          <CardDescription>23-KA-9101 · last 48 hours</CardDescription>
-        </CardHeaderCenter>
-      </CardHeader>
-      <CardContent>
-        <ul className="flex w-full flex-col gap-3">
-          {sensors.map((sensor) => (
-            <li key={sensor.id} className="grid grid-cols-[minmax(0,1fr)_6rem_6.5rem] items-center gap-4">
-              <span className="truncate text-sm text-base-foreground">{sensor.name}</span>
-              <Sparkline height={24} values={sensorTrend(sensor)} label={`${sensor.name}, last 48 hours`} unit={sensor.unit} decimals={sensor.decimals} />
-              <ValueReadout size="xs" value={sensor.value} unit={sensor.unit} decimals={sensor.decimals} className="justify-self-end" />
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  );
-}
-
-function SparklineSmallMultiples() {
-  const sensors = [SUCTION_PRESSURE, DISCHARGE_PRESSURE, DISCHARGE_TEMPERATURE, VIBRATION, EXPORT_FLOW, MOTOR_CURRENT];
-  return (
-    <div className="grid w-full grid-cols-2 gap-x-6 gap-y-5 self-center lg:grid-cols-3">
-      {sensors.map((sensor) => (
-        <div key={sensor.id} className="flex min-w-0 flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-xs text-muted-foreground">{sensor.name}</span>
-            <ValueReadout size="xs" value={sensor.value} unit={sensor.unit} decimals={sensor.decimals} />
-          </div>
-          <Sparkline
-            variant="area"
-            height={40}
-            values={sensorTrend(sensor)}
-            limit={sensor.highLimit}
-            domain={[sensor.lowLimit, sensor.highHighLimit ?? sensor.highLimit * 1.05]}
-            label={`${sensor.name} against its high limit, last 48 hours`}
-            unit={sensor.unit}
-            decimals={sensor.decimals}
-          />
+    <SparkSheet title="Outcome per day" subtitle="When the question is how often, not how much">
+      <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-[9rem_minmax(0,1fr)_auto] items-center gap-4">
+          <span className="text-sm font-medium text-(--kit-text)">Flaring vs permit</span>
+          <StateTicks className="w-full" size="lg" label="Daily flaring against the permit, last 14 days" ticks={SPARK_FLARING_TICKS} axis={[SPARK_FLARING_DAYS[0], SPARK_FLARING_DAYS[13]]} />
+          <span className="self-start text-sm font-semibold text-(--kit-text) tabular-nums">2 over</span>
         </div>
-      ))}
-    </div>
+        <div className="grid grid-cols-[9rem_minmax(0,1fr)_auto] items-center gap-4">
+          <span className="text-sm font-medium text-(--kit-text)">Standby test</span>
+          <StateTicks
+            className="w-full"
+            size="lg"
+            label="Weekly standby start test of export pump B, last 14 weeks"
+            ticks={Array.from({ length: 14 }, (_, index) => ({ label: `Week ${index + 1}`, tone: index === 9 || index > 11 ? 'neutral' : 'success', word: index === 9 || index > 11 ? 'Not run' : 'Passed' }))}
+            axis={['14 weeks ago', 'This week']}
+          />
+          <span className="self-start text-sm font-semibold text-(--kit-text) tabular-nums">3 missed</span>
+        </div>
+      </div>
+    </SparkSheet>
   );
 }
 
-function SparklineTagTable() {
-  const rows = [...SENSORS.slice(0, 4), ...SENSORS.slice(6)].map((sensor) => ({
-    sensor,
-    values: sensor.quality === 'bad' ? [] : sensorTrend(sensor, 48, sensor.seed % 3 === 0 ? (sensor.highLimit - sensor.lowLimit) * 0.12 : 0),
-  }));
+function SparklineDeltas() {
   return (
-    <div className="w-full self-center overflow-x-auto">
-      <table className="w-full min-w-2xl border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Tag
-            </th>
-            <th scope="col" className={TH}>
-              Measurement
-            </th>
-            <th scope="col" className={TH}>
-              Last 48 h
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Value
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              24 h change
-            </th>
-            <th scope="col" className={TH}>
-              Quality
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ sensor, values }) => (
-            <tr key={sensor.id} className="border-t border-default">
-              <td className={`${TD} whitespace-nowrap text-base-foreground tabular-nums`}>{sensor.tag}</td>
-              <td className={`${TD} text-muted-foreground`}>{sensor.name}</td>
-              <td className={`${TD} w-36`}>
-                <Sparkline height={24} values={values} label={`${sensor.name}, last 48 hours`} unit={sensor.unit} decimals={sensor.decimals} />
-              </td>
-              <td className={`${TD} text-right`}>
-                <ValueReadout
-                  size="xs"
-                  value={sensor.quality === 'bad' ? null : sensor.value}
-                  unit={sensor.unit}
-                  decimals={sensor.decimals}
-                  tone={toneFromLimits(sensor.value, limitsOf(sensor))}
-                />
-              </td>
-              <td className={`${TD} text-right`}>
-                {values.length > 24 ? (
-                  <TrendDelta value={sensor.value} reference={values[values.length - 25]} decimals={sensor.decimals} />
-                ) : (
-                  <span className="text-xs text-muted-foreground">No data</span>
-                )}
-              </td>
-              <td className={TD}>
-                <StatusIndicator size="sm" {...qualityStatus(sensor.quality)} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <SparkSheet title="Change with a judgement" subtitle="Arrow, sign and colour agree; the caption says against what">
+      <div className="flex flex-col">
+        <ListRow title="Gas export" meta="Up is good" trailing={<Delta value={0.17} decimals={2} unit=" MSm³/d" />} />
+        <ListRow title="Energy intensity" meta="Down is good" trailing={<Delta value={-1.4} unit=" kWh/boe" good="down" />} />
+        <ListRow title="Active alarms" meta="Up is bad" trailing={<Delta value={3} decimals={0} good="down" />} />
+        <ListRow title="Availability" meta="Down is bad" trailing={<Delta value={-0.7} unit=" pts" />} />
+        <ListRow title="Shaft speed" meta="No judgement" trailing={<Delta value={120} decimals={0} unit=" rpm" good="none" />} />
+        <ListRow title="Separator level" meta="No change" trailing={<Delta value={0} unit=" %" />} />
+      </div>
+    </SparkSheet>
+  );
+}
+
+function SparklineValueTrend() {
+  const tiles = [SPARK_PRESSURE, SPARK_TEMPERATURE, SPARK_SPEED];
+  return (
+    <Canvas>
+      <Grid>
+        {tiles.map((sensor) => {
+          const values = sparkValues(sensor);
+          const change = changeOf(values);
+          return (
+            <TrendTile
+              key={sensor.id}
+              className="col-span-4"
+              label={sensor.name}
+              detail={sensor.tag}
+              value={sensor.value}
+              decimals={sensor.decimals}
+              unit={sensor.unit}
+              aside={<Delta value={change.absolute} decimals={sensor.decimals} good="none" />}
+              trend={<MicroTrend className="h-14 w-full" tone={sparkTrendTone(sensor)} values={values} limit={sensor.highLimit} overTone="warning" label={`${sensor.name}, last 24 hours`} />}
+              footnote={`Last 24 h · high limit ${formatNumber(sensor.highLimit, sensor.decimals)} ${sensor.unit}`}
+            />
+          );
+        })}
+      </Grid>
+    </Canvas>
   );
 }
 
 function SparklineDailyBars() {
   return (
-    <Card className="w-full max-w-sm self-center">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>Flaring</CardTitle>
-          <CardDescription>Daily volume against the permit of 15 kSm³/d</CardDescription>
-        </CardHeaderCenter>
-        <CardHeaderEnd>
-          <StatusIndicator size="sm" tone="warning" shape="square" label="3 days over" />
-        </CardHeaderEnd>
-      </CardHeader>
-      <CardContent>
-        <div className="flex w-full flex-col gap-2">
-          <Sparkline variant="bar" height={64} values={FLARING_PER_DAY} limit={KPI.flaring.target} label="Flaring per day against the permit, last 14 days" unit="kSm³/d" />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>27 Feb</span>
-            <span>12 Mar</span>
+    <SparkSheet
+      title="Flaring"
+      subtitle="Daily total against the 15 kSm³/d permit, last 14 days"
+      actions={<SparkPill tone="success">Within permit today</SparkPill>}
+      footer={<span>Two days over the permit, on 2 and 8 March. Today is 2.6 kSm³/d under.</span>}
+    >
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-end gap-8">
+        <Stat variant="plain" size="lg" label="Today" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" delta={{ value: PLANT_KPIS.flaring.value - PLANT_KPIS.flaring.previous, good: 'down', caption: 'vs last week' }} />
+        <div className="flex flex-col gap-1">
+          <MicroTrend className="h-24 w-full" variant="bars" tone="neutral" limit={15} domain={[0, 19]} values={SPARK_FLARING} label="Daily flaring against the permit, last 14 days" />
+          <div className="flex justify-between text-xs text-(--kit-text-3) tabular-nums">
+            <span>{SPARK_FLARING_DAYS[0]}</span>
+            <span>Permit 15.0</span>
+            <span>{SPARK_FLARING_DAYS[13]}</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </SparkSheet>
   );
 }
 
-const TREND_CONFIG = {
-  pressure: { label: 'Discharge pressure', color: chartSeriesColor(1) },
-} satisfies ChartConfig;
-
-const TREND_DATA = makeSeries({ seed: 11, points: 48, base: 47.8, amplitude: 1.6, noise: 0.5, cycles: 2, stepMs: HOUR / 2, decimals: 1 }).map((point) => ({
-  time: formatTime(point.t),
-  pressure: point.v,
-}));
-
-function SparklineToFullChart() {
+function SparklineReadingList() {
   return (
-    <Card className="w-full self-center">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>Discharge pressure</CardTitle>
-          <CardDescription>23-PT-92531 · last 24 hours · high limit 52 barg</CardDescription>
-        </CardHeaderCenter>
-        <CardHeaderEnd>
-          <ValueReadout value={DISCHARGE_PRESSURE.value} unit="barg" decimals={1} />
-        </CardHeaderEnd>
-      </CardHeader>
-      <CardContent>
-        <ChartContainer
-          config={TREND_CONFIG}
-          aria-label="Discharge pressure over the last 24 hours, between 45 and 51 barg and below the high limit of 52 barg; latest 48.6 barg"
-          className="aspect-auto h-56 w-full"
-        >
-          <LineChart data={TREND_DATA} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="time" tickLine={false} axisLine={false} interval={7} tickMargin={8} />
-            <YAxis domain={[40, 56]} tickLine={false} axisLine={false} width={32} tickCount={5} />
-            <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-            <ReferenceLine y={52} stroke="var(--color-chart-neutral-450)" strokeDasharray="3 3" />
-            <Line dataKey="pressure" type="monotone" stroke="var(--color-pressure)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-          </LineChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+    <SparkSheet title="1st stage compressor" subtitle="23-KA-9101 · readings with their last 24 hours">
+      <div className="flex flex-col">
+        {SENSORS.filter((sensor) => sensor.assetId === '23-ka-9101').map((sensor) => {
+          const state = sparkState(sensor);
+          return (
+            <ListRow
+              key={sensor.id}
+              tone={state.tone === 'success' ? 'neutral' : state.tone}
+              title={sensor.name}
+              meta={<TagId>{sensor.tag}</TagId>}
+              trailing={
+                <span className="grid grid-cols-[7rem_7.5rem] items-center gap-4">
+                  <MicroTrend className="h-7 w-full" tone={sparkTrendTone(sensor)} values={sparkValues(sensor)} label={`${sensor.name}, last 24 hours`} />
+                  <span className="text-right text-sm font-semibold text-(--kit-text) tabular-nums">
+                    {formatNumber(sensor.value, sensor.decimals)} <span className="text-xs font-medium text-(--kit-text-3)">{sensor.unit}</span>
+                  </span>
+                </span>
+              }
+            />
+          );
+        })}
+      </div>
+    </SparkSheet>
+  );
+}
+
+const SPARK_TABLE_COLUMNS: DataTableColumn<Sensor>[] = [
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (sensor) => <TagId>{sensor.tag}</TagId> },
+  { id: 'name', header: 'Measurement', cell: (sensor) => sensor.name },
+  { id: 'value', header: 'Value', numeric: true, nowrap: true, cell: (sensor) => (sensor.quality === 'bad' ? '—' : `${formatNumber(sensor.value, sensor.decimals)} ${sensor.unit}`) },
+  {
+    id: 'trend',
+    header: 'Last 24 h',
+    width: 'w-40',
+    cell: (sensor) => <MicroTrend className="h-6 w-32" tone={sparkTrendTone(sensor)} variant="line" values={sensor.quality === 'bad' ? SPARK_NONE : sparkValues(sensor)} limit={sensor.highLimit} overTone="warning" label={`${sensor.name}, last 24 hours`} />,
+  },
+  {
+    id: 'change',
+    header: 'Change',
+    align: 'end',
+    nowrap: true,
+    cell: (sensor) => (sensor.quality === 'bad' ? '—' : <Delta value={changeOf(sparkValues(sensor)).absolute} decimals={sensor.decimals} good="none" />),
+  },
+  { id: 'state', header: 'State', cell: (sensor) => <SparkPill tone={sparkState(sensor).tone}>{sparkState(sensor).word}</SparkPill> },
+];
+
+function SparklineTagTable() {
+  return (
+    <Canvas>
+      <Panel title="Tag watchlist" subtitle="12 tags · value, last 24 hours, change and state" padding="none">
+        <DataTable flush label="Tag watchlist" columns={SPARK_TABLE_COLUMNS} rows={SENSORS} rowKey={(sensor) => sensor.id} rowTone={(sensor) => (sparkState(sensor).tone === 'success' ? undefined : sparkState(sensor).tone)} />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function SparklineSmallMultiples() {
+  return (
+    <Canvas>
+      <div className="flex flex-col gap-4">
+        <SectionHeader title="Readings at a glance" description="Eight tags, the same tile, each on its own scale with its high limit." size="sm" />
+        <Grid>
+          {SPARK_LIVE.slice(0, 8).map((sensor) => (
+            <TrendTile
+              key={sensor.id}
+              className="col-span-3"
+              label={sensor.name}
+              detail={sensor.tag}
+              value={sensor.value}
+              decimals={sensor.decimals}
+              unit={sensor.unit}
+              trend={<MicroTrend className="h-10 w-full" tone={sparkTrendTone(sensor)} values={sparkValues(sensor)} limit={sensor.highLimit} overTone="warning" label={`${sensor.name}, last 24 hours`} />}
+            />
+          ))}
+        </Grid>
+      </div>
+    </Canvas>
+  );
+}
+
+function SparklineLookConsole() {
+  return (
+    <LookScope look="console">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-8" title="Tag strip" subtitle="23-KA-9101 · 24 h · line, square, limit marked" padding="none">
+            <DataTable flush label="Compressor tags with trends" columns={SPARK_TABLE_COLUMNS} rows={SENSORS.slice(0, 7)} rowKey={(sensor) => sensor.id} rowTone={(sensor) => (sparkState(sensor).tone === 'success' ? undefined : sparkState(sensor).tone)} />
+          </Panel>
+          <Panel className="col-span-4" title="Recompressor" subtitle="23-KA-9103" tone="critical">
+            <div className="flex flex-1 flex-col justify-between gap-4">
+              <div className="flex items-start justify-between gap-3">
+                <Stat variant="plain" size="lg" label="Drive-end vibration" value={11.6} decimals={1} unit="mm/s" />
+                <SparkPill tone="critical">Trip</SparkPill>
+              </div>
+              <MicroTrend className="h-20 w-full" tone="critical" values={SPARK_TRIP} limit={11} label="Recompressor vibration reaching the trip limit" />
+              <span className="text-xs text-(--kit-text-2) tabular-nums">Trip limit 11.0 mm/s · reached 13:46</span>
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SparklineLookPoster() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Grid>
+          <TrendTile className="col-span-4" filled tone="green" label="Gas export" detail="MSm³ per day, 14 days" value={PLANT_KPIS.gasExport.value} decimals={2} trend={<MicroTrend ink className="h-20 w-full" values={SPARK_KPI_WEEKS.export} label="Gas export per day, last 14 days" />} footnote="Plan 4.50" />
+          <TrendTile className="col-span-4" filled tone="amber" label="Flaring" detail="kSm³ per day, 14 days" value={PLANT_KPIS.flaring.value} decimals={1} trend={<MicroTrend ink className="h-20 w-full" values={SPARK_FLARING} limit={15} label="Daily flaring against the permit, last 14 days" />} footnote="Permit 15.0 · two days over" />
+          <TrendTile className="col-span-4" filled tone="sky" label="Energy intensity" detail="kWh per boe, 14 days" value={PLANT_KPIS.energyIntensity.value} decimals={1} trend={<MicroTrend ink className="h-20 w-full" values={SPARK_KPI_WEEKS.energy} label="Energy intensity per day, last 14 days" />} footnote="Target 30.0" />
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SparklineLookGlass() {
+  const tiles: Array<{ sensor: Sensor; tone: Tone }> = [
+    { sensor: SPARK_PRESSURE, tone: 'sky' },
+    { sensor: SPARK_TEMPERATURE, tone: 'amber' },
+    { sensor: SPARK_VIBRATION, tone: 'pink' },
+    { sensor: SPARK_SPEED, tone: 'teal' },
+  ];
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Grid>
+          {tiles.map(({ sensor, tone }) => (
+            <Panel key={sensor.id} className="col-span-3" title={sensor.name} subtitle={sensor.tag}>
+              <div className="flex flex-1 flex-col justify-between gap-4">
+                <Stat variant="plain" size="lg" label="Now" value={sensor.value} decimals={sensor.decimals} unit={sensor.unit} />
+                <MicroTrend className="h-16 w-full" tone={tone} values={sparkValues(sensor)} label={`${sensor.name}, last 24 hours`} />
+              </div>
+            </Panel>
+          ))}
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SparklineLookBlueprint() {
+  const rows = [SPARK_PRESSURE, SPARK_TEMPERATURE, SPARK_VIBRATION, SPARK_LEVEL];
+  return (
+    <LookScope look="blueprint">
+      <Canvas>
+        <Panel title="Trend schedule" subtitle="Hourly samples · range dimensioned per tag">
+          <div className="grid grid-cols-[13rem_minmax(0,1fr)_7rem_7rem_7rem] items-center gap-x-6 gap-y-4">
+            {['Tag', 'Last 24 h, every sample marked', 'Minimum', 'Maximum', 'Now'].map((heading, index) => (
+              <span key={heading} className={`text-xs font-medium text-(--kit-text-2) ${index > 1 ? 'text-right' : ''}`}>
+                {heading}
+              </span>
+            ))}
+            {rows.map((sensor) => {
+              const values = sparkValues(sensor);
+              const ends = extremes(values);
+              return (
+                <div key={sensor.id} className="contents">
+                  <span className="flex flex-col">
+                    <span className="text-sm font-medium text-(--kit-text)">{sensor.name}</span>
+                    <TagId>{sensor.tag}</TagId>
+                  </span>
+                  <MicroTrend className="h-10 w-full" values={values} limit={sensor.highLimit} overTone="warning" label={`${sensor.name}, hourly samples`} />
+                  <span className="text-right text-sm text-(--kit-text) tabular-nums">{ends ? formatNumber(values[ends.min], sensor.decimals) : '—'}</span>
+                  <span className="text-right text-sm text-(--kit-text) tabular-nums">{ends ? formatNumber(values[ends.max], sensor.decimals) : '—'}</span>
+                  <span className="text-right text-sm font-semibold text-(--kit-text) tabular-nums">
+                    {formatNumber(sensor.value, sensor.decimals)} {sensor.unit}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SparklineLookSignal() {
+  return (
+    <LookScope look="signal">
+      <Canvas>
+        <Grid>
+          <TrendTile className="col-span-3" filled tone="success" label="Discharge pressure" value={48.6} decimals={1} unit="barg" aside={<IconCircleCheck aria-hidden="true" />} trend={<MicroTrend ink className="h-14 w-full" values={SPARK_PRESSURE_DAY} label="Discharge pressure, last 24 hours" />} footnote="Normal · high limit 52" />
+          <TrendTile className="col-span-3" filled tone="warning" label="Discharge temperature" value={141.2} decimals={1} unit="°C" aside={<IconAlertTriangle aria-hidden="true" />} trend={<MicroTrend ink className="h-14 w-full" values={sparkValues(SPARK_TEMPERATURE)} label="Discharge temperature, last 24 hours" />} footnote="Near limit · high limit 145" />
+          <TrendTile className="col-span-3" filled tone="warning" label="Drive-end vibration" value={6.8} decimals={1} unit="mm/s" aside={<IconAlertTriangle aria-hidden="true" />} trend={<MicroTrend ink className="h-14 w-full" values={sparkValues(SPARK_VIBRATION)} label="Drive-end vibration, last 24 hours" />} footnote="Near limit · high limit 7.1" />
+          <TrendTile className="col-span-3" filled tone="critical" label="Recompressor vibration" value={11.6} decimals={1} unit="mm/s" aside={<IconAlertOctagon aria-hidden="true" />} trend={<MicroTrend ink className="h-14 w-full" values={SPARK_TRIP} label="Recompressor vibration, last 24 hours" />} footnote="Trip · limit 11.0" />
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SparklineLookEditorial() {
+  return (
+    <LookScope look="editorial">
+      <Canvas>
+        <div className="flex flex-col gap-6">
+          <SectionHeader eyebrow="Nordkapp · two weeks in four lines" title="Export is up, energy and flaring are down" size="lg" />
+          <StatGroup columns={4} label="Plant KPIs, last 14 days">
+            <Stat variant="plain" size="lg" label="Gas export" value={PLANT_KPIS.gasExport.value} decimals={2} unit="MSm³/d" delta={{ value: 0.17, decimals: 2, caption: 'vs last week' }} sparkline={SPARK_KPI_WEEKS.export} />
+            <Stat variant="plain" size="lg" label="Availability" value={PLANT_KPIS.availability.value} decimals={1} unit="%" delta={{ value: -0.7, unit: ' pts', caption: 'vs last week' }} sparkline={SPARK_KPI_WEEKS.availability} />
+            <Stat variant="plain" size="lg" label="Energy intensity" value={PLANT_KPIS.energyIntensity.value} decimals={1} unit="kWh/boe" delta={{ value: -1.4, good: 'down', caption: 'vs last week' }} sparkline={SPARK_KPI_WEEKS.energy} />
+            <Stat variant="plain" size="lg" label="Flaring" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" delta={{ value: -6.5, good: 'down', caption: 'vs last week' }} sparkline={SPARK_FLARING} />
+          </StatGroup>
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SparklineKpiStrip() {
+  return (
+    <Canvas>
+      <Grid>
+        <Stat className="col-span-3" emphasis="strong" tone="accent" icon={<IconFlame />} label="Gas export" value={PLANT_KPIS.gasExport.value} decimals={2} unit="MSm³/d" delta={{ value: 0.17, decimals: 2, caption: 'vs yesterday' }} target="Plan 4.50 · 97 % of plan" sparkline={SPARK_KPI_WEEKS.export} />
+        <Stat className="col-span-3" tone="green" icon={<IconGauge />} label="Availability" value={PLANT_KPIS.availability.value} decimals={1} unit="%" delta={{ value: -0.7, unit: ' pts', caption: 'vs last week' }} target="Target 97.5 %" sparkline={SPARK_KPI_WEEKS.availability} />
+        <Stat className="col-span-3" tone="purple" icon={<IconBolt />} label="Energy intensity" value={PLANT_KPIS.energyIntensity.value} decimals={1} unit="kWh/boe" delta={{ value: -1.4, good: 'down', caption: 'vs last week' }} target="Target 30.0" sparkline={SPARK_KPI_WEEKS.energy} />
+        <Stat className="col-span-3" tone="amber" icon={<IconSnowflake />} label="Flaring" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" delta={{ value: -6.5, good: 'down', caption: 'vs last week' }} target="Permit 15.0" sparkline={SPARK_FLARING} />
+      </Grid>
+    </Canvas>
+  );
+}
+
+function SparklineWatchlist() {
+  const tags = SENSORS.filter((sensor) => sensor.assetId === '23-ka-9101');
+  const [selected, setSelected] = useState('vt-92540');
+  const sensor = sparkSensor(selected);
+  const values = sparkValues(sensor);
+  const labels = values.map((_, index) => formatTime(REFERENCE_NOW - (values.length - 1 - index) * HOUR));
+  return (
+    <Canvas>
+      <Grid>
+        <div className="col-span-5 flex flex-col gap-2">
+          {tags.map((entry) => (
+            <button key={entry.id} type="button" aria-pressed={entry.id === selected} onClick={() => setSelected(entry.id)} className="cursor-pointer text-left outline-none focus-visible:ring-2 focus-visible:ring-(--kit-rule-strong)" style={{ borderRadius: 'var(--kit-radius-sm)', boxShadow: entry.id === selected ? '0 0 0 2px var(--kit-line-accent)' : undefined }}>
+              <TrendTile
+                layout="row"
+                label={entry.name}
+                detail={entry.tag}
+                value={entry.value}
+                decimals={entry.decimals}
+                unit={entry.unit}
+                trend={<MicroTrend className="h-7 w-full" tone={sparkTrendTone(entry)} values={sparkValues(entry)} label={`${entry.name}, last 24 hours`} />}
+              />
+            </button>
+          ))}
+        </div>
+        <Panel className="col-span-7" title={sensor.name} subtitle={`${sensor.tag} · the selected sparkline, opened as a chart`} actions={<SparkPill tone={sparkState(sensor).tone}>{sparkState(sensor).word}</SparkPill>} footer={<span>A sparkline shows the shape. Open the chart when the reader needs values, times and limits.</span>}>
+          <SeriesPlot
+            label={`${sensor.name} against its high limit, last 24 hours`}
+            series={[{ id: sensor.id, label: sensor.name, values, tone: 'accent', fill: true }]}
+            labels={labels}
+            unit={sensor.unit}
+            decimals={sensor.decimals}
+            limits={[{ value: sensor.highLimit, label: `High ${formatNumber(sensor.highLimit, sensor.decimals)}`, tone: 'warning' }]}
+            xTicks={5}
+            height={300}
+          />
+        </Panel>
+      </Grid>
+    </Canvas>
   );
 }
 
@@ -450,302 +645,282 @@ export default definePage({
   id: 'sparklines-and-trends',
   title: 'Sparklines and trends',
   summary:
-    'Word-sized trends and signed changes that sit beside a value: a sparkline shows the shape of the last period, a trend delta says how far the value moved and whether that is good.',
+    'Word-sized trends that sit beside a value: lines, areas, bars, steps and dots, with a limit or a normal band when the reading has one, plus the change figure and the tiles, rows and tables they live in. They show the shape of the recent past, never exact values.',
   guidance: {
     use: [
-      'Put a sparkline next to the value it explains, in tiles, table rows and list items.',
-      'Mark the last point when the sparkline sits beside the current value.',
-      'Add a limit line or band when the question is "how close to the limit", not "what shape".',
-      'Give trend deltas a good direction for KPIs and leave it out for process values.',
+      'Put a sparkline next to the figure it explains, and say the period once for the whole list or card.',
+      'Add the limit line when the reading has one; a shape without a reference cannot say good or bad.',
+      'Use one scale per tag for shape and a shared scale only when the sizes should be compared.',
+      'Pair the trend with a signed change and the words that say against what.',
     ],
     avoid: [
-      'Reading exact values off a sparkline — use a chart with axes for that.',
-      'Different y scales in sparklines that people will compare; share the domain.',
-      'Colouring a sparkline by status unless the series is in that state now.',
-      'A delta without saying what it is compared with.',
+      'Reading exact values off a sparkline; open a chart with axes for that.',
+      'A flat line for a dead signal without saying so: mark it frozen or no data.',
+      'Different periods in one table column.',
+      'Colour without a state word when the trend is in a warning or critical tone.',
     ],
   },
   source,
   sections: [
     {
-      id: 'variants',
-      title: 'Sparkline variants',
-      description: 'Three marks and three optional references.',
+      id: 'forms',
+      title: 'Forms and marks',
+      description: 'The five forms, the markers, and the limit or band the trend is read against.',
       specimens: [
         {
-          id: 'SparklineLine',
-          title: 'Line',
-          note: 'Pick it for a continuous signal such as a pressure, temperature or flow.',
+          id: 'SparklineForms',
+          title: 'Line, area, bars, step and dots',
+          note: 'Pick the form by what the data is: a flowing signal, a total per period, a held value or separate samples.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineLine,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/Panel.tsx'],
+          Component: SparklineForms,
         },
         {
-          id: 'SparklineArea',
-          title: 'Area',
-          note: 'Pick it for volumes and totals, where the amount under the line means something.',
+          id: 'SparklineMarkers',
+          title: 'Markers',
+          note: 'Pick the latest-value dot by default, the extremes when range is the story, and none beside a figure.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineArea,
+          size: 'md',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/sparklines-and-trends/sparkMath.ts'],
+          Component: SparklineMarkers,
         },
         {
-          id: 'SparklineBar',
-          title: 'Bars',
-          note: 'Pick it for counts per period — alarms per hour, starts per day — not for continuous signals.',
+          id: 'SparklineLimitAndBand',
+          title: 'Limit line and normal band',
+          note: 'Pick a limit line for one-sided alarms, a band for a range to stay inside, and coloured bars for days over a permit.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineBar,
+          size: 'md',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx'],
+          Component: SparklineLimitAndBand,
         },
         {
-          id: 'SparklineLastPoint',
-          title: 'Last point marked',
-          note: 'Pick it when the current value is printed next to the sparkline, to tie the two together.',
+          id: 'SparklineSizes',
+          title: 'Size and density',
+          note: 'Pick the height by where it sits and keep at least two pixels per point, or aggregate first.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineLastPoint,
-        },
-        {
-          id: 'SparklineWithLimit',
-          title: 'With limit line',
-          note: 'Pick it when the reading has one limit that matters and the margin to it is the message.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineWithLimit,
-        },
-        {
-          id: 'SparklineWithBand',
-          title: 'With normal band',
-          note: 'Pick it for controlled values that should stay inside a band, such as a level.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineWithBand,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx'],
+          Component: SparklineSizes,
         },
       ],
     },
     {
-      id: 'size-and-scale',
-      title: 'Size and scale',
-      description: 'How big to draw it, how many points to give it and which y range to use.',
+      id: 'scale-and-states',
+      title: 'Scale and states',
+      description: 'How the scale changes the reading, and what a trend shows when the signal is in trouble.',
       specimens: [
         {
-          id: 'SparklineHeights',
-          title: 'Heights',
-          note: 'Pick 16 px inline with text, 24 px in table rows, 32 px in tiles and 48 px as a card header.',
+          id: 'SparklineStates',
+          title: 'States',
+          note: 'Pick the tone from the limits and always add the word: normal, near limit, trip, frozen, gap and no data.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/TrendTile.tsx', 'kit/sparklines-and-trends/MicroTrend.tsx', 'kit/sparklines-and-trends/sparkMath.ts', 'kit/StatusPill.tsx'],
+          Component: SparklineStates,
+        },
+        {
+          id: 'SparklineSharedScale',
+          title: 'Own scale and shared scale',
+          note: 'Pick own scales to compare shapes and a shared scale to compare sizes; say which one in the column heading.',
+          origin: 'custom',
           size: 'md',
-          Component: SparklineHeights,
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx'],
+          Component: SparklineSharedScale,
         },
         {
-          id: 'SparklineDensity',
-          title: 'Point density',
-          note: 'Pick a window that gives 24 to 100 points; fewer looks jagged and more turns into noise.',
+          id: 'SparklineStateTicks',
+          title: 'Outcome per period',
+          note: 'Pick it when each day either passed or failed: one block per period reads faster than a line across a limit.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineDensity,
-        },
-        {
-          id: 'SparklineFluid',
-          title: 'Fills its container',
-          note: 'Pick it without a width when the sparkline should follow a card or column as it resizes.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: SparklineFluid,
-        },
-        {
-          id: 'SparklineSharedDomain',
-          title: 'Shared scale',
-          note: 'Pick it when sparklines will be compared with each other, so equal height means equal value.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          align: 'stretch',
-          Component: SparklineSharedDomain,
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/StateTicks.tsx'],
+          Component: SparklineStateTicks,
         },
         {
           id: 'SparklineInText',
           title: 'In a sentence',
-          note: 'Pick it in shift logs and summaries, where the trend backs up a statement.',
+          note: 'Pick it in a report or a summary, where the trend should read as part of the sentence in the text colour.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/sparklines-and-trends/StateTicks.tsx'],
           Component: SparklineInText,
         },
       ],
     },
     {
-      id: 'states',
-      title: 'States',
-      description: 'Status colour only when the series is in that state now; plus frozen and missing signals.',
+      id: 'with-a-value',
+      title: 'With a value and a change',
+      description: 'The trend as part of a reading: figure, unit, change and the reference.',
       specimens: [
         {
-          id: 'SparklineWarning',
-          title: 'Above limit',
-          note: 'Pick it when the latest value has crossed its operating limit.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineWarning,
-        },
-        {
-          id: 'SparklineCritical',
-          title: 'At trip limit',
-          note: 'Pick it when the series has run into a trip limit and the lead-up explains why.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineCritical,
-        },
-        {
-          id: 'SparklineBarOverLimit',
-          title: 'Bars over limit',
-          note: 'Pick it to pick out the periods that went over a target, without colouring the rest.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineBarOverLimit,
-        },
-        {
-          id: 'SparklineFlat',
-          title: 'Frozen signal',
-          note: 'Pick it to see how a stuck transmitter looks: a dead-flat line is itself a finding.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineFlat,
-        },
-        {
-          id: 'SparklineNoData',
-          title: 'No data',
-          note: 'Pick it when the window has no points; the placeholder keeps the row height and says so.',
-          origin: 'custom',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: SparklineNoData,
-        },
-      ],
-    },
-    {
-      id: 'trend-delta',
-      title: 'Trend delta',
-      description: 'A signed change against a previous value, coloured by whether it is good news.',
-      specimens: [
-        {
-          id: 'SparklineDeltaUpGood',
-          title: 'Rise, good',
-          note: 'Pick it for KPIs where higher is better and the value went up.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: SparklineDeltaUpGood,
-        },
-        {
-          id: 'SparklineDeltaDownGood',
-          title: 'Fall, good',
-          note: 'Pick it for KPIs where lower is better and the value went down.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: SparklineDeltaDownGood,
-        },
-        {
-          id: 'SparklineDeltaUpBad',
-          title: 'Rise, bad',
-          note: 'Pick it when a value that should stay low is climbing.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: SparklineDeltaUpBad,
-        },
-        {
-          id: 'SparklineDeltaNeutral',
-          title: 'No judgement',
-          note: 'Pick it for process values, where a change is information and not a verdict.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: SparklineDeltaNeutral,
-        },
-        {
-          id: 'SparklineDeltaPercent',
-          title: 'Percent change',
-          note: 'Pick it when the relative move matters more than the amount, or units differ between rows.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: SparklineDeltaPercent,
-        },
-        {
-          id: 'SparklineDeltaNoChange',
-          title: 'No change',
-          note: 'Pick it to confirm the value was compared and did not move, instead of hiding the delta.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: SparklineDeltaNoChange,
-        },
-        {
-          id: 'SparklineDeltaSizes',
-          title: 'Sizes',
-          note: 'Pick small under a tile value and in table cells, medium on its own line.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: SparklineDeltaSizes,
-        },
-      ],
-    },
-    {
-      id: 'compositions',
-      title: 'Rows, tables and charts',
-      description: 'Sparklines and deltas beside the values they explain.',
-      specimens: [
-        {
-          id: 'SparklineWithValue',
+          id: 'SparklineValueTrend',
           title: 'Value with trend',
-          note: 'Pick it as the smallest complete reading: name, value, change and shape.',
+          note: 'Pick it as the standard reading tile: figure, change over the period, the day and the nearest limit.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx', 'industrial/TrendDelta.tsx', 'industrial/ValueReadout.tsx'],
-          align: 'stretch',
-          Component: SparklineWithValue,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/TrendTile.tsx', 'kit/sparklines-and-trends/MicroTrend.tsx', 'kit/Delta.tsx'],
+          Component: SparklineValueTrend,
+        },
+        {
+          id: 'SparklineDeltas',
+          title: 'Change with a judgement',
+          note: 'Pick which direction is good per measure; use no judgement for values that are neither good nor bad.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/Delta.tsx', 'kit/ListRow.tsx'],
+          Component: SparklineDeltas,
         },
         {
           id: 'SparklineDailyBars',
           title: 'Daily bars against a permit',
-          note: 'Pick it for a daily total with a limit, where the days over it are what people look for.',
+          note: 'Pick it for a daily total with a hard limit: the days over stand out in colour and the footer counts them.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx', 'industrial/StatusIndicator.tsx'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/Stat.tsx', 'kit/StatusPill.tsx'],
           Component: SparklineDailyBars,
         },
+      ],
+    },
+    {
+      id: 'rows-and-tables',
+      title: 'Rows, tables and small multiples',
+      description: 'Many trends at once, aligned so the eye can run down a column.',
+      specimens: [
         {
           id: 'SparklineReadingList',
           title: 'Readings list',
-          note: 'Pick it on an asset card to list each reading with its recent shape.',
+          note: 'Pick it for the readings of one asset: name and tag, the day, the value; rows off normal get an edge.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx', 'industrial/ValueReadout.tsx'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/ListRow.tsx', 'kit/TagId.tsx'],
           Component: SparklineReadingList,
         },
         {
           id: 'SparklineSmallMultiples',
           title: 'Small multiples',
-          note: 'Pick it to scan a machine for the one reading closing in on its limit.',
+          note: 'Pick it to scan many tags at once: identical tiles in a grid, each on its own scale.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx', 'industrial/ValueReadout.tsx'],
-          size: 'lg',
-          align: 'stretch',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/TrendTile.tsx', 'kit/sparklines-and-trends/MicroTrend.tsx'],
           Component: SparklineSmallMultiples,
         },
         {
           id: 'SparklineTagTable',
           title: 'Tag table with trends',
-          note: 'Pick it for a sensor list where each row needs its trend, value, change and quality.',
+          note: 'Pick it for a watchlist: the trend is a column like any other, with change and state beside it.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx', 'industrial/TrendDelta.tsx', 'industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx', 'industrial/status.ts'],
           size: 'full',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/DataTable.tsx', 'kit/Delta.tsx', 'kit/StatusPill.tsx'],
           Component: SparklineTagTable,
         },
+      ],
+    },
+    {
+      id: 'looks',
+      title: 'The same trends in six looks',
+      description: 'Form, weight and the tile around the trend all change with the look.',
+      specimens: [
         {
-          id: 'SparklineToFullChart',
-          title: 'When a sparkline is not enough',
-          note: 'Pick a chart with axes, a tooltip and a limit line once people need to read values or times.',
+          id: 'SparklineLookConsole',
+          title: 'Console: thin lines in a dense table',
+          note: 'Pick it for operators: square rows, hairline trends, and the one tripped machine as a toned panel.',
           origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: SparklineToFullChart,
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/DataTable.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: SparklineLookConsole,
+        },
+        {
+          id: 'SparklineLookPoster',
+          title: 'Poster: bars on solid colour',
+          note: 'Pick it for a team screen: each measure is a colour block with a huge figure and bars in ink.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/TrendTile.tsx', 'kit/sparklines-and-trends/MicroTrend.tsx', 'looks/LookScope.tsx'],
+          Component: SparklineLookPoster,
+        },
+        {
+          id: 'SparklineLookGlass',
+          title: 'Glass: glowing areas',
+          note: 'Pick it for a dark showcase screen where each reading glows in its own family colour.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: SparklineLookGlass,
+        },
+        {
+          id: 'SparklineLookBlueprint',
+          title: 'Blueprint: marked samples in a schedule',
+          note: 'Pick it for engineering documents: every sample is a point and the range is written out per tag.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/MicroTrend.tsx', 'kit/sparklines-and-trends/sparkMath.ts', 'kit/TagId.tsx', 'looks/LookScope.tsx'],
+          Component: SparklineLookBlueprint,
+        },
+        {
+          id: 'SparklineLookSignal',
+          title: 'Signal: state-filled tiles',
+          note: 'Pick it for a wall screen: the tile colour is the state and the trend is drawn in the tile ink.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/TrendTile.tsx', 'kit/sparklines-and-trends/MicroTrend.tsx', 'looks/LookScope.tsx'],
+          Component: SparklineLookSignal,
+        },
+        {
+          id: 'SparklineLookEditorial',
+          title: 'Editorial: figures between rules',
+          note: 'Pick it for a report: the headline says the conclusion and four large figures carry their fortnight.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/StatGroup.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: SparklineLookEditorial,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions ready to drop into a product.',
+      specimens: [
+        {
+          id: 'SparklineKpiStrip',
+          title: 'KPI strip',
+          note: 'Pick it as the top row of a dashboard: four figures with change, target and their last two weeks.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/Grid.tsx'],
+          Component: SparklineKpiStrip,
+        },
+        {
+          id: 'SparklineWatchlist',
+          title: 'Watchlist that opens a chart',
+          note: 'Pick it when a sparkline is not enough: the selected row opens as a chart with axes, limit and cursor.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/sparklines-and-trends/TrendTile.tsx', 'kit/sparklines-and-trends/MicroTrend.tsx', 'kit/time-series/SeriesPlot.tsx', 'kit/Panel.tsx'],
+          Component: SparklineWatchlist,
         },
       ],
     },

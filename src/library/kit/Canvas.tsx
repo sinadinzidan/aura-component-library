@@ -7,7 +7,9 @@ import { cx } from './tones';
 type CanvasProps = {
   /** `none` when the content brings its own edge, such as console panels that run edge to edge. */
   padding?: 'look' | 'none';
-  /** Layout classes. */
+  /** Take the height of the parent and scroll inside it, for a canvas in a fixed-height shell. */
+  fill?: boolean;
+  /** Layout classes; padding utilities override the look's padding. */
   className?: string;
   children: ReactNode;
 };
@@ -16,10 +18,10 @@ type CanvasProps = {
  * The page backdrop of a look: tinted in studio, hairline-coloured in console, a gradient in
  * glass, grid paper in blueprint. Everything on a kit screen sits on one.
  */
-export function Canvas({ padding = 'look', className, children }: CanvasProps) {
+export function Canvas({ padding = 'look', fill = false, className, children }: CanvasProps) {
   const look = useLook();
   return (
-    <div data-look={look} data-pad={padding} className={cx('kit-canvas', className)}>
+    <div data-look={look} data-pad={padding} data-fill={fill ? 'true' : undefined} className={cx('kit-canvas', className)}>
       {children}
     </div>
   );

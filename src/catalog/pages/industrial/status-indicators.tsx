@@ -1,454 +1,550 @@
-import { Card, CardContent, CardDescription, CardHeader, CardHeaderCenter, CardHeaderEnd, CardTitle } from '@cognite/aura/components/card';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@cognite/aura/components/tooltip';
+import { Button } from '@cognite/aura/components/button';
+import { IconAlertOctagon, IconAlertTriangle, IconBellRinging, IconCircleCheck, IconPlugConnectedX, IconTool } from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { healthStatus, qualityStatus, runStateStatus, severityStatus } from '../../../library/industrial/status';
-import type { StatusDescriptor } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ALARMS, ASSETS, SENSORS, childrenOf, findAsset } from '../../data/plant';
-import type { Asset, RunState, Sensor, Severity } from '../../data/plant';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StackLight, type StackLamp } from '../../../library/kit/status-indicators/StackLight';
+import { StateGlyph } from '../../../library/kit/status-indicators/StateGlyph';
+import { StateLabel } from '../../../library/kit/status-indicators/StateLabel';
+import { StateMatrix, type MatrixCell } from '../../../library/kit/status-indicators/StateMatrix';
+import { StateTally } from '../../../library/kit/status-indicators/StateTally';
+import { StateTile } from '../../../library/kit/status-indicators/StateTile';
+import { HEALTH_STATES, QUALITY_STATES, RUN_STATES, SEVERITY_STATES, tally, worst, type StateDescriptor } from '../../../library/kit/status-indicators/status';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
+import { ALARMS, ASSETS, SENSORS, childrenOf, findAsset, type Asset } from '../../data/plant';
 import { formatAgo } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './status-indicators.tsx?raw';
 
-function findSensor(id: string): Sensor {
-  const sensor = SENSORS.find((candidate) => candidate.id === id);
-  if (!sensor) throw new Error(`Unknown sensor ${id}`);
-  return sensor;
+const STATUS_EQUIPMENT = ASSETS.filter((asset) => asset.type !== 'site' && asset.type !== 'area' && asset.type !== 'system');
+
+const STATUS_AREAS = childrenOf('nk');
+
+const STATUS_COMPRESSION = childrenOf('nk-23');
+
+const STATUS_RUN_TALLY = tally(STATUS_EQUIPMENT.map((asset) => RUN_STATES[asset.state]));
+
+const STATUS_HEALTH_TALLY = tally(STATUS_EQUIPMENT.map((asset) => HEALTH_STATES[asset.health]));
+
+const STATUS_OPEN_ALARMS = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged');
+
+const STATUS_SEVERITY_TALLY = tally(STATUS_OPEN_ALARMS.map((alarm) => SEVERITY_STATES[alarm.severity]));
+
+const STATUS_RECOMPRESSOR = findAsset('23-ka-9103') ?? ASSETS[0];
+
+const STATUS_CELLS: MatrixCell[] = STATUS_EQUIPMENT.map((asset) => ({ id: asset.id, label: asset.tag.slice(3), name: asset.name, state: RUN_STATES[asset.state] }));
+
+const STATUS_LAMPS: StackLamp[] = [
+  { id: 'tripped', label: 'Fault', tone: 'critical' },
+  { id: 'maintenance', label: 'Attention', tone: 'warning' },
+  { id: 'running', label: 'Running', tone: 'success' },
+  { id: 'standby', label: 'Standby', tone: 'info' },
+];
+
+const STATUS_RUN_NOTES: Record<Asset['state'], string> = {
+  running: 'In service and delivering',
+  standby: 'Ready to start, not delivering',
+  stopped: 'Out of service by choice',
+  maintenance: 'Isolated for work',
+  tripped: 'Stopped by a protection function',
+};
+
+const STATUS_HEALTH_NOTES: Record<Asset['health'], string> = {
+  good: 'Condition score 85 or higher',
+  watch: 'Score 60–84: plan an inspection',
+  poor: 'Score below 60: act now',
+};
+
+const STATUS_QUALITY_NOTES = {
+  good: 'The reading can be trusted',
+  uncertain: 'Out of calibration, substituted or stale',
+  bad: 'No valid reading: sensor or link failure',
+} as const;
+
+const STATUS_SEVERITY_NOTES = {
+  critical: 'Act within minutes',
+  high: 'Act within the hour',
+  medium: 'Act within the shift',
+  low: 'For information',
+} as const;
+
+function StatusToneIcon({ state }: { state: StateDescriptor }) {
+  if (state.tone === 'critical') return <IconAlertOctagon aria-hidden="true" />;
+  if (state.tone === 'warning') return <IconAlertTriangle aria-hidden="true" />;
+  if (state.tone === 'neutral') return <IconPlugConnectedX aria-hidden="true" />;
+  return <IconCircleCheck aria-hidden="true" />;
 }
 
-function findAssetById(id: string): Asset {
-  const asset = ASSETS.find((candidate) => candidate.id === id);
-  if (!asset) throw new Error(`Unknown asset ${id}`);
-  return asset;
-}
-
-const RUN_STATES: readonly RunState[] = ['running', 'standby', 'stopped', 'tripped', 'maintenance'];
-const SEVERITIES: readonly Severity[] = ['critical', 'high', 'medium', 'low'];
-
-/** Equipment only: the leaves of the asset hierarchy. */
-const EQUIPMENT = ASSETS.filter((asset) => !['site', 'area', 'system'].includes(asset.type));
-
-const countByState = (assets: readonly Asset[], state: RunState): number => assets.filter((asset) => asset.state === state).length;
-
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
-
-function StatusIndicatorRunStates() {
+function StatusPillOf({ state, variant, size }: { state: StateDescriptor; variant?: 'filled' | 'soft' | 'outline'; size?: 'md' | 'lg' }) {
   return (
-    <div className="flex flex-col gap-3">
-      {RUN_STATES.map((state) => (
-        <StatusIndicator key={state} {...runStateStatus(state)} />
+    <StatusPill tone={state.tone} variant={variant} size={size} icon={<StateGlyph shape={state.shape} tone={state.tone} size={size === 'lg' ? 12 : 10} ink />}>
+      {state.label}
+    </StatusPill>
+  );
+}
+
+function StatusSheet({ title, subtitle, actions, footer, padding, children }: { title: string; subtitle: string; actions?: ReactNode; footer?: ReactNode; padding?: 'default' | 'none'; children: ReactNode }) {
+  return (
+    <Canvas>
+      <Panel title={title} subtitle={subtitle} actions={actions} footer={footer} padding={padding}>
+        {children}
+      </Panel>
+    </Canvas>
+  );
+}
+
+function StatusVocabulary({ entries }: { entries: ReadonlyArray<{ state: StateDescriptor; note: string }> }) {
+  return (
+    <div className="flex flex-col">
+      {entries.map(({ state, note }) => (
+        <ListRow key={state.label} leading={<StateGlyph shape={state.shape} tone={state.tone} size={20} />} title={state.label} meta={note} trailing={<StatusPillOf state={state} />} />
       ))}
     </div>
   );
 }
 
-function StatusIndicatorHealth() {
+function StatusIndicatorRunStates() {
   return (
-    <div className="flex flex-col gap-3">
-      <StatusIndicator {...healthStatus('good')} />
-      <StatusIndicator {...healthStatus('watch')} />
-      <StatusIndicator {...healthStatus('poor')} />
-    </div>
-  );
-}
-
-function StatusIndicatorQuality() {
-  return (
-    <div className="flex flex-col gap-3">
-      <StatusIndicator {...qualityStatus('good')} />
-      <StatusIndicator {...qualityStatus('uncertain')} />
-      <StatusIndicator {...qualityStatus('bad')} />
-    </div>
+    <StatusSheet title="Run state" subtitle="What a machine is doing · five states, five shapes">
+      <StatusVocabulary entries={(['running', 'standby', 'stopped', 'maintenance', 'tripped'] as const).map((key) => ({ state: RUN_STATES[key], note: STATUS_RUN_NOTES[key] }))} />
+    </StatusSheet>
   );
 }
 
 function StatusIndicatorSeverity() {
   return (
-    <div className="flex flex-col gap-3">
-      {SEVERITIES.map((severity) => (
-        <StatusIndicator key={severity} {...severityStatus(severity)} />
-      ))}
+    <StatusSheet title="Alarm severity" subtitle="How fast someone must act · four levels">
+      <div className="flex h-full flex-col justify-between gap-4">
+        <StatusVocabulary entries={(['critical', 'high', 'medium', 'low'] as const).map((key) => ({ state: SEVERITY_STATES[key], note: STATUS_SEVERITY_NOTES[key] }))} />
+        <StateTally label="Open alarms by severity" entries={STATUS_SEVERITY_TALLY} noun="open alarms" />
+      </div>
+    </StatusSheet>
+  );
+}
+
+function StatusIndicatorHealth() {
+  return (
+    <StatusSheet title="Health" subtitle="The condition of an asset · three levels">
+      <StatusVocabulary entries={(['good', 'watch', 'poor'] as const).map((key) => ({ state: HEALTH_STATES[key], note: STATUS_HEALTH_NOTES[key] }))} />
+    </StatusSheet>
+  );
+}
+
+function StatusIndicatorQuality() {
+  return (
+    <StatusSheet title="Signal quality" subtitle="Whether a reading can be trusted · three levels">
+      <StatusVocabulary entries={(['good', 'uncertain', 'bad'] as const).map((key) => ({ state: QUALITY_STATES[key], note: STATUS_QUALITY_NOTES[key] }))} />
+    </StatusSheet>
+  );
+}
+
+function StatusFormCell({ caption, hint, children }: { caption: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex min-h-16 items-center">{children}</div>
+      <div className="flex flex-col">
+        <span className="text-sm font-medium text-(--kit-text)">{caption}</span>
+        <span className="text-xs text-(--kit-text-2)">{hint}</span>
+      </div>
     </div>
   );
 }
 
-function StatusIndicatorCustomState() {
+function StatusIndicatorForms() {
+  const state = RUN_STATES.tripped;
   return (
-    <div className="flex flex-col gap-3">
-      <StatusIndicator tone="success" label="Online" />
-      <StatusIndicator tone="info" shape="ring" label="Starting" />
-      <StatusIndicator tone="warning" shape="square" label="Bypassed" />
-      <StatusIndicator tone="neutral" shape="ring" label="Not commissioned" />
-    </div>
-  );
-}
-
-function StatusIndicatorPlain() {
-  return <StatusIndicator {...runStateStatus('running')} />;
-}
-
-function StatusIndicatorBadge() {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-2">
-      {RUN_STATES.map((state) => (
-        <StatusIndicator key={state} variant="badge" {...runStateStatus(state)} />
-      ))}
-    </div>
+    <StatusSheet title="One state, seven forms" subtitle="Recompressor 23-KA-9103, tripped · from the quietest form to the loudest">
+      <div className="grid grid-cols-7 gap-5">
+        <StatusFormCell caption="Glyph" hint="Dense grids and maps">
+          <StateGlyph shape={state.shape} tone={state.tone} size={22} label="Tripped" />
+        </StatusFormCell>
+        <StatusFormCell caption="Glyph and word" hint="Tables and lists">
+          <StateLabel state={state} />
+        </StatusFormCell>
+        <StatusFormCell caption="Outline pill" hint="Beside a title">
+          <StatusPillOf state={state} variant="outline" />
+        </StatusFormCell>
+        <StatusFormCell caption="Soft pill" hint="Cards and headers">
+          <StatusPillOf state={state} variant="soft" />
+        </StatusFormCell>
+        <StatusFormCell caption="Filled pill" hint="Needs attention">
+          <StatusPillOf state={state} variant="filled" />
+        </StatusFormCell>
+        <StatusFormCell caption="Signal tower" hint="Machine by machine">
+          <StackLight label="Recompressor" lamps={STATUS_LAMPS.slice(0, 3)} lit="tripped" hideCaption />
+        </StatusFormCell>
+        <StatusFormCell caption="Tile" hint="Overviews and walls">
+          <StateTile className="w-full" title="Recompressor" state={state} anatomy="solid" />
+        </StatusFormCell>
+      </div>
+    </StatusSheet>
   );
 }
 
 function StatusIndicatorSizes() {
   return (
-    <div className="flex flex-col items-start gap-3">
-      <StatusIndicator size="sm" {...runStateStatus('maintenance')} />
-      <StatusIndicator size="md" {...runStateStatus('maintenance')} />
-    </div>
+    <StatusSheet title="Sizes" subtitle="Small in a table, medium in a list, large in a header">
+      <div className="grid grid-cols-3 items-center gap-x-6 gap-y-5">
+        <StateLabel size="sm" state={RUN_STATES.running} />
+        <StateLabel size="md" state={RUN_STATES.running} />
+        <StateLabel size="lg" state={RUN_STATES.running} />
+        <StateLabel size="sm" state={RUN_STATES.maintenance} detail="WO-104479" />
+        <StateLabel size="md" state={RUN_STATES.maintenance} detail="WO-104479" />
+        <StateLabel size="lg" state={RUN_STATES.maintenance} detail="WO-104479" />
+        <span className="text-xs text-(--kit-text-2)">Pill has no small size</span>
+        <StatusPillOf state={RUN_STATES.tripped} />
+        <StatusPillOf state={RUN_STATES.tripped} size="lg" />
+      </div>
+    </StatusSheet>
   );
 }
 
 function StatusIndicatorWithDetail() {
   return (
-    <div className="flex flex-col items-start gap-3">
-      <StatusIndicator {...runStateStatus('running')} detail="for 41 d" />
-      <StatusIndicator {...runStateStatus('tripped')} detail="14 min ago" />
-    </div>
-  );
-}
-
-function StatusIndicatorPulse() {
-  return (
-    <div className="flex flex-col items-start gap-3">
-      <StatusIndicator pulse {...severityStatus('critical')} label="Unacknowledged" detail="14 min" />
-      <StatusIndicator {...severityStatus('critical')} label="Acknowledged" detail="2 h" />
-    </div>
+    <StatusSheet title="With detail and attention" subtitle="A second line says since when or why; a ring says someone must act">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+        <StateLabel size="lg" state={RUN_STATES.tripped} detail="High vibration · 14 min ago" attention />
+        <StateLabel size="lg" state={RUN_STATES.running} detail="Since 3 March, 216 h" />
+        <StateLabel size="lg" state={QUALITY_STATES.bad} detail="No signal since 05:00" />
+        <StateLabel size="lg" state={RUN_STATES.standby} detail="Start test overdue by 4 d" attention />
+        <StateLabel size="lg" state={SEVERITY_STATES.high} detail="Acknowledged by Ingrid Haugen" coloured />
+        <StateLabel size="lg" state={HEALTH_STATES.watch} detail="Score 72, down 6 this week" coloured />
+      </div>
+    </StatusSheet>
   );
 }
 
 function StatusIndicatorShapes() {
+  const rows: Array<{ shape: StateDescriptor; means: string }> = [
+    { shape: RUN_STATES.running, means: 'Normal, in service' },
+    { shape: RUN_STATES.standby, means: 'Ready, idle' },
+    { shape: RUN_STATES.stopped, means: 'Off' },
+    { shape: RUN_STATES.maintenance, means: 'Caution' },
+    { shape: RUN_STATES.tripped, means: 'Fault, act' },
+    { shape: QUALITY_STATES.bad, means: 'No data' },
+  ];
   return (
-    <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-      <StatusIndicator tone="neutral" shape="dot" label="Dot — active, normal" />
-      <StatusIndicator tone="neutral" shape="ring" label="Ring — idle, uncertain" />
-      <StatusIndicator tone="neutral" shape="square" label="Square — held, attention" />
-      <StatusIndicator tone="neutral" shape="diamond" label="Diamond — fault" />
-    </div>
-  );
-}
-
-function StatusIndicatorDotOnly() {
-  const asset = findAssetById('23-ka-9103');
-  const status = runStateStatus(asset.state);
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button type="button" className="inline-flex size-6 items-center justify-center rounded-md focus-visible:shadow-focus-ring focus-visible:outline-none">
-            <StatusDot tone={status.tone} shape={status.shape} label={`${asset.name}: ${status.label}`} />
-          </button>
-        }
-      />
-      <TooltipContent>
-        {asset.name}: {status.label}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-function StatusIndicatorDotSizes() {
-  return (
-    <div className="flex items-center gap-6">
-      {RUN_STATES.map((state) => (
-        <div key={state} className="flex items-center gap-2">
-          <StatusDot size="sm" tone={runStateStatus(state).tone} shape={runStateStatus(state).shape} label={`${runStateStatus(state).label}, small`} />
-          <StatusDot size="md" tone={runStateStatus(state).tone} shape={runStateStatus(state).shape} label={`${runStateStatus(state).label}, medium`} />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function StatusIndicatorInHeading() {
-  const asset = findAssetById('23-ka-9103');
-  return (
-    <div className="flex w-full max-w-sm items-start justify-between gap-4 self-center">
-      <div className="min-w-0">
-        <h3 className="truncate text-xl font-semibold text-base-foreground">{asset.name}</h3>
-        <p className="text-sm text-muted-foreground">{asset.tag} · Gas compression</p>
-      </div>
-      <StatusIndicator variant="badge" {...runStateStatus(asset.state)} />
-    </div>
-  );
-}
-
-function StatusIndicatorInListRow() {
-  return (
-    <ul className="flex w-full max-w-sm flex-col gap-3 self-center">
-      {childrenOf('nk-23').map((asset) => (
-        <li key={asset.id} className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <p className="truncate text-sm text-base-foreground">{asset.name}</p>
-            <p className="text-xs text-muted-foreground tabular-nums">{asset.tag}</p>
+    <StatusSheet title="Shape carries the state" subtitle="The same glyphs in colour and in ink: still six different states" footer={<span>About one in twelve men cannot tell red from green. Shape and word must be enough.</span>}>
+      <div className="grid grid-cols-6 gap-4">
+        {rows.map(({ shape, means }) => (
+          <div key={shape.label} className="flex flex-col items-center gap-2 text-center">
+            <StateGlyph shape={shape.shape} tone={shape.tone} size={28} />
+            <span className="text-(--kit-text)">
+              <StateGlyph shape={shape.shape} tone={shape.tone} size={28} ink />
+            </span>
+            <span className="text-xs font-medium text-(--kit-text)">{means}</span>
           </div>
-          <StatusIndicator size="sm" {...runStateStatus(asset.state)} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function StatusIndicatorWithValue() {
-  const cooler = findSensor('tt-91141');
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs text-muted-foreground">
-        {cooler.name} · {cooler.tag}
-      </span>
-      <div className="flex items-baseline gap-3">
-        <ValueReadout value={cooler.value} unit={cooler.unit} decimals={1} />
-        <StatusIndicator size="sm" {...qualityStatus(cooler.quality)} label="Uncertain quality" />
+        ))}
       </div>
-    </div>
+    </StatusSheet>
   );
 }
 
-function StatusIndicatorCounts() {
+function StatusIndicatorStackLights() {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-      {RUN_STATES.map((state) => (
-        <StatusIndicator key={state} {...runStateStatus(state)} detail={String(countByState(EQUIPMENT, state))} />
-      ))}
-    </div>
+    <StatusSheet title="Signal towers" subtitle="Gas compression · the position of the lit lamp says the state as much as its colour">
+      <div className="grid grid-cols-5 items-start justify-items-center gap-4">
+        {STATUS_COMPRESSION.map((asset) => (
+          <StackLight key={asset.id} label={asset.name} lamps={STATUS_LAMPS} lit={asset.state} />
+        ))}
+      </div>
+    </StatusSheet>
   );
 }
 
-function StatusIndicatorLegend() {
-  const entries: readonly StatusDescriptor[] = [healthStatus('good'), healthStatus('watch'), healthStatus('poor')];
+function StatusIndicatorTally() {
   return (
-    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-      <span>Equipment health</span>
-      {entries.map((entry) => (
-        <StatusIndicator key={entry.label} size="sm" {...entry} />
-      ))}
-    </div>
+    <StatusSheet title="Counts by state" subtitle="11 pieces of equipment · three ways to show a tally">
+      <div className="flex flex-col gap-6">
+        <StateTally label="Equipment by run state" entries={STATUS_RUN_TALLY} noun="assets" />
+        <StateTally label="Equipment by run state, as chips" entries={STATUS_RUN_TALLY} layout="chips" />
+        <StateTally label="Equipment by health" entries={STATUS_HEALTH_TALLY} layout="list" />
+      </div>
+    </StatusSheet>
+  );
+}
+
+function StatusIndicatorMatrix() {
+  const [selected, setSelected] = useState(STATUS_RECOMPRESSOR.id);
+  const asset = findAsset(selected) ?? STATUS_RECOMPRESSOR;
+  return (
+    <StatusSheet title="Equipment matrix" subtitle="One cell per asset · select a cell to read it">
+      <div className="flex flex-col gap-5">
+        <StateMatrix label="Run state of all equipment" cells={STATUS_CELLS} columns={6} selected={selected} onSelect={setSelected} />
+        <div className="flex items-center justify-between gap-4 px-4 py-3" style={{ background: 'var(--kit-well)', borderRadius: 'var(--kit-radius-sm)' }}>
+          <span className="flex flex-col">
+            <span className="text-sm font-semibold text-(--kit-text)">{asset.name}</span>
+            <TagId>{asset.tag}</TagId>
+          </span>
+          <span className="flex items-center gap-4">
+            <StateLabel state={HEALTH_STATES[asset.health]} detail={`Health ${asset.healthScore}`} />
+            <StatusPillOf state={RUN_STATES[asset.state]} />
+          </span>
+        </div>
+      </div>
+    </StatusSheet>
   );
 }
 
 function StatusIndicatorNoSignal() {
-  const bearing = findSensor('tt-40015');
+  const sensors = SENSORS.filter((sensor) => ['pt-92531', 'tt-91141', 'tt-40015'].includes(sensor.id));
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs text-muted-foreground">
-        {bearing.name} · {bearing.tag}
-      </span>
-      <div className="flex items-baseline gap-3">
-        <ValueReadout value={null} unit={bearing.unit} />
-        <StatusIndicator size="sm" {...qualityStatus(bearing.quality)} label="No signal" detail="9 h" />
-      </div>
-    </div>
-  );
-}
-
-function StatusIndicatorEquipmentStrip() {
-  return (
-    <div className="grid w-full grid-cols-2 gap-3 self-center md:grid-cols-3 xl:grid-cols-6">
-      {EQUIPMENT.slice(5).map((asset) => (
-        <Card key={asset.id} className="min-w-0 gap-2">
-          <span className="text-xs text-muted-foreground tabular-nums">{asset.tag}</span>
-          <span className="truncate text-sm font-medium text-base-foreground">{asset.name}</span>
-          <StatusIndicator size="sm" {...runStateStatus(asset.state)} />
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function StatusIndicatorAssetTable() {
-  return (
-    <div className="w-full self-center overflow-x-auto">
-      <table className="w-full min-w-xl border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Tag
-            </th>
-            <th scope="col" className={TH}>
-              Equipment
-            </th>
-            <th scope="col" className={TH}>
-              State
-            </th>
-            <th scope="col" className={TH}>
-              Health
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Score
-            </th>
-            <th scope="col" className={TH}>
-              Criticality
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {EQUIPMENT.map((asset) => (
-            <tr key={asset.id} className="border-t border-default">
-              <td className={`${TD} whitespace-nowrap text-base-foreground tabular-nums`}>{asset.tag}</td>
-              <td className={`${TD} text-muted-foreground`}>{asset.name}</td>
-              <td className={TD}>
-                <StatusIndicator size="sm" {...runStateStatus(asset.state)} />
-              </td>
-              <td className={TD}>
-                <StatusIndicator size="sm" {...healthStatus(asset.health)} />
-              </td>
-              <td className={`${TD} text-right`}>
-                <ValueReadout size="xs" value={asset.healthScore} />
-              </td>
-              <td className={`${TD} text-muted-foreground`}>{asset.criticality}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function StatusIndicatorAreaSummary() {
-  const areas = ['nk-20', 'nk-23', 'nk-27'].map(findAssetById);
-  return (
-    <div className="grid w-full grid-cols-1 gap-4 self-center md:grid-cols-3">
-      {areas.map((area) => {
-        const equipment = childrenOf(area.id);
-        return (
-          <Card key={area.id}>
-            <CardHeader>
-              <CardHeaderCenter>
-                <CardTitle>{area.name}</CardTitle>
-                <CardDescription>
-                  {area.tag} · {equipment.length} units
-                </CardDescription>
-              </CardHeaderCenter>
-              <CardHeaderEnd>
-                <StatusIndicator variant="badge" {...healthStatus(area.health)} />
-              </CardHeaderEnd>
-            </CardHeader>
-            <CardContent>
-              <ul className="flex w-full flex-col gap-2">
-                {RUN_STATES.filter((state) => countByState(equipment, state) > 0).map((state) => (
-                  <li key={state} className="flex items-center justify-between">
-                    <StatusIndicator size="sm" {...runStateStatus(state)} />
-                    <ValueReadout size="xs" value={countByState(equipment, state)} />
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
-  );
-}
-
-function StatusIndicatorAlarmSummary() {
-  const open = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged');
-  return (
-    <Card className="w-full max-w-md self-center">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>Open alarms</CardTitle>
-          <CardDescription>Nordkapp plant · {open.length} open</CardDescription>
-        </CardHeaderCenter>
-      </CardHeader>
-      <CardContent>
-        <ul className="flex w-full flex-col gap-3">
-          {open.map((alarm) => (
-            <li key={alarm.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-baseline gap-3">
-              <StatusIndicator size="sm" pulse={alarm.state === 'active' && alarm.severity === 'critical'} {...severityStatus(alarm.severity)} />
-              <div className="min-w-0">
-                <p className="truncate text-sm text-base-foreground">{alarm.message}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {findAsset(alarm.assetId)?.name} · {alarm.state === 'active' ? 'Unacknowledged' : 'Acknowledged'}
-                </p>
-              </div>
-              <span className="text-xs text-muted-foreground tabular-nums">{formatAgo(alarm.raisedAt)}</span>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
-  );
-}
-
-function StatusIndicatorDotMatrix() {
-  return (
-    <div className="flex flex-col items-start gap-3">
-      <span className="text-xs text-muted-foreground">Equipment state, Nordkapp plant · {EQUIPMENT.length} units</span>
-      <div className="grid grid-cols-6 gap-1">
-        {EQUIPMENT.map((asset) => {
-          const status = runStateStatus(asset.state);
+    <StatusSheet title="Quality beside a value" subtitle="Good says nothing; uncertain and bad always speak up">
+      <div className="flex flex-col">
+        {sensors.map((sensor) => {
+          const quality = QUALITY_STATES[sensor.quality];
           return (
-            <Tooltip key={asset.id}>
-              <TooltipTrigger
-                render={
-                  <button type="button" className="inline-flex size-6 items-center justify-center rounded-md focus-visible:shadow-focus-ring focus-visible:outline-none">
-                    <StatusDot tone={status.tone} shape={status.shape} label={`${asset.tag} ${asset.name}: ${status.label}`} />
-                  </button>
-                }
-              />
-              <TooltipContent>
-                {asset.tag} {asset.name}: {status.label}
-              </TooltipContent>
-            </Tooltip>
+            <ListRow
+              key={sensor.id}
+              tone={sensor.quality === 'good' ? 'neutral' : quality.tone}
+              title={sensor.name}
+              meta={<TagId>{sensor.tag}</TagId>}
+              trailing={
+                <span className="flex items-center gap-4">
+                  {sensor.quality === 'good' ? null : <StateLabel size="sm" state={quality} detail={sensor.quality === 'bad' ? 'Since 05:00' : 'Last calibrated 14 months ago'} />}
+                  <span className="w-24 text-right text-lg font-semibold tabular-nums" style={{ color: sensor.quality === 'bad' ? 'var(--kit-text-3)' : 'var(--kit-text)' }}>
+                    {sensor.quality === 'bad' ? '—' : formatNumber(sensor.value, sensor.decimals)} <span className="text-xs font-medium text-(--kit-text-3)">{sensor.unit}</span>
+                  </span>
+                </span>
+              }
+            />
           );
         })}
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
-        {RUN_STATES.map((state) => (
-          <StatusIndicator key={state} size="sm" {...runStateStatus(state)} />
-        ))}
-      </div>
-    </div>
+    </StatusSheet>
+  );
+}
+
+const STATUS_TABLE_COLUMNS: DataTableColumn<Asset>[] = [
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (asset) => <TagId>{asset.tag}</TagId> },
+  { id: 'name', header: 'Equipment', cell: (asset) => asset.name },
+  { id: 'state', header: 'Run state', cell: (asset) => <StatusPillOf state={RUN_STATES[asset.state]} /> },
+  { id: 'health', header: 'Health', cell: (asset) => <StateLabel size="sm" state={HEALTH_STATES[asset.health]} /> },
+  { id: 'score', header: 'Score', numeric: true, cell: (asset) => asset.healthScore },
+  { id: 'criticality', header: 'Criticality', align: 'center', muted: true, cell: (asset) => asset.criticality },
+];
+
+function statusRowTone(asset: Asset) {
+  const state = worst([RUN_STATES[asset.state], HEALTH_STATES[asset.health]]);
+  return state && state.rank > 0 && state.tone !== 'info' ? state.tone : undefined;
+}
+
+function StatusIndicatorLookConsole() {
+  return (
+    <LookScope look="console">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-8" title="Equipment" subtitle="Gas compression and export · filled blocks, edge bars" padding="none">
+            <DataTable flush label="Equipment state" columns={STATUS_TABLE_COLUMNS} rows={STATUS_EQUIPMENT} rowKey={(asset) => asset.id} rowTone={statusRowTone} />
+          </Panel>
+          <Panel className="col-span-4" title="Compression" subtitle="NK-23" padding="tight">
+            <div className="grid flex-1 grid-cols-1 gap-px">
+              {STATUS_COMPRESSION.slice(0, 4).map((asset) => (
+                <StateTile key={asset.id} title={asset.name} subtitle={asset.tag} state={RUN_STATES[asset.state]} />
+              ))}
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function StatusIndicatorLookSignal() {
+  return (
+    <LookScope look="signal">
+      <Canvas>
+        <Grid>
+          {STATUS_COMPRESSION.slice(0, 4).map((asset) => (
+            <StateTile
+              key={asset.id}
+              className="col-span-3"
+              size="lg"
+              title={asset.name}
+              subtitle={asset.tag}
+              state={RUN_STATES[asset.state]}
+              icon={<StatusToneIcon state={RUN_STATES[asset.state]} />}
+              detail={`Health ${asset.healthScore} · ${HEALTH_STATES[asset.health].label.toLowerCase()}`}
+            />
+          ))}
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function StatusIndicatorLookPoster() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Grid>
+          <Stat className="col-span-4" size="hero" tone="green" label="Running" value={STATUS_EQUIPMENT.filter((asset) => asset.state === 'running').length} unit={`of ${STATUS_EQUIPMENT.length}`} target="1 tripped · 1 in maintenance" />
+          <Panel className="col-span-8" title="Every machine, one block" subtitle="Solid means it needs you">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <StateMatrix label="Run state of all equipment" cells={STATUS_CELLS} columns={6} />
+              <StateTally label="Equipment by run state" entries={STATUS_RUN_TALLY} layout="chips" />
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function StatusIndicatorLookBlueprint() {
+  return (
+    <LookScope look="blueprint">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-7" title="Equipment schedule" subtitle="Outlined cells · state by shape">
+            <StateMatrix label="Run state of all equipment" cells={STATUS_CELLS} columns={6} />
+          </Panel>
+          <Panel className="col-span-5" title="Key" subtitle="Symbols used on this sheet">
+            <div className="grid flex-1 grid-cols-2 content-center gap-x-6 gap-y-4">
+              {(['running', 'standby', 'stopped', 'maintenance', 'tripped'] as const).map((key) => (
+                <StateLabel key={key} state={RUN_STATES[key]} detail={STATUS_RUN_NOTES[key]} />
+              ))}
+              <StateLabel state={QUALITY_STATES.bad} detail="No valid signal" />
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function StatusIndicatorLookGlass() {
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-5" title="Plant state" subtitle="11 assets">
+            <div className="flex flex-1 items-center justify-around gap-6">
+              <RingGauge label="Running" value={(STATUS_EQUIPMENT.filter((asset) => asset.state === 'running').length / STATUS_EQUIPMENT.length) * 100} tone="success" size={128} />
+              <StateTally className="min-w-44" label="Equipment by run state" entries={STATUS_RUN_TALLY} layout="list" />
+            </div>
+          </Panel>
+          <Panel className="col-span-7" title="Signal towers" subtitle="Gas compression">
+            <div className="grid flex-1 grid-cols-5 items-center justify-items-center gap-3">
+              {STATUS_COMPRESSION.map((asset) => (
+                <StackLight key={asset.id} label={asset.name} lamps={STATUS_LAMPS} lit={asset.state} />
+              ))}
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function StatusIndicatorLookSoft() {
+  return (
+    <LookScope look="soft">
+      <Canvas>
+        <Grid>
+          {STATUS_AREAS.map((area) => {
+            const children = childrenOf(area.id);
+            return (
+              <Panel key={area.id} className="col-span-3" tone={HEALTH_STATES[area.health].tone} title={area.name} subtitle={area.tag}>
+                <div className="flex flex-1 flex-col justify-between gap-4">
+                  <StatusPillOf state={HEALTH_STATES[area.health]} size="lg" />
+                  <Meter label="Health score" value={area.healthScore} max={100} tone={HEALTH_STATES[area.health].tone} hideScale />
+                  <StateTally label={`Equipment in ${area.name}`} entries={tally(children.map((asset) => RUN_STATES[asset.state]))} layout="chips" />
+                </div>
+              </Panel>
+            );
+          })}
+        </Grid>
+      </Canvas>
+    </LookScope>
   );
 }
 
 function StatusIndicatorAssetHeader() {
-  const asset = findAssetById('23-ka-9101');
+  const alarm = ALARMS[0];
   return (
-    <Card className="w-full max-w-lg self-center">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>{asset.name}</CardTitle>
-          <CardDescription>{asset.tag} · Gas compression · criticality {asset.criticality}</CardDescription>
-        </CardHeaderCenter>
-        <CardHeaderEnd>
-          <StatusIndicator variant="badge" {...runStateStatus(asset.state)} />
-        </CardHeaderEnd>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid w-full grid-cols-3 gap-4">
-          <div className="flex flex-col gap-1">
-            <dt className="text-xs text-muted-foreground">Health</dt>
-            <dd>
-              <StatusIndicator {...healthStatus(asset.health)} detail={String(asset.healthScore)} />
-            </dd>
+    <Canvas>
+      <Grid>
+        <Panel
+          className="col-span-12"
+          title={STATUS_RECOMPRESSOR.name}
+          subtitle={`${STATUS_RECOMPRESSOR.tag} · Gas compression · criticality ${STATUS_RECOMPRESSOR.criticality}`}
+          actions={
+            <>
+              <StatusPillOf state={RUN_STATES.tripped} variant="filled" size="lg" />
+              <Button variant="outline" size="sm">
+                <IconTool aria-hidden="true" />
+                Open work order
+              </Button>
+            </>
+          }
+          footer={
+            <span className="flex items-center gap-2">
+              <IconBellRinging aria-hidden="true" className="size-4" />
+              {alarm.message} · {alarm.value} against a {alarm.limit} limit · raised {formatAgo(alarm.raisedAt)}
+            </span>
+          }
+        >
+          <div className="grid grid-cols-4 gap-4">
+            <StateTile title="Run state" state={RUN_STATES[STATUS_RECOMPRESSOR.state]} detail="Protection trip, 13:46" />
+            <StateTile title="Health" state={HEALTH_STATES[STATUS_RECOMPRESSOR.health]} detail={`Score ${STATUS_RECOMPRESSOR.healthScore} of 100`} />
+            <StateTile title="Signal quality" state={QUALITY_STATES.good} detail="14 of 14 signals good" />
+            <StateTile title="Highest open alarm" state={SEVERITY_STATES.critical} detail="1 critical · 0 high" />
           </div>
-          <div className="flex flex-col gap-1">
-            <dt className="text-xs text-muted-foreground">Alarms</dt>
-            <dd>
-              <StatusIndicator {...severityStatus('high')} label="2 open" />
-            </dd>
-          </div>
-          <div className="flex flex-col gap-1">
-            <dt className="text-xs text-muted-foreground">Signals</dt>
-            <dd>
-              <StatusIndicator {...qualityStatus('good')} label="6 of 6 good" />
-            </dd>
-          </div>
-        </dl>
-      </CardContent>
-    </Card>
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function StatusIndicatorAreaBoard() {
+  return (
+    <Canvas>
+      <div className="flex flex-col gap-4">
+        <SectionHeader title="Areas" description="The worst state of each area leads; the tally shows what is behind it." size="sm" />
+        <Grid>
+          {STATUS_AREAS.map((area) => {
+            const children = childrenOf(area.id);
+            const lead = worst(children.map((asset) => RUN_STATES[asset.state])) ?? RUN_STATES.running;
+            return (
+              <Panel key={area.id} className="col-span-3" title={area.name} subtitle={area.tag} actions={<StatusPillOf state={lead} />}>
+                <div className="flex flex-1 flex-col justify-between gap-4">
+                  <div className="flex flex-col">
+                    {children.map((asset) => (
+                      <ListRow key={asset.id} title={asset.name} trailing={<StateLabel size="sm" state={RUN_STATES[asset.state]} />} />
+                    ))}
+                  </div>
+                  <StateTally label={`Equipment in ${area.name}`} entries={tally(children.map((asset) => RUN_STATES[asset.state]))} />
+                </div>
+              </Panel>
+            );
+          })}
+        </Grid>
+      </div>
+    </Canvas>
+  );
+}
+
+function StatusIndicatorEquipmentTable() {
+  return (
+    <Canvas>
+      <Panel title="Equipment" subtitle="11 assets · run state as a pill, health as glyph and word, rows off normal get an edge" padding="none" footer={<StateTally label="Equipment by run state" entries={STATUS_RUN_TALLY} noun="assets" className="w-full" />}>
+        <DataTable flush label="Equipment with run state and health" columns={STATUS_TABLE_COLUMNS} rows={STATUS_EQUIPMENT} rowKey={(asset) => asset.id} rowTone={statusRowTone} />
+      </Panel>
+    </Canvas>
   );
 }
 
@@ -456,19 +552,19 @@ export default definePage({
   id: 'status-indicators',
   title: 'Status indicators',
   summary:
-    'The state of equipment, signals and alarms as a dot with a label. One mapping from state to colour and shape is shared by every industrial component, so "tripped" looks the same in a table, a card and a gauge.',
+    'How a state is shown: run state, health, signal quality and alarm severity, each as colour, shape and a word together. From a glyph in a table cell to a pill, a signal tower, a tally, a matrix and a state-filled tile on a wall screen — and how every look draws them.',
   guidance: {
     use: [
-      'Take the tone, label and shape from the status helpers instead of choosing colours per screen.',
-      'Use the plain dot and label in rows and tables; keep the badge for one state per card or page header.',
-      'Give a dot without visible text an accessible name and a tooltip.',
-      'Pulse only what is new and unacknowledged; stop once someone has seen it.',
+      'Always pair the colour with a word or a distinct shape; the state must survive a greyscale print.',
+      'Keep one vocabulary per meaning: run state, health, quality and severity are four different things.',
+      'Let the quiet states be quiet and spend fill and weight on the states that need someone to act.',
+      'Say since when, or why, in a second line when the state is not normal.',
     ],
     avoid: [
-      'Colour as the only signal — every state has a label, and a shape that repeats it.',
-      'Status colours for things that are not states, such as categories or owners.',
-      'More than one pulsing indicator in view at a time.',
-      'Inventing a sixth colour for a new state; map it to one of the five tones.',
+      'A lone coloured dot; it is unreadable for colour-blind users and too small to hit.',
+      'Red and green for anything that is not a state, such as categories or series.',
+      'Blinking or pulsing indicators; use a static ring or a filled form for attention.',
+      'A quality badge on every good reading; mark only uncertain and bad.',
     ],
   },
   source,
@@ -476,247 +572,245 @@ export default definePage({
     {
       id: 'vocabularies',
       title: 'State vocabularies',
-      description: 'The fixed mappings from an operational state to tone, label and shape.',
+      description: 'Four meanings, each with its own words, colours and shapes.',
       specimens: [
         {
           id: 'StatusIndicatorRunStates',
           title: 'Run state',
-          note: 'Pick it for what equipment is doing: running, standby, stopped, tripped or in maintenance.',
+          note: 'Pick it for what a machine is doing right now: running, standby, stopped, maintenance or tripped.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/status.ts', 'kit/status-indicators/StateGlyph.tsx', 'kit/StatusPill.tsx', 'kit/ListRow.tsx'],
           Component: StatusIndicatorRunStates,
+        },
+        {
+          id: 'StatusIndicatorSeverity',
+          title: 'Alarm severity',
+          note: 'Pick it for how fast an alarm must be handled; the tally below counts the open ones per level.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/status.ts', 'kit/status-indicators/StateGlyph.tsx', 'kit/status-indicators/StateTally.tsx', 'kit/StatusPill.tsx'],
+          Component: StatusIndicatorSeverity,
         },
         {
           id: 'StatusIndicatorHealth',
           title: 'Health',
-          note: 'Pick it for the condition of equipment as judged by monitoring: good, watch or poor.',
+          note: 'Pick it for the condition of an asset over days and weeks, never for what it is doing this minute.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/status.ts', 'kit/status-indicators/StateGlyph.tsx', 'kit/StatusPill.tsx'],
           Component: StatusIndicatorHealth,
         },
         {
           id: 'StatusIndicatorQuality',
           title: 'Signal quality',
-          note: 'Pick it for how far a reading can be trusted: good, uncertain or bad.',
+          note: 'Pick it for whether a reading can be trusted; bad quality is neutral grey, because it is missing data, not a fault of the process.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/status.ts', 'kit/status-indicators/StateGlyph.tsx', 'kit/StatusPill.tsx'],
           Component: StatusIndicatorQuality,
-        },
-        {
-          id: 'StatusIndicatorSeverity',
-          title: 'Alarm severity',
-          note: 'Pick it for how urgent an alarm or event is, from critical down to low.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          Component: StatusIndicatorSeverity,
-        },
-        {
-          id: 'StatusIndicatorCustomState',
-          title: 'Your own states',
-          note: 'Pick it when a state is not in the vocabularies: choose one of the five tones and a shape, and write the label.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          Component: StatusIndicatorCustomState,
         },
       ],
     },
     {
       id: 'forms',
       title: 'Forms',
-      description: 'The same state as dot and label, as a badge, or as a dot on its own.',
+      description: 'The same state from the quietest form to the loudest, and the details that go with it.',
       specimens: [
         {
-          id: 'StatusIndicatorPlain',
-          title: 'Dot and label',
-          note: 'Pick it by default: it is quiet enough to repeat on every row.',
+          id: 'StatusIndicatorForms',
+          title: 'Seven forms of one state',
+          note: 'Pick the quietest form that still gets noticed where it sits: glyph, glyph and word, pill, signal tower or tile.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          Component: StatusIndicatorPlain,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateGlyph.tsx', 'kit/status-indicators/StateLabel.tsx', 'kit/status-indicators/StackLight.tsx', 'kit/status-indicators/StateTile.tsx', 'kit/StatusPill.tsx'],
+          Component: StatusIndicatorForms,
         },
         {
-          id: 'StatusIndicatorBadge',
-          title: 'Badge',
-          note: 'Pick it for the one state that heads a card or page, where it should be found first.',
+          id: 'StatusIndicatorShapes',
+          title: 'Shape carries the state',
+          note: 'Pick shapes from the vocabulary so the state reads in monochrome and for colour-blind users.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
           size: 'md',
-          Component: StatusIndicatorBadge,
+          bleed: true,
+          uses: ['kit/status-indicators/StateGlyph.tsx', 'kit/status-indicators/status.ts'],
+          Component: StatusIndicatorShapes,
         },
         {
           id: 'StatusIndicatorSizes',
           title: 'Sizes',
-          note: 'Pick small in tables, tiles and legends, medium in lists and detail panels.',
+          note: 'Pick small for table cells, medium for lists and large for the header of an asset.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/StateLabel.tsx', 'kit/StatusPill.tsx'],
           Component: StatusIndicatorSizes,
         },
         {
           id: 'StatusIndicatorWithDetail',
-          title: 'With detail',
-          note: 'Pick it when how long, how many or since when belongs with the state.',
+          title: 'With detail and attention',
+          note: 'Pick the second line whenever the state is not normal, and the ring only when someone has to act.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/StateLabel.tsx', 'kit/status-indicators/status.ts'],
           Component: StatusIndicatorWithDetail,
         },
         {
-          id: 'StatusIndicatorPulse',
-          title: 'Needs attention',
-          note: 'Pick the pulse for a new state nobody has acknowledged yet; drop it once they have.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          Component: StatusIndicatorPulse,
-        },
-        {
-          id: 'StatusIndicatorShapes',
-          title: 'Shapes',
-          note: 'Pick the shape by meaning, so a state can be told apart in greyscale or with a colour vision deficiency.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          size: 'md',
-          Component: StatusIndicatorShapes,
-        },
-        {
-          id: 'StatusIndicatorDotOnly',
-          title: 'Dot only',
-          note: 'Pick it where there is no room for a label; it then needs an accessible name and a tooltip.',
-          origin: 'custom',
-          uses: ['industrial/StatusDot.tsx', 'industrial/status.ts'],
-          Component: StatusIndicatorDotOnly,
-        },
-        {
-          id: 'StatusIndicatorDotSizes',
-          title: 'Dot sizes',
-          note: 'Pick the small dot beside 12 px text and the medium dot beside 14 px text.',
-          origin: 'custom',
-          uses: ['industrial/StatusDot.tsx', 'industrial/status.ts'],
-          size: 'md',
-          Component: StatusIndicatorDotSizes,
-        },
-      ],
-    },
-    {
-      id: 'in-context',
-      title: 'In context',
-      description: 'Where an indicator sits relative to the thing whose state it gives.',
-      specimens: [
-        {
-          id: 'StatusIndicatorInHeading',
-          title: 'Beside a heading',
-          note: 'Pick it on an asset page: the badge sits opposite the name so the state is read with it.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: StatusIndicatorInHeading,
-        },
-        {
-          id: 'StatusIndicatorInListRow',
-          title: 'In list rows',
-          note: 'Pick it for equipment lists: states line up on the right edge and can be scanned as a column.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: StatusIndicatorInListRow,
-        },
-        {
-          id: 'StatusIndicatorWithValue',
-          title: 'Quality beside a value',
-          note: 'Pick it when a reading is shown but should not be fully trusted.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx', 'industrial/status.ts'],
-          Component: StatusIndicatorWithValue,
-        },
-        {
           id: 'StatusIndicatorNoSignal',
-          title: 'No signal',
-          note: 'Pick it when there is no reading at all: the dash and the state together say why.',
+          title: 'Quality beside a value',
+          note: 'Pick it next to live readings: good stays silent, uncertain is flagged, and a bad value is replaced by a dash.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx', 'industrial/status.ts'],
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/StateLabel.tsx', 'kit/ListRow.tsx', 'kit/TagId.tsx'],
           Component: StatusIndicatorNoSignal,
         },
         {
-          id: 'StatusIndicatorCounts',
-          title: 'Counts by state',
-          note: 'Pick it as a summary line above a list or map: how many units are in each state.',
+          id: 'StatusIndicatorStackLights',
+          title: 'Signal towers',
+          note: 'Pick it for a row of machines, where operators already know the tower on the shop floor.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'md',
-          Component: StatusIndicatorCounts,
-        },
-        {
-          id: 'StatusIndicatorLegend',
-          title: 'Legend',
-          note: 'Pick it under a map, matrix or diagram that shows states as dots only.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'md',
-          Component: StatusIndicatorLegend,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StackLight.tsx'],
+          Component: StatusIndicatorStackLights,
         },
       ],
     },
     {
-      id: 'compositions',
-      title: 'Strips, tables and summaries',
-      description: 'Many states at once, the way overview screens show them.',
+      id: 'many',
+      title: 'Many states at once',
+      description: 'Counting and scanning: tallies and a matrix.',
       specimens: [
         {
-          id: 'StatusIndicatorEquipmentStrip',
-          title: 'Equipment status strip',
-          note: 'Pick it across the top of an area view: one small card per unit with its run state.',
+          id: 'StatusIndicatorTally',
+          title: 'Counts by state',
+          note: 'Pick the strip for proportions, the chips for a header and the list when the counts are compared.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'full',
-          align: 'stretch',
-          Component: StatusIndicatorEquipmentStrip,
+          size: 'md',
+          bleed: true,
+          uses: ['kit/status-indicators/StateTally.tsx', 'kit/status-indicators/status.ts'],
+          Component: StatusIndicatorTally,
         },
         {
-          id: 'StatusIndicatorAssetHeader',
-          title: 'Asset summary',
-          note: 'Pick it at the top of an asset card: run state as the badge, health, alarms and signals beneath.',
+          id: 'StatusIndicatorMatrix',
+          title: 'Equipment matrix',
+          note: 'Pick it to scan dozens of assets for the few that are off normal, then select one to read it.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/status-indicators/StateMatrix.tsx', 'kit/status-indicators/StateLabel.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: StatusIndicatorMatrix,
+        },
+      ],
+    },
+    {
+      id: 'looks',
+      title: 'The same states in six looks',
+      description: 'Blocks and edge bars, filled tiles, outlines, glowing lamps and tinted cards.',
+      specimens: [
+        {
+          id: 'StatusIndicatorLookConsole',
+          title: 'Console: filled blocks and edge bars',
+          note: 'Pick it for a control room: square filled pills in a dense table and edge-striped tiles for the train.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateTile.tsx', 'kit/status-indicators/StateLabel.tsx', 'kit/DataTable.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: StatusIndicatorLookConsole,
+        },
+        {
+          id: 'StatusIndicatorLookSignal',
+          title: 'Signal: state-filled tiles',
+          note: 'Pick it for a wall screen: the whole tile is the state, with a giant word and icon.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateTile.tsx', 'looks/LookScope.tsx'],
+          Component: StatusIndicatorLookSignal,
+        },
+        {
+          id: 'StatusIndicatorLookPoster',
+          title: 'Poster: one count and solid blocks',
+          note: 'Pick it for a team screen: a huge count, and every machine as a block that is solid only when it needs you.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateMatrix.tsx', 'kit/status-indicators/StateTally.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: StatusIndicatorLookPoster,
+        },
+        {
+          id: 'StatusIndicatorLookBlueprint',
+          title: 'Blueprint: outlined cells and a key',
+          note: 'Pick it for drawings and documents: one ink, outlined cells, and a key that explains every symbol.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateMatrix.tsx', 'kit/status-indicators/StateLabel.tsx', 'looks/LookScope.tsx'],
+          Component: StatusIndicatorLookBlueprint,
+        },
+        {
+          id: 'StatusIndicatorLookGlass',
+          title: 'Glass: glowing lamps and a ring',
+          note: 'Pick it for a dark showcase: lit lamps glow, and one ring says how much of the plant is running.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StackLight.tsx', 'kit/status-indicators/StateTally.tsx', 'kit/RingGauge.tsx', 'looks/LookScope.tsx'],
+          Component: StatusIndicatorLookGlass,
+        },
+        {
+          id: 'StatusIndicatorLookSoft',
+          title: 'Soft: tinted area cards',
+          note: 'Pick it for a friendly overview: each area is a card tinted with its health, with a large pill and chips.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateTally.tsx', 'kit/Meter.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: StatusIndicatorLookSoft,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions ready to drop into a product.',
+      specimens: [
+        {
+          id: 'StatusIndicatorAssetHeader',
+          title: 'Asset status header',
+          note: 'Pick it as the top of an asset page: the four vocabularies side by side, the alarm that explains them, and the next action.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateTile.tsx', 'kit/status-indicators/status.ts', 'kit/Panel.tsx', 'kit/StatusPill.tsx'],
           Component: StatusIndicatorAssetHeader,
         },
         {
-          id: 'StatusIndicatorAlarmSummary',
-          title: 'Open alarms list',
-          note: 'Pick it for a short alarm list where severity leads each row and only the new critical one pulses.',
+          id: 'StatusIndicatorAreaBoard',
+          title: 'Area board',
+          note: 'Pick it as a plant overview: one card per area led by its worst state, with the equipment and a tally behind it.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: StatusIndicatorAlarmSummary,
-        },
-        {
-          id: 'StatusIndicatorAreaSummary',
-          title: 'Area summaries',
-          note: 'Pick it on a plant overview: each area with its health and a count of units per run state.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx', 'industrial/status.ts'],
-          size: 'lg',
-          align: 'stretch',
-          Component: StatusIndicatorAreaSummary,
-        },
-        {
-          id: 'StatusIndicatorDotMatrix',
-          title: 'Dot matrix',
-          note: 'Pick it to show a whole fleet in a few square centimetres; every dot is named and the legend explains them.',
-          origin: 'custom',
-          uses: ['industrial/StatusDot.tsx', 'industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          Component: StatusIndicatorDotMatrix,
-        },
-        {
-          id: 'StatusIndicatorAssetTable',
-          title: 'Equipment table',
-          note: 'Pick it when run state and health are two columns of many and need to be sorted and compared.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx', 'industrial/status.ts'],
           size: 'full',
-          align: 'stretch',
-          Component: StatusIndicatorAssetTable,
+          bleed: true,
+          uses: ['kit/status-indicators/StateLabel.tsx', 'kit/status-indicators/StateTally.tsx', 'kit/status-indicators/status.ts', 'kit/Panel.tsx', 'kit/ListRow.tsx'],
+          Component: StatusIndicatorAreaBoard,
+        },
+        {
+          id: 'StatusIndicatorEquipmentTable',
+          title: 'Equipment table',
+          note: 'Pick it for a full equipment list: the loud form for run state, the quiet one for health, and an edge on rows off normal.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/status-indicators/StateLabel.tsx', 'kit/status-indicators/StateTally.tsx', 'kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: StatusIndicatorEquipmentTable,
         },
       ],
     },

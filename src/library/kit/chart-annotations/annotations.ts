@@ -81,22 +81,36 @@ export function summarizeRange(values: readonly (number | null)[], from: number,
 
 /** An SVG path through the points in a 0–100 box; gaps (`null`) break the line. */
 export function linePath(values: readonly (number | null)[], domain: Domain, curve: 'linear' | 'monotone' | 'stepAfter', from = 0, to = values.length - 1): string {
-  let path = '';
-  let previous: { x: number; y: number } | null = null;
+  const runs: { x: number; y: number }[][] = [];
+  let run: { x: number; y: number }[] = [];
   for (let index = Math.max(0, from); index <= Math.min(values.length - 1, to); index += 1) {
     const value = values[index];
     if (value === null) {
-      previous = null;
+      if (run.length > 0) runs.push(run);
+      run = [];
       continue;
     }
-    const point = { x: xShare(index, values.length) * 100, y: yShare(value, domain) * 100 };
-    if (previous === null) path += `M${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-    else if (curve === 'stepAfter') path += `H${point.x.toFixed(2)}V${point.y.toFixed(2)}`;
-    else if (curve === 'monotone') {
-      const middle = ((previous.x + point.x) / 2).toFixed(2);
-      path += `C${middle},${previous.y.toFixed(2)} ${middle},${point.y.toFixed(2)} ${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-    } else path += `L${point.x.toFixed(2)},${point.y.toFixed(2)}`;
-    previous = point;
+    run.push({ x: xShare(index, values.length) * 100, y: yShare(value, domain) * 100 });
   }
-  return path;
+  if (run.length > 0) runs.push(run);
+  const at = (point: { x: number; y: number }): string => `${point.x.toFixed(2)},${point.y.toFixed(2)}`;
+
+  return runs
+    .map((points) =>
+      points
+        .map((point, index) => {
+          if (index === 0) return `M${at(point)}`;
+          const previous = points[index - 1];
+          if (curve === 'stepAfter') return `H${point.x.toFixed(2)}V${point.y.toFixed(2)}`;
+          if (curve === 'linear') return `L${at(point)}`;
+          // Catmull-Rom through the neighbours, so the curve passes every point without steps.
+          const before = points[index - 2] ?? previous;
+          const after = points[index + 1] ?? point;
+          const first = { x: previous.x + (point.x - before.x) / 6, y: previous.y + (point.y - before.y) / 6 };
+          const second = { x: point.x - (after.x - previous.x) / 6, y: point.y - (after.y - previous.y) / 6 };
+          return `C${at(first)} ${at(second)} ${at(point)}`;
+        })
+        .join('')
+    )
+    .join('');
 }

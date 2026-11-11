@@ -59,7 +59,7 @@ export function RoundCard({ name, area, state, timing, results, assignee, icon, 
       tone={state === 'overdue' ? 'critical' : 'neutral'}
       actions={<StatusPill tone={STATE_TONE[state]}>{STATE_WORD[state]}</StatusPill>}
       footer={
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex w-full items-center justify-between gap-3">
           <span className="text-sm text-(--kit-text-2)">
             {assignee ? `${assignee} · ` : ''}
             {timing}

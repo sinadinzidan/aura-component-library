@@ -35,9 +35,12 @@ export function ZoneBar({ label, value, boundaries = ISO_GROUP1_RIGID, max = 11,
         <span className="tabular-nums text-(--kit-text)" style={{ fontSize: size === 'lg' ? '1.75rem' : '1.125rem', lineHeight: 1.1, fontWeight: 'var(--kit-figure-weight)', letterSpacing: 'var(--kit-figure-tracking)' }}>
           {formatNumber(value, 1)}
           <span className="ml-1 text-xs font-medium tracking-normal text-(--kit-text-3)">{unit}</span>
+          <span data-tone={ISO_ZONE_TONE[zone]} className="ml-2 text-sm font-semibold tracking-normal text-(--t-ink)">
+            {ISO_ZONE_WORD[zone]}
+          </span>
         </span>
       </div>
-      <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-valuetext={`${formatNumber(value, 1)} ${unit}, zone ${zone}, ${ISO_ZONE_WORD[zone]}`} className="relative">
+      <div role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value} aria-valuetext={`${formatNumber(value, 1)} ${unit}, zone ${zone}, ${ISO_ZONE_WORD[zone]}`} className="relative pt-2.5">
         <div className={cx('flex gap-0.5 overflow-hidden', square ? '' : 'rounded-(--kit-radius-sm)')}>
           {ISO_ZONES.map((letter, index) => {
             const active = letter === zone;
@@ -54,12 +57,12 @@ export function ZoneBar({ label, value, boundaries = ISO_GROUP1_RIGID, max = 11,
                 )}
                 style={{ width: `${((edges[index + 1] - edges[index]) / max) * 100}%` }}
               >
-                {active ? `${letter} · ${ISO_ZONE_WORD[letter]}` : letter}
+                {letter}
               </span>
             );
           })}
         </div>
-        <span aria-hidden="true" className="absolute -top-1 -bottom-1 w-1 -translate-x-1/2 rounded-full bg-(--kit-text) [box-shadow:0_0_0_2px_var(--kit-surface)]" style={{ left: `${Math.min(100, (value / max) * 100)}%` }} />
+        <span aria-hidden="true" className="absolute top-0 size-0 -translate-x-1/2 [border-inline:6px_solid_transparent] [border-top:9px_solid_var(--kit-text)]" style={{ left: `${Math.min(100, (value / max) * 100)}%` }} />
       </div>
       <div aria-hidden="true" className="relative h-4 text-xs text-(--kit-text-3) tabular-nums">
         {edges.map((edge, index) => (

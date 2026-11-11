@@ -1,963 +1,705 @@
-import { Alert, AlertDescription, AlertTitle } from '@cognite/aura/components/alert';
 import { Button } from '@cognite/aura/components/button';
-import { Card } from '@cognite/aura/components/card';
-import { CheckboxGroup, CheckboxItem, CheckboxItemControl, CheckboxItemDescription, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
-import { IconArrowBackUp } from '@cognite/aura/icons';
+import { CheckboxItem, CheckboxItemControl, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
+import {
+  IconAlertTriangle,
+  IconBolt,
+  IconCircleCheck,
+  IconCircleX,
+  IconDroplet,
+  IconFileCertificate,
+  IconFlame,
+  IconGauge,
+  IconLock,
+  IconLockOpen,
+  IconSettings,
+  IconShieldCheck,
+  IconUsers,
+  IconWind,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { Breaker } from '../../../library/industrial/diagrams/Breaker';
-import { DiagramCanvas } from '../../../library/industrial/diagrams/DiagramCanvas';
-import { DiagramHotspot } from '../../../library/industrial/diagrams/DiagramHotspot';
-import { EquipmentSymbol } from '../../../library/industrial/diagrams/EquipmentSymbol';
-import { InstrumentBubble } from '../../../library/industrial/diagrams/InstrumentBubble';
-import { PipeLine } from '../../../library/industrial/diagrams/PipeLine';
-import { ValveSymbol } from '../../../library/industrial/diagrams/ValveSymbol';
-import { LinearGauge } from '../../../library/industrial/LinearGauge';
-import { DangerTag } from '../../../library/industrial/safety/DangerTag';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { DangerTag } from '../../../library/kit/lockout-tagout/DangerTag';
 import {
-  ENERGY_LABEL,
+  ENERGY_WORD,
   ISOLATION_STATES,
-  applicationOrder,
-  countIsolationStates,
-  deIsolationOrder,
-  isolationStatus,
-  releaseGate,
-} from '../../../library/industrial/safety/isolationOrder';
-import type { EnergyType, IsolationState } from '../../../library/industrial/safety/isolationOrder';
-import { IsolationPointRow } from '../../../library/industrial/safety/IsolationPointRow';
-import { LockBoard } from '../../../library/industrial/safety/LockBoard';
-import type { LockBoardPerson } from '../../../library/industrial/safety/LockBoard';
-import { TONE_MARK_FILL } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ConditionList } from '../../../library/industrial/workflows/ConditionList';
-import { SignOffBlock } from '../../../library/industrial/workflows/SignOffBlock';
-import type { SignOffSigner } from '../../../library/industrial/workflows/SignOffBlock';
+  STATE_TONE,
+  STATE_WORD,
+  advanceState,
+  boundaryProgress,
+  removalOrder,
+  workGate,
+  type EnergyType,
+  type IsolationPoint,
+  type IsolationState,
+} from '../../../library/kit/lockout-tagout/isolation';
+import { IsolationPointRow } from '../../../library/kit/lockout-tagout/IsolationPointRow';
+import { IsolationSchematic, type SchematicLink, type SchematicNode } from '../../../library/kit/lockout-tagout/IsolationSchematic';
+import { LockBoard, type LockBoardPerson } from '../../../library/kit/lockout-tagout/LockBoard';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
 import { definePage } from '../../types';
 
 import source from './lockout-tagout.tsx?raw';
 
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
+/** Isolation of the recompressor for the drive-end bearing inspection, WO-104482. */
+const LOCKOUT_TAGOUT_POINTS: IsolationPoint[] = [
+  { id: 'p1', step: 1, tag: '82-EN-9103', name: 'Motor breaker, recompressor', energy: 'electrical', method: 'Open, rack out and lock', state: 'verified', lock: 'R-113' },
+  { id: 'p2', step: 2, tag: '23-XV-9130', name: 'Suction valve', energy: 'process', method: 'Close and lock', state: 'verified', lock: 'R-114' },
+  { id: 'p3', step: 3, tag: '23-XV-9135', name: 'Discharge valve', energy: 'process', method: 'Close and lock', state: 'locked', lock: 'R-115' },
+  { id: 'p4', step: 4, tag: '23-HV-9138', name: 'Casing vent to flare', energy: 'process', method: 'Open and lock, bleed to zero', state: 'isolated' },
+  { id: 'p5', step: 5, tag: '41-HV-9171', name: 'Lube oil supply', energy: 'hydraulic', method: 'Close and lock', state: 'planned' },
+  { id: 'p6', step: 6, tag: '23-HV-9139', name: 'Seal gas supply', energy: 'pneumatic', method: 'Close and lock', state: 'planned' },
+];
 
-type Point = {
-  id: string;
-  step: number;
-  tag: string;
-  description: string;
-  device: string;
-  requiredPosition: string;
-  energy: EnergyType;
-  lock: string;
-  tagNo: string;
+const LOCKOUT_TAGOUT_VERIFIED: IsolationPoint[] = LOCKOUT_TAGOUT_POINTS.map((point) => ({ ...point, state: 'verified', lock: point.lock ?? `R-11${point.step + 2}` }));
+
+const LOCKOUT_TAGOUT_ENERGY_ICON: Record<EnergyType, ReactNode> = {
+  electrical: <IconBolt />,
+  process: <IconGauge />,
+  hydraulic: <IconDroplet />,
+  pneumatic: <IconWind />,
+  mechanical: <IconSettings />,
+  thermal: <IconFlame />,
 };
 
-const POINTS: readonly Point[] = [
-  { id: 'xv9105', step: 1, tag: '23-XV-9105', description: 'Suction shutdown valve', device: 'Valve', requiredPosition: 'Closed', energy: 'pressure', lock: 'L-0430', tagNo: 'DT-1181' },
-  { id: 'hv9106', step: 2, tag: '23-HV-9106', description: 'Suction block valve', device: 'Valve', requiredPosition: 'Closed', energy: 'pressure', lock: 'L-0431', tagNo: 'DT-1182' },
-  { id: 'hv9112', step: 3, tag: '23-HV-9112', description: 'Discharge block valve', device: 'Valve', requiredPosition: 'Closed', energy: 'pressure', lock: 'L-0432', tagNo: 'DT-1183' },
-  { id: 'xv9113', step: 4, tag: '23-XV-9113', description: 'Recycle valve', device: 'Valve', requiredPosition: 'Closed', energy: 'pressure', lock: 'L-0433', tagNo: 'DT-1184' },
-  { id: 'sp9115', step: 5, tag: '23-SP-9115', description: 'Spectacle blind, suction', device: 'Spectacle blind', requiredPosition: 'Closed side in line', energy: 'pressure', lock: 'L-0434', tagNo: 'DT-1185' },
-  { id: 'hv9120', step: 6, tag: '23-HV-9120', description: 'Vent to flare', device: 'Valve', requiredPosition: 'Open', energy: 'pressure', lock: 'L-0435', tagNo: 'DT-1186' },
-  { id: 'hv9131', step: 7, tag: '23-HV-9131', description: 'Seal gas supply', device: 'Valve', requiredPosition: 'Closed', energy: 'stored', lock: 'L-0436', tagNo: 'DT-1187' },
-  { id: 'qb9101', step: 8, tag: '23-QB-9101', description: 'Lube oil pump breaker', device: 'Breaker', requiredPosition: 'Racked out', energy: 'electrical', lock: 'L-0437', tagNo: 'DT-1188' },
-];
-
-type States = Record<string, IsolationState>;
-
-function allIn(state: IsolationState): States {
-  const states: States = {};
-  for (const point of POINTS) states[point.id] = state;
-  return states;
-}
-
-const ALL_PLANNED: States = allIn('planned');
-const MIXED: States = { ...ALL_PLANNED, xv9105: 'verified', hv9106: 'verified', hv9112: 'verified', xv9113: 'applied', sp9115: 'planned' };
-
-const REMOVED: IsolationState = 'removed';
-const VERIFIED: IsolationState = 'verified';
-
-const stateOf = (states: States, id: string): IsolationState => states[id] ?? 'planned';
-
-const ENERGY_SOURCES: readonly { type: EnergyType; source: string; hazard: string; control: string; check: string }[] = [
-  { type: 'electrical', source: 'Lube oil pump and heater supply', hazard: '400 V, motor can start from the control room', control: 'Breaker 23-QB-9101 racked out, locked and tagged', check: 'Voltage tester on the load side' },
-  { type: 'pressure', source: 'Process gas in the compressor and piping', hazard: '12 to 49 barg of hydrocarbon gas', control: 'Double block, spectacle blind and vent to flare', check: 'Gauge 23-PI-9107 reads 0 barg, gas test 0 % LEL' },
-  { type: 'thermal', source: 'Compressor casing and discharge line', hazard: 'Surface up to 141 °C', control: 'Cool down to below 50 °C before work', check: 'Surface thermometer at the casing' },
-  { type: 'stored', source: 'Seal gas accumulator and rotor run-down', hazard: 'Gas at 52 barg, rotor turns for about 8 min', control: 'Seal gas isolated and vented, rotor stopped', check: 'Rotor confirmed stopped, accumulator at 0 barg' },
-];
-
-const CREW_PEOPLE: readonly LockBoardPerson[] = [
-  { id: 'tb', name: 'Tomás Barros', role: 'Mechanical technician', lock: 'P-114', lockOn: true, at: '07:12' },
-  { id: 'ak', name: 'Aisha Khan', role: 'Rotating equipment engineer', lock: 'P-131', lockOn: true, at: '07:15' },
-  { id: 'jn', name: 'Jonas Nyberg', role: 'Instrument technician', lock: 'P-122', lockOn: false },
-];
-const CREW = CREW_PEOPLE;
-
-const LONG_TERM = [
-  { id: 'LT-031', point: '23-SP-9150', what: 'Blind on the flare knock-out drum inlet', since: '4 Aug 2025', reason: 'Drum out of service for repair', owner: 'Magnus Solberg', review: 'Review due 4 Apr', overdue: false },
-  { id: 'LT-029', point: '40-HV-4012', what: 'Block valve on cooling water line to spare cooler', since: '11 Jun 2025', reason: 'Cooler removed for replacement', owner: 'Liv Wold', review: 'Review overdue 21 d', overdue: true },
-  { id: 'LT-024', point: '27-QB-2001B', what: 'Export pump B motor breaker', since: '2 Jan 2026', reason: 'Motor rewinding at the workshop', owner: 'Aisha Khan', review: 'Review due 30 Mar', overdue: false },
-];
-
-function Panel({ title, meta, children }: { title: string; meta?: ReactNode; children: ReactNode }) {
-  return (
-    <Card className="w-full min-w-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-base-foreground">{title}</h3>
-        {meta ? <span className="text-xs text-muted-foreground tabular-nums">{meta}</span> : null}
-      </div>
-      {children}
-    </Card>
-  );
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm text-base-foreground">{children}</dd>
-    </div>
-  );
-}
-
-function rowFor(point: Point, state: IsolationState, actions?: ReactNode, step?: number) {
-  const applied = state === 'applied' || state === 'verified' || state === 'removed';
-  return (
-    <IsolationPointRow
-      step={step ?? point.step}
-      tag={point.tag}
-      description={point.description}
-      device={point.device}
-      requiredPosition={point.requiredPosition}
-      energy={point.energy}
-      lock={applied ? point.lock : undefined}
-      tagNo={applied ? point.tagNo : undefined}
-      state={state}
-      appliedBy={applied ? 'Ingrid Haugen' : undefined}
-      verifiedBy={state === 'verified' || state === 'removed' ? 'Liv Wold' : undefined}
-      actions={actions}
-    />
-  );
-}
-
-const MARKER_STATE_CLASS: Record<IsolationState, string> = {
-  planned: 'fill-base-background stroke-emphasized',
-  applied: 'fill-base-background stroke-chart-warning-450',
-  verified: `${TONE_MARK_FILL.success} stroke-chart-success-450`,
-  removed: 'fill-muted-background stroke-emphasized',
+const LOCKOUT_TAGOUT_STATE_TEXT: Record<IsolationState, string> = {
+  planned: 'On the certificate, not yet touched.',
+  isolated: 'In the safe position, but anyone could still move it.',
+  locked: 'Held by a lock, with a danger tag on it.',
+  verified: 'A second person has checked position, lock and tag.',
+  removed: 'Lock and tag taken off after the job.',
 };
 
-function LotoPatternMarker({ cx, cy, n, state }: { cx: number; cy: number; n: number; state: IsolationState }) {
-  const filled = state === 'verified';
-  return (
-    <g aria-hidden="true" data-state={state}>
-      {state === 'applied' ? (
-        <rect x={cx - 9} y={cy - 9} width={18} height={18} strokeWidth={2} vectorEffect="non-scaling-stroke" className={MARKER_STATE_CLASS[state]} />
-      ) : (
-        <circle cx={cx} cy={cy} r={9} strokeWidth={2} strokeDasharray={state === 'planned' ? '3 2' : undefined} vectorEffect="non-scaling-stroke" className={MARKER_STATE_CLASS[state]} />
-      )}
-      <text x={cx} y={cy + 3.5} fontSize={10} fontWeight={600} textAnchor="middle" className={filled ? 'fill-base-background' : 'fill-base-foreground'}>
-        {n}
-      </text>
-    </g>
-  );
-}
+const LOCKOUT_TAGOUT_NODES: SchematicNode[] = [
+  { id: 'board', x: 22, y: 12, kind: 'equipment', label: 'Switchboard' },
+  { id: 'suction', x: 8, y: 50, kind: 'equipment', label: 'Suction' },
+  { id: 'comp', x: 50, y: 50, kind: 'equipment', label: 'Recompressor 23-KA-9103' },
+  { id: 'discharge', x: 92, y: 50, kind: 'equipment', label: 'Discharge' },
+  { id: 'flare', x: 92, y: 12, kind: 'equipment', label: 'Flare' },
+  { id: 'lube', x: 8, y: 82, kind: 'equipment', label: 'Lube oil' },
+  { id: 'seal', x: 92, y: 82, kind: 'equipment', label: 'Seal gas' },
+];
 
-function LotoPatternBlind({ cx, cy, closed, label }: { cx: number; cy: number; closed: boolean; label: string }) {
-  return (
-    <g role="img" aria-label={`${label}, ${closed ? 'closed side in line' : 'open side in line'}`}>
-      <path d={`M ${cx - 7} ${cy} H ${cx + 7}`} stroke="currentColor" strokeWidth={1.5} />
-      <circle cx={cx - 12} cy={cy} r={6} stroke="currentColor" strokeWidth={1.5} fill={closed ? 'currentColor' : 'none'} />
-      <circle cx={cx + 12} cy={cy} r={6} stroke="currentColor" strokeWidth={1.5} fill={closed ? 'none' : 'currentColor'} />
-    </g>
-  );
-}
-
-type SchematicProps = { states: States; selectedId?: string; onSelect?: (id: string) => void };
-
-const VALVE_AT: Record<string, { x: number; y: number }> = {
-  xv9105: { x: 90, y: 150 },
-  hv9106: { x: 170, y: 150 },
-  hv9112: { x: 520, y: 150 },
-  xv9113: { x: 440, y: 70 },
-  hv9120: { x: 450, y: 205 },
-  hv9131: { x: 360, y: 225 },
+const LOCKOUT_TAGOUT_POINT_PLACES: Record<string, { x: number; y: number }> = {
+  p1: { x: 50, y: 12 },
+  p2: { x: 26, y: 50 },
+  p3: { x: 76, y: 50 },
+  p4: { x: 70, y: 12 },
+  p5: { x: 28, y: 82 },
+  p6: { x: 72, y: 82 },
 };
 
-function LotoPatternSchematicDrawing({ states, selectedId, onSelect }: SchematicProps) {
-  const interactive = onSelect !== undefined;
-  const positionOf = (point: Point) => {
-    const applied = stateOf(states, point.id) === 'applied' || stateOf(states, point.id) === 'verified';
-    const wanted = point.requiredPosition === 'Open' ? 'open' : 'closed';
-    if (!applied) return point.requiredPosition === 'Open' ? 'closed' : 'open';
-    return wanted;
-  };
-  const marker = (point: Point, x: number, y: number, labelDy: number) => {
-    const state = stateOf(states, point.id);
-    const content = (
-      <>
-        <LotoPatternMarker cx={x} cy={y} n={point.step} state={state} />
-        <text x={x} y={y + labelDy} fontSize={9} textAnchor="middle" className="fill-muted-foreground font-mono">
-          {point.tag.slice(3)}
-        </text>
-      </>
-    );
-    if (!interactive) return <g key={point.id}>{content}</g>;
-    return (
-      <DiagramHotspot key={point.id} x={x - 30} y={Math.min(y, y + labelDy) - 16} width={60} height={Math.abs(labelDy) + 30} label={`Isolation point ${point.step}, ${point.tag}, ${isolationStatus(state).label}`} selected={selectedId === point.id} onSelect={() => onSelect(point.id)}>
-        {content}
-      </DiagramHotspot>
-    );
-  };
-  const byId = (id: string): Point => POINTS.find((point) => point.id === id) ?? POINTS[0];
-  const breaker = byId('qb9101');
-  const blind = byId('sp9115');
-  const breakerState = stateOf(states, breaker.id);
-  const blindClosed = stateOf(states, blind.id) === 'applied' || stateOf(states, blind.id) === 'verified';
-  return (
-    <DiagramCanvas
-      interactive={interactive}
-      label="Piping schematic of the 1st stage compressor 23-KA-9101 with eight numbered isolation points: suction and discharge valves, recycle valve, spectacle blind, vent, seal gas supply and the lube oil pump breaker"
-      width={720}
-      height={300}
-      className="w-full"
-    >
-      <rect x={135} y={34} width={440} height={250} rx={10} stroke="currentColor" strokeWidth={1} strokeDasharray="6 4" vectorEffect="non-scaling-stroke" />
-      <text x={147} y={52} fontSize={10} className="fill-muted-foreground">
-        Isolation boundary
-      </text>
-      <PipeLine points={[{ x: 20, y: 150 }, { x: 328, y: 150 }]} weight="heavy" flow="forward" arrows={1} />
-      <PipeLine points={[{ x: 392, y: 150 }, { x: 700, y: 150 }]} weight="heavy" flow="forward" arrows={1} />
-      <PipeLine points={[{ x: 590, y: 150 }, { x: 590, y: 70 }, { x: 290, y: 70 }, { x: 290, y: 150 }]} weight="normal" />
-      <PipeLine points={[{ x: 450, y: 150 }, { x: 450, y: 262 }]} weight="normal" />
-      <PipeLine points={[{ x: 360, y: 184 }, { x: 360, y: 262 }]} weight="light" />
-      <text x={450} y={278} fontSize={9} textAnchor="middle" className="fill-muted-foreground">
-        To flare
-      </text>
-      <text x={360} y={278} fontSize={9} textAnchor="middle" className="fill-muted-foreground">
-        Seal gas
-      </text>
-      <text x={20} y={138} fontSize={9} className="fill-muted-foreground">
-        Suction header
-      </text>
-      <text x={700} y={138} fontSize={9} textAnchor="end" className="fill-muted-foreground">
-        Discharge header
-      </text>
-      <EquipmentSymbol kind="compressor" label="1st stage compressor 23-KA-9101" size={64} cx={360} cy={150} fill="soft" />
-      <text x={360} y={122} fontSize={10} textAnchor="middle" className="fill-base-foreground font-medium">
-        23-KA-9101
-      </text>
-      <InstrumentBubble letters="PI" loop="9107" size={26} cx={320} cy={104} />
-      <PipeLine points={[{ x: 320, y: 117 }, { x: 320, y: 150 }]} weight="light" dashed />
-      {Object.entries(VALVE_AT).map(([id, at]) => {
-        const point = byId(id);
-        return <ValveSymbol key={id} type={id === 'xv9105' || id === 'xv9113' ? 'shutdown' : 'gate'} position={positionOf(point)} label={point.tag} size={28} cx={at.x} cy={at.y} />;
-      })}
-      <LotoPatternBlind cx={240} cy={150} closed={blindClosed} label="Spectacle blind 23-SP-9115" />
-      <path d="M 40 250 H 230" stroke="currentColor" strokeWidth={1} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
-      <Breaker state={breakerState === 'applied' || breakerState === 'verified' ? 'open' : 'closed'} label="Lube oil pump breaker 23-QB-9101" orientation="horizontal" size={28} cx={120} cy={250} />
-      <text x={40} y={236} fontSize={9} className="fill-muted-foreground">
-        Lube oil pump 23-PA-9111
-      </text>
-      {marker(byId('xv9105'), 90, 112, -14)}
-      {marker(byId('hv9106'), 170, 112, -14)}
-      {marker(byId('sp9115'), 240, 112, -14)}
-      {marker(byId('hv9112'), 520, 112, -14)}
-      {marker(byId('xv9113'), 440, 32, -14)}
-      {marker(byId('hv9120'), 490, 205, -14)}
-      {marker(byId('hv9131'), 400, 225, -14)}
-      {marker(byId('qb9101'), 120, 214, -14)}
-      <path d="M 90 126 V 134 M 170 126 V 134 M 240 126 V 140 M 520 126 V 134 M 440 44 V 56" stroke="currentColor" strokeWidth={1} vectorEffect="non-scaling-stroke" opacity={0.5} />
-      <g aria-hidden="true">
-        <path d="M 480 205 H 468" stroke="currentColor" strokeWidth={1} opacity={0.5} />
-        <path d="M 390 225 H 376" stroke="currentColor" strokeWidth={1} opacity={0.5} />
-        <path d="M 120 223 V 236" stroke="currentColor" strokeWidth={1} opacity={0.5} />
-      </g>
-    </DiagramCanvas>
-  );
-}
+const LOCKOUT_TAGOUT_LINKS: SchematicLink[] = [
+  { from: 'board', to: 'p1', kind: 'electrical' },
+  { from: 'p1', to: 'comp', kind: 'electrical' },
+  { from: 'suction', to: 'p2' },
+  { from: 'p2', to: 'comp' },
+  { from: 'comp', to: 'p3' },
+  { from: 'p3', to: 'discharge' },
+  { from: 'comp', to: 'p4' },
+  { from: 'p4', to: 'flare' },
+  { from: 'lube', to: 'p5', kind: 'utility' },
+  { from: 'p5', to: 'comp', kind: 'utility' },
+  { from: 'seal', to: 'p6', kind: 'utility' },
+  { from: 'p6', to: 'comp', kind: 'utility' },
+];
 
-function SchematicKey() {
-  return (
-    <ul aria-label="Marker key" className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
-      {ISOLATION_STATES.filter((state) => state !== 'removed').map((state) => (
-        <li key={state}>
-          <StatusIndicator size="sm" {...isolationStatus(state)} />
-        </li>
-      ))}
-      <li className="text-xs text-muted-foreground">Numbers follow the order of application. Valves are drawn in the position they are left in.</li>
-    </ul>
-  );
-}
-
-function LotoPatternPointRow() {
-  return (
-    <Card role="group" aria-label="Isolation point 2" className="w-full min-w-0">
-      {rowFor(POINTS[1], 'verified')}
-    </Card>
-  );
-}
-
-function LotoPatternPointStates() {
-  const samples: [Point, IsolationState][] = [
-    [POINTS[0], 'planned'],
-    [POINTS[1], 'applied'],
-    [POINTS[2], 'verified'],
-    [POINTS[3], 'removed'],
+function lockoutTagoutNodes(points: readonly IsolationPoint[]): SchematicNode[] {
+  return [
+    ...LOCKOUT_TAGOUT_NODES,
+    ...points.map((point): SchematicNode => ({ id: point.id, kind: 'point', label: point.tag, step: point.step, state: point.state, ...LOCKOUT_TAGOUT_POINT_PLACES[point.id] })),
   ];
-  return (
-    <Panel title="Isolation point states" meta="One point in each state">
-      <ul className="flex flex-col gap-3">
-        {samples.map(([point, state]) => (
-          <li key={state}>{rowFor(point, state)}</li>
-        ))}
-      </ul>
-    </Panel>
-  );
 }
 
-function LotoPatternStatesLegend() {
-  const meaning: Record<IsolationState, string> = {
-    planned: 'On the plan. Nothing has been done at the equipment.',
-    applied: 'Position set, lock and tag on. Not counted until a second person checks it.',
-    verified: 'A second person checked the position, lock and tag at the equipment.',
-    removed: 'Lock and tag taken off in the removal sequence. The point is back in service.',
-  };
-  return (
-    <Panel title="Isolation states">
-      <dl className="flex flex-col gap-3">
-        {ISOLATION_STATES.map((state) => (
-          <div key={state} className="grid grid-cols-[10rem_minmax(0,1fr)] items-start gap-x-4">
-            <dt>
-              <StatusIndicator size="sm" {...isolationStatus(state)} />
-            </dt>
-            <dd className="text-sm text-medium-foreground">{meaning[state]}</dd>
-          </div>
-        ))}
-      </dl>
-    </Panel>
-  );
-}
-
-function LotoPatternDangerTag() {
-  return (
-    <DangerTag tagNo="DT-1182" point="Suction block valve" pointTag="23-HV-9106" position="Closed" reason="Dry gas seal replacement, IC-2304" lockNo="L-0431" placedBy="Ingrid Haugen" placedAt="12 Mar 2026, 06:40" />
-  );
-}
-
-function LotoPatternTagPair() {
-  return (
-    <div className="flex flex-wrap items-start justify-center gap-4">
-      <DangerTag tagNo="DT-1186" point="Vent to flare" pointTag="23-HV-9120" position="Open" reason="Keeps the casing at 0 barg, IC-2304" lockNo="L-0435" placedBy="Ingrid Haugen" placedAt="12 Mar 2026, 06:52" instruction="Do not close" heading="Danger" className="w-52" />
-      <DangerTag tagNo="DT-1188" point="Lube oil pump breaker" pointTag="23-QB-9101" position="Racked out" reason="Prevents start while the seal is open" placedBy="Ingrid Haugen" placedAt="12 Mar 2026, 06:58" className="w-52" />
-    </div>
-  );
-}
-
-function LotoPatternEnergySources() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="Energy sources and how each is controlled" className="w-full min-w-208 border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Energy
-            </th>
-            <th scope="col" className={TH}>
-              Source and hazard
-            </th>
-            <th scope="col" className={TH}>
-              Control
-            </th>
-            <th scope="col" className={TH}>
-              How it is proven
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {ENERGY_SOURCES.map((row) => (
-            <tr key={row.type} className="border-t border-default">
-              <th scope="row" className={`${TD} text-left font-medium whitespace-nowrap text-base-foreground`}>
-                {ENERGY_LABEL[row.type]}
-              </th>
-              <td className={`${TD} text-base-foreground`}>
-                {row.source}
-                <span className="block text-xs text-muted-foreground">{row.hazard}</span>
-              </td>
-              <td className={`${TD} text-base-foreground`}>{row.control}</td>
-              <td className={`${TD} text-medium-foreground`}>{row.check}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function LotoPatternIsolationList() {
-  const ordered = applicationOrder(POINTS);
-  const counts = countIsolationStates(ordered.map((point) => ({ state: stateOf(MIXED, point.id) })));
-  return (
-    <Panel title="Isolation list" meta={`${counts.verified} of ${ordered.length} verified`}>
-      <ol aria-label="Isolation points in the order they are applied" className="flex flex-col gap-3">
-        {ordered.map((point) => (
-          <li key={point.id}>{rowFor(point, stateOf(MIXED, point.id))}</li>
-        ))}
-      </ol>
-    </Panel>
-  );
-}
-
-function LotoPatternBoundary() {
-  return (
-    <Card role="group" aria-label="Boundary drawing summary" className="w-full min-w-0 gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-base-foreground">Boundary summary</h3>
-        <span className="text-xs text-muted-foreground">
-          P&amp;ID <span className="font-mono">NK-23-PID-0102</span> rev C
-        </span>
-      </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <div className="col-span-2">
-          <Fact label="Inside the boundary">1st stage compressor 23-KA-9101, dry gas seal system and the recycle line to the suction side</Fact>
-        </div>
-        <Fact label="Boundary points">
-          <span className="tabular-nums">8 isolation points</span>
-        </Fact>
-        <Fact label="Isolation type">Double block with a spectacle blind and bleed to flare</Fact>
-        <Fact label="Drains and vents">23-HV-9120 to flare, kept open</Fact>
-        <Fact label="Neighbouring work">Interstage cooler 23-HA-9114 stays in service</Fact>
-      </dl>
-    </Card>
-  );
-}
-
-function LotoPatternSchematic() {
-  return (
-    <Card className="w-full min-w-0 gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-base-foreground">Isolation points on the schematic</h3>
-        <span className="font-mono text-xs text-muted-foreground">IC-2304</span>
-      </div>
-      <LotoPatternSchematicDrawing states={MIXED} />
-      <SchematicKey />
-    </Card>
-  );
-}
-
-function LotoPatternSchematicSelect() {
-  const [selectedId, setSelectedId] = useState('hv9112');
-  const [states, setStates] = useState<States>(MIXED);
-  const point = POINTS.find((candidate) => candidate.id === selectedId) ?? POINTS[0];
-  const state = stateOf(states, point.id);
-  const next: IsolationState | null = state === 'planned' ? 'applied' : state === 'applied' ? 'verified' : null;
-  return (
-    <Card className="w-full min-w-0 gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-base-foreground">Select a point on the schematic</h3>
-        <span className="text-xs text-muted-foreground">Arrow to a point, Enter to select</span>
-      </div>
-      <LotoPatternSchematicDrawing states={states} selectedId={selectedId} onSelect={setSelectedId} />
-      <div className="border-t border-default pt-3" role="status">
-        {rowFor(
-          point,
-          state,
-          next ? (
-            <Button size="sm" variant="secondary" onClick={() => setStates((current) => ({ ...current, [point.id]: next }))}>
-              {next === 'applied' ? 'Apply point' : 'Verify point'}
-            </Button>
-          ) : undefined
-        )}
-      </div>
-    </Card>
-  );
-}
-
-function LotoPatternLockBoard() {
-  return (
-    <Card className="w-full min-w-0">
-      <LockBoard boxId="LB-07" keysInside={8} people={CREW_PEOPLE} />
-    </Card>
-  );
-}
-
-function LotoPatternLockBoardLive() {
-  const [people, setPeople] = useState<readonly LockBoardPerson[]>(CREW_PEOPLE.map((person) => ({ ...person, lockOn: true, at: '07:15' })));
-  return (
-    <Card className="w-full min-w-0">
-      <LockBoard boxId="LB-07" keysInside={8} people={people} onToggle={(id) => setPeople((current) => current.map((person) => (person.id === id ? { ...person, lockOn: !person.lockOn, at: person.lockOn ? '16:30' : '07:15' } : person)))} />
-    </Card>
-  );
-}
-
-function LotoPatternGroupLockout() {
-  const [onSite, setOnSite] = useState<readonly string[]>(['tb', 'ak']);
-  const [offSite, setOffSite] = useState<readonly string[]>([]);
-  const allOn = CREW.every((person) => onSite.includes(person.id));
-  const allOff = CREW.every((person) => offSite.includes(person.id));
-  return (
-    <Panel title="Group lock-out" meta={<span className="font-mono">LB-07 · PTW-26-0426</span>}>
-      <table aria-label="Crew sign-on and sign-off" className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={`${TH} pl-0`}>
-              Crew member
-            </th>
-            <th scope="col" className={TH}>
-              Sign-on
-            </th>
-            <th scope="col" className={`${TH} pr-0`}>
-              Sign-off
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {CREW.map((person) => {
-            const on = onSite.includes(person.id);
-            const off = offSite.includes(person.id);
-            return (
-              <tr key={person.id} className="border-t border-default">
-                <th scope="row" className={`${TD} pl-0 text-left font-normal text-base-foreground`}>
-                  {person.name}
-                  <span className="block text-xs text-muted-foreground">
-                    Lock <span className="font-mono">{person.lock}</span>
-                  </span>
-                </th>
-                <td className={TD}>
-                  {on ? (
-                    <StatusIndicator size="sm" tone="success" label="On site" />
-                  ) : (
-                    <Button size="sm" variant="secondary" onClick={() => setOnSite((current) => [...current, person.id])}>
-                      Sign on {person.name.split(' ')[0]}
-                    </Button>
-                  )}
-                </td>
-                <td className={`${TD} pr-0`}>
-                  {off ? (
-                    <StatusIndicator size="sm" tone="neutral" shape="square" label="Signed off" />
-                  ) : (
-                    <Button size="sm" variant="ghost" disabled={!on} onClick={() => setOffSite((current) => [...current, person.id])}>
-                      Sign off {person.name.split(' ')[0]}
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <p role="status" className="text-xs text-muted-foreground">
-        {allOff ? 'Everyone has signed off. The lock box can be opened.' : allOn ? 'All crew members are signed on. Work can start.' : `${CREW.length - onSite.length} crew ${CREW.length - onSite.length === 1 ? 'member has' : 'members have'} not signed on. They may not enter the work site.`}
-      </p>
-    </Panel>
-  );
-}
-
-const TRY_ITEMS = [
-  { id: 'start', label: 'Local start of the lube oil pump', description: 'Attempted at the starter. The pump does not start.' },
-  { id: 'gauge', label: 'Pressure gauge 23-PI-9107 reads zero', description: 'Read at the gauge, not on the screen.' },
-  { id: 'vent', label: 'Vent 23-HV-9120 open, no flow at the flare line', description: 'Checked by sound and the flow indicator.' },
-  { id: 'gas', label: 'Gas test at the seal housing', description: 'Reads 0 % LEL on the portable detector.' },
+const LOCKOUT_TAGOUT_CREW: LockBoardPerson[] = [
+  { id: 'tb', name: 'Tomás Barros', role: 'Mechanical technician', lock: 'P-21', tone: 'blue', on: true },
+  { id: 'jn', name: 'Jonas Nyberg', role: 'Instrument technician', lock: 'P-34', tone: 'purple', on: true },
+  { id: 'ak', name: 'Aisha Khan', role: 'Rotating equipment engineer', lock: 'P-08', tone: 'teal', on: false },
+  { id: 'ms', name: 'Magnus Solberg', role: 'Maintenance planner', lock: 'P-15', tone: 'amber', on: false },
 ];
 
-function LotoPatternTryStep() {
-  const [done, setDone] = useState<readonly string[]>(['start', 'gauge']);
-  const remaining = TRY_ITEMS.length - done.length;
-  return (
-    <Panel title="Verification: try step" meta={`${done.length} of ${TRY_ITEMS.length} proven`}>
-      <CheckboxGroup aria-label="Prove the equipment is dead" className="gap-3">
-        {TRY_ITEMS.map((item) => (
-          <CheckboxItem key={item.id}>
-            <CheckboxItemControl checked={done.includes(item.id)} onCheckedChange={(checked) => setDone((current) => (checked ? [...current, item.id] : current.filter((id) => id !== item.id)))} />
-            <CheckboxItemLabel>{item.label}</CheckboxItemLabel>
-            <CheckboxItemDescription>{item.description}</CheckboxItemDescription>
-          </CheckboxItem>
-        ))}
-      </CheckboxGroup>
-      <span role="status" className="border-t border-default pt-3 text-xs text-muted-foreground">
-        {remaining === 0 ? 'The equipment is proven dead.' : `${remaining} ${remaining === 1 ? 'test' : 'tests'} still to do before the equipment can be called dead.`}
+const LOCKOUT_TAGOUT_TRY_STEPS = [
+  'Area clear, everyone told the try step is starting',
+  'Local start button pressed: motor does not start',
+  'Control room start command given: no response',
+  'Casing pressure reads zero on the local gauge',
+  'Start button returned to off',
+];
+
+type LockoutTagoutLongTerm = { id: string; equipment: string; tag: string; reason: string; days: number; owner: string; review: string; overdue: boolean };
+
+const LOCKOUT_TAGOUT_REGISTER: LockoutTagoutLongTerm[] = [
+  { id: 'IC-2104', equipment: 'Test separator', tag: '20-VA-1002', reason: 'Awaiting vessel inspection', days: 142, owner: 'Liv Wold', review: '1 Mar', overdue: true },
+  { id: 'IC-2188', equipment: 'Cooling water pump', tag: '40-PA-4001', reason: 'Bearing replacement, parts on order', days: 61, owner: 'Magnus Solberg', review: '20 Mar', overdue: false },
+  { id: 'IC-2240', equipment: 'Export pump B', tag: '27-PA-2001B', reason: 'Seal leak, awaiting shutdown', days: 23, owner: 'Aisha Khan', review: '2 Apr', overdue: false },
+  { id: 'IC-2291', equipment: 'Recompressor', tag: '23-KA-9103', reason: 'Drive-end bearing inspection', days: 0, owner: 'Tomás Barros', review: '19 Mar', overdue: false },
+];
+
+const LOCKOUT_TAGOUT_REGISTER_COLUMNS: DataTableColumn<LockoutTagoutLongTerm>[] = [
+  {
+    id: 'equipment',
+    header: 'Equipment',
+    cell: (row) => (
+      <span className="flex flex-col">
+        <span className="font-medium">{row.equipment}</span>
+        <TagId>{row.tag}</TagId>
       </span>
-    </Panel>
+    ),
+  },
+  { id: 'certificate', header: 'Certificate', nowrap: true, cell: (row) => row.id },
+  { id: 'reason', header: 'Reason', muted: true, cell: (row) => row.reason },
+  { id: 'days', header: 'In place', numeric: true, nowrap: true, cell: (row) => (row.days === 0 ? 'Today' : `${row.days} days`) },
+  { id: 'owner', header: 'Owner', muted: true, nowrap: true, cell: (row) => row.owner },
+  { id: 'review', header: 'Review', nowrap: true, cell: (row) => <StatusPill tone={row.overdue ? 'critical' : 'neutral'}>{row.overdue ? `Overdue since ${row.review}` : `Due ${row.review}`}</StatusPill> },
+];
+
+const LOCKOUT_TAGOUT_POINT_COLUMNS: DataTableColumn<IsolationPoint>[] = [
+  { id: 'step', header: 'Step', numeric: true, width: 'w-14', cell: (point) => point.step },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (point) => <TagId>{point.tag}</TagId> },
+  { id: 'name', header: 'Point', cell: (point) => point.name },
+  { id: 'energy', header: 'Energy', muted: true, nowrap: true, cell: (point) => ENERGY_WORD[point.energy] },
+  { id: 'method', header: 'Method', muted: true, cell: (point) => point.method },
+  { id: 'lock', header: 'Lock', nowrap: true, cell: (point) => point.lock ?? '—' },
+  { id: 'state', header: 'State', nowrap: true, cell: (point) => <StatusPill tone={STATE_TONE[point.state]}>{STATE_WORD[point.state]}</StatusPill> },
+];
+
+/** One sheet of the page: a look scope with its canvas. Without a look it follows the app's look. */
+function LockoutTagoutSheet({ look, children }: { look?: LookId; children: ReactNode }) {
+  const canvas = <Canvas className="h-full">{children}</Canvas>;
+  return look ? (
+    <LookScope look={look} className="h-full w-full">
+      {canvas}
+    </LookScope>
+  ) : (
+    <div className="h-full w-full">{canvas}</div>
   );
 }
 
-function LotoPatternDeisolation() {
-  const verified: IsolationState = 'verified';
-  const order = deIsolationOrder(POINTS.map((point) => ({ ...point, state: verified })));
+function LockoutTagoutPointList() {
+  const [points, setPoints] = useState(LOCKOUT_TAGOUT_POINTS);
+  const progress = boundaryProgress(points);
+  const advance = (id: string) =>
+    setPoints(points.map((point) => (point.id === id ? { ...point, state: advanceState(point.state), lock: point.lock ?? `R-11${point.step + 2}` } : point)));
+  const current = points.find((point) => point.state !== 'verified');
   return (
-    <Panel title="De-isolation sequence" meta="Reverse of application">
-      <ol aria-label="Isolation points in the order they are removed" className="flex flex-col gap-3">
-        {order.map((point) => (
-          <li key={point.id}>{rowFor(point, 'verified', undefined, point.removeStep)}</li>
-        ))}
-      </ol>
-    </Panel>
-  );
-}
-
-function LotoPatternDeisolationLive() {
-  const [removed, setRemoved] = useState<readonly string[]>(['qb9101', 'hv9131']);
-  const order = deIsolationOrder(POINTS.map((point) => ({ ...point, state: removed.includes(point.id) ? REMOVED : VERIFIED })));
-  const next = order[0];
-  return (
-    <Panel title="Remove the isolations" meta={`${removed.length} of ${POINTS.length} removed`}>
-      {next ? (
-        <>
-          <div className="flex flex-col gap-3">
-            {rowFor(
-              next,
-              'verified',
-              <Button size="sm" onClick={() => setRemoved((current) => [...current, next.id])}>
-                Remove point
-              </Button>,
-              next.removeStep
-            )}
-          </div>
-          <p role="status" className="border-t border-default pt-3 text-xs text-muted-foreground">
-            {order.length - 1 === 0 ? 'This is the last point.' : `${order.length - 1} more after this one, in reverse order. The next point is only offered when this one is removed.`}
-          </p>
-        </>
-      ) : (
-        <p role="status" className="text-sm text-base-foreground">
-          All isolations are removed. Close the certificate.
-        </p>
-      )}
-      <div className="flex justify-end">
-        <Button size="sm" variant="ghost" disabled={removed.length === 0} onClick={() => setRemoved((current) => current.slice(0, -1))}>
-          <IconArrowBackUp aria-hidden="true" />
-          Undo last removal
-        </Button>
-      </div>
-    </Panel>
-  );
-}
-
-function LotoPatternConflicts() {
-  return (
-    <Panel title="Conflicts with other permits">
-      <div className="w-full">
-        <Alert variant="warning">
-          <AlertTitle>2 open permits touch this isolation</AlertTitle>
-          <AlertDescription>Resolve both before the isolation is released for work.</AlertDescription>
-        </Alert>
-      </div>
-      <ul className="flex flex-col gap-3">
-        <li className="flex flex-col gap-0.5">
-          <span className="text-sm text-base-foreground">
-            <span className="font-mono text-xs">PTW-26-0415</span> Vibration survey, 1st stage compressor
-          </span>
-          <span className="text-xs text-muted-foreground">Work at height on the same machine, 13 Mar. Survey needs the compressor running, so it cannot overlap with IC-2304.</span>
-        </li>
-        <li className="flex flex-col gap-0.5">
-          <span className="text-sm text-base-foreground">
-            <span className="font-mono text-xs">PTW-26-0418</span> Weld repair on interstage cooler drain
-          </span>
-          <span className="text-xs text-muted-foreground">Hot work 15 m from vent 23-HV-9120. Gas from the vent must not reach the work site.</span>
-        </li>
-      </ul>
-    </Panel>
-  );
-}
-
-function LotoPatternLongTerm() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="Long-term isolations" className="w-full min-w-208 border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Register no.
-            </th>
-            <th scope="col" className={TH}>
-              Isolation
-            </th>
-            <th scope="col" className={TH}>
-              In place since
-            </th>
-            <th scope="col" className={TH}>
-              Reason
-            </th>
-            <th scope="col" className={TH}>
-              Owner
-            </th>
-            <th scope="col" className={TH}>
-              Review
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {LONG_TERM.map((row) => (
-            <tr key={row.id} className="border-t border-default">
-              <th scope="row" className={`${TD} text-left font-mono text-xs font-normal text-base-foreground`}>
-                {row.id}
-              </th>
-              <td className={`${TD} text-base-foreground`}>
-                {row.what}
-                <span className="block font-mono text-xs text-muted-foreground">{row.point}</span>
-              </td>
-              <td className={`${TD} whitespace-nowrap tabular-nums text-medium-foreground`}>{row.since}</td>
-              <td className={`${TD} text-medium-foreground`}>{row.reason}</td>
-              <td className={`${TD} text-medium-foreground`}>{row.owner}</td>
-              <td className={TD}>{row.overdue ? <StatusIndicator size="sm" tone="warning" shape="square" label={row.review} /> : <span className="text-xs text-medium-foreground tabular-nums">{row.review}</span>}</td>
-            </tr>
+    <LockoutTagoutSheet>
+      <Panel
+        title="Isolation list"
+        subtitle="Recompressor 23-KA-9103 · certificate IC-2291 · in step order"
+        icon={<IconLock />}
+        padding="tight"
+        actions={<StatusPill tone={progress.complete ? 'success' : 'warning'}>{progress.verified} of {progress.total} verified</StatusPill>}
+        footer={<span className="text-sm text-(--kit-text-2)">{progress.complete ? 'Boundary complete. The try step can start.' : 'Work the points in order. A point counts only once a second person has verified it.'}</span>}
+      >
+        <ol aria-label="Isolation points in step order" className="flex flex-col">
+          {points.map((point) => (
+            <IsolationPointRow key={point.id} point={point} icon={LOCKOUT_TAGOUT_ENERGY_ICON[point.energy]} current={point.id === current?.id} onAdvance={advance} />
           ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function LotoPatternHandover() {
-  const [seen, setSeen] = useState<readonly string[]>(['ic2304']);
-  const items = [
-    { id: 'ic2304', label: 'IC-2304 · 1st stage compressor', detail: '8 points verified. Work paused at 15:30 and the permit suspended.' },
-    { id: 'lt029', label: 'LT-029 · cooling water spare cooler', detail: 'Long-term isolation, review overdue 21 days.' },
-    { id: 'ic2301', label: 'IC-2301 · cooling water pump 40-PA-4001', detail: '3 points applied, 1 not yet verified.' },
-  ];
-  const all = seen.length === items.length;
-  return (
-    <Panel title="Isolation handover" meta="Day shift to night shift">
-      <p className="text-xs text-muted-foreground">Liv Wold hands over to Ingrid Haugen. Confirm each isolation was walked through.</p>
-      <CheckboxGroup aria-label="Isolations handed over" className="gap-3">
-        {items.map((item) => (
-          <CheckboxItem key={item.id}>
-            <CheckboxItemControl checked={seen.includes(item.id)} onCheckedChange={(checked) => setSeen((current) => (checked ? [...current, item.id] : current.filter((id) => id !== item.id)))} />
-            <CheckboxItemLabel>{item.label}</CheckboxItemLabel>
-            <CheckboxItemDescription>{item.detail}</CheckboxItemDescription>
-          </CheckboxItem>
-        ))}
-      </CheckboxGroup>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-3">
-        <span role="status" className="text-xs text-muted-foreground">{all ? 'All isolations acknowledged.' : `${items.length - seen.length} not yet acknowledged.`}</span>
-        <Button size="sm" disabled={!all}>
-          Accept handover
-        </Button>
-      </div>
-    </Panel>
-  );
-}
-
-function LotoPatternCertificate() {
-  const [signed, setSigned] = useState<readonly string[]>(['authority', 'isolator']);
-  const signers: SignOffSigner[] = [
-    { id: 'authority', role: 'Isolation authority', name: 'Liv Wold', state: signed.includes('authority') ? 'signed' : 'pending', at: '12 Mar, 06:30' },
-    { id: 'isolator', role: 'Isolating technician', name: 'Ingrid Haugen', state: signed.includes('isolator') ? 'signed' : 'pending', at: '12 Mar, 07:02' },
-    { id: 'verifier', role: 'Verifier, second person', name: 'Magnus Solberg', state: signed.includes('verifier') ? 'signed' : 'pending', at: '12 Mar, 07:20' },
-    { id: 'holder', role: 'Permit holder', name: 'Tomás Barros', state: signed.includes('holder') ? 'signed' : 'pending', at: '12 Mar, 07:31' },
-  ];
-  return (
-    <Card role="group" aria-label="Isolation certificate IC-2304" className="w-full min-w-0 gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-muted-foreground">
-            Isolation certificate <span className="font-mono text-base-foreground">IC-2304</span>
-          </span>
-          <h3 className="text-base font-semibold text-base-foreground">Replace dry gas seal, 1st stage compressor</h3>
-        </div>
-        <StatusIndicator variant="badge" tone={signers.every((signer) => signer.state === 'signed') ? 'success' : 'warning'} label={signers.every((signer) => signer.state === 'signed') ? 'Signed' : 'Not fully signed'} />
-      </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <Fact label="Equipment">
-          <span className="font-mono text-xs">23-KA-9101</span> 1st stage compressor
-        </Fact>
-        <Fact label="Permit">
-          <span className="font-mono text-xs">PTW-26-0426</span> Cold work
-        </Fact>
-        <Fact label="Points">
-          <span className="tabular-nums">8 points, 8 locks, 8 tags</span>
-        </Fact>
-        <Fact label="Valid">
-          <span className="tabular-nums">12 Mar, 07:00 to 14 Mar, 19:00</span>
-        </Fact>
-      </dl>
-      <SignOffBlock
-        label="Certificate signatures"
-        signers={signers}
-        currentSignerId={signers.find((signer) => signer.state === 'pending')?.id}
-        onSign={(id) => setSigned((current) => [...current, id])}
-        signLabel="Sign certificate"
-      />
-    </Card>
-  );
-}
-
-function ReleasePanel({ states, tried, onTried }: { states: States; tried: boolean; onTried?: (done: boolean) => void }) {
-  const gate = releaseGate(
-    POINTS.map((point) => ({ id: point.id, tag: point.tag, state: stateOf(states, point.id) })),
-    [{ id: 'try', label: 'Try step', done: tried }]
-  );
-  return (
-    <div className="flex flex-col gap-3">
-      {onTried ? (
-        <CheckboxGroup aria-label="Release checks">
-          <CheckboxItem>
-            <CheckboxItemControl checked={tried} onCheckedChange={onTried} />
-            <CheckboxItemLabel>Try step done at the equipment</CheckboxItemLabel>
-            <CheckboxItemDescription>Start attempted, gauge at zero, no gas.</CheckboxItemDescription>
-          </CheckboxItem>
-        </CheckboxGroup>
-      ) : null}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-t border-default pt-3">
-        <div role="status" className="flex max-w-prose flex-col gap-1">
-          <span className="text-sm font-medium text-base-foreground">{gate.ready ? 'Ready to release' : 'Release for work is blocked'}</span>
-          <span className="text-xs text-medium-foreground">{gate.summary}</span>
-          {gate.blockers.length > 0 ? (
-            <ul aria-label="Reasons release is blocked" className="flex list-disc flex-col gap-0.5 pl-4 text-xs text-muted-foreground">
-              {gate.blockers.map((blocker) => (
-                <li key={blocker.id}>{blocker.reason}</li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-        <Button disabled={!gate.ready}>Release for work</Button>
-      </div>
-    </div>
-  );
-}
-
-function LotoPatternReleaseGate() {
-  const [tried, setTried] = useState(false);
-  return (
-    <Panel title="Completeness gate" meta={<span className="font-mono">IC-2304</span>}>
-      <ReleasePanel states={MIXED} tried={tried} onTried={setTried} />
-    </Panel>
-  );
-}
-
-function LotoPatternPlanner() {
-  const [states, setStates] = useState<States>(ALL_PLANNED);
-  const [history, setHistory] = useState<readonly States[]>([]);
-  const [tried, setTried] = useState(false);
-  const [message, setMessage] = useState('');
-  const ordered = applicationOrder(POINTS);
-  const nextPlanned = ordered.find((point) => stateOf(states, point.id) === 'planned');
-  const counts = countIsolationStates(ordered.map((point) => ({ state: stateOf(states, point.id) })));
-  const change = (point: Point, state: IsolationState, text: string) => {
-    setHistory((current) => [...current, states]);
-    setStates((current) => ({ ...current, [point.id]: state }));
-    setMessage(text);
-  };
-  const undo = () => {
-    const previous = history[history.length - 1];
-    if (!previous) return;
-    setStates(previous);
-    setHistory((current) => current.slice(0, -1));
-    setMessage('Undid the last action.');
-  };
-  return (
-    <Card className="w-full min-w-0 gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-sm font-medium text-base-foreground">Isolation plan IC-2304</h3>
-          <span className="text-xs text-muted-foreground">Replace dry gas seal on 23-KA-9101 · points go on in step order</span>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="ghost" disabled={history.length === 0} onClick={undo}>
-            <IconArrowBackUp aria-hidden="true" />
-            Undo
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={history.length === 0}
-            onClick={() => {
-              setStates(ALL_PLANNED);
-              setHistory([]);
-              setTried(false);
-              setMessage('Plan reset.');
-            }}
-          >
-            Reset plan
-          </Button>
-        </div>
-      </div>
-      <LinearGauge label="Isolation points verified" value={counts.verified} max={POINTS.length} size="sm" showHeader={false} />
-      <span className="text-xs text-muted-foreground tabular-nums">
-        {counts.verified} verified · {counts.applied} applied · {counts.planned} planned
-      </span>
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-        <ol aria-label="Isolation points in order of application" className="flex flex-col gap-4">
-          {ordered.map((point) => {
-            const state = stateOf(states, point.id);
-            let actions: ReactNode;
-            if (state === 'planned' && nextPlanned?.id === point.id) {
-              actions = (
-                <Button size="sm" variant="secondary" onClick={() => change(point, 'applied', `Applied ${point.tag}, step ${point.step}. Awaiting second person.`)}>
-                  Apply point
-                </Button>
-              );
-            } else if (state === 'planned') {
-              actions = <span className="text-xs text-muted-foreground">After step {point.step - 1}</span>;
-            } else if (state === 'applied') {
-              actions = (
-                <Button size="sm" onClick={() => change(point, 'verified', `Verified ${point.tag}, step ${point.step}.`)}>
-                  Verify point
-                </Button>
-              );
-            }
-            return <li key={point.id}>{rowFor(point, state, actions)}</li>;
-          })}
         </ol>
-        <div className="flex flex-col gap-4">
-          <LotoPatternSchematicDrawing states={states} />
-          <p aria-live="polite" className="text-xs text-muted-foreground">
-            {message || 'Apply the first point to start.'}
-          </p>
-        </div>
-      </div>
-      <ReleasePanel states={states} tried={tried} onTried={setTried} />
-    </Card>
+      </Panel>
+    </LockoutTagoutSheet>
   );
 }
 
-function LotoPatternOverview() {
-  const counts = countIsolationStates(POINTS.map((point) => ({ state: stateOf(MIXED, point.id) })));
-  const people = CREW_PEOPLE;
+function LockoutTagoutStates() {
   return (
-    <div className="flex w-full flex-col gap-4">
-      <Card className="min-w-0 gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs text-muted-foreground">
-              Isolation certificate <span className="font-mono text-base-foreground">IC-2304</span>
-            </span>
-            <h3 className="text-base font-semibold text-base-foreground">Replace dry gas seal, 1st stage compressor</h3>
-          </div>
-          <StatusIndicator variant="badge" tone="warning" label="Not complete" />
+    <LockoutTagoutSheet>
+      <Grid columns={5}>
+        {ISOLATION_STATES.map((state, index) => (
+          <Panel key={state} title={STATE_WORD[state]} subtitle={`Stage ${index + 1} of 5`} tone={STATE_TONE[state]}>
+            <div className="flex flex-col gap-3">
+              <IconChip tone={STATE_TONE[state]} size="lg">
+                {state === 'planned' ? <IconFileCertificate /> : state === 'isolated' ? <IconCircleX /> : state === 'locked' ? <IconLock /> : state === 'verified' ? <IconShieldCheck /> : <IconLockOpen />}
+              </IconChip>
+              <p className="text-sm text-(--kit-text-2)">{LOCKOUT_TAGOUT_STATE_TEXT[state]}</p>
+            </div>
+          </Panel>
+        ))}
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutTags() {
+  return (
+    <LockoutTagoutSheet>
+      <Panel title="Danger tags" subtitle="One on every locked point, readable from arm's length">
+        <div className="flex items-start justify-center gap-4">
+          <DangerTag className="max-w-56" warning="Do not operate" tag="23-XV-9130" point="Suction valve" position="Closed" lock="R-114" by="Tomás Barros" date="12 Mar, 09:40" certificate="IC-2291" />
+          <DangerTag className="max-w-56" warning="Do not close" tag="82-EN-9103" point="Motor breaker" position="Open, racked out" lock="R-113" by="Jonas Nyberg" date="12 Mar, 09:32" certificate="IC-2291" />
         </div>
-        <LinearGauge label="Isolation points verified" value={counts.verified} max={POINTS.length} size="sm" showHeader={false} />
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {counts.verified} of {POINTS.length} points verified · {counts.applied} applied · {counts.planned} planned
-        </span>
-        <LotoPatternSchematicDrawing states={MIXED} />
-        <SchematicKey />
-      </Card>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="min-w-0 gap-4">
-          <ol aria-label="Isolation points" className="flex flex-col gap-3">
-            {applicationOrder(POINTS).slice(0, 5).map((point) => (
-              <li key={point.id}>{rowFor(point, stateOf(MIXED, point.id))}</li>
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutEnergy() {
+  return (
+    <LockoutTagoutSheet>
+      <Panel title="Energy sources" subtitle="What has to be held back or let out before anyone opens the casing" icon={<IconAlertTriangle />}>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col">
+            <ListRow
+              leading={
+                <IconChip tone="amber" size="sm">
+                  <IconBolt />
+                </IconChip>
+              }
+              title="Electrical, 6.6 kV motor"
+              meta="Breaker open, racked out and locked"
+              trailing={<StatusPill tone="success">Zero energy</StatusPill>}
+            />
+            <ListRow
+              leading={
+                <IconChip tone="blue" size="sm">
+                  <IconGauge />
+                </IconChip>
+              }
+              title="Process gas in the casing"
+              meta="Vent open to flare, bleeding down"
+              trailing={<StatusPill tone="warning">Bleeding</StatusPill>}
+            />
+            <ListRow
+              leading={
+                <IconChip tone="teal" size="sm">
+                  <IconDroplet />
+                </IconChip>
+              }
+              title="Lube oil header"
+              meta="Supply valve still open"
+              trailing={<StatusPill tone="critical">Live</StatusPill>}
+            />
+            <ListRow
+              leading={
+                <IconChip tone="purple" size="sm">
+                  <IconSettings />
+                </IconChip>
+              }
+              title="Rotor run-down"
+              meta="Shaft at standstill since 13:52"
+              trailing={<StatusPill tone="success">Zero energy</StatusPill>}
+            />
+          </div>
+          <Meter label="Casing pressure" value={2.4} max={20} unit="barg" decimals={1} tone="warning" target={{ value: 0.2, label: 'Safe below' }} />
+        </div>
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutSchematic() {
+  const [selected, setSelected] = useState('p4');
+  const point = LOCKOUT_TAGOUT_POINTS.find((item) => item.id === selected) ?? LOCKOUT_TAGOUT_POINTS[0];
+  return (
+    <LockoutTagoutSheet>
+      <Grid>
+        <Panel className="col-span-8" title="Isolation boundary" subtitle="Solid: process · dashed: electrical · dotted: utilities · select a point">
+          <IsolationSchematic label="Isolation boundary of the recompressor" nodes={lockoutTagoutNodes(LOCKOUT_TAGOUT_POINTS)} links={LOCKOUT_TAGOUT_LINKS} selected={selected} onSelect={setSelected} height={360} />
+        </Panel>
+        <Panel
+          className="col-span-4"
+          title={point.name}
+          subtitle={`Point ${point.step} of ${LOCKOUT_TAGOUT_POINTS.length}`}
+          tone={STATE_TONE[point.state]}
+          actions={<StatusPill tone={STATE_TONE[point.state]}>{STATE_WORD[point.state]}</StatusPill>}
+          footer={<span className="text-sm text-(--kit-text-2)">{LOCKOUT_TAGOUT_STATE_TEXT[point.state]}</span>}
+        >
+          <dl className="flex flex-col">
+            <div className="flex items-baseline justify-between gap-3 border-b border-(--kit-rule) py-2.5">
+              <dt className="text-sm text-(--kit-text-2)">Tag</dt>
+              <dd className="text-sm font-medium">
+                <TagId>{point.tag}</TagId>
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 border-b border-(--kit-rule) py-2.5">
+              <dt className="text-sm text-(--kit-text-2)">Energy</dt>
+              <dd className="text-sm font-medium">{ENERGY_WORD[point.energy]}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 border-b border-(--kit-rule) py-2.5">
+              <dt className="text-sm text-(--kit-text-2)">Method</dt>
+              <dd className="text-right text-sm font-medium">{point.method}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 py-2.5">
+              <dt className="text-sm text-(--kit-text-2)">Lock</dt>
+              <dd className="text-sm font-medium tabular-nums">{point.lock ?? 'Not applied'}</dd>
+            </div>
+          </dl>
+          <div className="mt-4 flex items-start gap-3 rounded-(--kit-radius-sm) bg-(--kit-well) p-3">
+            <IconChip tone={point.lock ? 'critical' : 'neutral'} size="sm">
+              {point.lock ? <IconLock /> : <IconLockOpen />}
+            </IconChip>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{point.lock ? 'Danger tag attached' : 'No tag yet'}</p>
+              <p className="text-sm text-(--kit-text-2)">{point.lock ? `Printed for lock ${point.lock}. Reads "Do not operate".` : 'The tag is printed when the lock is applied.'}</p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <Button size="sm" variant="secondary" disabled={!point.lock} title={point.lock ? undefined : 'There is no lock on this point yet'}>
+              Print tag again
+            </Button>
+          </div>
+        </Panel>
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutLockBox() {
+  const [crew, setCrew] = useState(LOCKOUT_TAGOUT_CREW);
+  return (
+    <LockoutTagoutSheet>
+      <Panel
+        title="Lock box LB-07"
+        subtitle="Keys to the six isolation locks are inside · select a hook to sign on or off"
+        icon={<IconUsers />}
+        footer={<span className="text-sm text-(--kit-text-2)">The box opens only when every personal lock is off.</span>}
+      >
+        <LockBoard label="Lock box LB-07" people={crew} columns={2} onToggle={(id, on) => setCrew(crew.map((person) => (person.id === id ? { ...person, on } : person)))} />
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutHandover() {
+  const [accepted, setAccepted] = useState(false);
+  return (
+    <LockoutTagoutSheet>
+      <Panel
+        title="Isolation handover"
+        subtitle="Day shift to night shift · 19:00"
+        actions={<StatusPill tone={accepted ? 'success' : 'warning'}>{accepted ? 'Accepted' : 'Awaiting night shift'}</StatusPill>}
+        footer={
+          <div className="flex w-full items-center justify-between gap-3">
+            <span className="text-sm text-(--kit-text-2)">{accepted ? 'Liv Wold now holds certificate IC-2291.' : 'The certificate stays with the day shift until it is accepted.'}</span>
+            <Button size="sm" disabled={accepted} onClick={() => setAccepted(true)}>
+              Accept isolation
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div data-tone="success" className="rounded-(--kit-radius-sm) border border-(--kit-rule) p-3">
+              <p className="text-xs text-(--kit-text-2)">Handing over</p>
+              <p className="text-base font-semibold">Ingrid Haugen</p>
+              <p className="text-sm font-medium text-(--t-ink)">Signed 18:52</p>
+            </div>
+            <div data-tone={accepted ? 'success' : 'warning'} className="rounded-(--kit-radius-sm) border border-(--kit-rule) p-3">
+              <p className="text-xs text-(--kit-text-2)">Taking over</p>
+              <p className="text-base font-semibold">Liv Wold</p>
+              <p className="text-sm font-medium text-(--t-ink)">{accepted ? 'Signed 19:04' : 'Not signed'}</p>
+            </div>
+          </div>
+          <StatGroup joined columns={3} label="State of the isolation at handover">
+            <Stat variant="plain" size="sm" label="Points verified" value="6 of 6" tone="success" />
+            <Stat variant="plain" size="sm" label="Personal locks on" value={2} />
+            <Stat variant="plain" size="sm" label="Work status" value="Paused" />
+          </StatGroup>
+        </div>
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutTryStep() {
+  const [done, setDone] = useState<number[]>([0, 1]);
+  const passed = done.length === LOCKOUT_TAGOUT_TRY_STEPS.length;
+  return (
+    <LockoutTagoutSheet>
+      <Panel
+        title="Try step"
+        subtitle="Prove the machine cannot start before anyone touches it"
+        icon={<IconShieldCheck />}
+        actions={<StatusPill tone={passed ? 'success' : 'info'}>{passed ? 'Passed' : `${done.length} of ${LOCKOUT_TAGOUT_TRY_STEPS.length}`}</StatusPill>}
+        footer={<span className="text-sm text-(--kit-text-2)">{passed ? 'Try step passed at 10:12, witnessed by Liv Wold.' : 'If the machine responds at any step, stop and re-check the boundary.'}</span>}
+      >
+        <div className="flex flex-col gap-3">
+          {LOCKOUT_TAGOUT_TRY_STEPS.map((step, index) => (
+            <CheckboxItem key={step}>
+              <CheckboxItemControl checked={done.includes(index)} onCheckedChange={(checked) => setDone(checked === true ? [...done, index] : done.filter((item) => item !== index))} />
+              <CheckboxItemLabel>{step}</CheckboxItemLabel>
+            </CheckboxItem>
+          ))}
+        </div>
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutGate() {
+  const [crewLocks, setCrewLocks] = useState(2);
+  const conditions = workGate(LOCKOUT_TAGOUT_VERIFIED, true, 3, crewLocks);
+  const open = conditions.every((condition) => condition.met);
+  return (
+    <LockoutTagoutSheet>
+      <Panel
+        title="Ready to start work"
+        subtitle="All three must hold"
+        tone={open ? 'success' : 'warning'}
+        actions={<StatusPill tone={open ? 'success' : 'warning'} icon={open ? <IconCircleCheck /> : <IconAlertTriangle />}>{open ? 'Safe to start' : 'Not yet'}</StatusPill>}
+        footer={
+          <div className="flex w-full items-center justify-between gap-3">
+            <Button size="sm" variant="secondary" onClick={() => setCrewLocks(crewLocks === 3 ? 2 : 3)}>
+              {crewLocks === 3 ? 'Take one lock off' : 'Put the last lock on'}
+            </Button>
+            <Button size="sm" disabled={!open} title={open ? undefined : 'One worker has no lock on the box'}>
+              Start work
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col">
+          {conditions.map((condition) => (
+            <ListRow
+              key={condition.id}
+              tone={condition.met ? 'success' : 'critical'}
+              leading={
+                <IconChip tone={condition.met ? 'success' : 'critical'} size="sm">
+                  {condition.met ? <IconCircleCheck /> : <IconCircleX />}
+                </IconChip>
+              }
+              title={condition.text}
+              trailing={<StatusPill tone={condition.met ? 'success' : 'critical'}>{condition.met ? 'Met' : 'Missing'}</StatusPill>}
+            />
+          ))}
+        </div>
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutRemoval() {
+  const [points, setPoints] = useState<IsolationPoint[]>(LOCKOUT_TAGOUT_VERIFIED.map((point) => (point.step === 6 ? { ...point, state: 'removed' } : point)));
+  const ordered = removalOrder(points);
+  const next = ordered.find((point) => point.state !== 'removed');
+  const removed = points.filter((point) => point.state === 'removed').length;
+  return (
+    <LockoutTagoutSheet>
+      <Panel
+        title="Remove the isolations"
+        subtitle="Reverse order: the last point locked comes off first"
+        icon={<IconLockOpen />}
+        padding="tight"
+        actions={<StatusPill tone={removed === points.length ? 'success' : 'info'}>{removed} of {points.length} removed</StatusPill>}
+        footer={<span className="text-sm text-(--kit-text-2)">{next ? `Next: ${next.name}, lock ${next.lock ?? ''}. Only the next point can be released.` : 'All locks are back in the box. The certificate can be closed.'}</span>}
+      >
+        <ol aria-label="Isolation points in removal order" className="flex flex-col">
+          {ordered.map((point) => (
+            <IsolationPointRow
+              key={point.id}
+              point={point}
+              icon={LOCKOUT_TAGOUT_ENERGY_ICON[point.energy]}
+              current={point.id === next?.id}
+              action={
+                point.state === 'removed' ? undefined : (
+                  <Button size="sm" variant="secondary" disabled={point.id !== next?.id} onClick={() => setPoints(points.map((item) => (item.id === point.id ? { ...item, state: 'removed' } : item)))}>
+                    Remove lock
+                  </Button>
+                )
+              }
+            />
+          ))}
+        </ol>
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutRegister() {
+  return (
+    <LockoutTagoutSheet>
+      <Panel title="Long-term isolations" subtitle="In place for more than one shift · reviewed every 30 days" icon={<IconFileCertificate />} padding="none" actions={<StatusPill tone="critical">1 review overdue</StatusPill>}>
+        <DataTable label="Long-term isolations" flush columns={LOCKOUT_TAGOUT_REGISTER_COLUMNS} rows={LOCKOUT_TAGOUT_REGISTER} rowKey={(row) => row.id} rowTone={(row) => (row.overdue ? 'critical' : undefined)} />
+      </Panel>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutConsole() {
+  const progress = boundaryProgress(LOCKOUT_TAGOUT_POINTS);
+  return (
+    <LockoutTagoutSheet look="console">
+      <Grid>
+        <StatGroup className="col-span-12" columns={4} label="Isolation IC-2291">
+          <Stat variant="plain" label="Certificate" value="IC-2291" target="Recompressor 23-KA-9103" />
+          <Stat variant="plain" label="Locked" value={progress.locked} unit={`of ${progress.total}`} tone="info" target="3 points still open" />
+          <Stat variant="plain" label="Verified" value={progress.verified} unit={`of ${progress.total}`} tone="warning" target="Boundary not complete" />
+          <Stat variant="plain" label="Casing pressure" value={2.4} decimals={1} unit="barg" tone="critical" target="Not at zero energy" />
+        </StatGroup>
+        <Panel className="col-span-12" title="Isolation points" subtitle="In step order" padding="none">
+          <DataTable
+            label="Isolation points in step order"
+            flush
+            columns={LOCKOUT_TAGOUT_POINT_COLUMNS}
+            rows={LOCKOUT_TAGOUT_POINTS}
+            rowKey={(point) => point.id}
+            rowTone={(point) => (point.state === 'planned' ? undefined : STATE_TONE[point.state])}
+          />
+        </Panel>
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutPoster() {
+  return (
+    <LockoutTagoutSheet look="poster">
+      <Grid>
+        <Stat className="col-span-6" size="hero" tone="pink" label="Recompressor · do not start" value="Locked" />
+        <Stat className="col-span-3" size="hero" tone="blue" label="Points locked" value={3} unit="of 6" />
+        <Stat className="col-span-3" size="hero" tone="amber" label="People on the job" value={2} />
+        <Panel className="col-span-12" title="Who has a lock on">
+          <LockBoard label="Lock box LB-07, crew" people={LOCKOUT_TAGOUT_CREW} columns={4} />
+        </Panel>
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutBlueprint() {
+  return (
+    <LockoutTagoutSheet look="blueprint">
+      <Grid>
+        <Panel className="col-span-8" title="Isolation boundary" subtitle="Drawing IC-2291-01 · rev B · not to scale">
+          <IsolationSchematic label="Isolation boundary drawing" nodes={lockoutTagoutNodes(LOCKOUT_TAGOUT_POINTS)} links={LOCKOUT_TAGOUT_LINKS} height={360} />
+        </Panel>
+        <Panel className="col-span-4" title="Tag as issued" subtitle="Point 2 of 6">
+          <div className="flex justify-center">
+            <DangerTag warning="Do not operate" tag="23-XV-9130" point="Suction valve" position="Closed" lock="R-114" by="Tomás Barros" date="12 Mar, 09:40" certificate="IC-2291" />
+          </div>
+        </Panel>
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutSignal() {
+  return (
+    <LockoutTagoutSheet look="signal">
+      <Grid>
+        <Stat className="col-span-6" size="hero" tone="critical" state="Not safe" stateIcon={<IconCircleX />} label="Recompressor 23-KA-9103" value="2 of 6 verified" target="Do not open the casing" />
+        <Stat className="col-span-3" size="lg" tone="warning" state="Bleeding" stateIcon={<IconGauge />} label="Casing pressure" value={2.4} decimals={1} unit="barg" target="Safe below 0.2 barg" />
+        <Stat className="col-span-3" size="lg" tone="success" state="Zero" stateIcon={<IconBolt />} label="Electrical" value="Racked out" target="Lock R-113, verified" />
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutEditorial() {
+  return (
+    <LockoutTagoutSheet look="editorial">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          eyebrow="Isolation certificate IC-2291"
+          title="Recompressor 23-KA-9103, isolated for bearing inspection"
+          description="Issued 12 March 09:20 by Liv Wold for work order WO-104482. Six points across four energy sources. Valid until the work order is closed."
+        />
+        <StatGroup className="col-span-12" columns={4} label="Certificate figures">
+          <Stat variant="plain" size="lg" label="Isolation points" value={6} />
+          <Stat variant="plain" size="lg" label="Verified" value={2} unit="of 6" />
+          <Stat variant="plain" size="lg" label="Energy sources" value={4} />
+          <Stat variant="plain" size="lg" label="People on the job" value={2} />
+        </StatGroup>
+        <Panel className="col-span-12" title="Schedule of isolations" padding="none">
+          <DataTable label="Schedule of isolations" flush columns={LOCKOUT_TAGOUT_POINT_COLUMNS.filter((column) => column.id !== 'energy')} rows={LOCKOUT_TAGOUT_POINTS} rowKey={(point) => point.id} />
+        </Panel>
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutPlanner() {
+  const [points, setPoints] = useState(LOCKOUT_TAGOUT_POINTS);
+  const [selected, setSelected] = useState('p3');
+  const [crew, setCrew] = useState(LOCKOUT_TAGOUT_CREW.slice(0, 3));
+  const progress = boundaryProgress(points);
+  const locksOn = crew.filter((person) => person.on).length;
+  const conditions = workGate(points, progress.complete, crew.length, locksOn);
+  const open = conditions.every((condition) => condition.met);
+  const advance = (id: string) => {
+    setSelected(id);
+    setPoints(points.map((point) => (point.id === id ? { ...point, state: advanceState(point.state), lock: point.lock ?? `R-11${point.step + 2}` } : point)));
+  };
+  return (
+    <LockoutTagoutSheet>
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="sm"
+          level={4}
+          title="Isolate recompressor 23-KA-9103"
+          description="Certificate IC-2291 · WO-104482 · drive-end bearing inspection"
+          actions={
+            <StatusPill tone={open ? 'success' : 'warning'} icon={open ? <IconCircleCheck /> : <IconAlertTriangle />}>
+              {open ? 'Safe to start work' : `${progress.verified} of ${progress.total} verified`}
+            </StatusPill>
+          }
+        />
+        <Panel className="col-span-7" title="Boundary" subtitle="Select a point on the drawing or work it from the list">
+          <IsolationSchematic label="Isolation boundary of the recompressor" nodes={lockoutTagoutNodes(points)} links={LOCKOUT_TAGOUT_LINKS} selected={selected} onSelect={setSelected} height={340} />
+        </Panel>
+        <Panel className="col-span-5" title="Crew locks" subtitle="Lock box LB-07" icon={<IconUsers />}>
+          <LockBoard label="Lock box LB-07, crew" people={crew} columns={1} onToggle={(id, on) => setCrew(crew.map((person) => (person.id === id ? { ...person, on } : person)))} />
+        </Panel>
+        <Panel className="col-span-12" title="Isolation points" subtitle="In step order" padding="tight">
+          <ol aria-label="Isolation points" className="flex flex-col">
+            {points.map((point) => (
+              <IsolationPointRow key={point.id} point={point} icon={LOCKOUT_TAGOUT_ENERGY_ICON[point.energy]} current={point.id === selected} onAdvance={advance} />
             ))}
           </ol>
-          <span className="text-xs text-muted-foreground">Showing 5 of {POINTS.length} points.</span>
-        </Card>
-        <div className="flex min-w-0 flex-col gap-4">
-          <Card className="min-w-0">
-            <LockBoard boxId="LB-07" keysInside={8} people={people} />
-          </Card>
-          <Card className="min-w-0">
-            <ConditionList
-              label="Before release for work"
-              conditions={[
-                { id: 'points', label: 'All points verified', detail: `${POINTS.length - counts.verified} open`, state: counts.verified === POINTS.length ? 'met' : 'unmet' },
-                { id: 'try', label: 'Try step done', detail: 'Not recorded', state: 'unmet' },
-                { id: 'permit', label: 'Permit PTW-26-0426 approved', detail: 'Approved 11 Mar, 17:05', state: 'met' },
-              ]}
-            />
-          </Card>
-        </div>
-      </div>
-    </div>
+        </Panel>
+      </Grid>
+    </LockoutTagoutSheet>
+  );
+}
+
+function LockoutTagoutCertificate() {
+  const progress = boundaryProgress(LOCKOUT_TAGOUT_VERIFIED);
+  return (
+    <LockoutTagoutSheet>
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="sm"
+          level={4}
+          title="Isolation certificate IC-2291"
+          description="Recompressor 23-KA-9103 · issued 12 March 09:20 by Liv Wold"
+          actions={
+            <StatusPill tone="success" icon={<IconShieldCheck />}>
+              Live, work in progress
+            </StatusPill>
+          }
+        />
+        <Stat className="col-span-3" label="Points verified" value={progress.verified} unit={`of ${progress.total}`} icon={<IconShieldCheck />} tone="green" target="Boundary complete 10:05" />
+        <Stat className="col-span-3" label="Try step" value="Passed" icon={<IconCircleCheck />} tone="teal" target="10:12, witnessed by Liv Wold" />
+        <Stat className="col-span-3" label="Personal locks on" value={2} icon={<IconLock />} tone="blue" target="Tomás Barros, Jonas Nyberg" />
+        <Stat className="col-span-3" label="In place for" value={4} unit="h 40 min" icon={<IconFileCertificate />} tone="purple" target="Review due 19 March" />
+        <Panel className="col-span-8" title="Schedule of isolations" subtitle="All points locked, tagged and verified" padding="none">
+          <DataTable label="Schedule of isolations" flush columns={LOCKOUT_TAGOUT_POINT_COLUMNS.filter((column) => column.id !== 'energy')} rows={LOCKOUT_TAGOUT_VERIFIED} rowKey={(point) => point.id} />
+        </Panel>
+        <Panel className="col-span-4" title="Conflicts with other permits" subtitle="Work that touches the same boundary" tone="warning">
+          <div className="flex flex-col">
+            <ListRow tone="warning" title="Hot work, cooler deck" meta="Permit PTW-5521 · shares the flare vent 23-HV-9138" trailing={<StatusPill tone="warning">Shared point</StatusPill>} />
+            <ListRow tone="neutral" title="Scaffolding, compressor hall" meta="Permit PTW-5507 · access only" trailing={<StatusPill>No conflict</StatusPill>} />
+            <ListRow tone="critical" title="Lube oil flushing" meta="Permit PTW-5530 · needs 41-HV-9171 open" trailing={<StatusPill tone="critical">Blocked</StatusPill>} />
+          </div>
+        </Panel>
+      </Grid>
+    </LockoutTagoutSheet>
   );
 }
 
@@ -965,285 +707,242 @@ export default definePage({
   id: 'lockout-tagout',
   title: 'Lock-out and tag-out',
   summary:
-    'Isolation planning and control for a job on the 1st stage compressor: isolation points with locks and tags, the schematic they are marked on, a group lock box, the try step that proves the equipment dead, removal in reverse order and a gate that keeps the equipment from being released until every point is verified.',
+    'Isolating equipment so it cannot hurt the people working on it: the points in step order, tags, the boundary on a drawing, the lock box, the try step, the gate before work starts and taking it all off again.',
   guidance: {
     use: [
-      'Write the state of every point in words: planned, applied, verified, removed.',
-      'Count a point only after a second person has verified it at the equipment.',
-      'Block release for work with a stated reason, not a silently disabled button.',
-      'Remove isolations in the reverse order of application, and only when every personal lock is off.',
+      'Keep the points in sequence order; removal runs in reverse.',
+      'Say each state in words: isolated is not locked, locked is not verified.',
+      'Block the start of work until boundary, try step and crew locks all hold.',
+      'Show who has a personal lock on, by name.',
     ],
     avoid: [
-      'Green for an applied point; only a verified point is shown as done.',
-      'Letting the same person apply and verify a point.',
-      'Showing the schematic without the position each valve must be left in.',
-      'Hiding long-term isolations: each needs an owner and a review date.',
+      'Green for a point that is only isolated.',
+      'A progress percentage in place of the count of verified points.',
+      'Letting a point be released out of order.',
+      'Closing a certificate while a personal lock is still on.',
     ],
   },
   source,
   sections: [
     {
-      id: 'points',
+      id: 'points-and-tags',
       title: 'Points, tags and energy',
-      description: 'One isolation point, its states, its tag and the energy it controls.',
+      description: 'The isolation point, its states and what hangs on it.',
       specimens: [
         {
-          id: 'LotoPatternPointRow',
-          title: 'Isolation point',
-          note: 'Pick it for one point: the device, the position it is left in, the lock, the tag and who applied and verified.',
-          origin: 'custom',
-          uses: ['industrial/safety/IsolationPointRow.tsx', 'industrial/safety/isolationOrder.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternPointRow,
-        },
-        {
-          id: 'LotoPatternStatesLegend',
-          title: 'Isolation states',
-          note: 'Pick it as the legend of an isolation system: the four states and what each one allows.',
-          origin: 'custom',
-          uses: ['industrial/safety/isolationOrder.ts', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternStatesLegend,
-        },
-        {
-          id: 'LotoPatternPointStates',
-          title: 'A point in each state',
-          note: 'Pick it to see how the row changes from planned to removed, and what is shown at each stage.',
-          origin: 'custom',
-          uses: ['industrial/safety/IsolationPointRow.tsx', 'industrial/safety/isolationOrder.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternPointStates,
-        },
-        {
-          id: 'LotoPatternDangerTag',
-          title: 'Danger tag',
-          note: 'Pick it to preview or print the tag hung on a point, with the fields filled in by hand in the field.',
-          origin: 'custom',
-          uses: ['industrial/safety/DangerTag.tsx'],
-          size: 'sm',
-          Component: LotoPatternDangerTag,
-        },
-        {
-          id: 'LotoPatternTagPair',
-          title: 'Tags for an open and a racked-out point',
-          note: 'Pick it when the instruction is not "do not operate" in the closed position: the tag says to leave the point open.',
-          origin: 'custom',
-          uses: ['industrial/safety/DangerTag.tsx'],
-          size: 'md',
-          Component: LotoPatternTagPair,
-        },
-        {
-          id: 'LotoPatternBoundary',
-          title: 'Boundary summary',
-          note: 'Pick it beside the isolation list: what is inside the boundary, how it is isolated and what stays in service.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternBoundary,
-        },
-        {
-          id: 'LotoPatternEnergySources',
-          title: 'Energy sources',
-          note: 'Pick it to show that every kind of energy has a control and a way to prove it: electrical, pressure, thermal and stored.',
-          origin: 'custom',
-          uses: ['industrial/safety/isolationOrder.ts'],
-          size: 'full',
-          align: 'stretch',
-          Component: LotoPatternEnergySources,
-        },
-        {
-          id: 'LotoPatternIsolationList',
+          id: 'LockoutTagoutPointList',
           title: 'Isolation list in step order',
-          note: 'Pick it for the plan as the isolating technician reads it: the points in the order they go on.',
+          note: 'Pick it as the working list: each point with its energy, method, state, lock and next action.',
           origin: 'custom',
-          uses: ['industrial/safety/IsolationPointRow.tsx', 'industrial/safety/isolationOrder.ts'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/lockout-tagout/IsolationPointRow.tsx', 'kit/lockout-tagout/isolation.ts', 'kit/Panel.tsx'],
+          Component: LockoutTagoutPointList,
+        },
+        {
+          id: 'LockoutTagoutStates',
+          title: 'The five states',
+          note: 'Pick it as the legend: what each state means, so isolated is never read as safe.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/IconChip.tsx', 'kit/lockout-tagout/isolation.ts'],
+          Component: LockoutTagoutStates,
+        },
+        {
+          id: 'LockoutTagoutTags',
+          title: 'Danger tags',
+          note: 'Pick the tag to preview or print what hangs on a point: the warning, the position and who locked it.',
+          origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          Component: LotoPatternIsolationList,
+          bleed: true,
+          uses: ['kit/lockout-tagout/DangerTag.tsx', 'kit/Panel.tsx'],
+          Component: LockoutTagoutTags,
+        },
+        {
+          id: 'LockoutTagoutEnergy',
+          title: 'Energy sources',
+          note: 'Pick it before the boundary is drawn: every energy that has to be held back, and what is still live.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/IconChip.tsx', 'kit/Meter.tsx'],
+          Component: LockoutTagoutEnergy,
         },
       ],
     },
     {
-      id: 'schematic',
+      id: 'on-the-schematic',
       title: 'On the schematic',
-      description: 'Isolation points marked on a piping drawing of the machine.',
+      description: 'The boundary where it physically is.',
       specimens: [
         {
-          id: 'LotoPatternSchematic',
-          title: 'Points marked on the schematic',
-          note: 'Pick it to show where each point is and the position it is left in; the marker shape repeats the state.',
+          id: 'LockoutTagoutSchematic',
+          title: 'Boundary with a selected point',
+          note: 'Pick it when people need to see that the boundary closes: every point on the lines, with detail beside it.',
           origin: 'custom',
-          uses: ['industrial/diagrams/DiagramCanvas.tsx', 'industrial/diagrams/ValveSymbol.tsx', 'industrial/diagrams/EquipmentSymbol.tsx', 'industrial/diagrams/PipeLine.tsx', 'industrial/diagrams/Breaker.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: LotoPatternSchematic,
-        },
-        {
-          id: 'LotoPatternSchematicSelect',
-          title: 'Select a point on the schematic',
-          note: 'Pick it when people work from the drawing: choose a marker, see the point, and apply or verify it there.',
-          origin: 'custom',
-          uses: ['industrial/diagrams/DiagramHotspot.tsx', 'industrial/diagrams/DiagramCanvas.tsx', 'industrial/safety/IsolationPointRow.tsx'],
-          size: 'full',
-          align: 'stretch',
-          Component: LotoPatternSchematicSelect,
+          bleed: true,
+          uses: ['kit/lockout-tagout/IsolationSchematic.tsx', 'kit/Panel.tsx', 'kit/TagId.tsx'],
+          Component: LockoutTagoutSchematic,
         },
       ],
     },
     {
-      id: 'crew',
+      id: 'locks-and-crew',
       title: 'Locks, crew and handover',
-      description: 'Who holds which lock, and how isolations pass between people and shifts.',
+      description: 'Who is protected by the isolation.',
       specimens: [
         {
-          id: 'LotoPatternLockBoard',
+          id: 'LockoutTagoutLockBox',
           title: 'Lock box board',
-          note: 'Pick it to see the group lock box: a personal lock for each crew member, on or off.',
-          origin: 'custom',
-          uses: ['industrial/safety/LockBoard.tsx', 'industrial/safety/isolationOrder.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternLockBoard,
-        },
-        {
-          id: 'LotoPatternLockBoardLive',
-          title: 'Lock box with controls',
-          note: 'Pick it for the working version: hang and remove personal locks and watch the removal gate change.',
-          origin: 'custom',
-          uses: ['industrial/safety/LockBoard.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternLockBoardLive,
-        },
-        {
-          id: 'LotoPatternGroupLockout',
-          title: 'Crew sign-on and sign-off',
-          note: 'Pick it for a group lock-out: each member signs on before entering and signs off when they leave.',
+          note: 'Pick it for crew sign-on: one hook per worker, lock on or off, and the count that holds the box shut.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          Component: LotoPatternGroupLockout,
+          bleed: true,
+          uses: ['kit/lockout-tagout/LockBoard.tsx', 'kit/Panel.tsx'],
+          Component: LockoutTagoutLockBox,
         },
         {
-          id: 'LotoPatternHandover',
+          id: 'LockoutTagoutHandover',
           title: 'Isolation handover',
-          note: 'Pick it at shift change: the incoming supervisor confirms each isolation before accepting.',
+          note: 'Pick it at shift change: the isolation passes only when the incoming shift accepts it.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          Component: LotoPatternHandover,
+          bleed: true,
+          uses: ['kit/StatGroup.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx'],
+          Component: LockoutTagoutHandover,
         },
       ],
     },
     {
-      id: 'verification',
+      id: 'verification-and-removal',
       title: 'Verification and removal',
-      description: 'Proving the equipment dead, and taking the isolations off in the right order.',
+      description: 'Proving it holds, and taking it off.',
       specimens: [
         {
-          id: 'LotoPatternTryStep',
+          id: 'LockoutTagoutTryStep',
           title: 'Try step checklist',
-          note: 'Pick it for the proof: tests at the equipment that show the energy is gone, each to be confirmed.',
+          note: 'Pick it between locking and working: a short list ticked off while someone tries to start the machine.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          Component: LotoPatternTryStep,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx'],
+          Component: LockoutTagoutTryStep,
         },
         {
-          id: 'LotoPatternDeisolation',
-          title: 'De-isolation sequence',
-          note: 'Pick it for the removal plan: the same points in reverse order, numbered from 1.',
-          origin: 'custom',
-          uses: ['industrial/safety/isolationOrder.ts', 'industrial/safety/IsolationPointRow.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternDeisolation,
-        },
-        {
-          id: 'LotoPatternDeisolationLive',
-          title: 'Remove the isolations',
-          note: 'Pick it for the removal itself: only the next point in the reverse sequence is offered, with undo.',
-          origin: 'custom',
-          uses: ['industrial/safety/isolationOrder.ts', 'industrial/safety/IsolationPointRow.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternDeisolationLive,
-        },
-        {
-          id: 'LotoPatternReleaseGate',
+          id: 'LockoutTagoutGate',
           title: 'Completeness gate',
-          note: 'Pick it before work starts: release is blocked, with each reason listed, until every point and the try step are done.',
-          origin: 'custom',
-          uses: ['industrial/safety/isolationOrder.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternReleaseGate,
-        },
-      ],
-    },
-    {
-      id: 'records',
-      title: 'Certificate, conflicts and registers',
-      description: 'The paperwork that goes with an isolation.',
-      specimens: [
-        {
-          id: 'LotoPatternCertificate',
-          title: 'Isolation certificate',
-          note: 'Pick it for the certificate that proves the isolation: equipment, points and four signatures.',
-          origin: 'custom',
-          uses: ['industrial/workflows/SignOffBlock.tsx', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: LotoPatternCertificate,
-        },
-        {
-          id: 'LotoPatternConflicts',
-          title: 'Conflicts with other permits',
-          note: 'Pick it when open permits touch the isolation: each is named with why it conflicts.',
+          note: 'Pick it in front of the start button: the conditions, which one is missing and why the button is off.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          Component: LotoPatternConflicts,
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/lockout-tagout/isolation.ts', 'kit/Panel.tsx'],
+          Component: LockoutTagoutGate,
         },
         {
-          id: 'LotoPatternLongTerm',
+          id: 'LockoutTagoutRemoval',
+          title: 'De-isolation sequence',
+          note: 'Pick it after the job: points in reverse order, and only the next one can be released.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/lockout-tagout/IsolationPointRow.tsx', 'kit/lockout-tagout/isolation.ts'],
+          Component: LockoutTagoutRemoval,
+        },
+        {
+          id: 'LockoutTagoutRegister',
           title: 'Long-term isolation register',
-          note: 'Pick it for isolations that outlast a shift: owner, reason and a review date, with overdue reviews marked.',
+          note: 'Pick it for the weekly review: isolations left in place, how long, who owns them and which review is overdue.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: LotoPatternLongTerm,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: LockoutTagoutRegister,
         },
       ],
     },
     {
-      id: 'blocks',
-      title: 'Full blocks',
-      description: 'A working isolation planner and a certificate overview.',
+      id: 'looks',
+      title: 'In other looks',
+      description: 'The same isolation as a console table, a poster by the machine, a drawing, wall tiles and a certificate.',
       specimens: [
         {
-          id: 'LotoPatternPlanner',
-          title: 'Isolation planner',
-          note: 'Pick it to work a whole isolation: apply points in order, verify them, undo, and see release stay blocked until all is proven.',
+          id: 'LockoutTagoutConsole',
+          title: 'Console isolation table',
+          note: 'Pick it in the control room: the certificate in a strip and every point in a dense table.',
           origin: 'custom',
-          uses: ['industrial/safety/isolationOrder.ts', 'industrial/safety/IsolationPointRow.tsx', 'industrial/diagrams/DiagramCanvas.tsx', 'industrial/LinearGauge.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: LotoPatternPlanner,
+          bleed: true,
+          uses: ['kit/StatGroup.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: LockoutTagoutConsole,
         },
         {
-          id: 'LotoPatternOverview',
-          title: 'Certificate overview',
-          note: 'Pick it as the top of an isolation page: progress, the schematic, the points, the lock box and what blocks release.',
+          id: 'LockoutTagoutPoster',
+          title: 'Poster at the machine',
+          note: 'Pick it for a screen or print-out at the equipment: locked out, by how many locks, and whose.',
           origin: 'custom',
-          uses: ['industrial/safety/LockBoard.tsx', 'industrial/safety/IsolationPointRow.tsx', 'industrial/workflows/ConditionList.tsx', 'industrial/LinearGauge.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: LotoPatternOverview,
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/lockout-tagout/LockBoard.tsx', 'looks/LookScope.tsx'],
+          Component: LockoutTagoutPoster,
+        },
+        {
+          id: 'LockoutTagoutBlueprint',
+          title: 'Blueprint boundary drawing',
+          note: 'Pick it for the drawing attached to the certificate: outlined equipment, square markers and the tag as issued.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/lockout-tagout/IsolationSchematic.tsx', 'kit/lockout-tagout/DangerTag.tsx', 'looks/LookScope.tsx'],
+          Component: LockoutTagoutBlueprint,
+        },
+        {
+          id: 'LockoutTagoutSignal',
+          title: 'Signal safe-to-work tiles',
+          note: 'Pick it for a wall screen in the workshop: one answer, safe or not, with the energies beside it.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: LockoutTagoutSignal,
+        },
+        {
+          id: 'LockoutTagoutEditorial',
+          title: 'Editorial certificate',
+          note: 'Pick it for the certificate as a document: a title that says what is isolated and why, then the schedule.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/SectionHeader.tsx', 'kit/StatGroup.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: LockoutTagoutEditorial,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions that can be dropped into a product.',
+      specimens: [
+        {
+          id: 'LockoutTagoutPlanner',
+          title: 'Isolation planner',
+          note: 'Pick it as the working screen: the drawing, the crew locks and the list move together as points are worked.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/lockout-tagout/IsolationSchematic.tsx', 'kit/lockout-tagout/LockBoard.tsx', 'kit/lockout-tagout/IsolationPointRow.tsx', 'kit/lockout-tagout/isolation.ts'],
+          Component: LockoutTagoutPlanner,
+        },
+        {
+          id: 'LockoutTagoutCertificate',
+          title: 'Certificate overview',
+          note: 'Pick it for the permit office: the live certificate, its schedule and the permits it collides with.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/DataTable.tsx', 'kit/ListRow.tsx', 'kit/SectionHeader.tsx'],
+          Component: LockoutTagoutCertificate,
         },
       ],
     },

@@ -79,7 +79,7 @@ export function StateStrip({ label, rows, start, end, ticks, now, legend, size =
             </span>
           ))}
           {now ? (
-            <span className="absolute top-0 -translate-x-1/2 bg-(--kit-text) px-1 font-medium whitespace-nowrap text-(--kit-surface)" style={{ left: at(now.at) }}>
+            <span className="absolute top-0 -translate-x-1/2 font-semibold whitespace-nowrap text-(--kit-text)" style={{ left: at(now.at) }}>
               {now.label}
             </span>
           ) : null}

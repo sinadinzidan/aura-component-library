@@ -32,4 +32,20 @@ describe(Bars.name, () => {
 
     expect(screen.queryByRole('list')).toBeNull();
   });
+
+  it('accepts a fixed value range and a limit', () => {
+    render(
+      <Bars
+        label="Export per day"
+        categories={DAYS}
+        series={[{ id: 'export', label: 'Export', values: [4.4, 4.2, 4.38] }]}
+        yDomain={[4, 4.6]}
+        unit="MSm³/d"
+        showValues
+        limit={{ value: 4.5, label: 'Plan' }}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: 'Export per day' })).toBeInTheDocument();
+  });
 });

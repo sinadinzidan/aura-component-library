@@ -20,9 +20,14 @@ type LimitScaleProps = {
   className?: string;
 };
 
+const ZONE_STRENGTH: Record<string, number> = { low: 26, normal: 48, high: 62, trip: 78 };
+
+/** On a state-filled tile the zones are shades of the tile's own ink. */
+const SIGNAL_STRENGTH: Record<string, number> = { low: 14, normal: 34, high: 58, trip: 85 };
+
 /**
  * A reading on its instrument range with the limit zones drawn in: low, normal window, high and
- * trip. The marker takes the colour of the zone it stands in and the ticks name each limit.
+ * trip. The marker takes the colour of the zone it stands in; the limits are listed in order under the scale.
  * Outline looks (blueprint, editorial) draw the zones as hatched outlines with dimension ticks;
  * the others draw solid bands.
  */
@@ -38,12 +43,12 @@ export function LimitScale({ label, value, min, max, unit, decimals = 1, limits,
   zones.push({ id: 'normal', from: normalFrom, to: normalTo, tone: 'success' });
   if (limits.high !== undefined) zones.push({ id: 'high', from: limits.high, to: limits.highHigh ?? max, tone: 'warning' });
   if (limits.highHigh !== undefined) zones.push({ id: 'trip', from: limits.highHigh, to: max, tone: 'critical' });
-  const ticks: Array<{ id: string; at: number; text: string }> = [
-    { id: 'min', at: min, text: formatNumber(min, 0) },
-    ...(limits.low !== undefined && limits.low > min ? [{ id: 'low', at: limits.low, text: `L ${formatNumber(limits.low, decimals)}` }] : []),
-    ...(limits.high !== undefined ? [{ id: 'high', at: limits.high, text: `H ${formatNumber(limits.high, decimals)}` }] : []),
-    ...(limits.highHigh !== undefined ? [{ id: 'trip', at: limits.highHigh, text: `HH ${formatNumber(limits.highHigh, decimals)}` }] : []),
-    { id: 'max', at: max, text: formatNumber(max, 0) },
+  const ticks: Array<{ id: string; text: string }> = [
+    { id: 'min', text: formatNumber(min, 0) },
+    ...(limits.low !== undefined && limits.low > min ? [{ id: 'low', text: `L ${formatNumber(limits.low, decimals)}` }] : []),
+    ...(limits.high !== undefined ? [{ id: 'high', text: `H ${formatNumber(limits.high, decimals)}` }] : []),
+    ...(limits.highHigh !== undefined ? [{ id: 'trip', text: `HH ${formatNumber(limits.highHigh, decimals)}` }] : []),
+    { id: 'max', text: formatNumber(max, 0) },
   ];
   const text = `${formatNumber(value, decimals)}${unit ? ` ${unit}` : ''}`;
 
@@ -64,7 +69,9 @@ export function LimitScale({ label, value, min, max, unit, decimals = 1, limits,
                   ? zone.id === 'normal'
                     ? 'transparent'
                     : 'repeating-linear-gradient(135deg, var(--t-line) 0 1.5px, transparent 1.5px 5px)'
-                  : `color-mix(in oklab, var(--t-line) ${zone.id === 'normal' ? 30 : 60}%, transparent)`,
+                  : look === 'signal'
+                    ? `color-mix(in oklab, currentColor ${SIGNAL_STRENGTH[zone.id] ?? 40}%, transparent)`
+                    : `color-mix(in oklab, var(--t-line) ${look === 'poster' ? 100 : (ZONE_STRENGTH[zone.id] ?? 50)}%, transparent)`,
                 borderLeft: zone.id === 'normal' || zone.from === min ? undefined : '1.5px solid var(--kit-surface)',
               }}
             />
@@ -79,9 +86,9 @@ export function LimitScale({ label, value, min, max, unit, decimals = 1, limits,
         ) : null}
       </div>
       {bare ? null : (
-        <div aria-hidden className="relative mt-2 h-4 text-xs text-(--kit-text-3) tabular-nums">
-          {ticks.map((tick, index) => (
-            <span key={tick.id} className={cx('absolute top-0 whitespace-nowrap', index === 0 ? '' : index === ticks.length - 1 ? '-translate-x-full' : '-translate-x-1/2', tick.id === 'min' || tick.id === 'max' ? '' : 'font-medium text-(--kit-text-2)')} style={{ left: `${at(tick.at)}%` }}>
+        <div aria-hidden className="mt-2 flex justify-between gap-2 text-xs text-(--kit-text-3) tabular-nums">
+          {ticks.map((tick) => (
+            <span key={tick.id} className={cx('whitespace-nowrap', tick.id === 'min' || tick.id === 'max' ? '' : 'font-medium text-(--kit-text-2)')}>
               {tick.text}
             </span>
           ))}

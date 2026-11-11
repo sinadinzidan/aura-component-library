@@ -37,4 +37,12 @@ describe(Panel.name, () => {
     expect(container.firstElementChild).toHaveAttribute('data-tone', 'critical');
     expect(container.firstElementChild).toHaveAttribute('data-pad', 'none');
   });
+
+  it('is a default panel unless asked to float', () => {
+    const { container, rerender } = render(<Panel>Rows</Panel>);
+    expect(container.firstElementChild).toHaveAttribute('data-variant', 'default');
+
+    rerender(<Panel variant="floating">Rows</Panel>);
+    expect(container.firstElementChild).toHaveAttribute('data-variant', 'floating');
+  });
 });

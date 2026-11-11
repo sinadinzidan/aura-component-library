@@ -19,22 +19,29 @@ type PanelProps = {
   tone?: Tone;
   /** `none` for content that runs to the panel edge, such as a table or a map. */
   padding?: 'default' | 'tight' | 'none';
-  /** Layout classes: the grid span. */
+  /**
+   * `floating` is for a panel over a 3D scene, a map or an image: an opaque-enough ground for the
+   * look, a lifted shadow and a blur of what is behind it.
+   */
+  variant?: 'default' | 'floating';
+  /** Layout classes: the grid span, or `h-auto` to size to the content. */
   className?: string;
   children: ReactNode;
 };
 
 /**
  * The container of a kit screen. Its anatomy — border, shadow, fill, header style, padding and
- * radius — comes from the look, and it always fills the height of its grid cell so rows line up.
+ * radius — comes from the look. It fills the height of its grid cell so rows line up; pass
+ * `className="h-auto"` (with `flex-1` in a flex column) when it should size to its content.
+ * In a narrow panel the actions wrap under the title instead of squeezing it.
  */
-export function Panel({ title, subtitle, icon, actions, footer, tone = 'neutral', padding = 'default', className, children }: PanelProps) {
+export function Panel({ title, subtitle, icon, actions, footer, tone = 'neutral', padding = 'default', variant = 'default', className, children }: PanelProps) {
   const look = useLook();
   const titleId = useId();
   const hasHead = Boolean(title || actions || icon);
 
   return (
-    <section aria-labelledby={title ? titleId : undefined} data-look={look} data-tone={tone} data-pad={padding} className={cx('kit-panel', className)}>
+    <section aria-labelledby={title ? titleId : undefined} data-look={look} data-tone={tone} data-pad={padding} data-variant={variant} className={cx('kit-panel', className)}>
       {hasHead ? (
         <header className="kit-panel-head">
           {icon ? <span className="kit-panel-icon">{icon}</span> : null}

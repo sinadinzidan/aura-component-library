@@ -64,4 +64,36 @@ describe(AppFrame.name, () => {
     );
     expect(container.querySelector('.kit-frame')).toHaveAttribute('data-variant', 'topbar');
   });
+
+  it('can fill its parent and scroll the canvas inside', () => {
+    const { container } = render(
+      <AppFrame brand={{ name: 'Nordkapp' }} fill canvasClassName="grid">
+        Board
+      </AppFrame>
+    );
+
+    expect(container.querySelector('.kit-frame')).toHaveAttribute('data-fill', 'true');
+    expect(container.querySelector('.kit-canvas')).toHaveAttribute('data-fill', 'true');
+    expect(container.querySelector('.kit-canvas')).toHaveClass('grid');
+  });
+
+  it('names and titles icon-only rail items', () => {
+    render(
+      <AppFrame variant="rail" brand={{ name: 'Nordkapp' }} nav={NAV} current="overview">
+        Board
+      </AppFrame>
+    );
+
+    expect(screen.getByRole('button', { name: 'Alarms, 4' })).toHaveAttribute('title', 'Alarms');
+  });
+
+  it('adds no tooltip where the label is visible', () => {
+    render(
+      <AppFrame variant="sidebar" brand={{ name: 'Nordkapp' }} nav={NAV} current="overview">
+        Board
+      </AppFrame>
+    );
+
+    expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute('title');
+  });
 });

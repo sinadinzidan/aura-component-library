@@ -19,4 +19,10 @@ describe(HudPanel.name, () => {
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
+
+  it('sets its title in sentence case in the UI typeface', () => {
+    render(<HudPanel title="Selected unit">Body</HudPanel>);
+
+    expect(screen.getByRole('heading', { name: 'Selected unit' }).className).not.toMatch(/uppercase|font-mono|tracking-wide/);
+  });
 });

@@ -128,9 +128,9 @@ const SAFETY_PERMIT_COLUMNS: DataTableColumn<SafetyPermit>[] = [
       </span>
     ),
   },
-  { id: 'area', header: 'Area', nowrap: true, cell: (permit) => permit.area },
+  { id: 'area', header: 'Area', cell: (permit) => permit.area },
   { id: 'tag', header: 'Equipment', nowrap: true, cell: (permit) => <TagId>{permit.tag}</TagId> },
-  { id: 'holder', header: 'Holder', nowrap: true, cell: (permit) => permit.holder },
+  { id: 'holder', header: 'Holder', cell: (permit) => permit.holder },
   { id: 'valid', header: 'Valid', nowrap: true, numeric: true, cell: (permit) => `${permit.from} – ${permit.to}` },
   { id: 'state', header: 'State', nowrap: true, cell: (permit) => <StatusPill tone={permitStatus(permit.state).tone}>{permitStatus(permit.state).label}</StatusPill> },
 ];
@@ -312,7 +312,7 @@ const SAFETY_AREAS: Array<{ area: string; tag: string; tone: Tone; state: string
   { area: 'Inlet and separation', tag: 'NK-20', tone: 'warning', state: 'On hold', detail: 'PTW-2288 gas retest overdue', active: 1 },
   { area: 'Gas compression', tag: 'NK-23', tone: 'success', state: 'Work on', detail: '2 permits active, hot work', active: 2 },
   { area: 'Gas export', tag: 'NK-27', tone: 'success', state: 'Clear', detail: '1 permit issued, not started', active: 0 },
-  { area: 'Cooling water', tag: 'NK-40', tone: 'info', state: 'Awaiting', detail: 'PTW-2294 needs approval', active: 0 },
+  { area: 'Cooling water', tag: 'NK-40', tone: 'info', state: 'Waiting', detail: 'PTW-2294 needs approval', active: 0 },
 ];
 
 /** One sheet of the page: a look scope with its canvas. Without a look it follows the app's look. */
@@ -844,7 +844,6 @@ function SafetyAndPermitsSignal() {
           <Stat
             key={area.tag}
             className="col-span-3"
-            size="lg"
             tone={area.tone}
             state={area.state}
             stateIcon={area.tone === 'success' ? <IconCircleCheck /> : <IconAlertTriangle />}

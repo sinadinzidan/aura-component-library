@@ -265,6 +265,7 @@ export function ForecastChart({
               )}
             />
           ) : null}
+          {limit && crossing ? <ReferenceLine x={now + crossing.steps} stroke={toneLine(limit.tone ?? 'critical')} strokeWidth={1} strokeDasharray="2 3" /> : null}
           {limit && crossing ? (
             <ReferenceDot
               x={now + crossing.steps}
@@ -276,10 +277,9 @@ export function ForecastChart({
                 const left = cx - width - 10;
                 return (
                   <g>
-                    <line x1={cx} y1={cy} x2={cx} y2={cy + 400} stroke={mark} strokeWidth={1} strokeDasharray="2 3" />
                     <circle cx={cx} cy={cy} r={5.5} fill="var(--base-background)" stroke={mark} strokeWidth={2.5} />
-                    <rect x={left} y={cy + 10} width={width} height={22} rx={Math.min(chart.barRadius, 11)} fill={mark} />
-                    <text x={left + width / 2} y={cy + 25} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--base-background)">
+                    <rect x={left} y={cy - 32} width={width} height={22} rx={Math.min(chart.barRadius, 11)} fill={mark} />
+                    <text x={left + width / 2} y={cy - 17} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--base-background)">
                       {crossing.label}
                     </text>
                   </g>

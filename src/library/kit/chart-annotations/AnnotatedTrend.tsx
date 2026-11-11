@@ -21,7 +21,7 @@ export type AnnotatedSeries = {
 export type LimitMark = { value: number; label: string; tone?: Tone; solid?: boolean };
 
 /** A stretch of the x axis, in point indexes. */
-export type RegionMark = { id: string; from: number; to: number; label?: string; tone?: Tone; hatched?: boolean };
+export type RegionMark = { id: string; from: number; to: number; label?: string; tone?: Tone; hatched?: boolean; labelAt?: 'top' | 'bottom' };
 
 /** A moment on the x axis with a short mark that a list beside the chart repeats. */
 export type EventMark = { id: string; at: number; mark: string; title: string; tone?: Tone };
@@ -120,7 +120,7 @@ export function AnnotatedTrend({
   const count = labels.length;
   const domain = yDomain ?? fitDomain(series.flatMap((item) => item.values), limits.map((limit) => limit.value));
   const hasTopMarks = events.length > 0 || pins.length > 0 || nowAt !== undefined;
-  const top = hasTopMarks ? 34 : 12;
+  const top = hasTopMarks ? 34 : unit ? 30 : 12;
   const x = (index: number): number => xShare(index, count);
   const y = (value: number): number => yShare(value, domain);
   const suffix = unit ? ` ${unit}` : '';
@@ -200,7 +200,7 @@ export function AnnotatedTrend({
                 }}
               >
                 {region.label ? (
-                  <span data-tone={tone} className="absolute top-1.5 left-1.5 rounded-(--kit-radius-sm) bg-(--kit-halo) px-1.5 py-0.5 text-xs leading-4 font-medium whitespace-nowrap text-(--kit-text)">
+                  <span data-tone={tone} className={cx('absolute left-1.5 rounded-(--kit-radius-sm) bg-(--kit-halo) px-1.5 py-0.5 text-xs leading-4 font-medium whitespace-nowrap text-(--kit-text)', region.labelAt === 'bottom' ? 'bottom-1.5' : 'top-1.5')}>
                     {region.label}
                   </span>
                 ) : null}
@@ -268,7 +268,7 @@ export function AnnotatedTrend({
           {limits.map((limit) => (
             <span
               key={limit.label}
-              className="absolute right-1 rounded-(--kit-radius-sm) bg-(--kit-halo) px-1 text-xs leading-4 font-medium whitespace-nowrap"
+              className="absolute left-1 rounded-(--kit-radius-sm) bg-(--kit-halo) px-1 text-xs leading-4 font-medium whitespace-nowrap"
               style={{ top: `calc(${share(y(limit.value))} - 20px)`, color: toneLine(limit.tone ?? 'warning') }}
             >
               {limit.label} {formatNumber(limit.value, decimals)}

@@ -1,706 +1,841 @@
 import { Button } from '@cognite/aura/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardHeaderCenter, CardHeaderEnd, CardTitle } from '@cognite/aura/components/card';
-import { IconArrowNarrowRight, IconCalendar, IconRefresh } from '@cognite/aura/icons';
-import { Fragment, useState } from 'react';
+import {
+  IconAlertOctagon,
+  IconAlertTriangle,
+  IconArrowsShuffle,
+  IconBox,
+  IconCircleCheck,
+  IconClock,
+  IconDatabase,
+  IconFileText,
+  IconLink,
+  IconPlugConnected,
+  IconRefresh,
+  IconRoute,
+  IconServer,
+  IconTimeline,
+  IconTool,
+} from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { MetadataList } from '../../../library/display/MetadataList';
-import { LinearGauge } from '../../../library/industrial/LinearGauge';
-import { formatValue } from '../../../library/industrial/status';
-import type { StatusDescriptor, Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { GapTimeline } from '../../../library/industrial/workflows/GapTimeline';
-import { RunHistoryStrip } from '../../../library/industrial/workflows/RunHistoryStrip';
-import type { RunHistoryRun } from '../../../library/industrial/workflows/RunHistoryStrip';
-import { TagChip } from '../../../library/industrial/workflows/TagChip';
-import { coveragePercent, formatDuration, summarizeRuns } from '../../../library/industrial/workflows/workflow';
-import type { Interval, RunStatus } from '../../../library/industrial/workflows/workflow';
-import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatDateTime, formatTime } from '../../data/series';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { GapTimeline, type GapRow } from '../../../library/kit/data-quality/GapTimeline';
+import { LineageFlow, type LineageNode } from '../../../library/kit/data-quality/LineageFlow';
+import {
+  FRESHNESS_LABEL,
+  FRESHNESS_TONE,
+  RUN_LABEL,
+  RUN_TONE,
+  coveragePercent,
+  formatDuration,
+  freshness,
+  longestGap,
+  summarizeRuns,
+  type Run,
+  type RunStatus,
+} from '../../../library/kit/data-quality/quality';
+import { RunStrip } from '../../../library/kit/data-quality/RunStrip';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Histogram } from '../../../library/kit/distributions/Histogram';
+import { bucketize } from '../../../library/kit/distributions/stats';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
+import { DAY, HOUR, MINUTE, REFERENCE_NOW, createRandom, formatAgo, formatDateTime, formatTime, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './data-quality.tsx?raw';
 
-const RUN_STATUS: Record<RunStatus, StatusDescriptor> = {
-  success: { tone: 'success', label: 'Succeeded', shape: 'dot' },
-  failed: { tone: 'critical', label: 'Failed', shape: 'diamond' },
-  running: { tone: 'info', label: 'Running', shape: 'ring' },
-  skipped: { tone: 'neutral', label: 'Skipped', shape: 'ring' },
-};
+const DQ_STATUS: Record<string, RunStatus> = { s: 'success', f: 'failed', r: 'running', k: 'skipped' };
 
-/** A run history from a compact code: s = success, f = failed, r = running, k = skipped. */
-function runsFrom(code: string): RunHistoryRun[] {
-  const status: Record<string, RunStatus> = { s: 'success', f: 'failed', r: 'running', k: 'skipped' };
-  return [...code].map((letter, index) => ({ id: String(index), status: status[letter] ?? 'success' }));
+/** A run history from a compact code, newest last: s = success, f = failed, r = running, k = skipped. */
+function dqRuns(code: string, everyMs: number, typicalMs: number, seed: number, error?: string): Run[] {
+  const random = createRandom(seed);
+  return [...code].map((letter, index) => {
+    const status = DQ_STATUS[letter] ?? 'success';
+    const durationMs = status === 'success' ? Math.round(typicalMs * (0.7 + random() * 0.6)) : status === 'failed' ? 4_000 : 0;
+    return {
+      id: `run-${index}`,
+      status,
+      startedAt: REFERENCE_NOW - (code.length - 1 - index) * everyMs - 2 * MINUTE,
+      durationMs,
+      rows: status === 'success' ? Math.round((durationMs / 1000) * 320) : 0,
+      error: status === 'failed' ? error : undefined,
+    };
+  });
 }
 
-type Pipeline = {
+type DqPipeline = {
   id: string;
   kind: 'Extractor' | 'Transformation';
   source: string;
-  status: RunStatus;
-  /** When the last run started. */
-  startedAt: number;
-  /** `null` while running. */
-  durationMs: number | null;
-  rows: number | null;
-  history: readonly RunHistoryRun[];
   schedule: string;
   nextRunAt: number | null;
+  runs: readonly Run[];
 };
 
-const PIPELINES: readonly Pipeline[] = [
-  { id: 'opcua-nordkapp-timeseries', kind: 'Extractor', source: 'OPC UA', status: 'success', startedAt: REFERENCE_NOW - 2 * MINUTE, durationMs: 38_000, rows: 1_243_800, history: runsFrom('ssssssssssssss'), schedule: 'Every 5 min', nextRunAt: REFERENCE_NOW + 3 * MINUTE },
-  { id: 'pi-compression-backfill', kind: 'Extractor', source: 'PI', status: 'running', startedAt: REFERENCE_NOW - 8 * MINUTE, durationMs: null, rows: 412_600, history: runsFrom('sssssfsssssssr'), schedule: 'Every hour', nextRunAt: REFERENCE_NOW + 52 * MINUTE },
-  { id: 'sap-work-orders', kind: 'Extractor', source: 'SAP', status: 'failed', startedAt: REFERENCE_NOW - 178 * MINUTE, durationMs: 4_000, rows: 0, history: runsFrom('ssssssssssffff'), schedule: 'Every 30 min', nextRunAt: REFERENCE_NOW + 2 * MINUTE },
-  { id: 'tr-asset-hierarchy', kind: 'Transformation', source: 'RAW', status: 'success', startedAt: REFERENCE_NOW - 8 * HOUR, durationMs: 252_000, rows: 16_204, history: runsFrom('sssssssssfssss'), schedule: 'Daily at 06:00', nextRunAt: REFERENCE_NOW + 16 * HOUR },
-  { id: 'tr-work-order-links', kind: 'Transformation', source: 'RAW', status: 'skipped', startedAt: REFERENCE_NOW - 150 * MINUTE, durationMs: 0, rows: null, history: runsFrom('sssssssssskkkk'), schedule: 'After sap-work-orders', nextRunAt: null },
+const DQ_PIPELINES: readonly DqPipeline[] = [
+  { id: 'opcua-nordkapp-timeseries', kind: 'Extractor', source: 'OPC UA', schedule: 'Every 5 min', nextRunAt: REFERENCE_NOW + 3 * MINUTE, runs: dqRuns('ssssssssssssssssssssssss', 5 * MINUTE, 38_000, 3) },
+  { id: 'pi-compression-backfill', kind: 'Extractor', source: 'PI', schedule: 'Every hour', nextRunAt: REFERENCE_NOW + 52 * MINUTE, runs: dqRuns('ssssssssssssssfssssssssr', HOUR, 412_000, 5, 'Historian timeout after 600 s') },
+  {
+    id: 'sap-work-orders',
+    kind: 'Extractor',
+    source: 'SAP',
+    schedule: 'Every 30 min',
+    nextRunAt: REFERENCE_NOW + 2 * MINUTE,
+    runs: dqRuns('sssssssssssssssssfffffff', 30 * MINUTE, 96_000, 7, '401 Unauthorized: service account token rejected by SAP gateway'),
+  },
+  { id: 'tr-asset-hierarchy', kind: 'Transformation', source: 'RAW', schedule: 'Daily at 06:00', nextRunAt: REFERENCE_NOW + 16 * HOUR, runs: dqRuns('ssssssssssssssssssfsssss', DAY, 252_000, 9, 'Duplicate external id 23-KA-9103') },
+  { id: 'tr-work-order-links', kind: 'Transformation', source: 'RAW', schedule: 'After sap-work-orders', nextRunAt: null, runs: dqRuns('ssssssssssssssssskkkkkkk', 30 * MINUTE, 61_000, 11) },
 ];
 
-type DataSource = { id: string; name: string; system: string; status: StatusDescriptor; detail: string; lastSeen: number; expectedMs: number };
+const DQ_SAP = DQ_PIPELINES[2];
 
-const SOURCES: readonly DataSource[] = [
-  { id: 'opcua', name: 'OPC UA', system: 'Nordkapp DCS', status: { tone: 'success', label: 'Connected', shape: 'dot' }, detail: '12,480 tags · latency 1.2 s', lastSeen: REFERENCE_NOW - 42_000, expectedMs: MINUTE },
-  { id: 'pi', name: 'PI', system: 'Plant historian', status: { tone: 'warning', label: 'Lagging', shape: 'square' }, detail: 'Backfill running · 4 min behind', lastSeen: REFERENCE_NOW - 4 * MINUTE, expectedMs: MINUTE },
-  { id: 'sap', name: 'SAP', system: 'Maintenance, PM module', status: { tone: 'critical', label: 'Failing', shape: 'diamond' }, detail: 'Authentication rejected since 11:02', lastSeen: REFERENCE_NOW - 192 * MINUTE, expectedMs: 30 * MINUTE },
-  { id: 'docs', name: 'Document archive', system: 'Engineering documents', status: { tone: 'success', label: 'Connected', shape: 'dot' }, detail: '8,912 files · synced nightly', lastSeen: REFERENCE_NOW - 12 * HOUR, expectedMs: DAY },
+const dqLastRun = (pipeline: DqPipeline): Run => pipeline.runs[pipeline.runs.length - 1];
+
+type DqSource = { id: string; name: string; system: string; detail: string; lastSeen: number; expectedMs: number };
+
+const DQ_SOURCES: readonly DqSource[] = [
+  { id: 'opcua', name: 'OPC UA', system: 'Nordkapp DCS', detail: '12,480 tags · latency 1.2 s', lastSeen: REFERENCE_NOW - 42_000, expectedMs: MINUTE },
+  { id: 'pi', name: 'PI', system: 'Plant historian', detail: 'Backfill running, catching up', lastSeen: REFERENCE_NOW - 2.4 * MINUTE, expectedMs: MINUTE },
+  { id: 'sap', name: 'SAP', system: 'Maintenance, PM module', detail: 'Authentication rejected since 10:48', lastSeen: REFERENCE_NOW - 192 * MINUTE, expectedMs: 30 * MINUTE },
+  { id: 'lims', name: 'LIMS', system: 'Laboratory samples', detail: '36 samples today', lastSeen: REFERENCE_NOW - 50 * MINUTE, expectedMs: HOUR },
+  { id: 'docs', name: 'Document archive', system: 'Engineering documents', detail: '8,912 files · synced nightly', lastSeen: REFERENCE_NOW - 12 * HOUR, expectedMs: DAY },
 ];
 
-const COMPLETENESS: readonly { source: string; expected: number; received: number }[] = [
-  { source: 'OPC UA', expected: 17_971_200, received: 17_935_300 },
-  { source: 'PI', expected: 4_320_000, received: 4_112_600 },
-  { source: 'SAP', expected: 48, received: 42 },
-  { source: 'Document archive', expected: 8_940, received: 8_912 },
+const DQ_SOURCE_COLUMNS: DataTableColumn<DqSource>[] = [
+  { id: 'source', header: 'Source', cell: (row) => row.name },
+  { id: 'system', header: 'System', muted: true, cell: (row) => row.system },
+  { id: 'detail', header: 'Detail', muted: true, cell: (row) => row.detail },
+  { id: 'seen', header: 'Last data', numeric: true, nowrap: true, cell: (row) => formatAgo(row.lastSeen) },
+  { id: 'expected', header: 'Expected every', numeric: true, nowrap: true, cell: (row) => formatDuration(row.expectedMs) },
+  {
+    id: 'state',
+    header: 'State',
+    nowrap: true,
+    cell: (row) => {
+      const state = freshness(REFERENCE_NOW - row.lastSeen, row.expectedMs);
+      return <StatusPill tone={FRESHNESS_TONE[state]}>{FRESHNESS_LABEL[state]}</StatusPill>;
+    },
+  },
 ];
 
-type DataSet = { id: string; name: string; score: number; previous: number; issue: string };
+const dqSourceTone = (row: DqSource): Tone | undefined => {
+  const state = freshness(REFERENCE_NOW - row.lastSeen, row.expectedMs);
+  return state === 'fresh' ? undefined : FRESHNESS_TONE[state];
+};
 
-const DATA_SETS: readonly DataSet[] = [
-  { id: 'ds-timeseries', name: 'Nordkapp time series', score: 97, previous: 97, issue: 'No open issues' },
-  { id: 'ds-assets', name: 'Nordkapp asset hierarchy', score: 92, previous: 90, issue: '14 assets without a parent' },
-  { id: 'ds-maintenance', name: 'Nordkapp maintenance', score: 71, previous: 88, issue: 'Work orders 3 h stale' },
-  { id: 'ds-documents', name: 'Nordkapp documents', score: 84, previous: 83, issue: '312 files without an asset link' },
+const DQ_COMPLETENESS: { source: string; share: number; tone: Tone }[] = [
+  { source: 'OPC UA time series', share: 99.8, tone: 'success' },
+  { source: 'PI historian backfill', share: 95.2, tone: 'warning' },
+  { source: 'SAP work orders', share: 87.5, tone: 'critical' },
+  { source: 'Document archive', share: 99.7, tone: 'success' },
 ];
 
-const scoreTone = (score: number): Tone => (score < 75 ? 'critical' : score < 90 ? 'warning' : 'neutral');
-
-const DAY_START = REFERENCE_NOW - DAY;
-
-const TAG_GAPS: readonly { tag: string; gaps: readonly Interval[] }[] = [
-  { tag: '23-PT-92531', gaps: [] },
-  { tag: '23-TT-91141', gaps: [{ from: DAY_START + 9 * HOUR, to: DAY_START + 9.6 * HOUR }, { from: DAY_START + 17 * HOUR, to: DAY_START + 17.3 * HOUR }] },
-  { tag: '27-IT-20013', gaps: [{ from: DAY_START + 3 * HOUR, to: DAY_START + 5.2 * HOUR }] },
-  { tag: '40-TT-40015', gaps: [{ from: DAY_START + 15 * HOUR, to: REFERENCE_NOW }] },
+const DQ_DATA_SETS: { id: string; name: string; score: number; previous: number; issue: string; tone: Tone }[] = [
+  { id: 'ds-timeseries', name: 'Time series', score: 97, previous: 97, issue: 'No open issues', tone: 'blue' },
+  { id: 'ds-assets', name: 'Asset hierarchy', score: 92, previous: 90, issue: '14 assets without a parent', tone: 'teal' },
+  { id: 'ds-maintenance', name: 'Maintenance', score: 71, previous: 88, issue: 'Work orders 3 h stale', tone: 'critical' },
+  { id: 'ds-documents', name: 'Documents', score: 84, previous: 83, issue: '312 files without an asset', tone: 'amber' },
 ];
 
-const LATENCY_BUCKETS: readonly { label: string; share: number }[] = [
-  { label: '<1 s', share: 38 },
-  { label: '1–2', share: 34 },
-  { label: '2–5', share: 17 },
-  { label: '5–10', share: 7 },
-  { label: '10–30', share: 3 },
-  { label: '>30 s', share: 1 },
+const DQ_LINKS: { label: string; linked: number; total: number; tone: Tone }[] = [
+  { label: 'Time series', linked: 1_184, total: 1_260, tone: 'accent' },
+  { label: 'Work orders', linked: 1_021, total: 1_260, tone: 'teal' },
+  { label: 'Documents', linked: 948, total: 1_260, tone: 'purple' },
+  { label: 'Placed in 3D', linked: 612, total: 1_260, tone: 'pink' },
 ];
 
-const LINKS: readonly { label: string; linked: number; total: number }[] = [
-  { label: 'Assets with time series', linked: 1_184, total: 1_260 },
-  { label: 'Assets with documents', linked: 948, total: 1_260 },
-  { label: 'Assets with work orders', linked: 1_021, total: 1_260 },
-  { label: 'Assets placed in 3D', linked: 612, total: 1_260 },
+const DQ_DAY_START = REFERENCE_NOW - DAY;
+
+const DQ_GAPS: GapRow[] = [
+  { id: 'pt-92531', label: '23-PT-92531', sublabel: 'Discharge pressure', gaps: [] },
+  {
+    id: 'tt-91141',
+    label: '23-TT-91141',
+    sublabel: 'Cooler outlet temperature',
+    gaps: [
+      { from: DQ_DAY_START + 9 * HOUR, to: DQ_DAY_START + 9.6 * HOUR },
+      { from: DQ_DAY_START + 17 * HOUR, to: DQ_DAY_START + 17.3 * HOUR },
+    ],
+  },
+  { id: 'vt-92540', label: '23-VT-92540', sublabel: 'Drive-end vibration', gaps: [{ from: DQ_DAY_START + 11.2 * HOUR, to: DQ_DAY_START + 11.4 * HOUR }] },
+  { id: 'it-20013', label: '27-IT-20013', sublabel: 'Motor current', gaps: [{ from: DQ_DAY_START + 3 * HOUR, to: DQ_DAY_START + 5.2 * HOUR }] },
+  { id: 'tt-40015', label: '40-TT-40015', sublabel: 'Bearing temperature', gaps: [{ from: DQ_DAY_START + 15 * HOUR, to: REFERENCE_NOW }] },
 ];
 
-const LINEAGE: readonly { id: string; stage: string; name: string; detail: string; status: RunStatus }[] = [
-  { id: 'source', stage: 'Source', name: 'SAP PM', detail: 'Work orders, notifications', status: 'failed' },
-  { id: 'raw', stage: 'Staged', name: 'raw.sap.workorders', detail: '48,210 rows · 3 h old', status: 'success' },
-  { id: 'transformed', stage: 'Transformed', name: 'tr-work-order-links', detail: 'Skipped, upstream failed', status: 'skipped' },
-  { id: 'model', stage: 'Data model', name: 'Maintenance.WorkOrder', detail: '47,902 instances', status: 'success' },
+const DQ_GAP_TICKS = [0, 6, 12, 18, 24].map((hour) => ({ at: DQ_DAY_START + hour * HOUR, label: hour === 24 ? 'Now' : formatTime(DQ_DAY_START + hour * HOUR) }));
+
+const DQ_GAP_CAUSE: Record<string, string> = {
+  'tt-91141': 'Transmitter restart',
+  'vt-92540': 'Network glitch',
+  'it-20013': 'Extractor redeploy',
+  'tt-40015': 'Sensor fault, signal lost',
+};
+
+type DqGap = { id: string; tag: string; from: number; to: number; cause: string };
+
+const DQ_GAP_LIST: DqGap[] = DQ_GAPS.flatMap((row) => row.gaps.map((gap, index) => ({ id: `${row.id}-${index}`, tag: row.label, from: gap.from, to: gap.to, cause: DQ_GAP_CAUSE[row.id] ?? 'Unknown' }))).sort(
+  (a, b) => b.to - b.from - (a.to - a.from)
+);
+
+const DQ_GAP_COLUMNS: DataTableColumn<DqGap>[] = [
+  { id: 'tag', header: 'Series', nowrap: true, cell: (gap) => <TagId>{gap.tag}</TagId> },
+  { id: 'from', header: 'From', nowrap: true, cell: (gap) => formatDateTime(gap.from) },
+  { id: 'length', header: 'Length', numeric: true, nowrap: true, cell: (gap) => formatDuration(gap.to - gap.from) },
+  { id: 'cause', header: 'Cause', muted: true, cell: (gap) => gap.cause },
 ];
 
-const ISSUES: readonly { id: string; title: string; scope: string; tone: Tone; shape: StatusDescriptor['shape']; label: string; since: number }[] = [
-  { id: 'i1', title: 'SAP work orders have stopped arriving', scope: 'sap-work-orders', tone: 'critical', shape: 'diamond', label: 'Critical', since: REFERENCE_NOW - 178 * MINUTE },
-  { id: 'i2', title: 'Bearing temperature has no data', scope: '40-TT-40015', tone: 'warning', shape: 'square', label: 'High', since: REFERENCE_NOW - 9 * HOUR },
-  { id: 'i3', title: 'Historian backfill is 4 min behind', scope: 'pi-compression-backfill', tone: 'info', shape: 'dot', label: 'Medium', since: REFERENCE_NOW - 8 * MINUTE },
-  { id: 'i4', title: '312 documents have no asset link', scope: 'Nordkapp documents', tone: 'neutral', shape: 'ring', label: 'Low', since: REFERENCE_NOW - 6 * DAY },
+const DQ_ALL_GAPS = DQ_GAPS.flatMap((row) => row.gaps);
+
+const DQ_MEAN_COVERAGE = DQ_GAPS.reduce((sum, row) => sum + coveragePercent(DQ_DAY_START, REFERENCE_NOW, row.gaps), 0) / DQ_GAPS.length;
+
+/** Seconds from measurement to availability for the last 1,000 points; a long tail from the historian backfill. */
+const dqLatencyRandom = createRandom(29);
+
+const DQ_LATENCY = Array.from({ length: 1000 }, () => {
+  const draw = dqLatencyRandom();
+  return draw < 0.93 ? 0.4 + dqLatencyRandom() * 4.2 * dqLatencyRandom() + dqLatencyRandom() * 1.6 : 6 + dqLatencyRandom() * 13;
+});
+
+const DQ_LATENCY_BINS = bucketize(DQ_LATENCY, { bins: 20, min: 0, max: 20 });
+
+const DQ_LATE_SHARE = (DQ_LATENCY.filter((value) => value > 10).length / DQ_LATENCY.length) * 100;
+
+const DQ_CLEANING = [
+  { rule: 'Duplicates removed', rows: 1204 },
+  { rule: 'Outliers flagged', rows: 318 },
+  { rule: 'Flatlines flagged', rows: 86 },
+  { rule: 'Out of order, resorted', rows: 41 },
 ];
 
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
+const DQ_LINEAGE: LineageNode[] = [
+  { id: 'source', stage: 'Source', name: 'SAP PM', detail: 'Work orders and notifications', state: 'Failing', tone: 'critical', icon: <IconServer /> },
+  { id: 'extract', stage: 'Extractor', name: 'sap-work-orders', detail: '7 failed runs since 10:48', state: 'Failed', tone: 'critical', icon: <IconPlugConnected /> },
+  { id: 'raw', stage: 'Staged', name: 'raw.sap.workorders', detail: '48,210 rows · 3 h old', state: 'Stale', tone: 'warning', icon: <IconDatabase /> },
+  { id: 'transform', stage: 'Transformation', name: 'tr-work-order-links', detail: 'Waits for the extractor', state: 'Skipped', tone: 'neutral', icon: <IconArrowsShuffle /> },
+  { id: 'model', stage: 'Data model', name: 'WorkOrder view', detail: '47,902 instances served', state: 'Serving old data', tone: 'warning', icon: <IconBox /> },
+];
 
-const formatRows = (rows: number | null): string => (rows === null ? '—' : formatValue(rows));
-const ageOf = (timestamp: number): string => formatDuration(REFERENCE_NOW - timestamp);
+const DQ_LINEAGE_NOTE: Record<string, { title: string; text: string; action: string }> = {
+  source: { title: 'SAP PM rejects the service account', text: 'The gateway has answered 401 since 10:48. Nothing downstream can refresh until the token is renewed.', action: 'Renew credentials' },
+  extract: { title: 'Extractor has failed 7 runs in a row', text: 'Each run stops after 4 s at authentication. It retries every 30 minutes; next attempt 14:02.', action: 'Open run log' },
+  raw: { title: 'Staged rows are 3 h 12 min old', text: 'The last successful write was at 10:48. The table is intact, only out of date.', action: 'Inspect table' },
+  transform: { title: 'Transformation is skipped on purpose', text: 'It runs after the extractor succeeds, so it has skipped 7 times rather than rewrite stale links.', action: 'Run anyway' },
+  model: { title: 'Work orders in the model are out of date', text: 'Applications still read 47,902 work orders, but anything created in SAP after 10:48 is missing.', action: 'See consumers' },
+};
 
-/** Label, a large age, and whether that age is within what is expected. */
-function FreshnessTile({ label, lastUpdate, expectedMs, expectedLabel }: { label: string; lastUpdate: number; expectedMs: number; expectedLabel: string }) {
-  const age = REFERENCE_NOW - lastUpdate;
-  const fresh = age <= expectedMs;
-  return (
-    <Card className="w-full max-w-64 gap-3">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="flex items-baseline gap-2">
-        <span className={`text-2xl font-semibold tracking-tight tabular-nums ${fresh ? 'text-base-foreground' : 'text-warning-foreground-strong'}`}>{formatDuration(age)}</span>
-        <span className="text-sm text-muted-foreground">ago</span>
+type DqIssue = { id: string; title: string; scope: string; tone: Tone; level: string; since: number; icon: ReactNode };
+
+const DQ_ISSUES: DqIssue[] = [
+  { id: 'i1', title: 'SAP work orders have stopped arriving', scope: 'sap-work-orders', tone: 'critical', level: 'Critical', since: REFERENCE_NOW - 192 * MINUTE, icon: <IconAlertOctagon /> },
+  { id: 'i2', title: 'Bearing temperature has no data', scope: '40-TT-40015', tone: 'warning', level: 'High', since: REFERENCE_NOW - 9 * HOUR, icon: <IconAlertTriangle /> },
+  { id: 'i3', title: 'Historian backfill is behind', scope: 'pi-compression-backfill', tone: 'info', level: 'Medium', since: REFERENCE_NOW - 8 * MINUTE, icon: <IconClock /> },
+  { id: 'i4', title: '312 documents have no asset link', scope: 'Nordkapp documents', tone: 'neutral', level: 'Low', since: REFERENCE_NOW - 6 * DAY, icon: <IconLink /> },
+];
+
+const DQ_PIPELINE_COLUMNS: DataTableColumn<DqPipeline>[] = [
+  {
+    id: 'pipeline',
+    header: 'Pipeline',
+    cell: (pipeline) => (
+      <div>
+        <div className="font-medium whitespace-nowrap">{pipeline.id}</div>
+        <div className="text-xs text-[var(--kit-text-2)]">
+          {pipeline.kind} · {pipeline.source}
+        </div>
       </div>
-      <StatusIndicator size="sm" tone={fresh ? 'success' : 'warning'} shape={fresh ? 'dot' : 'square'} label={fresh ? 'Fresh' : 'Stale'} detail={expectedLabel} />
-      <span className="text-xs text-muted-foreground tabular-nums">Last update {formatDateTime(lastUpdate)}</span>
-    </Card>
+    ),
+  },
+  { id: 'schedule', header: 'Schedule', muted: true, nowrap: true, cell: (pipeline) => pipeline.schedule },
+  { id: 'state', header: 'Last run', nowrap: true, cell: (pipeline) => <StatusPill tone={RUN_TONE[dqLastRun(pipeline).status]}>{RUN_LABEL[dqLastRun(pipeline).status]}</StatusPill> },
+  {
+    id: 'history',
+    header: 'Last 24 runs',
+    width: 'w-56',
+    cell: (pipeline) => <RunStrip label={`Last 24 runs of ${pipeline.id}`} runs={pipeline.runs} variant="blocks" height={18} formatStart={formatDateTime} />,
+  },
+  { id: 'rate', header: 'Success', numeric: true, nowrap: true, cell: (pipeline) => `${formatNumber(summarizeRuns(pipeline.runs).successRate, 0)} %` },
+  { id: 'next', header: 'Next run', numeric: true, nowrap: true, muted: true, cell: (pipeline) => (pipeline.nextRunAt ? formatTime(pipeline.nextRunAt) : 'On trigger') },
+];
+
+const dqPipelineTone = (pipeline: DqPipeline): Tone | undefined => {
+  const status = dqLastRun(pipeline).status;
+  return status === 'success' ? undefined : RUN_TONE[status];
+};
+
+const DQ_NAV: AppFrameNavItem[] = [
+  { id: 'health', label: 'Data health', icon: <IconCircleCheck /> },
+  { id: 'pipelines', label: 'Pipelines', icon: <IconRoute />, badge: '1' },
+  { id: 'sources', label: 'Sources', icon: <IconServer /> },
+  { id: 'gaps', label: 'Gaps', icon: <IconTimeline /> },
+  { id: 'issues', label: 'Issues', icon: <IconAlertTriangle />, badge: '4' },
+];
+
+const DQ_LAG = makeValues({ seed: 71, points: 24, base: 38, amplitude: 6, noise: 5, min: 20, decimals: 0 });
+
+const DQ_BACKFILL_LAG = makeValues({ seed: 72, points: 24, base: 5, amplitude: 1, noise: 0.5, drift: -2.6, min: 1, decimals: 1 });
+
+const DQ_SAP_AGE = [18, 4, 22, 9, 26, 12, 28, 6, 20, 10, 24, 8, 27, 14, 3, 20, 5, 34, 64, 94, 124, 154, 184, 192];
+
+const DQ_DOCS_AGE = Array.from({ length: 24 }, (_, index) => (index + 12) % 24);
+
+const DQ_HOURS = Array.from({ length: 25 }, (_, index) => formatTime(DQ_DAY_START + index * HOUR));
+
+const DQ_SCORE_TREND = makeValues({ seed: 77, points: 25, base: 92, amplitude: 1, noise: 0.6, drift: -6, decimals: 1 });
+
+function DqSheet({ look, children }: { look: LookId; children: ReactNode }) {
+  return (
+    <LookScope look={look} className="flex h-full flex-col">
+      <Canvas className="flex-1">{children}</Canvas>
+    </LookScope>
   );
 }
 
-function PipelineName({ pipeline }: { pipeline: Pipeline }) {
+function DqGapTimeline({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col">
-      <span className="truncate font-mono text-sm text-base-foreground">{pipeline.id}</span>
-      <span className="truncate text-xs text-muted-foreground">
-        {pipeline.kind} · {pipeline.source}
-      </span>
-    </div>
+    <GapTimeline
+      label="Data gaps for five series over the last 24 hours; the bearing temperature has had no data since 05:00"
+      rows={DQ_GAPS}
+      start={DQ_DAY_START}
+      end={REFERENCE_NOW}
+      ticks={compact ? DQ_GAP_TICKS.filter((_, index) => index % 2 === 0) : DQ_GAP_TICKS}
+    />
   );
 }
 
-function DataQualityFreshnessTile() {
-  return <FreshnessTile label="Nordkapp time series" lastUpdate={REFERENCE_NOW - 42_000} expectedMs={MINUTE} expectedLabel="expected every 60 s" />;
-}
-
-function DataQualityFreshnessStale() {
-  return <FreshnessTile label="Nordkapp work orders" lastUpdate={REFERENCE_NOW - 192 * MINUTE} expectedMs={30 * MINUTE} expectedLabel="expected every 30 min" />;
-}
-
-function DataQualityCoverage() {
+function DqIssueList({ limit = 4 }: { limit?: number }) {
   return (
-    <Card className="w-full max-w-64 gap-3">
-      <span className="text-xs text-muted-foreground">Tag coverage, last 24 h</span>
-      <ValueReadout value={96.8} unit="%" decimals={1} />
-      <LinearGauge label="Tags with data in the last 24 hours" value={96.8} target={99} unit="%" decimals={1} size="sm" showHeader={false} />
-      <span className="text-xs text-muted-foreground tabular-nums">12,081 of 12,480 tags · target 99 %</span>
-    </Card>
-  );
-}
-
-function DataQualityFreshnessList() {
-  return (
-    <ul aria-label="Freshness by source" className="flex w-full max-w-lg flex-col divide-y divide-default">
-      {SOURCES.map((item) => {
-        const fresh = REFERENCE_NOW - item.lastSeen <= item.expectedMs;
-        return (
-          <li key={item.id} className="grid grid-cols-[minmax(0,1fr)_6rem_5rem] items-center gap-3 py-2">
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm text-base-foreground">{item.name}</span>
-              <span className="truncate text-xs text-muted-foreground">Expected every {formatDuration(item.expectedMs)}</span>
-            </div>
-            <span className={`text-right text-sm tabular-nums ${fresh ? 'text-base-foreground' : 'font-medium text-warning-foreground-strong'}`}>{ageOf(item.lastSeen)} ago</span>
-            <StatusIndicator size="sm" tone={fresh ? 'success' : 'warning'} shape={fresh ? 'dot' : 'square'} label={fresh ? 'Fresh' : 'Stale'} />
-          </li>
-        );
-      })}
+    <ul>
+      {DQ_ISSUES.slice(0, limit).map((issue) => (
+        <ListRow
+          key={issue.id}
+          tone={issue.tone}
+          leading={
+            <IconChip tone={issue.tone} size="sm">
+              {issue.icon}
+            </IconChip>
+          }
+          title={issue.title}
+          meta={
+            <>
+              <TagId>{issue.scope}</TagId> · {issue.level}
+            </>
+          }
+          trailing={formatAgo(issue.since)}
+        />
+      ))}
     </ul>
+  );
+}
+
+function DqFreshnessStats() {
+  return (
+    <StatGroup columns={4} label="Freshness per data type">
+      <Stat label="Time series lag" value={42} unit="s" icon={<IconClock />} tone="success" state="Fresh" target="Expected within 1 min" sparkline={DQ_LAG} />
+      <Stat label="Backfill lag" value={2.4} decimals={1} unit="min" icon={<IconDatabase />} tone="warning" state="Late" target="Expected within 1 min" sparkline={DQ_BACKFILL_LAG} />
+      <Stat label="Work orders age" value="3 h 12 min" icon={<IconTool />} tone="critical" state="Stale" stateIcon={<IconAlertOctagon />} target="Expected every 30 min" sparkline={DQ_SAP_AGE} />
+      <Stat label="Documents age" value={12} unit="h" icon={<IconFileText />} tone="success" state="Fresh" target="Synced nightly" sparkline={DQ_DOCS_AGE} />
+    </StatGroup>
+  );
+}
+
+function DataQualityFreshness() {
+  return (
+    <DqSheet look="studio">
+      <Grid>
+        <div className="col-span-12">
+          <DqFreshnessStats />
+        </div>
+        <Panel
+          className="col-span-12"
+          title="Arrival delay by source"
+          subtitle="Each cell is one hour of the last 24; darker means later than expected"
+          icon={
+            <IconChip tone="blue">
+              <IconClock />
+            </IconChip>
+          }
+        >
+          <HeatStrip
+            label="Arrival delay per hour by source over the last 24 hours; SAP has been late since 10:48"
+            size="lg"
+            rows={[
+              { label: 'OPC UA', values: makeValues({ seed: 91, points: 24, base: 1, noise: 0.8, min: 0, decimals: 0 }), tone: 'success' },
+              { label: 'PI historian', values: makeValues({ seed: 92, points: 24, base: 2, noise: 1.2, drift: 4, min: 0, decimals: 0 }), tone: 'warning' },
+              { label: 'SAP', values: [1, 0, 1, 1, 0, 1, 2, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 9, 9, 9, 9], tone: 'critical' },
+              { label: 'Document archive', values: makeValues({ seed: 94, points: 24, base: 0.6, noise: 0.5, min: 0, decimals: 0 }), tone: 'success' },
+            ]}
+            max={9}
+            ticks={['14:00', '20:00', '02:00', '08:00', 'Now']}
+            scale={{ label: 'Delay against the expected interval', low: 'On time', high: '3× late' }}
+          />
+        </Panel>
+      </Grid>
+    </DqSheet>
+  );
+}
+
+function DataQualityFreshnessBySource() {
+  return (
+    <DqSheet look="console">
+      <Grid>
+        <Panel className="col-span-9" title="Sources" subtitle="5 connected systems" padding="none">
+          <DataTable label="Freshness by source system" flush columns={DQ_SOURCE_COLUMNS} rows={DQ_SOURCES} rowKey={(row) => row.id} rowTone={dqSourceTone} />
+        </Panel>
+        <Grid stack className="col-span-3">
+          <Stat label="Sources fresh" value="3 of 5" tone="warning" target="1 late · 1 stale" />
+          <Stat label="Oldest data" value="3 h 12 min" tone="critical" target="SAP · limit 30 min" />
+        </Grid>
+      </Grid>
+    </DqSheet>
   );
 }
 
 function DataQualityCompleteness() {
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <span className="text-xs text-muted-foreground">Records received against expected, last 24 h</span>
-      {COMPLETENESS.map((row) => {
-        const percent = (row.received / row.expected) * 100;
-        return (
-          <div key={row.source} className="flex flex-col gap-1">
-            <LinearGauge label={row.source} value={percent} unit="%" decimals={1} size="sm" tone={percent < 90 ? 'warning' : 'neutral'} />
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {formatValue(row.received)} of {formatValue(row.expected)} · {formatValue(row.expected - row.received)} missing
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function DataQualityScore() {
-  return (
-    <ul aria-label="Quality score by data set" className="flex w-full max-w-lg flex-col divide-y divide-default">
-      {DATA_SETS.map((dataSet) => {
-        const tone = scoreTone(dataSet.score);
-        const change = dataSet.score - dataSet.previous;
-        return (
-          <li key={dataSet.id} className="grid grid-cols-[minmax(0,1fr)_6rem_2.5rem] items-center gap-3 py-2">
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm text-base-foreground">{dataSet.name}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {dataSet.issue}
-                {change === 0 ? '' : ` · ${change > 0 ? 'up' : 'down'} ${Math.abs(change)} since last week`}
-              </span>
-            </div>
-            <LinearGauge label={`${dataSet.name} quality score`} value={dataSet.score} size="sm" tone={tone} showHeader={false} />
-            <ValueReadout size="sm" value={dataSet.score} tone={tone} className="justify-end" />
-          </li>
-        );
-      })}
-    </ul>
+    <DqSheet look="soft">
+      <Panel tone="teal" title="Completeness" subtitle="Rows received against rows expected, last 24 hours">
+        <div className="flex flex-col gap-5">
+          {DQ_COMPLETENESS.map((row) => (
+            <Meter key={row.source} size="lg" label={row.source} value={row.share} min={80} max={100} decimals={1} unit="%" tone={row.tone} target={{ value: 99, label: 'Target' }} />
+          ))}
+        </div>
+      </Panel>
+    </DqSheet>
   );
 }
 
 function DataQualityContextualisation() {
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Contextualisation coverage</span>
-        <span className="text-xs text-muted-foreground tabular-nums">1,260 assets</span>
-      </div>
-      {LINKS.map((link) => (
-        <div key={link.label} className="flex flex-col gap-1">
-          <LinearGauge label={link.label} value={(link.linked / link.total) * 100} unit="%" size="sm" />
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {formatValue(link.linked)} linked · {formatValue(link.total - link.linked)} to resolve
-          </span>
+    <DqSheet look="glass">
+      <Panel title="Contextualisation" subtitle="Share of 1,260 assets linked to each data type">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-8 py-2">
+          {DQ_LINKS.map((link) => (
+            <div key={link.label} className="flex items-center gap-4">
+              <RingGauge label={`Assets with ${link.label.toLowerCase()}`} value={(link.linked / link.total) * 100} tone={link.tone} size={104} hideLabel />
+              <div>
+                <p className="text-sm font-semibold">{link.label}</p>
+                <p className="text-xs tabular-nums text-[var(--kit-text-2)]">
+                  {formatNumber(link.linked)} of {formatNumber(link.total)}
+                </p>
+                <p className="text-xs tabular-nums text-[var(--kit-text-2)]">{formatNumber(link.total - link.linked)} to link</p>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
+      </Panel>
+    </DqSheet>
   );
 }
 
-function DataQualityRunStates() {
+function DataQualityScores() {
   return (
-    <div className="flex flex-col gap-3">
-      <StatusIndicator {...RUN_STATUS.success} />
-      <StatusIndicator {...RUN_STATUS.running} detail="61 %" />
-      <StatusIndicator {...RUN_STATUS.failed} />
-      <StatusIndicator {...RUN_STATUS.skipped} detail="upstream failed" />
-    </div>
-  );
-}
-
-function DataQualityRunRow() {
-  return (
-    <ul aria-label="Latest pipeline runs" className="flex w-full flex-col divide-y divide-default">
-      {PIPELINES.slice(0, 4).map((pipeline) => (
-        <li key={pipeline.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_3.5rem_8rem_6.5rem] items-center gap-3 py-2">
-          <PipelineName pipeline={pipeline} />
-          <StatusIndicator size="sm" {...RUN_STATUS[pipeline.status]} />
-          <span className="text-right text-xs text-muted-foreground tabular-nums">{pipeline.durationMs === null ? '—' : formatDuration(pipeline.durationMs)}</span>
-          <span className="text-right text-sm whitespace-nowrap text-base-foreground tabular-nums">{formatRows(pipeline.rows)} rows</span>
-          <span className="text-right text-xs whitespace-nowrap text-muted-foreground tabular-nums">{ageOf(pipeline.startedAt)} ago</span>
-        </li>
-      ))}
-    </ul>
+    <DqSheet look="poster">
+      <Grid>
+        <SectionHeader className="col-span-12" title="Quality score per data set" description="Completeness, timeliness and validity rolled into one figure out of 100." />
+        {DQ_DATA_SETS.map((set) => (
+          <Stat
+            key={set.id}
+            className="col-span-3"
+            size="lg"
+            label={set.name}
+            value={set.score}
+            unit="/ 100"
+            tone={set.tone}
+            delta={{ value: set.score - set.previous, decimals: 0, unit: ' pts', caption: 'vs last week' }}
+            target={set.issue}
+          />
+        ))}
+      </Grid>
+    </DqSheet>
   );
 }
 
 function DataQualityRunHistory() {
+  const [selected, setSelected] = useState('run-19');
+  const run = DQ_SAP.runs.find((entry) => entry.id === selected) ?? dqLastRun(DQ_SAP);
+  const summary = summarizeRuns(DQ_SAP.runs);
+
   return (
-    <ul aria-label="Run history by pipeline" className="flex w-full max-w-lg flex-col gap-4">
-      {PIPELINES.slice(0, 4).map((pipeline) => {
-        const summary = summarizeRuns(pipeline.history);
-        return (
-          <li key={pipeline.id} className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate font-mono text-sm text-base-foreground">{pipeline.id}</span>
-              <span className="text-xs text-muted-foreground tabular-nums">
-                {summary.counts.success} of {summary.total} succeeded
-              </span>
+    <DqSheet look="studio">
+      <Grid>
+        <Panel
+          className="col-span-8"
+          title="sap-work-orders"
+          subtitle="Extractor · every 30 min · last 24 runs, bar height is duration"
+          icon={
+            <IconChip tone="critical">
+              <IconPlugConnected />
+            </IconChip>
+          }
+          actions={
+            <StatusPill tone="critical" icon={<IconAlertOctagon />}>
+              {summary.consecutiveFailures} failures in a row
+            </StatusPill>
+          }
+          footer="Select a run to inspect it"
+        >
+          <div className="flex flex-col gap-4">
+            <RunStrip label="Last 24 runs of sap-work-orders" runs={DQ_SAP.runs} height={120} selected={selected} onSelect={setSelected} formatStart={formatDateTime} />
+            <div className="flex justify-between text-xs tabular-nums text-[var(--kit-text-2)]">
+              <span>{formatDateTime(DQ_SAP.runs[0].startedAt)}</span>
+              <span>Success rate {formatNumber(summary.successRate, 0)} %</span>
+              <span>{formatDateTime(dqLastRun(DQ_SAP).startedAt)}</span>
             </div>
-            <RunHistoryStrip label={`${pipeline.id}, last ${pipeline.history.length} runs`} runs={pipeline.history} />
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function DataQualityFailedRun() {
-  const pipeline = PIPELINES[2];
-  const [state, setState] = useState<'failed' | 'queued'>('failed');
-  return (
-    <Card className="w-full max-w-lg">
-      <div className="flex items-start justify-between gap-4">
-        <PipelineName pipeline={pipeline} />
-        {state === 'failed' ? <StatusIndicator variant="badge" {...RUN_STATUS.failed} /> : <StatusIndicator variant="badge" tone="info" label="Retry queued" />}
-      </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-medium text-base-foreground">The SAP gateway rejected the sign-in</p>
-        <p className="text-sm text-muted-foreground">The service account password expired on 12 Mar. Renew it in the extractor configuration, then retry.</p>
-      </div>
-      <pre className="overflow-x-auto rounded-lg bg-muted-background p-3 font-mono text-xs text-base-foreground">
-        {'11:02:14  POST /sap/opu/odata/PM_ORDER  401 Unauthorized\n11:02:14  Run aborted after 4 s, 0 rows written'}
-      </pre>
-      <div className="flex items-center justify-between gap-4">
-        <span className="text-xs text-muted-foreground tabular-nums">
-          Run 4 of 4 failed since {formatTime(REFERENCE_NOW - 268 * MINUTE)} · started {formatTime(pipeline.startedAt)}
-        </span>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="ghost" size="sm">
-            View log
-          </Button>
-          <Button variant="secondary" size="sm" disabled={state === 'queued'} onClick={() => setState('queued')}>
-            <IconRefresh /> Retry run
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function DataQualitySchedule() {
-  return (
-    <ul aria-label="Schedules and next runs" className="flex w-full max-w-lg flex-col divide-y divide-default">
-      {PIPELINES.map((pipeline) => (
-        <li key={pipeline.id} className="flex items-center gap-3 py-2">
-          <IconCalendar aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate font-mono text-sm text-base-foreground">{pipeline.id}</span>
-            <span className="truncate text-xs text-muted-foreground">{pipeline.schedule}</span>
           </div>
-          <div className="flex shrink-0 flex-col items-end">
-            <span className="text-sm text-base-foreground tabular-nums">{pipeline.nextRunAt === null ? 'Waiting' : formatTime(pipeline.nextRunAt)}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {pipeline.nextRunAt === null ? 'on upstream run' : `in ${formatDuration(pipeline.nextRunAt - REFERENCE_NOW)}`}
-            </span>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function DataQualitySourceStatus() {
-  return (
-    <ul aria-label="Data source status" className="flex w-full max-w-lg flex-col divide-y divide-default">
-      {SOURCES.map((item) => (
-        <li key={item.id} className="flex items-center gap-3 py-2">
-          <div className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-sm text-base-foreground">
-              {item.name} <span className="text-muted-foreground">· {item.system}</span>
-            </span>
-            <span className="truncate text-xs text-muted-foreground tabular-nums">{item.detail}</span>
-          </div>
-          <span className="w-24 shrink-0">
-            <StatusIndicator size="sm" {...item.status} />
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function DataQualityLineage() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <ol aria-label="Lineage of maintenance work orders, source to data model" className="flex min-w-3xl items-stretch">
-        {LINEAGE.map((step, index) => (
-          <Fragment key={step.id}>
-            <li className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl bg-card-background p-3">
-              <span className="text-xs text-muted-foreground">{step.stage}</span>
-              <span className="truncate font-mono text-sm text-base-foreground">{step.name}</span>
-              <span className="truncate text-xs text-muted-foreground tabular-nums">{step.detail}</span>
-              <StatusIndicator size="sm" {...RUN_STATUS[step.status]} label={step.status === 'success' ? 'Up to date' : RUN_STATUS[step.status].label} />
-            </li>
-            {index < LINEAGE.length - 1 ? (
-              <li aria-hidden role="presentation" className="flex shrink-0 items-center px-1 text-muted-foreground">
-                <IconArrowNarrowRight className="size-5" />
-              </li>
-            ) : null}
-          </Fragment>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
-function DataQualityGapTimeline() {
-  const { tag, gaps } = TAG_GAPS[1];
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-3">
-      <div className="flex items-center justify-between gap-4">
-        <TagChip tag={tag} />
-        <span className="text-xs text-muted-foreground">Cooler outlet temperature · last 24 h</span>
-      </div>
-      <GapTimeline label={`${tag}, last 24 hours`} start={DAY_START} end={REFERENCE_NOW} gaps={gaps} startLabel={formatDateTime(DAY_START)} endLabel="Now" showSummary />
-    </div>
-  );
-}
-
-function DataQualityGapList() {
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-3">
-      <ul aria-label="Data gaps by tag, last 24 hours" className="flex flex-col gap-3">
-        {TAG_GAPS.map(({ tag, gaps }) => {
-          const coverage = coveragePercent(DAY_START, REFERENCE_NOW, gaps);
-          return (
-            <li key={tag} className="grid grid-cols-[7rem_minmax(0,1fr)_3.5rem] items-center gap-3">
-              <span className="font-mono text-xs text-base-foreground">{tag}</span>
-              <GapTimeline size="sm" label={`${tag}, last 24 hours`} start={DAY_START} end={REFERENCE_NOW} gaps={gaps} />
-              <span className={`text-right text-xs tabular-nums ${coverage < 90 ? 'font-medium text-warning-foreground-strong' : 'text-muted-foreground'}`}>{formatValue(coverage, 1)} %</span>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="grid grid-cols-[7rem_minmax(0,1fr)_3.5rem] gap-3 text-xs text-muted-foreground tabular-nums">
-        <span />
-        <span className="flex justify-between">
-          <span>{formatDateTime(DAY_START)}</span>
-          <span>Now</span>
-        </span>
-        <span />
-      </div>
-    </div>
-  );
-}
-
-function DataQualityLatency() {
-  const peak = Math.max(...LATENCY_BUCKETS.map((bucket) => bucket.share));
-  return (
-    <div className="flex w-full max-w-64 flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">Ingestion latency, last hour</span>
-        <div className="flex items-baseline gap-3">
-          <ValueReadout value={1.4} unit="s" decimals={1} />
-          <span className="text-xs text-muted-foreground tabular-nums">median · p95 8.2 s</span>
-        </div>
-      </div>
-      <div
-        role="img"
-        aria-label={`Latency distribution: ${LATENCY_BUCKETS.map((bucket) => `${bucket.label} ${bucket.share} percent`).join(', ')}`}
-        className="grid grid-cols-6 items-end gap-1"
-      >
-        {LATENCY_BUCKETS.map((bucket) => (
-          <div key={bucket.label} className="flex flex-col items-center gap-1">
-            <span className="text-xs text-muted-foreground tabular-nums">{bucket.share}</span>
-            <div className="flex h-16 w-full items-end">
-              <span className="w-full rounded-xs bg-chart-1-450" style={{ height: `${Math.max((bucket.share / peak) * 100, 3)}%` }} />
-            </div>
-            <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">{bucket.label}</span>
-          </div>
-        ))}
-      </div>
-      <span className="text-xs text-muted-foreground">Share of data points, %</span>
-    </div>
-  );
-}
-
-function DataQualityDuplicates() {
-  const rows: readonly { label: string; count: number; note: string; tone: Tone }[] = [
-    { label: 'Duplicate data points', count: 1_284, note: 'Removed on ingestion', tone: 'neutral' },
-    { label: 'Outliers flagged', count: 37, note: 'Outside instrument range', tone: 'warning' },
-    { label: 'Out-of-order points', count: 212, note: 'Re-sorted by timestamp', tone: 'neutral' },
-  ];
-  return (
-    <div className="flex w-full max-w-64 flex-col gap-3">
-      <span className="text-xs text-muted-foreground">Cleaning, last 24 h</span>
-      <ul className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <li key={row.label} className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 flex-col">
-              <span className="text-sm text-base-foreground">{row.label}</span>
-              <span className="text-xs text-muted-foreground">{row.note}</span>
-            </div>
-            <ValueReadout size="sm" value={row.count} tone={row.tone} />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function DataQualitySla() {
-  return (
-    <Card className="w-full max-w-64 gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground">Freshness SLA, March</span>
-        <StatusIndicator size="sm" tone="warning" shape="square" label="At risk" />
-      </div>
-      <ValueReadout value={99.21} unit="%" decimals={2} tone="warning" />
-      <LinearGauge label="Time within freshness SLA this month" value={99.21} min={98} max={100} target={99.5} unit="%" decimals={2} size="sm" tone="warning" showHeader={false} />
-      <span className="text-xs text-muted-foreground tabular-nums">Target 99.50 % · 2 h 12 min of 3 h 43 min budget used</span>
-    </Card>
-  );
-}
-
-function DataQualityDataSetCard() {
-  const dataSet = DATA_SETS[2];
-  return (
-    <Card className="w-full max-w-lg">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>{dataSet.name}</CardTitle>
-          <CardDescription>Work orders, notifications and operations from SAP PM</CardDescription>
-        </CardHeaderCenter>
-        <CardHeaderEnd>
-          <StatusIndicator variant="badge" tone="critical" label="Stale" />
-        </CardHeaderEnd>
-      </CardHeader>
-      <CardContent>
-        <div className="grid w-full grid-cols-3 gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Quality score</span>
-            <ValueReadout size="md" value={dataSet.score} tone={scoreTone(dataSet.score)} />
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Last update</span>
-            <ValueReadout size="md" value={3.2} unit="h ago" decimals={1} tone="warning" />
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Records</span>
-            <ValueReadout size="md" value={47_902} />
-          </div>
-        </div>
-        <MetadataList
-          items={[
-            { label: 'Owner', value: 'Magnus Solberg' },
-            { label: 'Pipelines', value: '2 · 1 failing' },
-            { label: 'Linked to assets', value: '96 %' },
-            { label: 'Next run', value: formatTime(PIPELINES[2].nextRunAt ?? REFERENCE_NOW) },
-          ]}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function DataQualityIssueList() {
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Open data issues</span>
-        <span className="text-xs text-muted-foreground tabular-nums">{ISSUES.length} open · most severe first</span>
-      </div>
-      <ul className="flex flex-col divide-y divide-default">
-        {ISSUES.map((issue) => (
-          <li key={issue.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-baseline gap-3 py-2">
-            <StatusIndicator size="sm" tone={issue.tone} shape={issue.shape} label={issue.label} />
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm text-base-foreground">{issue.title}</span>
-              <span className="truncate font-mono text-xs text-muted-foreground">{issue.scope}</span>
-            </div>
-            <span className="text-xs text-muted-foreground tabular-nums">{ageOf(issue.since)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+        </Panel>
+        <Panel className="col-span-4" title={`Run at ${formatTime(run.startedAt)}`} subtitle={formatDateTime(run.startedAt)} actions={<StatusPill tone={RUN_TONE[run.status]}>{RUN_LABEL[run.status]}</StatusPill>}>
+          <ul>
+            <ListRow title="Duration" trailing={formatDuration(run.durationMs)} />
+            <ListRow title="Rows written" trailing={formatNumber(run.rows ?? 0)} />
+            <ListRow title="Triggered by" trailing="Schedule" />
+          </ul>
+          {run.error ? <p className="mt-3 text-sm leading-5 text-[var(--kit-line-critical)]">{run.error}</p> : <p className="mt-3 text-sm leading-5 text-[var(--kit-text-2)]">Completed without warnings.</p>}
+        </Panel>
+      </Grid>
+    </DqSheet>
   );
 }
 
 function DataQualityPipelineTable() {
   return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-4xl border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Pipeline
-            </th>
-            <th scope="col" className={TH}>
-              Last run
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Started
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Duration
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Rows
-            </th>
-            <th scope="col" className={TH}>
-              Last 14 runs
-            </th>
-            <th scope="col" className={TH}>
-              Schedule
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Next run
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {PIPELINES.map((pipeline) => (
-            <tr key={pipeline.id} className="border-t border-default">
-              <td className={TD}>
-                <PipelineName pipeline={pipeline} />
-              </td>
-              <td className={TD}>
-                <StatusIndicator size="sm" {...RUN_STATUS[pipeline.status]} />
-              </td>
-              <td className={`${TD} text-right whitespace-nowrap text-muted-foreground tabular-nums`}>{formatTime(pipeline.startedAt)}</td>
-              <td className={`${TD} text-right whitespace-nowrap text-muted-foreground tabular-nums`}>
-                {pipeline.durationMs === null ? '—' : formatDuration(pipeline.durationMs)}
-              </td>
-              <td className={`${TD} text-right text-base-foreground tabular-nums`}>{formatRows(pipeline.rows)}</td>
-              <td className={TD}>
-                <RunHistoryStrip size="sm" label={`${pipeline.id}, last ${pipeline.history.length} runs`} runs={pipeline.history} />
-              </td>
-              <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{pipeline.schedule}</td>
-              <td className={`${TD} text-right whitespace-nowrap text-base-foreground tabular-nums`}>{pipeline.nextRunAt === null ? '—' : formatTime(pipeline.nextRunAt)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DqSheet look="console">
+      <Panel title="Pipelines" subtitle="5 pipelines · 1 failing · 1 running" padding="none">
+        <DataTable label="Pipelines with their last runs" flush columns={DQ_PIPELINE_COLUMNS} rows={DQ_PIPELINES} rowKey={(pipeline) => pipeline.id} rowTone={dqPipelineTone} />
+      </Panel>
+    </DqSheet>
+  );
+}
+
+function DataQualityLineage() {
+  const [selected, setSelected] = useState('extract');
+  const note = DQ_LINEAGE_NOTE[selected] ?? DQ_LINEAGE_NOTE.extract;
+  const node = DQ_LINEAGE.find((entry) => entry.id === selected) ?? DQ_LINEAGE[1];
+
+  return (
+    <DqSheet look="studio">
+      <Panel
+        title="Lineage of maintenance work orders"
+        subtitle="From SAP to the data model · select a step"
+        icon={
+          <IconChip tone="purple">
+            <IconRoute />
+          </IconChip>
+        }
+      >
+        <div className="flex flex-col gap-5">
+          <LineageFlow label="Lineage of work orders from SAP to the data model" nodes={DQ_LINEAGE} selected={selected} onSelect={setSelected} />
+          <div data-tone={node.tone} className="flex flex-wrap items-center gap-4 rounded-[var(--kit-radius-sm)] bg-[var(--t-soft)] p-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-[var(--kit-text)]">{note.title}</p>
+              <p className="text-sm leading-5 text-[var(--kit-text-2)]">{note.text}</p>
+            </div>
+            <Button variant="outline" size="sm">
+              {note.action}
+            </Button>
+          </div>
+        </div>
+      </Panel>
+    </DqSheet>
+  );
+}
+
+function DataQualityFailedRun() {
+  return (
+    <DqSheet look="blueprint">
+      <Grid>
+        <Panel className="col-span-12" title="Data flow DF-014 · SAP work orders" subtitle="Rev B · 12 Mar 2026">
+          <LineageFlow label="Lineage of work orders drawn as a data flow" nodes={DQ_LINEAGE} />
+        </Panel>
+        <Panel className="col-span-5" title="Failed run" subtitle="run-23 · 13:58">
+          <ul>
+            <ListRow title="Pipeline" trailing={<TagId>sap-work-orders</TagId>} />
+            <ListRow title="Stopped after" trailing="4 s" />
+            <ListRow title="Step" trailing="Authenticate" />
+            <ListRow tone="critical" title="Consecutive failures" trailing="7" />
+          </ul>
+        </Panel>
+        <Panel className="col-span-7" title="Log" subtitle="Last 7 lines" actions={<Button variant="outline" size="sm">Retry run</Button>}>
+          <pre className="overflow-x-auto font-mono text-xs leading-5 whitespace-pre-wrap text-[var(--kit-text)]">
+            {`13:58:02  INFO   Starting sap-work-orders, schedule tick
+13:58:02  INFO   Requesting token for svc-cdf-extract
+13:58:05  ERROR  401 Unauthorized from SAP gateway
+13:58:06  ERROR  Token rejected: credentials expired 12 Mar 10:45
+13:58:06  INFO   Run failed after 4 s, next attempt 14:28
+13:58:06  WARN   7 consecutive failures, paging integration on call
+13:58:07  INFO   Downstream tr-work-order-links marked as skipped`}
+          </pre>
+        </Panel>
+      </Grid>
+    </DqSheet>
+  );
+}
+
+function DataQualitySchedule() {
+  return (
+    <DqSheet look="soft">
+      <Panel tone="blue" title="Next runs" subtitle="Schedule for the coming hours">
+        <ul>
+          {[...DQ_PIPELINES]
+            .sort((a, b) => (a.nextRunAt ?? Infinity) - (b.nextRunAt ?? Infinity))
+            .map((pipeline) => (
+              <ListRow
+                key={pipeline.id}
+                leading={
+                  <IconChip tone={RUN_TONE[dqLastRun(pipeline).status]} size="sm">
+                    {pipeline.kind === 'Extractor' ? <IconPlugConnected /> : <IconArrowsShuffle />}
+                  </IconChip>
+                }
+                title={pipeline.id}
+                meta={pipeline.schedule}
+                trailing={pipeline.nextRunAt ? `${formatTime(pipeline.nextRunAt)} · in ${formatDuration(pipeline.nextRunAt - REFERENCE_NOW)}` : 'On trigger'}
+              />
+            ))}
+        </ul>
+      </Panel>
+    </DqSheet>
+  );
+}
+
+function DataQualitySourceStatus() {
+  return (
+    <DqSheet look="signal">
+      <StatGroup columns={2} label="Source systems" className="h-full">
+        <Stat label="OPC UA · Nordkapp DCS" value="42 s" tone="success" state="Fresh" stateIcon={<IconCircleCheck />} target="Limit 1 min" />
+        <Stat label="PI · Plant historian" value="2.4 min" tone="warning" state="Late" stateIcon={<IconAlertTriangle />} target="Limit 1 min" />
+        <Stat label="SAP · Maintenance" value="3 h 12 min" tone="critical" state="Stale" stateIcon={<IconAlertOctagon />} target="Limit 30 min" />
+        <Stat label="Document archive" value="12 h" tone="success" state="Fresh" stateIcon={<IconCircleCheck />} target="Limit 24 h" />
+      </StatGroup>
+    </DqSheet>
+  );
+}
+
+function DataQualityGapTimeline() {
+  return (
+    <DqSheet look="studio">
+      <Grid>
+        <Panel
+          className="col-span-9"
+          title="Gaps in the last 24 hours"
+          subtitle="Five series on the 1st stage compressor and its auxiliaries"
+          icon={
+            <IconChip tone="amber">
+              <IconTimeline />
+            </IconChip>
+          }
+        >
+          <DqGapTimeline />
+        </Panel>
+        <Grid stack className="col-span-3">
+          <Stat label="Mean coverage" value={DQ_MEAN_COVERAGE} decimals={1} unit="%" tone="warning" target="Target 99.0 %" />
+          <Stat label="Longest gap" value={formatDuration(longestGap(DQ_DAY_START, REFERENCE_NOW, DQ_ALL_GAPS))} tone="critical" target="40-TT-40015 · ongoing" />
+          <Stat label="Series with gaps" value="4 of 5" target="6 gaps in total" />
+        </Grid>
+      </Grid>
+    </DqSheet>
+  );
+}
+
+function DataQualityGapList() {
+  return (
+    <DqSheet look="editorial">
+      <Panel title="Gaps by length" subtitle="Last 24 hours, longest first">
+        <DataTable label="Data gaps over the last 24 hours, longest first" columns={DQ_GAP_COLUMNS} rows={DQ_GAP_LIST} rowKey={(gap) => gap.id} />
+      </Panel>
+    </DqSheet>
+  );
+}
+
+function DataQualityLatency() {
+  return (
+    <DqSheet look="glass">
+      <Panel title="Ingestion latency" subtitle="Measurement to availability, last 1,000 points">
+        <Histogram
+          label={`Distribution of ingestion latency for the last 1,000 points; ${formatNumber(DQ_LATE_SHARE, 1)} % arrived later than the 10 second target`}
+          counts={DQ_LATENCY_BINS}
+          min={0}
+          max={20}
+          xTitle="Latency, seconds"
+          yTitle="Points"
+          height={290}
+          limits={[{ value: 10, label: 'Target', tone: 'critical', side: 'above' }]}
+        />
+      </Panel>
+    </DqSheet>
+  );
+}
+
+function DataQualityCleaning() {
+  return (
+    <DqSheet look="poster">
+      <Panel title="Cleaning rules" subtitle="Rows touched in the last 24 hours">
+        <Bars
+          label="Rows touched by each cleaning rule in the last 24 hours; duplicates lead with 1,204"
+          orientation="horizontal"
+          categories={DQ_CLEANING.map((row) => row.rule)}
+          series={[{ id: 'rows', label: 'Rows', values: DQ_CLEANING.map((row) => row.rows), tone: 'amber' }]}
+          showValues
+          height={260}
+        />
+      </Panel>
+    </DqSheet>
+  );
+}
+
+function DataQualitySla() {
+  return (
+    <DqSheet look="signal">
+      <Grid>
+        <Stat className="col-span-12" size="hero" label="Freshness agreement, this month" value={98.1} decimals={1} unit="%" tone="warning" state="At risk" stateIcon={<IconAlertTriangle />} target="Agreed 99.0 % · 6 h 42 min of allowance used" />
+        <Stat className="col-span-6" label="Time series" value={99.8} decimals={1} unit="%" tone="success" state="Met" />
+        <Stat className="col-span-6" label="Work orders" value={93.4} decimals={1} unit="%" tone="critical" state="Missed" />
+      </Grid>
+    </DqSheet>
   );
 }
 
 function DataQualityOverview() {
-  const failing = PIPELINES.filter((pipeline) => pipeline.status === 'failed').length;
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>Data health, Nordkapp</CardTitle>
-          <CardDescription>
-            {SOURCES.length} sources · {PIPELINES.length} pipelines · checked {formatTime(REFERENCE_NOW)}
-          </CardDescription>
-        </CardHeaderCenter>
-        <CardHeaderEnd>
-          <StatusIndicator variant="badge" tone="warning" label={`${failing} pipeline failing`} />
-        </CardHeaderEnd>
-      </CardHeader>
-      <CardContent>
-        <div className="grid w-full grid-cols-2 gap-x-8 gap-y-4 lg:grid-cols-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Tag coverage, 24 h</span>
-            <ValueReadout value={96.8} unit="%" decimals={1} />
-            <span className="text-xs text-muted-foreground">Target 99 %</span>
+    <LookScope look="studio">
+      <AppFrame
+        brand={{ name: 'Nordkapp data', detail: 'Cognite Data Fusion', mark: <IconDatabase /> }}
+        nav={DQ_NAV}
+        current="health"
+        title="Data health"
+        subtitle="Thursday 12 March · updated 14:00 UTC"
+        status={
+          <StatusPill tone="critical" icon={<IconAlertOctagon />}>
+            1 source failing
+          </StatusPill>
+        }
+        actions={
+          <Button variant="outline" size="sm">
+            <IconRefresh /> Refresh
+          </Button>
+        }
+      >
+        <Grid>
+          <div className="col-span-12">
+            <DqFreshnessStats />
           </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Median latency</span>
-            <ValueReadout value={1.4} unit="s" decimals={1} />
-            <span className="text-xs text-muted-foreground tabular-nums">p95 8.2 s</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Oldest source</span>
-            <ValueReadout value={3.2} unit="h" decimals={1} tone="warning" />
-            <span className="text-xs text-muted-foreground">SAP, expected every 30 min</span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground">Freshness SLA, March</span>
-            <ValueReadout value={99.21} unit="%" decimals={2} tone="warning" />
-            <span className="text-xs text-muted-foreground tabular-nums">Target 99.50 %</span>
-          </div>
+          <Panel className="col-span-12" title="Pipelines" subtitle="5 pipelines · last 24 runs each" padding="none">
+            <DataTable label="Pipelines with their last runs" flush columns={DQ_PIPELINE_COLUMNS} rows={DQ_PIPELINES} rowKey={(pipeline) => pipeline.id} rowTone={dqPipelineTone} />
+          </Panel>
+          <Panel className="col-span-7" title="Gaps in the last 24 hours" subtitle="Watched series">
+            <DqGapTimeline compact />
+          </Panel>
+          <Panel className="col-span-5" title="Open issues" subtitle="4 open, most severe first" actions={<Button variant="ghost" size="sm">View all</Button>}>
+            <DqIssueList />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
+  );
+}
+
+function DataQualityOperations() {
+  return (
+    <DqSheet look="console">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="sm"
+          title="Pipeline operations"
+          description="Nordkapp · 14:00 UTC"
+          actions={
+            <StatusPill tone="critical" icon={<IconAlertOctagon />}>
+              sap-work-orders failing
+            </StatusPill>
+          }
+        />
+        <div className="col-span-12">
+          <StatGroup columns={4} label="Pipeline summary">
+            <Stat variant="plain" label="Runs today" value={412} />
+            <Stat variant="plain" label="Failed" value={8} tone="critical" />
+            <Stat variant="plain" label="Rows written" value="29.8 M" />
+            <Stat variant="plain" label="Median latency" value={1.2} decimals={1} unit="s" tone="success" />
+          </StatGroup>
         </div>
-        <div className="grid w-full grid-cols-1 gap-x-8 gap-y-4 border-t border-default pt-4 lg:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Sources</span>
-            <ul className="flex flex-col gap-2">
-              {SOURCES.map((item) => (
-                <li key={item.id} className="grid grid-cols-[minmax(0,1fr)_5.5rem_6rem] items-center gap-3">
-                  <span className="truncate text-sm text-base-foreground">{item.name}</span>
-                  <StatusIndicator size="sm" {...item.status} />
-                  <span className="text-right text-xs text-muted-foreground tabular-nums">{ageOf(item.lastSeen)} ago</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Pipelines, last 14 runs</span>
-            <ul className="flex flex-col gap-2">
-              {PIPELINES.slice(0, 4).map((pipeline) => (
-                <li key={pipeline.id} className="flex items-center justify-between gap-3">
-                  <span className="truncate font-mono text-xs text-base-foreground">{pipeline.id}</span>
-                  <RunHistoryStrip size="sm" label={`${pipeline.id}, last ${pipeline.history.length} runs`} runs={pipeline.history} />
-                </li>
-              ))}
-            </ul>
-          </div>
+        {DQ_PIPELINES.slice(0, 3).map((pipeline) => {
+          const summary = summarizeRuns(pipeline.runs);
+          const last = dqLastRun(pipeline);
+          return (
+            <Panel key={pipeline.id} className="col-span-4" tone={RUN_TONE[last.status]} title={pipeline.id} subtitle={pipeline.schedule}>
+              <div className="flex flex-col gap-3">
+                <RunStrip label={`Last 24 runs of ${pipeline.id}`} runs={pipeline.runs} height={72} formatStart={formatDateTime} />
+                <div className="flex items-center justify-between text-xs tabular-nums text-[var(--kit-text-2)]">
+                  <StatusPill tone={RUN_TONE[last.status]}>{RUN_LABEL[last.status]}</StatusPill>
+                  <span>
+                    {formatNumber(summary.successRate, 0)} % of {summary.total} runs
+                  </span>
+                </div>
+              </div>
+            </Panel>
+          );
+        })}
+        <Panel className="col-span-8" title="Sources" padding="none">
+          <DataTable label="Freshness by source system" flush columns={DQ_SOURCE_COLUMNS.filter((column) => column.id !== 'detail')} rows={DQ_SOURCES} rowKey={(row) => row.id} rowTone={dqSourceTone} />
+        </Panel>
+        <Panel className="col-span-4" title="Open issues" subtitle="4 open">
+          <DqIssueList limit={3} />
+        </Panel>
+      </Grid>
+    </DqSheet>
+  );
+}
+
+function DataQualityReport() {
+  return (
+    <DqSheet look="editorial">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="lg"
+          eyebrow="Nordkapp · weekly data quality report · week 11"
+          title="Maintenance data went stale on Thursday; everything else held"
+          description="One expired SAP credential stopped work orders for three hours and pulled the maintenance score from 88 to 71."
+        />
+        <div className="col-span-12">
+          <StatGroup columns={4} label="Quality score per data set">
+            {DQ_DATA_SETS.map((set) => (
+              <Stat key={set.id} variant="plain" label={set.name} value={set.score} unit="/ 100" delta={{ value: set.score - set.previous, decimals: 0, unit: ' pts', caption: 'vs last week' }} />
+            ))}
+          </StatGroup>
         </div>
-      </CardContent>
-    </Card>
+        <Panel className="col-span-7" title="Maintenance score, last 24 hours">
+          <TrendArea
+            label="Quality score of the maintenance data set over the last 24 hours"
+            labels={DQ_HOURS}
+            series={[{ id: 'score', label: 'Score', values: DQ_SCORE_TREND, tone: 'accent' }]}
+            decimals={0}
+            height={260}
+            yDomain={[80, 94]}
+            limits={[{ value: 90, label: 'Target', tone: 'critical' }]}
+            notes="The score starts to fall at 10:48, when the SAP gateway first rejected the extractor. It will recover within one run of the credential being renewed."
+          />
+        </Panel>
+        <Panel className="col-span-5" title="Longest gaps">
+          <DataTable label="Longest data gaps this week" columns={DQ_GAP_COLUMNS.filter((column) => column.id !== 'from')} rows={DQ_GAP_LIST.slice(0, 5)} rowKey={(gap) => gap.id} />
+        </Panel>
+      </Grid>
+    </DqSheet>
   );
 }
 
@@ -708,19 +843,18 @@ export default definePage({
   id: 'data-quality',
   title: 'Data quality',
   summary:
-    'Whether the data behind a screen can be trusted: how fresh it is, how much of it arrived, which pipelines ran, and where the gaps are. Healthy data stays quiet; only what is late, missing or failing takes colour.',
+    'Whether the data can be trusted right now: freshness, completeness, pipeline runs, lineage and gaps, shown as finished sheets in the looks they suit.',
   guidance: {
     use: [
-      'State freshness as an age against what is expected, not as a bare timestamp.',
-      'Show coverage and completeness as a share with the counts behind it.',
-      'Give a failed run its cause in plain words, the raw error, and a retry beside it.',
-      'Name every status in words; run squares carry a cross or dash as well as colour.',
+      'Lead with freshness against the expected interval — "3 h old, expected every 30 min" — not a bare timestamp.',
+      'Show runs as a history so one failure reads differently from seven in a row.',
+      'Draw gaps on a time axis and write coverage as a percentage beside each series.',
+      'Trace a problem along the lineage to the step where it starts.',
     ],
     avoid: [
-      'A green wall of healthy pipelines — success is the quiet default.',
-      'A percentage without its denominator.',
-      'Hiding skipped runs; say they were skipped and why.',
-      'Charts of data health with no accessible summary of what they show.',
+      'A green tick for a pipeline that succeeded on stale input.',
+      'Timestamps without a judgement: say fresh, late or stale.',
+      'Hiding skipped runs — a skip is information about the step upstream.',
     ],
   },
   source,
@@ -728,149 +862,124 @@ export default definePage({
     {
       id: 'freshness',
       title: 'Freshness and coverage',
-      description: 'How old the data is and how much of what was expected has arrived.',
+      description: 'How old the data is, how much of it arrived and how well it is connected.',
       specimens: [
         {
-          id: 'DataQualityFreshnessTile',
-          title: 'Freshness tile',
-          note: 'Pick it to answer "how old is this data": the age leads, judged against the expected interval.',
+          id: 'DataQualityFreshness',
+          title: 'Freshness tiles with delay strip',
+          note: 'Pick it as the top of a data health page: one tile per data type and the last day of delay per source.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/workflows/workflow.ts'],
-          align: 'stretch',
-          Component: DataQualityFreshnessTile,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/StatGroup.tsx', 'kit/HeatStrip.tsx', 'kit/Panel.tsx'],
+          Component: DataQualityFreshness,
         },
         {
-          id: 'DataQualityFreshnessStale',
-          title: 'Freshness tile, stale',
-          note: 'Pick the same tile when the age exceeds the interval: the number and the state turn amber.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/workflows/workflow.ts'],
-          align: 'stretch',
-          Component: DataQualityFreshnessStale,
-        },
-        {
-          id: 'DataQualityCoverage',
-          title: 'Coverage with bar',
-          note: 'Pick it for a share of a whole: percent, a bar with the target mark, and the counts behind it.',
-          origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/ValueReadout.tsx'],
-          align: 'stretch',
-          Component: DataQualityCoverage,
-        },
-        {
-          id: 'DataQualityFreshnessList',
+          id: 'DataQualityFreshnessBySource',
           title: 'Freshness by source',
-          note: 'Pick it to compare sources with different rhythms: each age is judged against its own interval.',
+          note: 'Pick it for an operator table of source systems where a late row must stand out by its edge.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/workflows/workflow.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: DataQualityFreshnessList,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/data-quality/quality.ts', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: DataQualityFreshnessBySource,
         },
         {
           id: 'DataQualityCompleteness',
-          title: 'Completeness by source',
-          note: 'Pick it to show how much of the expected data arrived from each source, with what is missing in numbers.',
+          title: 'Completeness against target',
+          note: 'Pick it to compare received against expected rows per source on one scale with the target marked.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/status.ts'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Meter.tsx', 'looks/LookScope.tsx'],
           Component: DataQualityCompleteness,
-        },
-        {
-          id: 'DataQualityScore',
-          title: 'Quality score per data set',
-          note: 'Pick it to rank data sets: one score each, the main issue beneath, colour only below the threshold.',
-          origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/ValueReadout.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: DataQualityScore,
         },
         {
           id: 'DataQualityContextualisation',
           title: 'Contextualisation coverage',
-          note: 'Pick it to show how connected the data is: the share of assets linked to time series, documents and more.',
+          note: 'Pick it to show how much of the asset hierarchy is linked to each kind of data.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/status.ts'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/RingGauge.tsx', 'looks/LookScope.tsx'],
           Component: DataQualityContextualisation,
+        },
+        {
+          id: 'DataQualityScores',
+          title: 'Score per data set',
+          note: 'Pick it for a review screen where four scores and their change must land from across the room.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: DataQualityScores,
         },
       ],
     },
     {
       id: 'pipelines',
       title: 'Pipelines and runs',
-      description: 'Extractors and transformations: the latest run, the history, the schedule and the path the data takes.',
+      description: 'What ran, how it ended and what it feeds.',
       specimens: [
         {
-          id: 'DataQualityRunStates',
-          title: 'Run states',
-          note: 'Pick these four words and shapes for every run, so a state reads the same in a row, a table and a card.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          Component: DataQualityRunStates,
-        },
-        {
-          id: 'DataQualityRunRow',
-          title: 'Pipeline run rows',
-          note: 'Pick it as the default line for a pipeline: kind and source, status, duration, rows and how long ago.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/workflows/workflow.ts'],
-          size: 'lg',
-          align: 'stretch',
-          Component: DataQualityRunRow,
-        },
-        {
           id: 'DataQualityRunHistory',
-          title: 'Run history strip',
-          note: 'Pick it to show reliability at a glance: the last 14 runs as squares, failures and skips marked by a glyph.',
+          title: 'Run history with detail',
+          note: 'Pick it on a pipeline page: bars show duration and outcome, and selecting a run opens its facts.',
           origin: 'custom',
-          uses: ['industrial/workflows/RunHistoryStrip.tsx', 'industrial/workflows/workflow.ts'],
-          size: 'md',
-          align: 'stretch',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/data-quality/RunStrip.tsx', 'kit/data-quality/quality.ts', 'kit/ListRow.tsx', 'kit/Panel.tsx'],
           Component: DataQualityRunHistory,
         },
         {
-          id: 'DataQualityFailedRun',
-          title: 'Failed run detail',
-          note: 'Pick it when someone opens a failed run: what went wrong in plain words, the raw error, and retry. Click retry to try.',
+          id: 'DataQualityPipelineTable',
+          title: 'Pipeline table',
+          note: 'Pick it to watch many pipelines at once, each with its last 24 runs as a strip in the row.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/data-quality/RunStrip.tsx', 'looks/LookScope.tsx'],
+          Component: DataQualityPipelineTable,
+        },
+        {
+          id: 'DataQualityLineage',
+          title: 'Lineage with explanation',
+          note: 'Pick it to trace stale data to its cause; selecting a step explains it and offers the next action.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/data-quality/LineageFlow.tsx', 'kit/Panel.tsx'],
+          Component: DataQualityLineage,
+        },
+        {
+          id: 'DataQualityFailedRun',
+          title: 'Failed run on a data flow sheet',
+          note: 'Pick it for an integration engineer: the flow as a drawing, the failed run and its log underneath.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/data-quality/LineageFlow.tsx', 'kit/ListRow.tsx', 'looks/LookScope.tsx'],
           Component: DataQualityFailedRun,
         },
         {
           id: 'DataQualitySchedule',
           title: 'Schedule and next run',
-          note: 'Pick it to answer "when will this update": the schedule in words, the next run as a time and a countdown.',
+          note: 'Pick it to answer when data will next refresh, ordered by the soonest run.',
           origin: 'custom',
-          uses: ['industrial/workflows/workflow.ts'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/IconChip.tsx', 'looks/LookScope.tsx'],
           Component: DataQualitySchedule,
         },
         {
           id: 'DataQualitySourceStatus',
-          title: 'Data source status',
-          note: 'Pick it for the systems behind the pipelines: OPC UA, PI, SAP and others, each with its connection state.',
+          title: 'Source status tiles',
+          note: 'Pick it for a wall screen in the integration room: each source is a tile filled with its state.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/StatGroup.tsx', 'looks/LookScope.tsx'],
           Component: DataQualitySourceStatus,
-        },
-        {
-          id: 'DataQualityLineage',
-          title: 'Lineage row',
-          note: 'Pick it to trace a problem upstream: source, staged, transformed and data model, with the state at each hop.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          size: 'full',
-          align: 'stretch',
-          Component: DataQualityLineage,
         },
       ],
     },
@@ -882,96 +991,89 @@ export default definePage({
         {
           id: 'DataQualityGapTimeline',
           title: 'Gap timeline',
-          note: 'Pick it for one time series: a bar with holes where data is missing, and coverage in numbers.',
+          note: 'Pick it to see when and for how long each series had no data, with coverage per row.',
           origin: 'custom',
-          uses: ['industrial/workflows/GapTimeline.tsx', 'industrial/workflows/TagChip.tsx'],
-          size: 'md',
-          align: 'stretch',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/data-quality/GapTimeline.tsx', 'kit/data-quality/quality.ts', 'kit/Stat.tsx'],
           Component: DataQualityGapTimeline,
         },
         {
           id: 'DataQualityGapList',
-          title: 'Gaps across tags',
-          note: 'Pick it to see whether gaps line up across tags, which points at a shared cause upstream.',
+          title: 'Gaps as a table',
+          note: 'Pick it in a report, where gaps are ranked by length and each has its cause written out.',
           origin: 'custom',
-          uses: ['industrial/workflows/GapTimeline.tsx', 'industrial/workflows/workflow.ts'],
           size: 'md',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/TagId.tsx', 'looks/LookScope.tsx'],
           Component: DataQualityGapList,
         },
         {
           id: 'DataQualityLatency',
           title: 'Latency distribution',
-          note: 'Pick it when the median hides a slow tail: the share of data points per latency bucket.',
+          note: 'Pick it to judge ingestion delay against a target: the tail beyond the line is what breaks the agreement.',
           origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx'],
-          align: 'stretch',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/distributions/Histogram.tsx', 'looks/LookScope.tsx'],
           Component: DataQualityLatency,
         },
         {
-          id: 'DataQualityDuplicates',
-          title: 'Duplicate and outlier counts',
-          note: 'Pick it to show what cleaning did: counts with what happened to them, coloured only if someone must look.',
+          id: 'DataQualityCleaning',
+          title: 'Cleaning rule counts',
+          note: 'Pick it to show what the cleaning rules changed, ranked by the number of rows touched.',
           origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx'],
-          align: 'stretch',
-          Component: DataQualityDuplicates,
+          size: 'md',
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'looks/LookScope.tsx'],
+          Component: DataQualityCleaning,
         },
         {
           id: 'DataQualitySla',
-          title: 'SLA status',
-          note: 'Pick it for a service level: attainment against the target on a zoomed scale, and the error budget used.',
+          title: 'Freshness agreement',
+          note: 'Pick it when one agreed percentage decides the state, with the parts that make it up below.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx'],
-          align: 'stretch',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'looks/LookScope.tsx'],
           Component: DataQualitySla,
         },
       ],
     },
     {
-      id: 'summaries',
-      title: 'Summaries',
-      description: 'A data set card, an issue list, the pipeline register and a data health overview.',
+      id: 'in-use',
+      title: 'In use',
+      description: 'Whole screens ready to drop into a product.',
       specimens: [
         {
-          id: 'DataQualityDataSetCard',
-          title: 'Data set summary card',
-          note: 'Pick it in a catalogue of data sets: score, freshness and size up top, ownership and pipelines beneath.',
-          origin: 'custom',
-          uses: ['display/MetadataList.tsx', 'industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: DataQualityDataSetCard,
-        },
-        {
-          id: 'DataQualityIssueList',
-          title: 'Open data issues',
-          note: 'Pick it as the to-do list for data owners: most severe first, with what is affected and for how long.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/workflows/workflow.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: DataQualityIssueList,
-        },
-        {
-          id: 'DataQualityPipelineTable',
-          title: 'Pipeline table',
-          note: 'Pick it as the register of pipelines: last run, duration, rows, 14-run history, schedule and next run.',
-          origin: 'custom',
-          uses: ['industrial/workflows/RunHistoryStrip.tsx', 'industrial/StatusIndicator.tsx', 'industrial/workflows/workflow.ts'],
-          size: 'full',
-          align: 'stretch',
-          Component: DataQualityPipelineTable,
-        },
-        {
           id: 'DataQualityOverview',
-          title: 'Data health overview',
-          note: 'Pick it as the landing block for data health: four headline figures, then sources and pipeline history.',
+          title: 'Data health page',
+          note: 'Pick it as the landing page of a data operations product used at a desk.',
           origin: 'custom',
-          uses: ['industrial/workflows/RunHistoryStrip.tsx', 'industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx', 'industrial/workflows/workflow.ts'],
           size: 'full',
-          align: 'stretch',
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/data-quality/GapTimeline.tsx', 'kit/data-quality/RunStrip.tsx', 'kit/DataTable.tsx', 'kit/ListRow.tsx'],
           Component: DataQualityOverview,
+        },
+        {
+          id: 'DataQualityOperations',
+          title: 'Pipeline operations board',
+          note: 'Pick it for the integration team that watches pipelines all day and needs density and unmistakable state.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/data-quality/RunStrip.tsx', 'kit/StatGroup.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: DataQualityOperations,
+        },
+        {
+          id: 'DataQualityReport',
+          title: 'Weekly data quality report',
+          note: 'Pick it for a weekly report that is read top to bottom and sent as a PDF.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/StatGroup.tsx', 'kit/TrendArea.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: DataQualityReport,
         },
       ],
     },

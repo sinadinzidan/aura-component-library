@@ -69,4 +69,17 @@ describe('looks.css', () => {
     const sizes = [...WITHOUT_COMMENTS.matchAll(/font-size:\s*([\d.]+)rem/g)].map((match) => Number(match[1]));
     expect(Math.min(...sizes)).toBeGreaterThanOrEqual(0.75);
   });
+
+  it('keeps soft and glass corner tokens as corners, not pills', () => {
+    const block = /\[data-look='soft'\], \[data-look='glass'\]\) \{([^}]*)\}/.exec(WITHOUT_COMMENTS)?.[1] ?? '';
+
+    expect(block).toContain('--radius-lg: 16px');
+    expect(block).not.toContain('999px');
+  });
+
+  it('puts overridable layout defaults in the components layer', () => {
+    const layer = /@layer components \{([\s\S]*?)\n\}/.exec(WITHOUT_COMMENTS)?.[1] ?? '';
+
+    for (const part of ['.kit-panel', '.kit-canvas', '.kit-spark', '.kit-tag', '.kit-ring']) expect(layer).toContain(part);
+  });
 });

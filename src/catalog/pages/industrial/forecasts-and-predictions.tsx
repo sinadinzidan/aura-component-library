@@ -65,15 +65,13 @@ const FC_VIB_EARLY = stepsToLimit(
   FC_VIB_LIMIT
 );
 
-const FC_TEMP_FULL = makeValues({ seed: 19, points: 37, base: 37.2, amplitude: 1.1, noise: 0.3, drift: 2.1, cycles: 1.5, decimals: 1 });
-
-const FC_TEMP_HISTORY = FC_TEMP_FULL.slice(0, 25);
-
-const FC_TEMP_ACTUAL = FC_TEMP_FULL.slice(25);
+const FC_TEMP_HISTORY = makeValues({ seed: 19, points: 25, base: 37.2, amplitude: 1.1, noise: 0.3, drift: 1.2, cycles: 1.5, decimals: 1 });
 
 const FC_TEMP_FORECAST = project(FC_TEMP_HISTORY, { steps: 12, lookback: 16, amplitude: 0.5, period: 16, decimals: 1 });
 
 const FC_TEMP_RANGE = widen(FC_TEMP_FORECAST, 0.4, 1.3, 1);
+
+const FC_TEMP_ACTUAL = makeValues({ seed: 23, points: 12, base: 0.3, noise: 0.45, drift: 1.1, decimals: 1 }).map((offset, index) => Number((FC_TEMP_FORECAST[index] + offset).toFixed(1)));
 
 const FC_TEMP_LABELS = Array.from({ length: 37 }, (_, index) => FC_HOUR_LABEL.format(REFERENCE_NOW + (index - 36) * HOUR));
 
@@ -152,6 +150,7 @@ function FcVibrationChart({ height = 300, steps = 36, headline, notes, showLegen
       unit="mm/s"
       decimals={1}
       tone="blue"
+      yDomain={[5, 9]}
       tickEvery={12}
       height={height}
       headline={headline}
@@ -421,22 +420,25 @@ function ForecastConfidenceLevels() {
 function ForecastAccuracy() {
   return (
     <FcSheet title="Forecast accuracy" subtitle="Vibration model · backtested over the last 30 days" actions={<FcModelPill />}>
-      <StatGroup columns={3} joined label="Accuracy scores">
-        <Stat variant="plain" size="md" label="Mean error" value={3.1} decimals={1} unit="%" delta={{ value: -0.6, good: 'down', caption: 'vs last month' }} />
-        <Stat variant="plain" size="md" label="Inside 80 % range" value={83} unit="%" target="Expected 80 %" />
-        <Stat variant="plain" size="md" label="Bias" value="+0.04" unit="mm/s" target="Slightly high" />
-      </StatGroup>
-      <Bars
-        className="mt-5"
-        label="Mean forecast error by horizon"
-        categories={['6 h', '12 h', '18 h', '24 h', '30 h', '36 h']}
-        series={[{ id: 'error', label: 'Mean error', values: FC_ERROR_BY_HORIZON, tone: 'blue' }]}
-        limit={{ value: 5, label: 'Acceptable', tone: 'warning' }}
-        unit="%"
-        decimals={1}
-        showValues
-        height={200}
-      />
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] items-center gap-8">
+        <div className="flex flex-col gap-5">
+          <Stat variant="plain" size="lg" label="Mean error" value={3.1} decimals={1} unit="%" delta={{ value: -0.6, good: 'down', caption: 'vs last month' }} />
+          <StatGroup columns={2} joined label="Accuracy scores">
+            <Stat variant="plain" size="sm" label="Inside 80 % range" value={83} unit="%" target="Expected 80 %" />
+            <Stat variant="plain" size="sm" label="Bias" value="+0.04" unit="mm/s" target="Slightly high" />
+          </StatGroup>
+        </div>
+        <Bars
+          label="Mean forecast error in percent by horizon"
+          categories={['6 h', '12 h', '18 h', '24 h', '30 h', '36 h']}
+          series={[{ id: 'error', label: 'Mean error, %', values: FC_ERROR_BY_HORIZON, tone: 'blue' }]}
+          limit={{ value: 5, label: 'Acceptable', tone: 'warning' }}
+          decimals={1}
+          showValues
+          showLegend
+          height={240}
+        />
+      </div>
     </FcSheet>
   );
 }
@@ -472,6 +474,7 @@ function ForecastStates() {
             rangeLabel="80 % range"
             unit="°C"
             tone="amber"
+            tickEvery={5}
             height={200}
             showLegend={false}
             notes={<ConfidenceMeter percent={31} variant="block" detail="Signal lost for 9 of the last 24 hours; the range is too wide to plan on." />}
@@ -531,16 +534,25 @@ function ForecastLookConsole() {
           <Panel className="col-span-7" title="Drive-end vibration" subtitle="23-VT-92540 · forecast 36 h">
             <FcVibrationChart height={280} />
           </Panel>
-          <Panel className="col-span-5" padding="none" title="Failure forecast" subtitle="30 days">
-            <DataTable
-              flush
-              label="Failure forecast by unit"
-              columns={FC_RISK_COLUMNS.filter((column) => column.id !== 'tag' && column.id !== 'confidence')}
-              rows={FC_RISKS}
-              rowKey={(risk) => risk.id}
-              rowTone={(risk) => fcRiskTone(risk.probability)}
-            />
-          </Panel>
+          <div className="col-span-5 flex flex-col gap-(--kit-gap)">
+            <Panel padding="none" title="Failure forecast" subtitle="30 days">
+              <DataTable
+                flush
+                label="Failure forecast by unit"
+                columns={FC_RISK_COLUMNS.filter((column) => column.id !== 'tag' && column.id !== 'confidence')}
+                rows={FC_RISKS}
+                rowKey={(risk) => risk.id}
+                rowTone={(risk) => fcRiskTone(risk.probability)}
+              />
+            </Panel>
+            <Panel className="flex-1" title="Model" subtitle="Vibration trend · run 14:00">
+              <StatGroup columns={3} label="Model scores">
+                <Stat variant="plain" size="md" label="Limit in" value={formatLead(FC_VIB_CROSS)} tone="warning" />
+                <Stat variant="plain" size="md" label="Mean error" value={3.1} decimals={1} unit="%" />
+                <Stat variant="plain" size="md" label="In range" value={83} unit="%" />
+              </StatGroup>
+            </Panel>
+          </div>
         </Grid>
       </Canvas>
     </LookScope>
@@ -920,7 +932,7 @@ export default definePage({
           title: 'Accuracy by horizon',
           note: 'Pick it on a model page: error, coverage and bias, and how the error grows with the horizon.',
           origin: 'custom',
-          size: 'md',
+          size: 'full',
           bleed: true,
           uses: ['kit/Bars.tsx', 'kit/StatGroup.tsx', 'kit/Stat.tsx'],
           Component: ForecastAccuracy,

@@ -22,6 +22,12 @@ describe(Meter.name, () => {
     const { container } = render(<Meter label="Level" value={30} max={100} target={{ value: 70, label: 'High limit' }} />);
 
     expect(container.querySelector<HTMLElement>('.kit-meter-target')?.style.left).toBe('70%');
+    expect(screen.getByText('High limit')).toBeInTheDocument();
+  });
+
+  it('appends the target value only when asked', () => {
+    render(<Meter label="Level" value={30} max={100} target={{ value: 70, label: 'High limit', showValue: true }} />);
+
     expect(screen.getByText('High limit 70')).toBeInTheDocument();
   });
 

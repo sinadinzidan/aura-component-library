@@ -14,4 +14,12 @@ describe(TagId.name, () => {
 
     expect(screen.getByText('23-KA-9101').className).not.toMatch(/mono/);
   });
+
+  it('leaves the figures to the context unless told', () => {
+    const { rerender } = render(<TagId>23-KA-9101</TagId>);
+    expect(screen.getByText('23-KA-9101')).not.toHaveAttribute('data-figures');
+
+    rerender(<TagId figures="tabular">23-KA-9101</TagId>);
+    expect(screen.getByText('23-KA-9101')).toHaveAttribute('data-figures', 'tabular');
+  });
 });

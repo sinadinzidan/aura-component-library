@@ -244,7 +244,6 @@ function LngTrain3dLegend({ colourBy }: { colourBy: LngTrain3dColourBy }) {
           { label: 'Warning', tone: 'warning' },
           { label: 'Information', tone: 'info' },
           { label: 'Standby', tone: 'neutral' },
-          { label: 'Selected', tone: 'accent' },
         ]}
       />
     );
@@ -554,7 +553,7 @@ type LngTrain3dSceneOverlayProps = {
 
 function LngTrain3dSceneOverlay({ state, dispatch, colourBy, onColourBy, live = false, onLive }: LngTrain3dSceneOverlayProps) {
   const stage = LNGTRAIN3D_STAGES[state.stageIndex];
-  const chip = 'pointer-events-auto rounded-full border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_88%,transparent)] px-3.5 py-2 shadow-[0_6px_16px_-10px_var(--effect-shadow-xl)] backdrop-blur-md';
+  const chip = 'pointer-events-auto rounded-2xl border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_88%,transparent)] px-3.5 py-2 shadow-[0_6px_16px_-10px_var(--effect-shadow-xl)] backdrop-blur-md';
 
   return (
     <div className="flex h-full flex-col justify-between p-4">
@@ -574,14 +573,14 @@ function LngTrain3dSceneOverlay({ state, dispatch, colourBy, onColourBy, live = 
           </Button>
         </div>
       </div>
-      <div className="flex items-end justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
         <div className={chip}>
           <LngTrain3dLegend colourBy={colourBy} />
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
           {onLive ? (
             <ToggleChip icon={<IconPlayerPlay />} pressed={live} onPressedChange={onLive} className="bg-[var(--kit-surface)]">
-              Live flow and flare
+              Live flow
             </ToggleChip>
           ) : null}
           {onColourBy ? <LngTrain3dColourSwitch value={colourBy} onChange={onColourBy} /> : null}
@@ -859,7 +858,7 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Pick a stop in the strip, or use the arrows, and the camera flies there. Click a unit in the scene or in the card to select it. Drag the scene to look around; Resume tour brings you back. Whole site shows everything at once, and Live flow and flare adds the motion that never stops.',
+      description: 'Pick a stop in the strip, or use the arrows, and the camera flies there. Click a unit in the scene or in the card to select it. Drag the scene to look around; Resume tour brings you back. Whole site shows everything at once, and Live flow adds what never stops moving: flow along the trunk lines and the lit flare.',
       specimens: [
         {
           id: 'LngTrainSignature',

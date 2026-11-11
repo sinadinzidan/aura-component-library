@@ -1,1157 +1,1050 @@
-import { Alert, AlertDescription, AlertTitle } from '@cognite/aura/components/alert';
 import { Button } from '@cognite/aura/components/button';
-import { Card } from '@cognite/aura/components/card';
-import { CheckboxGroup, CheckboxItem, CheckboxItemControl, CheckboxItemDescription, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
-import { Input } from '@cognite/aura/components/input';
-import { Label } from '@cognite/aura/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@cognite/aura/components/select';
-import { Textarea } from '@cognite/aura/components/textarea';
-import { IconArrowBackUp } from '@cognite/aura/icons';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
+import {
+  IconAdjustments,
+  IconAlertTriangle,
+  IconBellOff,
+  IconChecklist,
+  IconClipboardList,
+  IconFileText,
+  IconFlame,
+  IconHistory,
+  IconLayoutDashboard,
+  IconRepeat,
+  IconScale,
+  IconTarget,
+  IconUsers,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { LinearGauge } from '../../../library/industrial/LinearGauge';
-import { DistributionBar } from '../../../library/industrial/operations/DistributionBar';
-import { SIGNAL_TYPES, SIGNAL_TYPE_LABEL, delayInSamples, suggestTuning } from '../../../library/industrial/safety/alarmTuning';
-import type { SignalType } from '../../../library/industrial/safety/alarmTuning';
+import { ChangeList, type ChangeItem } from '../../../library/kit/alarm-rationalisation/ChangeList';
+import { LimitScale, type ScaleBand } from '../../../library/kit/alarm-rationalisation/LimitScale';
 import {
-  CONSEQUENCE_SEVERITIES,
-  PRIORITY_TARGET,
-  RESPONSE_CLASSES,
-  RESPONSE_LABEL,
-  SEVERITY_LABEL,
-  alarmPriority,
-  alarmPriorityStatus,
-  isDistributionOnTarget,
-  matrixCell,
-  priorityDistribution,
-  rationalise,
-  responseClass,
-} from '../../../library/industrial/safety/priorityMatrix';
-import type { AlarmPriority, ConsequenceSeverity } from '../../../library/industrial/safety/priorityMatrix';
-import { RATIONALISATION_COLUMNS } from '../../../library/industrial/safety/rationalisationColumns';
-import { RationalisationRow } from '../../../library/industrial/safety/RationalisationRow';
-import { compareSettings } from '../../../library/industrial/safety/replayAlarmCount';
-import { formatDelta, formatValue } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import type { Condition } from '../../../library/industrial/workflows/ConditionList';
-import { ConditionList } from '../../../library/industrial/workflows/ConditionList';
-import type { StepListItem } from '../../../library/industrial/workflows/StepList';
-import { StepList } from '../../../library/industrial/workflows/StepList';
-import { MINUTE, makeSeries } from '../../data/series';
+  CONSEQUENCES,
+  CONSEQUENCE_LABEL,
+  PRIORITY_LABEL,
+  URGENCIES,
+  URGENCY_LABEL,
+  derivePriority,
+  isConsequence,
+  isUrgency,
+  urgencyOf,
+  type AlarmPriority,
+  type Consequence,
+  type Urgency,
+} from '../../../library/kit/alarm-rationalisation/priority';
+import { PriorityMatrix, type MatrixCell } from '../../../library/kit/alarm-rationalisation/PriorityMatrix';
+import { replayAlarm } from '../../../library/kit/alarm-rationalisation/replay';
+import { StageTrack, type Stage } from '../../../library/kit/alarm-rationalisation/StageTrack';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Donut, type DonutSegment } from '../../../library/kit/Donut';
+import { Grid } from '../../../library/kit/Grid';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
+import { formatTime, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './alarm-rationalisation.tsx?raw';
 
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
+const AR_TONE: Record<AlarmPriority, Tone> = { high: 'critical', medium: 'warning', low: 'info', none: 'neutral' };
 
-type WorksheetEntry = {
-  id: string;
+type ArEntry = {
   tag: string;
-  alarmType: string;
+  text: string;
   cause: string;
-  consequence: string;
-  severity: ConsequenceSeverity;
+  effect: string;
   action: string;
+  consequence: Consequence;
+  /** Minutes the operator has before the consequence. */
   minutes: number;
   current: AlarmPriority;
+  /** Activations in the last 30 days. */
+  activations: number;
+  review: 'Approved' | 'Reviewed' | 'Draft';
 };
 
-const WORKSHEET: readonly WorksheetEntry[] = [
-  { id: 'w1', tag: '23-PT-92531', alarmType: 'High, 52 barg', cause: 'Blocked discharge or closed export valve', consequence: 'Relief valve lifts and gas is released to flare', severity: 'severe', action: 'Open the recycle valve and reduce compressor speed', minutes: 2, current: 'high' },
-  { id: 'w2', tag: '23-TT-92532', alarmType: 'High, 145 °C', cause: 'Loss of cooling water to the interstage cooler', consequence: 'Compressor trips on high discharge temperature', severity: 'major', action: 'Start the standby cooling water pump', minutes: 8, current: 'high' },
-  { id: 'w3', tag: '23-VT-92540', alarmType: 'High, 7.1 mm/s', cause: 'Bearing wear or rotor imbalance', consequence: 'Machine trip at 11 mm/s and a bearing replacement', severity: 'severe', action: 'Reduce load and call the rotating equipment engineer', minutes: 12, current: 'high' },
-  { id: 'w4', tag: '20-PT-10010', alarmType: 'Low, 11 barg', cause: 'Well flow reduced upstream', consequence: 'Lower gas export for the shift', severity: 'major', action: 'Check the inlet choke settings', minutes: 15, current: 'medium' },
-  { id: 'w5', tag: '20-LT-10012', alarmType: 'High, 70 %', cause: 'Liquid carry-over from the wells', consequence: 'Separator level drifts, no trip within the shift', severity: 'minor', action: 'Adjust the level controller setpoint', minutes: 45, current: 'low' },
-  { id: 'w6', tag: '27-PA-2001B', alarmType: 'Standby test overdue', cause: 'Start test not done in 30 days', consequence: 'None until the pump is needed', severity: 'none', action: 'None. Raise a work order instead', minutes: 600, current: 'low' },
+const AR_ENTRIES: ArEntry[] = [
+  { tag: '23-TT-92532', text: 'Discharge temperature high', cause: 'Fouled interstage cooler', effect: 'Seal damage, trip at 155 °C', action: 'Reduce load, check cooler outlet', consequence: 'major', minutes: 15, current: 'high', activations: 214, review: 'Reviewed' },
+  { tag: '23-VT-92740', text: 'Recompressor vibration high-high', cause: 'Bearing wear, surge', effect: 'Machine damage, loss of recompression', action: 'Confirm trip, do not restart', consequence: 'severe', minutes: 2, current: 'high', activations: 3, review: 'Approved' },
+  { tag: '20-LT-10012', text: 'Separator level deviation', cause: 'Slugging from the inlet', effect: 'Carry-over to compression', action: 'Trim the level controller', consequence: 'moderate', minutes: 8, current: 'low', activations: 96, review: 'Reviewed' },
+  { tag: '23-TT-91141', text: 'Cooler outlet temperature high', cause: 'Low cooling water flow', effect: 'Higher discharge temperature', action: 'Start the standby cooling pump', consequence: 'moderate', minutes: 25, current: 'medium', activations: 131, review: 'Draft' },
+  { tag: '27-IT-20013', text: 'Export pump motor current high', cause: 'High export rate, worn impeller', effect: 'Motor trip, export loss', action: 'Reduce flow, start pump B', consequence: 'major', minutes: 5, current: 'low', activations: 41, review: 'Reviewed' },
+  { tag: '27-PA-2001B', text: 'Standby test overdue', cause: 'Test not scheduled', effect: 'Unknown standby readiness', action: 'None in the control room', consequence: 'minor', minutes: 2880, current: 'low', activations: 12, review: 'Draft' },
+  { tag: '40-TT-40015', text: 'Bearing temperature signal lost', cause: 'Transmitter fault', effect: 'No protection reading', action: 'Read the local gauge hourly', consequence: 'moderate', minutes: 45, current: 'medium', activations: 58, review: 'Reviewed' },
+  { tag: '23-PT-92530', text: 'Suction pressure low', cause: 'Upstream restriction', effect: 'Surge, trip on low suction', action: 'Open the recycle valve', consequence: 'severe', minutes: 6, current: 'medium', activations: 9, review: 'Approved' },
 ];
 
-const CURRENT_COUNTS: Record<Exclude<AlarmPriority, 'none'>, number> = { low: 312, medium: 171, high: 97 };
+const arProposed = (entry: ArEntry): AlarmPriority => derivePriority(entry.consequence, urgencyOf(entry.minutes));
 
-function expand(counts: Record<Exclude<AlarmPriority, 'none'>, number>): AlarmPriority[] {
-  return [...Array<AlarmPriority>(counts.low).fill('low'), ...Array<AlarmPriority>(counts.medium).fill('medium'), ...Array<AlarmPriority>(counts.high).fill('high')];
-}
+const arRespond = (minutes: number): string => (minutes >= 1440 ? `${Math.round(minutes / 1440)} d` : `${minutes} min`);
 
-const PRIORITY_TONE = { low: 'info', medium: 'warning', high: 'critical' } as const;
+const AR_REVIEW_TONE: Record<ArEntry['review'], Tone> = { Approved: 'success', Reviewed: 'info', Draft: 'neutral' };
 
-type BadActor = { tag: string; text: string; activations: number; share: number; category: string; change: string };
-
-const BAD_ACTORS: readonly BadActor[] = [
-  { tag: '23-TT-91141', text: 'Cooler outlet temperature high', activations: 412, share: 11.4, category: 'Chattering', change: 'Add a 1 °C deadband and a 60 s on-delay' },
-  { tag: '20-LT-10012', text: 'Separator level deviation', activations: 287, share: 7.9, category: 'Chattering', change: 'Widen the deviation limit from 5 % to 8 %' },
-  { tag: '40-TT-40015', text: 'Bearing temperature signal lost', activations: 241, share: 6.7, category: 'Stale', change: 'Repair the transmitter, then raise on bad quality once' },
-  { tag: '27-PA-2001B', text: 'Standby test overdue', activations: 198, share: 5.5, category: 'Standing', change: 'Remove the alarm and plan the test as a work order' },
-  { tag: '23-PT-92530', text: 'Suction pressure low', activations: 164, share: 4.5, category: 'Duplicate', change: 'Remove: the same event raises 23-PT-92531' },
-];
-
-const NUISANCE = [
-  { id: 'chattering', label: 'Chattering', count: 38, rule: 'Raised three or more times in 10 minutes' },
-  { id: 'standing', label: 'Standing', count: 24, rule: 'Active for more than 24 hours' },
-  { id: 'stale', label: 'Stale', count: 17, rule: 'Active but not acknowledged for 12 hours' },
-  { id: 'duplicate', label: 'Duplicate', count: 9, rule: 'Raised together with another alarm within 1 minute' },
-];
-
-const CHATTER_VALUES = makeSeries({ seed: 91141, points: 240, base: 141.5, amplitude: 2.4, noise: 1.6, cycles: 5, stepMs: 10 * MINUTE, min: 130, max: 156, decimals: 1 });
-const REPLAY_VALUES = CHATTER_VALUES.map((point) => point.v);
-
-const PHILOSOPHY: readonly Condition[] = [
-  { id: 'p1', label: 'Every alarm needs an operator action', detail: '1 alarm has none: 27-PA-2001B', state: 'unmet' },
-  { id: 'p2', label: 'Every alarm has a consequence of no action', detail: 'All 6 worksheet alarms have one', state: 'met' },
-  { id: 'p3', label: 'Priority follows the matrix, never a request', detail: '3 of 6 differ from the matrix result', state: 'unmet' },
-  { id: 'p4', label: 'No alarm for an event the operator cannot influence', detail: 'Checked in the worksheet review', state: 'met' },
-  { id: 'p5', label: 'Limits are set from the process, not the instrument range', detail: '2 limits still at the default', state: 'bypassed' },
-];
-
-const AGENDA = [
-  { time: '09:00', item: 'Review of the last month: top 10 alarms and bad actors', who: 'Magnus Solberg', minutes: 20 },
-  { time: '09:20', item: 'Rationalisation of the 1st stage compressor alarms', who: 'Aisha Khan', minutes: 40 },
-  { time: '10:00', item: 'Proposed limit and deadband changes: replay results', who: 'Jonas Nyberg', minutes: 30 },
-  { time: '10:30', item: 'Shelved and suppressed alarms: renew or remove', who: 'Liv Wold', minutes: 15 },
-  { time: '10:45', item: 'Changes for approval and actions', who: 'Ingrid Haugen', minutes: 15 },
-];
-
-const SUPPRESSIONS = [
-  { tag: '40-TT-40015', kind: 'Out of service', reason: 'Transmitter failed. WO-104479 replaces it', by: 'Jonas Nyberg', approved: 'Liv Wold', since: '12 Mar, 05:10', review: 'Review 13 Mar', overdue: false },
-  { tag: '23-GD-9153', kind: 'Suppressed by design', reason: 'Inhibited for hot work PTW-26-0418', by: 'Tomás Barros', approved: 'Liv Wold', since: '12 Mar, 07:00', review: 'Ends 12 Mar, 19:00', overdue: false },
-  { tag: '27-PA-2001B', kind: 'Shelved', reason: 'Standby test deferred to the shutdown', by: 'Ingrid Haugen', approved: 'Liv Wold', since: '4 Mar, 10:20', review: 'Overdue 6 d', overdue: true },
-  { tag: '20-LT-10012', kind: 'Shelved', reason: 'Level instrument being recalibrated', by: 'Jonas Nyberg', approved: 'Magnus Solberg', since: '12 Mar, 09:00', review: 'Returns 12 Mar, 21:00', overdue: false },
-];
-
-const AUDIT = [
-  { at: '12 Mar, 13:52', who: 'Aisha Khan', what: 'Changed priority of 23-VT-92540 from High to Medium', why: 'Matrix: severe consequence, 12 min to respond' },
-  { at: '12 Mar, 13:31', who: 'Jonas Nyberg', what: 'Proposed limit for 23-TT-91141 from 40.0 to 42.0 °C', why: 'Replay: 74% fewer activations' },
-  { at: '12 Mar, 11:05', who: 'Liv Wold', what: 'Approved shelving of 20-LT-10012 for 12 h', why: 'Instrument recalibration, WO-104440' },
-  { at: '11 Mar, 16:40', who: 'Magnus Solberg', what: 'Removed alarm 23-PT-92530 (duplicate)', why: 'MoC-0214 approved' },
-];
-
-function Panel({ title, meta, children }: { title: string; meta?: ReactNode; children: ReactNode }) {
+function ArPriority({ priority, variant }: { priority: AlarmPriority; variant?: 'filled' | 'soft' | 'outline' }) {
   return (
-    <Card className="w-full min-w-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-base-foreground">{title}</h3>
-        {meta ? <span className="text-xs text-muted-foreground tabular-nums">{meta}</span> : null}
-      </div>
-      {children}
-    </Card>
+    <StatusPill tone={AR_TONE[priority]} variant={variant}>
+      {PRIORITY_LABEL[priority]}
+    </StatusPill>
   );
 }
 
-function isSeverity(value: unknown): value is ConsequenceSeverity {
-  return CONSEQUENCE_SEVERITIES.some((severity) => severity === value);
+const AR_WORKSHEET: DataTableColumn<ArEntry>[] = [
+  { id: 'alarm', header: 'Alarm', cell: (entry) => entry.text },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (entry) => <TagId>{entry.tag}</TagId> },
+  { id: 'consequence', header: 'Consequence', nowrap: true, cell: (entry) => CONSEQUENCE_LABEL[entry.consequence] },
+  { id: 'respond', header: 'Time to respond', numeric: true, nowrap: true, cell: (entry) => arRespond(entry.minutes) },
+  { id: 'current', header: 'Current', nowrap: true, cell: (entry) => <ArPriority priority={entry.current} variant="outline" /> },
+  { id: 'proposed', header: 'Derived', nowrap: true, cell: (entry) => <ArPriority priority={arProposed(entry)} /> },
+  { id: 'review', header: 'Review', nowrap: true, cell: (entry) => <StatusPill tone={AR_REVIEW_TONE[entry.review]}>{entry.review}</StatusPill> },
+];
+
+const AR_CELL_COUNT: Record<Consequence, Record<Urgency, number>> = {
+  minor: { 'over-30': 212, '10-30': 164, '3-10': 71, 'under-3': 12 },
+  moderate: { 'over-30': 96, '10-30': 148, '3-10': 83, 'under-3': 19 },
+  major: { 'over-30': 34, '10-30': 61, '3-10': 44, 'under-3': 14 },
+  severe: { 'over-30': 6, '10-30': 12, '3-10': 17, 'under-3': 9 },
+};
+
+const AR_ROWS = CONSEQUENCES.map((id) => ({ id, label: CONSEQUENCE_LABEL[id] }));
+
+const AR_COLUMNS = URGENCIES.map((id) => ({ id, label: URGENCY_LABEL[id] }));
+
+function arCell(row: string, column: string, counts = false): MatrixCell {
+  if (!isConsequence(row) || !isUrgency(column)) return { label: '—', tone: 'neutral' };
+  const priority = derivePriority(row, column);
+  return { label: priority === 'none' ? 'Event' : PRIORITY_LABEL[priority], tone: AR_TONE[priority], count: counts ? AR_CELL_COUNT[row][column] : undefined };
 }
 
-function isSignalType(value: unknown): value is SignalType {
-  return SIGNAL_TYPES.some((type) => type === value);
-}
+const AR_DISTRIBUTION: DonutSegment[] = [
+  { label: 'High', value: 22, tone: 'critical' },
+  { label: 'Medium', value: 31, tone: 'warning' },
+  { label: 'Low', value: 47, tone: 'info' },
+];
 
-const SEVERITY_ITEMS = CONSEQUENCE_SEVERITIES.map((severity) => ({ value: severity, label: SEVERITY_LABEL[severity] }));
-const SIGNAL_ITEMS = SIGNAL_TYPES.map((type) => ({ value: type, label: SIGNAL_TYPE_LABEL[type] }));
+type ArActor = { tag: string; text: string; count: number; share: number; category: string; fix: string; tone: Tone };
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+const AR_ACTORS: ArActor[] = [
+  { tag: '23-TT-92532', text: 'Discharge temp high', count: 214, share: 18, category: 'Chattering', fix: 'Deadband 1.5 °C', tone: 'warning' },
+  { tag: '23-TT-91141', text: 'Cooler outlet temp high', count: 131, share: 11, category: 'Chattering', fix: 'On-delay 60 s', tone: 'warning' },
+  { tag: '20-LT-10012', text: 'Separator level dev.', count: 96, share: 8, category: 'Wrong limit', fix: 'Limit 70 → 74 %', tone: 'info' },
+  { tag: '40-TT-40015', text: 'Bearing temp signal lost', count: 58, share: 5, category: 'Stale', fix: 'Replace transmitter', tone: 'neutral' },
+  { tag: '27-IT-20013', text: 'Motor current high', count: 41, share: 3, category: 'Wrong priority', fix: 'Low → High', tone: 'critical' },
+  { tag: '27-PA-2001B', text: 'Standby test overdue', count: 12, share: 1, category: 'No action', fix: 'Make it a work order', tone: 'neutral' },
+];
+
+const AR_NUISANCE: DonutSegment[] = [
+  { label: 'Chattering', value: 345, tone: 'amber' },
+  { label: 'Wrong limit', value: 96, tone: 'blue' },
+  { label: 'Stale', value: 58, tone: 'purple' },
+  { label: 'Wrong priority', value: 41, tone: 'pink' },
+  { label: 'No operator action', value: 12, tone: 'teal' },
+];
+
+const AR_TEMPERATURE = makeSeries({ seed: 204, points: 145, base: 144.1, amplitude: 1.0, noise: 1.1, cycles: 3, decimals: 1, stepMs: 10 * 60_000 });
+
+const AR_TEMPERATURE_VALUES = AR_TEMPERATURE.map((point) => point.v);
+
+const AR_TEMPERATURE_LABELS = AR_TEMPERATURE.map((point) => formatTime(point.t));
+
+const AR_CHANGES: ChangeItem[] = [
+  { id: 'limit', attribute: 'High limit', from: '145.0 °C', to: '147.0 °C', reason: 'Normal operation reaches 145.8 °C at full load; seal limit is 155 °C.' },
+  { id: 'deadband', attribute: 'Deadband', from: '0.0 °C', to: '1.5 °C', reason: '1 % of span for temperature signals.' },
+  { id: 'delay', attribute: 'On-delay', from: '0 s', to: '60 s', reason: 'Temperature moves slowly; a minute costs nothing.' },
+  { id: 'priority', attribute: 'Priority', from: 'High', to: 'Medium', reason: 'Major consequence with 15 minutes to respond.' },
+  { id: 'trip', attribute: 'Trip limit', from: '155.0 °C', to: '155.0 °C' },
+];
+
+const AR_STAGES: Stage[] = [
+  { id: 'draft', label: 'Drafted', detail: 'Aisha Khan · 4 Mar', state: 'done' },
+  { id: 'replay', label: 'Replayed on data', detail: '30 days · 6 Mar', state: 'done' },
+  { id: 'review', label: 'Reviewed', detail: 'Alarm board · 10 Mar', state: 'done' },
+  { id: 'approve', label: 'Approved', detail: 'Liv Wold · due 14 Mar', state: 'current' },
+  { id: 'implement', label: 'Implemented', state: 'todo' },
+  { id: 'verify', label: 'Verified', detail: 'After 30 days', state: 'todo' },
+];
+
+type ArShelved = { tag: string; text: string; kind: string; reason: string; owner: string; approver: string; until: string; state: 'Active' | 'Review due' | 'Expired'; tone: Tone };
+
+const AR_REGISTER: ArShelved[] = [
+  { tag: '40-TT-40015', text: 'Bearing temperature signal lost', kind: 'Shelved', reason: 'Transmitter fault, WO-104479', owner: 'Ingrid Haugen', approver: 'Liv Wold', until: '12 Mar 18:00', state: 'Active', tone: 'info' },
+  { tag: '20-LT-10013', text: 'Test separator level low', kind: 'Out of service', reason: 'Separator isolated for inspection', owner: 'Magnus Solberg', approver: 'Liv Wold', until: '20 Mar', state: 'Active', tone: 'info' },
+  { tag: '23-PDT-9255', text: 'Seal gas differential low', kind: 'Suppressed by design', reason: 'Suppressed while the machine is stopped', owner: 'Aisha Khan', approver: 'Alarm board', until: 'Permanent', state: 'Review due', tone: 'warning' },
+  { tag: '27-FT-20011', text: 'Export flow low', kind: 'Shelved', reason: 'Pump changeover', owner: 'Ingrid Haugen', approver: 'Liv Wold', until: '11 Mar 06:00', state: 'Expired', tone: 'critical' },
+];
+
+const AR_REGISTER_COLUMNS: DataTableColumn<ArShelved>[] = [
+  { id: 'alarm', header: 'Alarm', cell: (item) => item.text },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (item) => <TagId>{item.tag}</TagId> },
+  { id: 'kind', header: 'Type', nowrap: true, cell: (item) => item.kind },
+  { id: 'reason', header: 'Reason', muted: true, cell: (item) => item.reason },
+  {
+    id: 'owner',
+    header: 'Owner and approver',
+    nowrap: true,
+    cell: (item) => (
+      <span className="flex flex-col">
+        <span>{item.owner}</span>
+        <span className="text-medium-foreground">Approved by {item.approver}</span>
+      </span>
+    ),
+  },
+  { id: 'until', header: 'Until', nowrap: true, numeric: true, cell: (item) => item.until },
+  { id: 'state', header: 'State', nowrap: true, cell: (item) => <StatusPill tone={item.tone}>{item.state}</StatusPill> },
+];
+
+const AR_AUDIT: ReadonlyArray<{ id: string; when: string; who: string; what: string; detail: string; tone: Tone }> = [
+  { id: 'a1', when: '10 Mar 14:20', who: 'Alarm board', what: 'Reviewed 23-TT-92532', detail: 'Priority High → Medium accepted, limit change sent for approval', tone: 'info' },
+  { id: 'a2', when: '6 Mar 09:05', who: 'Aisha Khan', what: 'Replayed proposed settings', detail: '214 → 9 activations on 30 days of data', tone: 'accent' },
+  { id: 'a3', when: '4 Mar 16:40', who: 'Aisha Khan', what: 'Drafted change MOC-2231', detail: 'Limit, deadband, on-delay and priority', tone: 'neutral' },
+  { id: 'a4', when: '1 Mar 08:00', who: 'System', what: 'Flagged as bad actor', detail: '18 % of all activations in February', tone: 'warning' },
+];
+
+const AR_AGENDA: ReadonlyArray<{ id: string; title: string; meta: string; state: string; tone: Tone }> = [
+  { id: 'g1', title: 'Top ten bad actors, February', meta: '6 alarms · 30 min', state: 'Done', tone: 'success' },
+  { id: 'g2', title: 'Gas compression temperature alarms', meta: '14 alarms · 45 min', state: 'In review', tone: 'info' },
+  { id: 'g3', title: 'Alarms without an operator action', meta: '9 alarms · 20 min', state: 'Next', tone: 'neutral' },
+  { id: 'g4', title: 'Shelving register and overdue reviews', meta: '4 entries · 15 min', state: 'Next', tone: 'neutral' },
+];
+
+const AR_NAV: AppFrameNavItem[] = [
+  { id: 'overview', label: 'Overview', icon: <IconLayoutDashboard /> },
+  { id: 'worksheet', label: 'Worksheet', icon: <IconClipboardList />, badge: '8' },
+  { id: 'actors', label: 'Bad actors', icon: <IconRepeat /> },
+  { id: 'changes', label: 'Changes', icon: <IconAdjustments />, badge: '3' },
+  { id: 'register', label: 'Shelving register', icon: <IconBellOff /> },
+  { id: 'philosophy', label: 'Philosophy', icon: <IconFileText /> },
+];
+
+function ArFacts({ items }: { items: ReadonlyArray<readonly [string, ReactNode]> }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="text-sm text-base-foreground">{children}</dd>
+    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
+      {items.map(([term, detail]) => (
+        <div key={term} className="col-span-2 grid grid-cols-subgrid items-baseline">
+          <dt className="text-medium-foreground">{term}</dt>
+          <dd className="font-medium">{detail}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function ArRecordFacts({ entry }: { entry: ArEntry }) {
+  return (
+    <ArFacts
+      items={[
+        ['Cause', entry.cause],
+        ['Consequence of no action', `${entry.effect} · ${CONSEQUENCE_LABEL[entry.consequence]}`],
+        ['Operator action', entry.action],
+        ['Time to respond', arRespond(entry.minutes)],
+        ['Response sheet', 'In the operating procedure, reviewed yearly'],
+        ['Activations, 30 days', <span key="n" className="tabular-nums">{entry.activations}</span>],
+      ]}
+    />
+  );
+}
+
+function ArEntryMatrix({ entry, size }: { entry: ArEntry; size?: 'sm' | 'md' }) {
+  return (
+    <PriorityMatrix
+      size={size}
+      label={`Priority of ${entry.tag} by consequence and time to respond`}
+      rows={AR_ROWS}
+      columns={AR_COLUMNS}
+      rowHeader="Consequence"
+      columnHeader="Time to respond"
+      cell={(row, column) => arCell(row, column)}
+      selected={{ row: entry.consequence, column: urgencyOf(entry.minutes) }}
+    />
+  );
+}
+
+function ArDerived({ entry }: { entry: ArEntry }) {
+  const proposed = arProposed(entry);
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <span className="text-medium-foreground">Current</span>
+      <ArPriority priority={entry.current} variant="outline" />
+      <span className="text-medium-foreground">Derived</span>
+      <ArPriority priority={proposed} variant="filled" />
+      <span className="font-medium">{proposed === entry.current ? 'No change' : proposed === 'none' ? 'Make it an event or a work order' : 'Change proposed'}</span>
     </div>
   );
 }
 
-function WorksheetTable({ rows }: { rows: readonly WorksheetEntry[] }) {
+function ArLimitScale({ proposed = 147, deadband = 1.5 }: { proposed?: number; deadband?: number }) {
+  const bands: ScaleBand[] = [{ id: 'normal', from: 138, to: 145.8, tone: 'success', label: 'Normal operation 138 to 145.8 °C' }];
+  if (deadband > 0) bands.push({ id: 'deadband', from: proposed - deadband, to: proposed, tone: 'accent', label: `Deadband ${deadband} °C` });
   return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="Alarm rationalisation worksheet" className="w-full min-w-224 border-collapse text-sm">
-        <thead>
-          <tr>
-            {RATIONALISATION_COLUMNS.map((heading) => (
-              <th key={heading} scope="col" className={TH}>
-                {heading}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <RationalisationRow key={row.id} tag={row.tag} alarmType={row.alarmType} cause={row.cause} consequence={row.consequence} severity={row.severity} action={row.action} minutesToRespond={row.minutes} currentPriority={row.current} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <LimitScale
+      label="Discharge temperature limits"
+      min={130}
+      max={160}
+      unit="°C"
+      decimals={1}
+      reading={144.1}
+      bands={bands}
+      markers={[
+        { id: 'current', value: 145, label: 'Current limit', tone: 'warning', side: 'below' },
+        { id: 'proposed', value: proposed, label: 'Proposed', tone: 'accent', dashed: true },
+        { id: 'trip', value: 155, label: 'Trip', tone: 'critical' },
+      ]}
+    />
   );
 }
 
-function AlarmRationMasterRecord() {
+function ArReplayTrend({ proposed = 147, height = 250 }: { proposed?: number; height?: number }) {
   return (
-    <Card role="group" aria-label="Alarm master record 23-TT-92532" className="w-full min-w-0 gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-xs text-muted-foreground">23-TT-92532 · High</span>
-          <h3 className="text-base font-semibold text-base-foreground">Discharge temperature high</h3>
-        </div>
-        <StatusIndicator variant="badge" {...alarmPriorityStatus('medium')} />
-      </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-        <Field label="Limit">
-          <span className="tabular-nums">145.0 °C</span>
-        </Field>
-        <Field label="Time to respond">
-          <span className="tabular-nums">8 min</span>
-        </Field>
-        <div className="col-span-2">
-          <Field label="Consequence of no action">Compressor trips on high discharge temperature at 155 °C. About 6 hours of lost export.</Field>
-        </div>
-        <div className="col-span-2">
-          <Field label="Operator action">Check cooling water flow and start the standby cooler fan.</Field>
-        </div>
-        <Field label="Owner">Aisha Khan</Field>
-        <Field label="Last reviewed">
-          <span className="tabular-nums">12 Mar 2026</span>
-        </Field>
-      </dl>
-    </Card>
+    <TrendLine
+      label="Discharge temperature over the last 24 hours against the current and the proposed high limit"
+      labels={AR_TEMPERATURE_LABELS}
+      unit="°C"
+      height={height}
+      yDomain={[140, 149]}
+      highlightLast={false}
+      series={[{ id: 'temperature', label: '23-TT-92532', values: AR_TEMPERATURE_VALUES, tone: 'accent' }]}
+      limits={[
+        { value: 145, label: 'Current', tone: 'warning' },
+        { value: proposed, label: 'Proposed', tone: 'success' },
+      ]}
+    />
   );
 }
 
-function AlarmRationWorksheetRow() {
-  const row = WORKSHEET[1];
+const AR_OPTIONS = [
+  { id: 'now', label: 'As it is', settings: { limit: 145 } },
+  { id: 'deadband', label: 'Deadband 1.5', settings: { limit: 145, deadband: 1.5 } },
+  { id: 'delay', label: 'Delay 60 s', settings: { limit: 145, deadband: 1.5, delaySamples: 1 } },
+  { id: 'limit', label: 'Limit 147', settings: { limit: 147, deadband: 1.5, delaySamples: 1 } },
+];
+
+const AR_OPTION_COUNTS = AR_OPTIONS.map((option) => replayAlarm(AR_TEMPERATURE_VALUES, option.settings).activations);
+
+function ArReplayBars({ height = 240 }: { height?: number }) {
   return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="One worksheet row" className="w-full min-w-224 border-collapse text-sm">
-        <thead>
-          <tr>
-            {RATIONALISATION_COLUMNS.map((heading) => (
-              <th key={heading} scope="col" className={TH}>
-                {heading}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <RationalisationRow tag={row.tag} alarmType={row.alarmType} cause={row.cause} consequence={row.consequence} severity={row.severity} action={row.action} minutesToRespond={row.minutes} currentPriority="medium" />
-        </tbody>
-      </table>
-    </div>
+    <Bars
+      label="Activations in 24 hours of recorded data for four settings, each adding to the one before"
+      categories={AR_OPTIONS.map((option) => option.label)}
+      series={[{ id: 'count', label: 'Activations in 24 h', values: AR_OPTION_COUNTS }]}
+      tones={['warning', 'accent', 'accent', 'success']}
+      limit={{ value: 2, label: 'Target', tone: 'success' }}
+      showValues
+      height={height}
+    />
   );
 }
 
-function PriorityMatrixGrid({ selected }: { selected?: { severity: ConsequenceSeverity; minutes: number } }) {
-  const activeResponse = selected ? responseClass(selected.minutes) : null;
+function ArActorBars({ height = 260 }: { height?: number }) {
   return (
-    <table aria-label="Priority matrix: consequence severity against time to respond" className="w-full border-collapse text-sm">
-      <thead>
-        <tr>
-          <th scope="col" className={TH}>
-            Time to respond
-          </th>
-          {CONSEQUENCE_SEVERITIES.map((severity) => (
-            <th key={severity} scope="col" className={`${TH} text-center`}>
-              {SEVERITY_LABEL[severity]}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {[...RESPONSE_CLASSES].reverse().map((response) => (
-          <tr key={response} className="border-t border-default">
-            <th scope="row" className="px-3 py-2 text-left text-xs font-normal whitespace-nowrap text-medium-foreground">
-              {RESPONSE_LABEL[response]}
-            </th>
-            {CONSEQUENCE_SEVERITIES.map((severity) => {
-              const priority = matrixCell(severity, response);
-              const hit = selected !== undefined && activeResponse === response && selected.severity === severity;
-              return (
-                <td key={severity} data-selected={hit} className={`px-2 py-1.5 text-center ${hit ? 'bg-muted-background outline-2 -outline-offset-2 outline-base-foreground' : ''}`}>
-                  <StatusIndicator size="sm" {...alarmPriorityStatus(priority)} />
-                </td>
-              );
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <Bars
+      label="Activations in 30 days for the six most frequent alarms"
+      orientation="horizontal"
+      categories={AR_ACTORS.map((actor) => actor.text)}
+      series={[{ id: 'count', label: 'Activations', values: AR_ACTORS.map((actor) => actor.count) }]}
+      tones={AR_ACTORS.map((actor) => actor.tone)}
+      showValues
+      height={height}
+    />
   );
 }
 
-function AlarmRationPriorityMatrix() {
+function ArDistributionBars({ height = 240 }: { height?: number }) {
   return (
-    <Panel title="Priority matrix" meta="Example for this site">
-      <PriorityMatrixGrid />
-      <p className="text-xs text-muted-foreground">Priority follows from the consequence of no action and the time the operator has. It is never set by asking how important the alarm feels.</p>
-    </Panel>
+    <Bars
+      label="Share of configured alarms per priority in per cent, against the recommended distribution"
+      categories={['High', 'Medium', 'Low']}
+      series={[
+        { id: 'now', label: 'Configured now', values: [22, 31, 47], tone: 'warning' },
+        { id: 'after', label: 'After rationalisation', values: [6, 17, 77], tone: 'accent' },
+        { id: 'target', label: 'Recommended', values: [5, 15, 80], tone: 'neutral' },
+      ]}
+      showValues
+      height={height}
+    />
   );
 }
 
-function AlarmRationWorksheetLive() {
-  const [severity, setSeverity] = useState<ConsequenceSeverity>('major');
-  const [minutes, setMinutes] = useState('8');
-  const parsed = Number(minutes);
-  const valid = minutes.trim() !== '' && Number.isFinite(parsed) && parsed >= 0;
-  const result = valid ? rationalise(severity, parsed) : null;
+function ArKpis({ plain = false, size = 'md' }: { plain?: boolean; size?: 'md' | 'lg' | 'hero' }) {
+  const variant = plain ? 'plain' : 'tile';
   return (
-    <Panel title="Work out a priority" meta="Changes the result at once">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col">
-          <Label htmlFor="alarm-ration-severity">Consequence of no action</Label>
-          <Select items={SEVERITY_ITEMS} value={severity} onValueChange={(value) => (isSeverity(value) ? setSeverity(value) : undefined)}>
-            <SelectTrigger id="alarm-ration-severity" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SEVERITY_ITEMS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex flex-col">
-          <Label htmlFor="alarm-ration-minutes">Time to respond, minutes</Label>
-          <Input id="alarm-ration-minutes" inputMode="decimal" aria-invalid={!valid} value={minutes} onChange={(event) => setMinutes(event.target.value)} />
-          {!valid ? <span className="pt-1 text-xs text-critical-foreground-strong">Enter a number of minutes, 0 or more.</span> : null}
-        </div>
-      </div>
-      <div role="status" className="flex flex-col gap-1.5 border-t border-default pt-3">
-        {result ? (
-          <>
-            <span className="flex items-center gap-3 text-sm text-medium-foreground">
-              Resulting priority <StatusIndicator variant="badge" {...alarmPriorityStatus(result.priority)} />
-            </span>
-            <span className="text-xs text-muted-foreground">Time band: {RESPONSE_LABEL[result.response].toLowerCase()}</span>
-            {result.finding ? <span className="text-xs text-base-foreground">{result.finding}</span> : null}
-          </>
-        ) : (
-          <span className="text-xs text-muted-foreground">No priority until the time to respond is valid.</span>
-        )}
-      </div>
-    </Panel>
+    <>
+      <Stat variant={variant} size={size} tone="success" icon={plain ? undefined : <IconUsers />} label="Alarms per operator" value={0.9} decimals={1} unit="per 10 min" delta={{ value: -2.5, good: 'down', caption: 'was 3.4' }} target="Target 1.0" />
+      <Stat variant={variant} size={size} tone="warning" icon={plain ? undefined : <IconAlertTriangle />} label="Peak rate" value={14} unit="per 10 min" delta={{ value: -28, decimals: 0, good: 'down', caption: 'was 42' }} target="Target 10" />
+      <Stat variant={variant} size={size} tone="success" icon={plain ? undefined : <IconHistory />} label="Standing alarms" value={4} delta={{ value: -14, decimals: 0, good: 'down', caption: 'was 18' }} target="Target 5" />
+      <Stat variant={variant} size={size} tone="success" icon={plain ? undefined : <IconRepeat />} label="Chattering alarms" value={2} delta={{ value: -9, decimals: 0, good: 'down', caption: 'was 11' }} target="Target 0" />
+    </>
   );
 }
 
-function AlarmRationWorksheetTable() {
-  return <WorksheetTable rows={WORKSHEET} />;
-}
-
-function AlarmRationPriorityDistribution() {
-  const shares = priorityDistribution(expand(CURRENT_COUNTS));
+function AlarmRationalisationRecord() {
+  const entry = AR_ENTRIES[0];
   return (
-    <Panel title="Priority distribution" meta={`${shares.reduce((sum, entry) => sum + entry.count, 0)} configured alarms`}>
-      <DistributionBar
-        label="Configured alarms by priority"
-        segments={shares.map((entry) => ({ id: entry.priority, label: alarmPriorityStatus(entry.priority).label, value: entry.count, tone: PRIORITY_TONE[entry.priority] }))}
-      />
-      <p className="text-xs text-muted-foreground">Target is about {PRIORITY_TARGET.low} / {PRIORITY_TARGET.medium} / {PRIORITY_TARGET.high} percent low, medium and high.</p>
-    </Panel>
+    <Canvas>
+      <Grid>
+        <Panel
+          className="col-span-7"
+          title={entry.text}
+          subtitle={`Alarm master record · ${entry.tag} · 1st stage compressor`}
+          icon={
+            <IconChip tone="warning">
+              <IconFileText />
+            </IconChip>
+          }
+          actions={<StatusPill tone={AR_REVIEW_TONE[entry.review]}>{entry.review}</StatusPill>}
+          footer={<ArDerived entry={entry} />}
+        >
+          <ArRecordFacts entry={entry} />
+        </Panel>
+        <Panel className="col-span-5" title="Derived priority" subtitle="Major consequence, 15 minutes to respond">
+          <ArEntryMatrix entry={entry} size="sm" />
+        </Panel>
+      </Grid>
+    </Canvas>
   );
 }
 
-function AlarmRationDistributionVsTarget() {
-  const shares = priorityDistribution(expand(CURRENT_COUNTS));
+function AlarmRationalisationMatrix() {
+  const [cell, setCell] = useState<{ row: string; column: string }>({ row: 'major', column: '3-10' });
+  const picked = arCell(cell.row, cell.column, true);
   return (
-    <Panel title="Distribution against target" meta={isDistributionOnTarget(shares) ? 'On target' : 'Off target'}>
-      <table aria-label="Priority share against target" className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={`${TH} pl-0`}>
-              Priority
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Share
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Target
-            </th>
-            <th scope="col" className={`${TH} pr-0 text-right`}>
-              Difference
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {shares.map((entry) => (
-            <tr key={entry.priority} className="border-t border-default">
-              <th scope="row" className={`${TD} pl-0 text-left font-normal`}>
-                <StatusIndicator size="sm" {...alarmPriorityStatus(entry.priority)} />
-              </th>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{formatValue(entry.share, 1)} %</td>
-              <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{entry.target} %</td>
-              <td className={`${TD} pr-0 text-right tabular-nums ${Math.abs(entry.delta) > 5 ? 'font-medium text-warning-foreground-strong' : 'text-medium-foreground'}`}>{formatDelta(entry.delta, 1)} pts</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="text-xs text-muted-foreground">Too many high-priority alarms means the priority no longer tells the operator what to do first.</p>
-    </Panel>
-  );
-}
-
-function AlarmRationBeforeAfter() {
-  const rows = [
-    { label: 'Alarms per operator per hour', before: 14.2, after: 5.6, target: '6 or fewer', decimals: 1 },
-    { label: 'Peak alarms in 10 minutes', before: 38, after: 12, target: '10 or fewer', decimals: 0 },
-    { label: 'Standing alarms', before: 24, after: 6, target: 'Fewer than 5', decimals: 0 },
-    { label: 'Chattering alarms', before: 38, after: 9, target: 'None', decimals: 0 },
-    { label: 'High-priority share, %', before: 16.7, after: 6.1, target: '5', decimals: 1 },
-  ];
-  return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="Alarm system KPIs before and after rationalisation" className="w-full min-w-136 border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Measure
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Before
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              After
-            </th>
-            <th scope="col" className={TH}>
-              Change
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Target
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.label} className="border-t border-default">
-              <th scope="row" className={`${TD} text-left font-normal text-base-foreground`}>
-                {row.label}
-              </th>
-              <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(row.before, row.decimals)}</td>
-              <td className={`${TD} text-right tabular-nums font-medium text-base-foreground`}>{formatValue(row.after, row.decimals)}</td>
-              <td className={TD}>
-                <TrendDelta value={row.after} reference={row.before} decimals={row.decimals} goodDirection="down" size="sm" />
-              </td>
-              <td className={`${TD} text-right text-xs text-muted-foreground`}>{row.target}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AlarmRationDocumentation() {
-  const fields = [
-    { label: 'Consequence', done: 561 },
-    { label: 'Operator action', done: 548 },
-    { label: 'Time to respond', done: 502 },
-    { label: 'Limit basis', done: 436 },
-  ];
-  const total = 580;
-  return (
-    <Panel title="Documentation completeness" meta={`${total} configured alarms`}>
-      <div className="flex flex-col gap-3">
-        {fields.map((field) => (
-          <LinearGauge key={field.label} label={field.label} value={field.done} max={total} size="sm" showHeader={false} />
-        ))}
-      </div>
-      <dl className="flex flex-col gap-1.5 text-sm">
-        {fields.map((field) => (
-          <div key={field.label} className="flex justify-between gap-3">
-            <dt className="text-medium-foreground">{field.label}</dt>
-            <dd className="tabular-nums text-base-foreground">
-              {formatValue((field.done / total) * 100)} % · {total - field.done} missing
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </Panel>
-  );
-}
-
-function AlarmRationNuisance() {
-  const total = NUISANCE.reduce((sum, entry) => sum + entry.count, 0);
-  return (
-    <Panel title="Nuisance alarms" meta={`${total} flagged`}>
-      <ul className="flex flex-col gap-3">
-        {NUISANCE.map((entry) => (
-          <li key={entry.id} className="flex items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm text-base-foreground">{entry.label}</span>
-              <span className="text-xs text-muted-foreground">{entry.rule}</span>
-            </div>
-            <ValueReadout size="xs" value={entry.count} />
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
-}
-
-function AlarmRationBadActors() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="Bad actors with proposed change" className="w-full min-w-208 border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Alarm
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Activations, 30 d
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Share of all
-            </th>
-            <th scope="col" className={TH}>
-              Category
-            </th>
-            <th scope="col" className={TH}>
-              Proposed change
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {BAD_ACTORS.map((actor) => (
-            <tr key={actor.tag} className="border-t border-default">
-              <th scope="row" className={`${TD} text-left font-normal`}>
-                <span className="font-mono text-xs text-base-foreground">{actor.tag}</span>
-                <span className="block text-xs text-muted-foreground">{actor.text}</span>
-              </th>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{actor.activations}</td>
-              <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(actor.share, 1)} %</td>
-              <td className={`${TD} text-medium-foreground`}>{actor.category}</td>
-              <td className={`${TD} text-base-foreground`}>{actor.change}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AlarmRationReplayTrend() {
-  const [proposed, setProposed] = useState('144');
-  const limit = Number(proposed);
-  const comparison = compareSettings(REPLAY_VALUES, { limit: 141 }, { limit: Number.isFinite(limit) ? limit : 141 });
-  return (
-    <Card className="w-full min-w-0 gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-sm font-medium text-base-foreground">Current against proposed limit</h3>
-          <span className="text-xs text-muted-foreground">
-            <span className="font-mono">23-TT-91141</span> replayed over the last 40 hours
+    <Canvas>
+      <Panel
+        title="Priority matrix"
+        subtitle="Where the 1,002 configured alarms sit"
+        footer={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <StatusPill tone={picked.tone}>{picked.label}</StatusPill>
+            <span className="font-medium text-base-foreground tabular-nums">{picked.count} alarms in this cell</span>
+            <span>Select a cell to list them.</span>
           </span>
-        </div>
-        <div className="flex w-48 flex-col">
-          <Label htmlFor="alarm-ration-proposed">Proposed limit</Label>
-          <Select
-            items={[141, 143, 144, 146, 148].map((value) => ({ value: String(value), label: `${value} °C` }))}
-            value={proposed}
-            onValueChange={(value) => (typeof value === 'string' ? setProposed(value) : undefined)}
-          >
-            <SelectTrigger id="alarm-ration-proposed" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[141, 143, 144, 146, 148].map((value) => (
-                <SelectItem key={value} value={String(value)}>
-                  {value} °C
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <TrendChart
-        label={`Cooler outlet temperature replayed against a current limit of 141 °C and a proposed limit of ${proposed} °C. The current limit would have alarmed ${comparison.current.count} times, the proposal ${comparison.proposed.count} times.`}
-        series={[{ key: 'temperature', label: 'Outlet temperature', points: CHATTER_VALUES.map((point) => ({ t: point.t, v: point.v })) }]}
-        limits={[
-          { value: 141, label: 'Current 141', tone: 'neutral', align: 'left' },
-          { value: limit, label: `Proposed ${proposed}`, tone: 'warning', align: 'right' },
-        ]}
-        unit="°C"
-        heightClassName="h-56"
-        maxTicks={6}
-      />
-      <dl className="grid grid-cols-3 gap-4 border-t border-default pt-3">
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-muted-foreground">Current limit would alarm</dt>
-          <dd>
-            <ValueReadout size="md" value={comparison.current.count} unit="times" />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-muted-foreground">Proposed limit would alarm</dt>
-          <dd>
-            <ValueReadout size="md" value={comparison.proposed.count} unit="times" />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-muted-foreground">Change</dt>
-          <dd className="text-sm text-base-foreground tabular-nums">{comparison.reductionPercent === null ? 'No alarms to compare' : `${formatDelta(-comparison.reductionPercent)} % activations`}</dd>
-        </div>
-      </dl>
-    </Card>
+        }
+      >
+        <PriorityMatrix
+          label="Configured alarms by consequence and time to respond"
+          rows={AR_ROWS}
+          columns={AR_COLUMNS}
+          rowHeader="Consequence"
+          columnHeader="Time to respond"
+          cell={(row, column) => arCell(row, column, true)}
+          selected={cell}
+          onSelect={(row, column) => setCell({ row, column })}
+        />
+      </Panel>
+    </Canvas>
   );
 }
 
-function AlarmRationReplayTable() {
-  const options = [
-    { label: 'Current: limit 141 °C', settings: { limit: 141 } },
-    { label: 'Limit 144 °C', settings: { limit: 144 } },
-    { label: 'Limit 141 °C, 2 °C deadband', settings: { limit: 141, deadband: 2 } },
-    { label: 'Limit 141 °C, deadband and 1 min delay', settings: { limit: 141, deadband: 2, onDelay: 6 } },
-  ];
-  const baseline = compareSettings(REPLAY_VALUES, options[0].settings, options[0].settings).current.count;
+function AlarmRationalisationCalculator() {
+  const [consequence, setConsequence] = useState<Consequence>('major');
+  const [urgency, setUrgency] = useState<Urgency>('10-30');
+  const priority = derivePriority(consequence, urgency);
   return (
-    <Panel title="Replay of 40 hours" meta="240 samples at 10 min">
-      <table aria-label="Alarm activations by setting" className="w-full border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={`${TH} pl-0`}>
-              Setting
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Activations
-            </th>
-            <th scope="col" className={`${TH} pr-0 text-right`}>
-              Change
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {options.map((option) => {
-            const count = compareSettings(REPLAY_VALUES, option.settings, option.settings).current.count;
-            return (
-              <tr key={option.label} className="border-t border-default">
-                <th scope="row" className={`${TD} pl-0 text-left font-normal text-base-foreground`}>
-                  {option.label}
-                </th>
-                <td className={`${TD} text-right tabular-nums text-base-foreground`}>{count}</td>
-                <td className={`${TD} pr-0 text-right tabular-nums text-medium-foreground`}>{count === baseline ? 'Baseline' : `${formatDelta(count - baseline)}`}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </Panel>
-  );
-}
-
-function AlarmRationTuning() {
-  const [type, setType] = useState<SignalType>('temperature');
-  const span = type === 'temperature' ? 180 : type === 'pressure' ? 60 : type === 'flow' ? 250000 : 100;
-  const unit = type === 'temperature' ? '°C' : type === 'pressure' ? 'barg' : type === 'flow' ? 'Sm³/h' : '%';
-  const tuning = suggestTuning(type, span);
-  return (
-    <Panel title="Deadband and delay" meta="Starting points">
-      <div className="flex flex-col">
-        <Label htmlFor="alarm-ration-signal">Signal type</Label>
-        <Select items={SIGNAL_ITEMS} value={type} onValueChange={(value) => (isSignalType(value) ? setType(value) : undefined)}>
-          <SelectTrigger id="alarm-ration-signal" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SIGNAL_ITEMS.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <dl role="status" className="grid grid-cols-3 gap-4 border-t border-default pt-3">
-        <Field label="Instrument span">
-          <span className="tabular-nums">
-            {formatValue(span)} {unit}
-          </span>
-        </Field>
-        <Field label="Deadband">
-          <span className="tabular-nums">
-            {formatValue(tuning.deadband, 1)} {unit} ({tuning.deadbandPercent} %)
-          </span>
-        </Field>
-        <Field label="On and off delay">
-          <span className="tabular-nums">
-            {tuning.delaySeconds} s · {delayInSamples(tuning.delaySeconds, 10)} samples at 10 s
-          </span>
-        </Field>
-      </dl>
-      <p className="text-xs text-muted-foreground">Check the suggestion against the trend before it goes into a change request.</p>
-    </Panel>
-  );
-}
-
-const SHELVE_REASONS = [
-  { value: 'instrument', label: 'Instrument fault, repair planned' },
-  { value: 'maintenance', label: 'Equipment in maintenance' },
-  { value: 'process', label: 'Known process condition' },
-];
-
-function AlarmRationShelving() {
-  const [reason, setReason] = useState('instrument');
-  const [note, setNote] = useState('');
-  const [stage, setStage] = useState<'draft' | 'requested' | 'approved' | 'rejected'>('draft');
-  const steps: StepListItem[] = [
-    { id: 'request', label: 'Requested by Jonas Nyberg', detail: stage === 'draft' ? 'Not sent' : '12 Mar, 13:58', state: stage === 'draft' ? 'pending' : 'done' },
-    { id: 'approve', label: 'Approved by the shift supervisor', detail: stage === 'approved' ? 'Liv Wold · 12 Mar, 14:02' : stage === 'rejected' ? 'Rejected by Liv Wold' : 'Waiting', state: stage === 'approved' ? 'done' : stage === 'rejected' ? 'failed' : stage === 'requested' ? 'active' : 'pending' },
-    { id: 'shelved', label: 'Shelved for 12 hours', detail: stage === 'approved' ? 'Returns 13 Mar, 02:00' : undefined, state: stage === 'approved' ? 'done' : 'pending' },
-  ];
-  return (
-    <Panel title="Shelving request" meta={<span className="font-mono">40-TT-40015</span>}>
-      <div className="flex flex-col">
-        <Label htmlFor="alarm-ration-shelve-reason">Reason</Label>
-        <Select items={SHELVE_REASONS} value={reason} onValueChange={(value) => (typeof value === 'string' ? setReason(value) : undefined)} disabled={stage !== 'draft'}>
-          <SelectTrigger id="alarm-ration-shelve-reason" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SHELVE_REASONS.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Label htmlFor="alarm-ration-shelve-note" className="pt-3">
-          What compensates while it is shelved
-        </Label>
-        <Textarea id="alarm-ration-shelve-note" rows={2} value={note} disabled={stage !== 'draft'} onChange={(event) => setNote(event.target.value)} placeholder="Operator checks the local gauge every hour" />
-      </div>
-      <StepList label="Shelving approval" steps={steps} showState />
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-3">
-        <span className="text-xs text-muted-foreground">{stage === 'draft' && note.trim() === '' ? 'Say what compensates before you send the request.' : 'The requester cannot approve their own request.'}</span>
-        <div className="flex gap-2">
-          {stage === 'draft' ? (
-            <Button size="sm" disabled={note.trim() === ''} onClick={() => setStage('requested')}>
-              Request shelving
-            </Button>
-          ) : null}
-          {stage === 'requested' ? (
-            <>
-              <Button size="sm" variant="ghost" onClick={() => setStage('rejected')}>
-                Reject request
-              </Button>
-              <Button size="sm" onClick={() => setStage('approved')}>
-                Approve shelving
-              </Button>
-            </>
-          ) : null}
-          {stage === 'approved' || stage === 'rejected' ? (
-            <Button size="sm" variant="secondary" onClick={() => setStage('draft')}>
-              Start a new request
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </Panel>
-  );
-}
-
-function AlarmRationSuppressionRegister() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="Shelved, suppressed and out-of-service alarms" className="w-full min-w-208 border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Alarm
-            </th>
-            <th scope="col" className={TH}>
-              Status
-            </th>
-            <th scope="col" className={TH}>
-              Reason
-            </th>
-            <th scope="col" className={TH}>
-              Requested and approved
-            </th>
-            <th scope="col" className={TH}>
-              Review
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {SUPPRESSIONS.map((row) => (
-            <tr key={row.tag} className="border-t border-default">
-              <th scope="row" className={`${TD} text-left font-mono text-xs font-normal text-base-foreground`}>
-                {row.tag}
-              </th>
-              <td className={`${TD} text-medium-foreground`}>{row.kind}</td>
-              <td className={`${TD} text-base-foreground`}>{row.reason}</td>
-              <td className={`${TD} text-xs text-muted-foreground tabular-nums`}>
-                {row.by}, approved by {row.approved}
-                <span className="block">{row.since}</span>
-              </td>
-              <td className={TD}>
-                {row.overdue ? <StatusIndicator size="sm" tone="warning" shape="square" label={row.review} /> : <span className="text-xs text-medium-foreground tabular-nums">{row.review}</span>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function AlarmRationMoc() {
-  const steps: StepListItem[] = [
-    { id: 'raise', label: 'Change raised', detail: 'Aisha Khan · 11 Mar', state: 'done' },
-    { id: 'review', label: 'Technical review', detail: 'Replay shows 74% fewer activations', state: 'done' },
-    { id: 'approve', label: 'Approval by the alarm review team', detail: 'Waiting for the meeting on 14 Mar', state: 'active' },
-    { id: 'implement', label: 'Implemented in the control system', state: 'pending' },
-    { id: 'verify', label: 'Verified after 7 days', state: 'pending' },
-  ];
-  return (
-    <Panel title="Management of change" meta={<span className="font-mono">MoC-0217</span>}>
-      <p className="text-sm text-base-foreground">
-        Raise the limit of <span className="font-mono text-xs">23-TT-91141</span> from 40.0 to 42.0 °C.
-      </p>
-      <StepList label="Management of change status, MoC-0217" steps={steps} showState />
-    </Panel>
-  );
-}
-
-function AlarmRationPhilosophy() {
-  return (
-    <Panel title="Alarm philosophy rules" meta="Worksheet check">
-      <ConditionList label="Alarm philosophy rules" conditions={PHILOSOPHY} stateLabels={{ met: 'Follows', unmet: 'Breaks rule', bypassed: 'Open' }} />
-    </Panel>
-  );
-}
-
-function AlarmRationAgenda() {
-  return (
-    <Panel title="Review meeting agenda" meta="14 Mar, 09:00 · 2 hours">
-      <ol className="flex flex-col">
-        {AGENDA.map((entry, index) => (
-          <li key={entry.time} className={`grid grid-cols-[3rem_minmax(0,1fr)_auto] items-start gap-x-3 py-2.5 ${index === 0 ? 'pt-0' : 'border-t border-default'}`}>
-            <span className="text-xs tabular-nums text-muted-foreground">{entry.time}</span>
-            <span className="flex flex-col">
-              <span className="text-sm text-base-foreground">{entry.item}</span>
-              <span className="text-xs text-muted-foreground">{entry.who}</span>
-            </span>
-            <span className="text-xs tabular-nums text-muted-foreground">{entry.minutes} min</span>
-          </li>
-        ))}
-      </ol>
-    </Panel>
-  );
-}
-
-type BulkRow = { id: string; tag: string; text: string; priority: Exclude<AlarmPriority, 'none'> };
-
-const BULK_ROWS: readonly BulkRow[] = [
-  { id: 'b1', tag: '23-PT-92531', text: 'Discharge pressure high', priority: 'high' },
-  { id: 'b2', tag: '23-TT-92532', text: 'Discharge temperature high', priority: 'high' },
-  { id: 'b3', tag: '23-VT-92540', text: 'Drive-end vibration high', priority: 'high' },
-  { id: 'b4', tag: '23-PT-92530', text: 'Suction pressure low', priority: 'medium' },
-  { id: 'b5', tag: '23-ST-92501', text: 'Shaft speed high', priority: 'medium' },
-  { id: 'b6', tag: '23-FT-92510', text: 'Gas flow low', priority: 'low' },
-];
-
-const PRIORITY_ITEMS = [
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-];
-
-function isBulkPriority(value: unknown): value is BulkRow['priority'] {
-  return value === 'low' || value === 'medium' || value === 'high';
-}
-
-function AlarmRationBulk() {
-  const [rows, setRows] = useState<readonly BulkRow[]>(BULK_ROWS);
-  const [history, setHistory] = useState<readonly (readonly BulkRow[])[]>([]);
-  const [selected, setSelected] = useState<readonly string[]>(['b2', 'b3']);
-  const [target, setTarget] = useState<BulkRow['priority']>('medium');
-  const [message, setMessage] = useState('');
-  const apply = () => {
-    setHistory((current) => [...current, rows]);
-    setRows((current) => current.map((row) => (selected.includes(row.id) ? { ...row, priority: target } : row)));
-    setMessage(`Changed ${selected.length} ${selected.length === 1 ? 'alarm' : 'alarms'} to ${target} priority.`);
-    setSelected([]);
-  };
-  const undo = () => {
-    const previous = history[history.length - 1];
-    if (!previous) return;
-    setRows(previous);
-    setHistory((current) => current.slice(0, -1));
-    setMessage('Undid the last change.');
-  };
-  const shares = priorityDistribution(rows.map((row) => row.priority));
-  return (
-    <Card className="w-full min-w-0 gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-sm font-medium text-base-foreground">Bulk re-prioritise</h3>
-          <span className="text-xs text-muted-foreground tabular-nums">{selected.length} selected of {rows.length}</span>
-        </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex w-40 flex-col">
-            <Label htmlFor="alarm-ration-bulk-target">New priority</Label>
-            <Select items={PRIORITY_ITEMS} value={target} onValueChange={(value) => (isBulkPriority(value) ? setTarget(value) : undefined)}>
-              <SelectTrigger id="alarm-ration-bulk-target" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PRIORITY_ITEMS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
+    <Canvas>
+      <Panel
+        title="Priority calculator"
+        subtitle="Two answers in, one priority out"
+        icon={
+          <IconChip tone="accent">
+            <IconScale />
+          </IconChip>
+        }
+        footer={priority === 'none' ? 'No alarm is justified: log it as an event or raise a work order.' : 'The priority follows from the answers, never from how important the alarm feels.'}
+      >
+        <div className="flex flex-1 flex-col justify-between gap-5">
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">Consequence if nobody acts</span>
+            <SegmentedControl value={consequence} onValueChange={(next) => (isConsequence(next) ? setConsequence(next) : undefined)}>
+              <SegmentedControlList aria-label="Consequence if nobody acts">
+                {CONSEQUENCES.map((item) => (
+                  <SegmentedControlButton key={item} value={item}>
+                    {CONSEQUENCE_LABEL[item]}
+                  </SegmentedControlButton>
                 ))}
-              </SelectContent>
-            </Select>
+              </SegmentedControlList>
+            </SegmentedControl>
           </div>
-          <Button size="sm" disabled={selected.length === 0} onClick={apply}>
-            Change priority
-          </Button>
-          <Button size="sm" variant="ghost" disabled={history.length === 0} onClick={undo}>
-            <IconArrowBackUp aria-hidden="true" />
-            Undo
-          </Button>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-medium">Time the operator has</span>
+            <SegmentedControl value={urgency} onValueChange={(next) => (isUrgency(next) ? setUrgency(next) : undefined)}>
+              <SegmentedControlList aria-label="Time the operator has">
+                {URGENCIES.map((item) => (
+                  <SegmentedControlButton key={item} value={item}>
+                    {URGENCY_LABEL[item]}
+                  </SegmentedControlButton>
+                ))}
+              </SegmentedControlList>
+            </SegmentedControl>
+          </div>
+          <Stat
+            size="lg"
+            tone={AR_TONE[priority]}
+            emphasis="strong"
+            label="Derived priority"
+            value={priority === 'none' ? 'Not an alarm' : PRIORITY_LABEL[priority]}
+            target={`${CONSEQUENCE_LABEL[consequence]} consequence · ${URGENCY_LABEL[urgency].toLowerCase()}`}
+          />
         </div>
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <CheckboxGroup aria-label="Alarms to change" className="gap-3">
-          {rows.map((row) => (
-            <CheckboxItem key={row.id}>
-              <CheckboxItemControl checked={selected.includes(row.id)} onCheckedChange={(checked) => setSelected((current) => (checked ? [...current, row.id] : current.filter((id) => id !== row.id)))} />
-              <CheckboxItemLabel>
-                <span className="font-mono text-xs">{row.tag}</span> {row.text}
-              </CheckboxItemLabel>
-              <CheckboxItemDescription>Priority now: {alarmPriorityStatus(row.priority).label.toLowerCase()}</CheckboxItemDescription>
-            </CheckboxItem>
-          ))}
-        </CheckboxGroup>
-        <div className="flex flex-col gap-3">
-          <span className="text-xs text-muted-foreground">After the change</span>
-          {shares.map((entry) => (
-            <div key={entry.priority} className="flex items-center justify-between gap-3 text-sm">
-              <StatusIndicator size="sm" {...alarmPriorityStatus(entry.priority)} />
-              <span className="tabular-nums text-base-foreground">
-                {entry.count} · {formatValue(entry.share)} %
-              </span>
-            </div>
-          ))}
-          <p role="status" className="text-xs text-muted-foreground">
-            {message || 'Select alarms and choose a priority. Changes stay in this review until approved.'}
-          </p>
-        </div>
-      </div>
-    </Card>
+      </Panel>
+    </Canvas>
   );
 }
 
-function AlarmRationAuditTrail() {
+function AlarmRationalisationWorksheet() {
   return (
-    <Panel title="Audit trail" meta="Latest first">
-      <ul className="flex flex-col">
-        {AUDIT.map((entry, index) => (
-          <li key={entry.at} className={`flex flex-col gap-0.5 py-3 ${index === 0 ? 'pt-0' : 'border-t border-default'}`}>
-            <span className="text-sm text-base-foreground">{entry.what}</span>
-            <span className="text-xs text-muted-foreground">{entry.why}</span>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {entry.who} · {entry.at}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </Panel>
+    <Canvas>
+      <Panel title="Rationalisation worksheet" subtitle="Gas processing · 8 of 1,002 alarms shown · derived priority beside the configured one" padding="none" actions={<Button variant="outline" size="sm">Export</Button>}>
+        <DataTable
+          label="Rationalisation worksheet"
+          flush
+          columns={AR_WORKSHEET}
+          rows={AR_ENTRIES}
+          rowKey={(entry) => entry.tag}
+          rowTone={(entry) => (arProposed(entry) === entry.current ? undefined : 'warning')}
+        />
+      </Panel>
+    </Canvas>
   );
 }
 
-function AlarmRationWorkbench() {
-  const [selectedId, setSelectedId] = useState('w2');
-  const [severities, setSeverities] = useState<Record<string, ConsequenceSeverity>>({});
-  const [times, setTimes] = useState<Record<string, number>>({});
-  const entry = WORKSHEET.find((candidate) => candidate.id === selectedId) ?? WORKSHEET[0];
-  const severity = severities[entry.id] ?? entry.severity;
-  const minutes = times[entry.id] ?? entry.minutes;
-  const result = rationalise(severity, minutes);
-  const priorities = WORKSHEET.map((row) => alarmPriority(severities[row.id] ?? row.severity, times[row.id] ?? row.minutes));
-  const shares = priorityDistribution(priorities);
+function AlarmRationalisationDistribution() {
   return (
-    <Card className="w-full min-w-0 gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-base-foreground">Rationalisation workbench</h3>
-        <span className="text-xs text-muted-foreground">1st stage compressor 23-KA-9101 · {WORKSHEET.length} alarms</span>
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <ul aria-label="Alarms in the review" className="flex flex-col">
-          {WORKSHEET.map((row, index) => {
-            const priority = priorities[index];
-            const active = row.id === selectedId;
-            return (
-              <li key={row.id} className={index === 0 ? '' : 'border-t border-default'}>
-                <button
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setSelectedId(row.id)}
-                  className={`flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring-default ${active ? 'bg-muted-background' : 'hover:bg-muted-background'}`}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="font-mono text-xs text-base-foreground">{row.tag}</span>
-                    <span className="truncate text-xs text-muted-foreground">{row.alarmType}</span>
-                  </span>
-                  <StatusIndicator size="sm" {...alarmPriorityStatus(priority)} />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="font-mono text-xs text-muted-foreground">{entry.tag}</span>
-            <p className="text-sm text-base-foreground">Cause: {entry.cause}</p>
-            <p className="text-sm text-base-foreground">Consequence: {entry.consequence}</p>
-            <p className="text-sm text-base-foreground">Action: {entry.action}</p>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex flex-col">
-              <Label htmlFor="alarm-ration-wb-severity">Consequence severity</Label>
-              <Select items={SEVERITY_ITEMS} value={severity} onValueChange={(value) => (isSeverity(value) ? setSeverities((current) => ({ ...current, [entry.id]: value })) : undefined)}>
-                <SelectTrigger id="alarm-ration-wb-severity" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEVERITY_ITEMS.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex flex-col">
-              <Label htmlFor="alarm-ration-wb-time">Time to respond</Label>
-              <Select
-                items={[1, 5, 15, 45].map((value) => ({ value: String(value), label: `${value} min` }))}
-                value={String(minutes)}
-                onValueChange={(value) => (typeof value === 'string' ? setTimes((current) => ({ ...current, [entry.id]: Number(value) })) : undefined)}
-              >
-                <SelectTrigger id="alarm-ration-wb-time" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[1, 5, 15, 45].map((value) => (
-                    <SelectItem key={value} value={String(value)}>
-                      {value} min
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div role="status" className="flex flex-col gap-1.5 border-t border-default pt-3">
-            <span className="flex items-center gap-3 text-sm text-medium-foreground">
-              Resulting priority <StatusIndicator variant="badge" {...alarmPriorityStatus(result.priority)} />
-            </span>
-            {result.finding ? <span className="text-xs text-base-foreground">{result.finding}</span> : null}
-            <span className="text-xs text-muted-foreground tabular-nums">
-              Compressor alarms after this review: {shares.map((share) => `${share.count} ${share.priority}`).join(', ')}
-            </span>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function AlarmRationOverview() {
-  const shares = priorityDistribution(expand(CURRENT_COUNTS));
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="min-w-0">
-          <span className="text-xs text-muted-foreground">Alarms per operator per hour</span>
-          <ValueReadout size="lg" value={5.6} decimals={1} />
-          <TrendDelta value={5.6} reference={14.2} decimals={1} goodDirection="down" caption="since the review" />
-        </Card>
-        <Card className="min-w-0">
-          <span className="text-xs text-muted-foreground">Reviewed alarms</span>
-          <ValueReadout size="lg" value={412} unit="of 580" />
-          <LinearGauge label="Reviewed alarms" value={412} max={580} size="sm" showHeader={false} />
-        </Card>
-        <Card className="min-w-0">
-          <span className="text-xs text-muted-foreground">Changes waiting for approval</span>
-          <ValueReadout size="lg" value={7} />
-          <span className="text-xs text-muted-foreground">Next review meeting 14 Mar</span>
-        </Card>
-        <Card className="min-w-0">
-          <span className="text-xs text-muted-foreground">Shelved past their review date</span>
-          <ValueReadout size="lg" value={1} tone="warning" />
-          <StatusIndicator size="sm" tone="warning" shape="square" label="27-PA-2001B, 6 days" />
-        </Card>
-      </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Panel title="Priority distribution" meta="Target 80 / 15 / 5">
-          <DistributionBar label="Configured alarms by priority" segments={shares.map((entry) => ({ id: entry.priority, label: alarmPriorityStatus(entry.priority).label, value: entry.count, tone: PRIORITY_TONE[entry.priority] }))} />
-          <div className="w-full">
-            <Alert variant="warning">
-              <AlertTitle>High priority is {formatValue(shares[2].share, 1)} percent of alarms</AlertTitle>
-              <AlertDescription>The target is 5 percent. Review the 97 high-priority alarms against the matrix before the next meeting.</AlertDescription>
-            </Alert>
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-5" title="Priority distribution" subtitle="Configured alarms today" footer="Too many high-priority alarms: when everything is urgent, nothing is.">
+          <div className="flex flex-1 items-center justify-center">
+            <Donut label="Configured alarms by priority" segments={AR_DISTRIBUTION} unit=" %" centerValue="1,002" centerCaption="alarms" size={164} />
           </div>
         </Panel>
-        <Panel title="Top bad actors" meta="Last 30 days">
-          <ul className="flex flex-col gap-3">
-            {BAD_ACTORS.slice(0, 4).map((actor) => (
-              <li key={actor.tag} className="flex items-start justify-between gap-4">
-                <div className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm text-base-foreground">
-                    {actor.text} <span className="font-mono text-xs text-muted-foreground">{actor.tag}</span>
-                  </span>
-                  <span className="text-xs text-muted-foreground">{actor.change}</span>
-                </div>
-                <span className="text-xs tabular-nums text-medium-foreground">{actor.activations}</span>
-              </li>
+        <Panel className="col-span-7" title="Against the recommended split" subtitle="Per cent of configured alarms · about 5 high, 15 medium and 80 low">
+          <ArDistributionBars />
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationBadActors() {
+  return (
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-6" title="Bad actors" subtitle="Six alarms raise 46 % of all activations · last 30 days">
+          <ArActorBars />
+        </Panel>
+        <Panel className="col-span-6" title="Review list" subtitle="Each with its nuisance category and the proposed fix">
+          <ul>
+            {AR_ACTORS.slice(0, 5).map((actor) => (
+              <ListRow
+                key={actor.tag}
+                tone={actor.tone}
+                title={actor.text}
+                meta={
+                  <>
+                    <TagId>{actor.tag}</TagId>
+                    <span>{actor.fix}</span>
+                  </>
+                }
+                trailing={<StatusPill tone={actor.tone}>{actor.category}</StatusPill>}
+              />
             ))}
           </ul>
         </Panel>
-      </div>
-    </div>
+      </Grid>
+    </Canvas>
   );
 }
 
-function AlarmRationMatrixLookup() {
-  const [severity, setSeverity] = useState<ConsequenceSeverity>('major');
-  const [response, setResponse] = useState('5');
-  const minutes = Number(response);
+function AlarmRationalisationKpis() {
   return (
-    <Panel title="Where the alarm falls" meta="Cell outlined">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col">
-          <Label htmlFor="alarm-ration-lookup-sev">Consequence</Label>
-          <Select items={SEVERITY_ITEMS} value={severity} onValueChange={(value) => (isSeverity(value) ? setSeverity(value) : undefined)}>
-            <SelectTrigger id="alarm-ration-lookup-sev" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SEVERITY_ITEMS.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <Canvas>
+      <StatGroup columns={4} label="Alarm system performance before and after rationalisation">
+        <ArKpis />
+      </StatGroup>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationCompleteness() {
+  return (
+    <Canvas>
+      <Panel title="Documentation completeness" subtitle="Alarms with cause, consequence, action and time to respond" footer="An alarm without an operator action is not an alarm.">
+        <div className="flex flex-1 flex-col justify-between gap-5">
+          <Meter label="Inlet and separation" value={96} max={100} unit="%" tone="success" target={{ value: 95, label: 'Target' }} />
+          <Meter label="Gas compression" value={71} max={100} unit="%" tone="warning" target={{ value: 95, label: 'Target' }} />
+          <Meter label="Gas export" value={88} max={100} unit="%" tone="warning" target={{ value: 95, label: 'Target' }} />
+          <Meter label="Cooling water" value={52} max={100} unit="%" tone="critical" target={{ value: 95, label: 'Target' }} />
         </div>
-        <div className="flex flex-col">
-          <Label htmlFor="alarm-ration-lookup-time">Time to respond</Label>
-          <Select items={[1, 5, 15, 45].map((value) => ({ value: String(value), label: `${value} min` }))} value={response} onValueChange={(value) => (typeof value === 'string' ? setResponse(value) : undefined)}>
-            <SelectTrigger id="alarm-ration-lookup-time" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[1, 5, 15, 45].map((value) => (
-                <SelectItem key={value} value={String(value)}>
-                  {value} min
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationNuisance() {
+  return (
+    <Canvas>
+      <Panel title="Nuisance categories" subtitle="Why the bad actors raise · activations in 30 days" footer="Chattering is fixed with deadband and delay before the limit is touched.">
+        <div className="flex flex-1 items-center justify-center">
+          <Donut label="Nuisance activations by category" segments={AR_NUISANCE} centerCaption="activations" size={172} />
         </div>
-      </div>
-      <PriorityMatrixGrid selected={{ severity, minutes }} />
-    </Panel>
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationLimit() {
+  const [limit, setLimit] = useState('147');
+  const [deadband, setDeadband] = useState('1.5');
+  const proposed = Number(limit);
+  const band = Number(deadband);
+  const now = replayAlarm(AR_TEMPERATURE_VALUES, { limit: 145 });
+  const after = replayAlarm(AR_TEMPERATURE_VALUES, { limit: proposed, deadband: band });
+  return (
+    <Canvas>
+      <Grid>
+        <Panel
+          className="col-span-7"
+          title="Replay a proposed limit"
+          subtitle="23-TT-92532 · 24 hours of recorded data"
+          actions={
+            <SegmentedControl value={limit} onValueChange={(next) => setLimit(String(next))}>
+              <SegmentedControlList size="small" aria-label="Proposed high limit">
+                <SegmentedControlButton value="145">145 °C</SegmentedControlButton>
+                <SegmentedControlButton value="146">146 °C</SegmentedControlButton>
+                <SegmentedControlButton value="147">147 °C</SegmentedControlButton>
+                <SegmentedControlButton value="148">148 °C</SegmentedControlButton>
+              </SegmentedControlList>
+            </SegmentedControl>
+          }
+        >
+          <ArReplayTrend proposed={proposed} />
+        </Panel>
+        <Panel
+          className="col-span-5"
+          title="Replay result"
+          subtitle="Same data, proposed settings"
+          actions={
+            <SegmentedControl value={deadband} onValueChange={(next) => setDeadband(String(next))}>
+              <SegmentedControlList size="small" aria-label="Deadband">
+                <SegmentedControlButton value="0">No deadband</SegmentedControlButton>
+                <SegmentedControlButton value="1.5">1.5 °C</SegmentedControlButton>
+              </SegmentedControlList>
+            </SegmentedControl>
+          }
+        >
+          <div className="flex flex-1 flex-col justify-between gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Stat variant="plain" size="lg" tone="warning" label="Activations now" value={now.activations} target="Limit 145 °C, no deadband" />
+              <Stat
+                variant="plain"
+                size="lg"
+                tone="success"
+                label="With proposal"
+                value={after.activations}
+                delta={{ value: after.activations - now.activations, decimals: 0, good: 'down' }}
+                target={`Standing ${Math.round((after.standingSamples * 10) / 6) / 10} h of 24`}
+              />
+            </div>
+            <ArLimitScale proposed={proposed} deadband={band} />
+          </div>
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationReplay() {
+  return (
+    <Canvas>
+      <Panel title="Replay of options" subtitle="Each step adds to the one before" footer="Deadband and delay remove most of the chatter before the limit moves.">
+        <ArReplayBars />
+      </Panel>
+    </Canvas>
+  );
+}
+
+const AR_TUNING: ReadonlyArray<{ id: string; signal: string; deadband: string; delay: string; why: string }> = [
+  { id: 'flow', signal: 'Flow', deadband: '5 %', delay: '15 s', why: 'Noisy, fast' },
+  { id: 'level', signal: 'Level', deadband: '5 %', delay: '60 s', why: 'Slow, sloshing' },
+  { id: 'pressure', signal: 'Pressure', deadband: '2 %', delay: '15 s', why: 'Fast, clean' },
+  { id: 'temperature', signal: 'Temperature', deadband: '1 %', delay: '60 s', why: 'Slow, clean' },
+];
+
+function AlarmRationalisationTuning() {
+  const [signal, setSignal] = useState('temperature');
+  const picked = AR_TUNING.find((item) => item.id === signal) ?? AR_TUNING[3];
+  return (
+    <Canvas>
+      <Panel
+        title="Deadband and delay"
+        subtitle="Starting points by signal type"
+        icon={
+          <IconChip tone="accent">
+            <IconAdjustments />
+          </IconChip>
+        }
+        footer={`${picked.signal} signals are ${picked.why.toLowerCase()}. Tune from these values with a replay.`}
+      >
+        <div className="flex flex-1 flex-col justify-between gap-5">
+          <SegmentedControl value={signal} onValueChange={(next) => setSignal(String(next))}>
+            <SegmentedControlList aria-label="Signal type">
+              {AR_TUNING.map((item) => (
+                <SegmentedControlButton key={item.id} value={item.id}>
+                  {item.signal}
+                </SegmentedControlButton>
+              ))}
+            </SegmentedControlList>
+          </SegmentedControl>
+          <div className="grid grid-cols-3 gap-3">
+            <Stat size="md" tone="accent" label="Deadband" value={picked.deadband} target="Of span" />
+            <Stat size="md" tone="teal" label="On-delay" value={picked.delay} target="Before it raises" />
+            <Stat size="md" tone="purple" label="Off-delay" value={picked.delay} target="Before it clears" />
+          </div>
+          <Meter label="Chatter removed in replay with these values" value={signal === 'temperature' ? 81 : signal === 'level' ? 74 : signal === 'flow' ? 68 : 59} max={100} unit="%" tone="success" hideScale />
+        </div>
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationChange() {
+  return (
+    <Canvas>
+      <Grid>
+        <Panel className="col-span-12" title="Management of change MOC-2231" subtitle="23-TT-92532 Discharge temperature high" actions={<StatusPill tone="info">Waiting for approval</StatusPill>}>
+          <StageTrack label="Management of change status" stages={AR_STAGES} />
+        </Panel>
+        <Panel className="col-span-7" title="Proposed changes" subtitle="Current against proposed, with the reason for each">
+          <ChangeList label="Proposed changes to 23-TT-92532" items={AR_CHANGES} className="flex-1" />
+        </Panel>
+        <Panel className="col-span-5" title="On the range" subtitle="Drawn to scale, 130 to 160 °C" footer="8 °C of margin is left between the proposed alarm and the trip.">
+          <div className="flex flex-1 flex-col justify-between gap-5">
+            <ArLimitScale />
+            <div className="grid grid-cols-2 gap-4">
+              <Stat variant="plain" size="md" tone="success" label="Margin to trip" value={8} unit="°C" target="Was 10 °C" />
+              <Stat variant="plain" size="md" label="Above normal operation" value={1.2} decimals={1} unit="°C" target="Was −0.8 °C" />
+            </div>
+          </div>
+        </Panel>
+      </Grid>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationRegister() {
+  return (
+    <Canvas>
+      <Panel title="Shelving and suppression register" subtitle="Every silenced alarm has an owner, an approver and an end" padding="none" actions={<StatusPill tone="critical">1 expired</StatusPill>}>
+        <DataTable label="Shelving and suppression register" flush columns={AR_REGISTER_COLUMNS} rows={AR_REGISTER} rowKey={(item) => item.tag} rowTone={(item) => (item.state === 'Active' ? undefined : item.tone)} />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function ArAuditRows() {
+  return (
+    <ul>
+      {AR_AUDIT.map((entry) => (
+        <ListRow key={entry.id} tone={entry.tone} title={entry.what} meta={<span>{entry.detail}</span>} trailing={<span className="flex flex-col items-end"><span className="font-medium">{entry.who}</span><span className="tabular-nums">{entry.when}</span></span>} />
+      ))}
+    </ul>
+  );
+}
+
+function AlarmRationalisationAudit() {
+  return (
+    <Canvas>
+      <Panel title="Audit trail" subtitle="23-TT-92532 · who changed what, and why" footer="Nothing is edited in bulk without an entry here.">
+        <ArAuditRows />
+      </Panel>
+    </Canvas>
+  );
+}
+
+function ArAgendaRows() {
+  return (
+    <ul>
+      {AR_AGENDA.map((item, index) => (
+        <ListRow
+          key={item.id}
+          leading={<span className="w-5 text-base font-semibold tabular-nums">{index + 1}</span>}
+          title={item.title}
+          meta={<span>{item.meta}</span>}
+          trailing={<StatusPill tone={item.tone}>{item.state}</StatusPill>}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function AlarmRationalisationAgenda() {
+  return (
+    <Canvas>
+      <Panel title="Alarm review board" subtitle="Thursday 12 March · 10:00 · meeting 14" footer="33 alarms on the agenda · 6 decided so far">
+        <div className="flex flex-1 flex-col gap-4">
+          <Meter label="Alarms rationalised" value={342} max={1002} tone="accent" target={{ value: 500, label: 'Q1 target' }} />
+          <ArAgendaRows />
+        </div>
+      </Panel>
+    </Canvas>
+  );
+}
+
+function AlarmRationalisationBlueprint() {
+  const entry = AR_ENTRIES[0];
+  return (
+    <LookScope look="blueprint">
+      <Canvas>
+        <Grid>
+          <Panel className="col-span-7" title="Limit sheet 23-TT-92532" subtitle="Discharge temperature · range 130 to 160 °C · drawn to scale" footer="Sheet 1 of 3 · MOC-2231 · rev B · checked A. Khan">
+            <div className="flex flex-1 flex-col justify-center gap-6">
+              <ArLimitScale />
+              <ChangeList label="Proposed changes to 23-TT-92532" items={AR_CHANGES.map((item) => ({ ...item, reason: undefined }))} />
+            </div>
+          </Panel>
+          <Panel className="col-span-5" title="Priority derivation" subtitle="Major consequence · 15 min to respond">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <ArEntryMatrix entry={entry} size="sm" />
+              <ArDerived entry={entry} />
+            </div>
+          </Panel>
+          <Panel className="col-span-12" title="Replay" subtitle="24 h of recorded data · current and proposed limit">
+            <ArReplayTrend height={220} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmRationalisationEditorial() {
+  return (
+    <LookScope look="editorial">
+      <Canvas>
+        <Grid>
+          <div className="col-span-12 flex flex-col gap-2">
+            <p className="text-sm font-medium text-medium-foreground">Nordkapp alarm rationalisation · progress report 14 · March 2026</p>
+            <h3 className="max-w-4xl text-4xl leading-tight font-semibold tracking-tight">Six alarms made half the noise. Fixing them brought the operator load under target.</h3>
+          </div>
+          <StatGroup columns={4} label="Alarm system performance" className="col-span-12">
+            <ArKpis plain size="lg" />
+          </StatGroup>
+          <Panel className="col-span-7" title="Priorities against the recommended split" subtitle="Share of configured alarms, per cent">
+            <ArDistributionBars height={260} />
+          </Panel>
+          <Panel className="col-span-5" title="The bad actors" subtitle="Category and fix">
+            <ul>
+              {AR_ACTORS.slice(0, 5).map((actor) => (
+                <ListRow key={actor.tag} title={actor.text} meta={<span>{actor.category} · {actor.fix}</span>} trailing={<span className="text-lg font-semibold tabular-nums">{actor.count}</span>} />
+              ))}
+            </ul>
+          </Panel>
+          <Panel className="col-span-12" title="One change in detail" subtitle="MOC-2231 · 23-TT-92532 Discharge temperature high">
+            <div className="grid grid-cols-2 gap-10">
+              <ChangeList label="Proposed changes to 23-TT-92532" items={AR_CHANGES} />
+              <div className="flex flex-col justify-between gap-6">
+                <ArLimitScale />
+                <StageTrack label="Management of change status" stages={AR_STAGES.slice(1, 5)} />
+              </div>
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmRationalisationPoster() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Grid>
+          <StatGroup columns={4} label="Alarm system performance" className="col-span-12">
+            <ArKpis size="lg" />
+          </StatGroup>
+          <Panel className="col-span-6" title="Replay of options" subtitle="Activations in 24 h">
+            <ArReplayBars height={260} />
+          </Panel>
+          <Panel className="col-span-6" title="Priority matrix" subtitle="Consequence against time to respond">
+            <PriorityMatrix label="Priority by consequence and time to respond" rows={AR_ROWS} columns={AR_COLUMNS} rowHeader="Consequence" columnHeader="Time to respond" cell={(row, column) => arCell(row, column)} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmRationalisationConsole() {
+  const [selected, setSelected] = useState({ row: 'major', column: '10-30' });
+  return (
+    <LookScope look="console">
+      <Canvas padding="none">
+        <Grid>
+          <StatGroup columns={4} label="Alarm system performance" className="col-span-12">
+            <ArKpis plain size="lg" />
+          </StatGroup>
+          <Panel className="col-span-8" title="Worksheet" subtitle="8 of 1,002 · changed rows carry an edge" padding="none">
+            <DataTable label="Rationalisation worksheet" flush columns={AR_WORKSHEET} rows={AR_ENTRIES} rowKey={(entry) => entry.tag} rowTone={(entry) => (arProposed(entry) === entry.current ? undefined : 'warning')} />
+          </Panel>
+          <Panel className="col-span-4" title="Priority matrix" subtitle="Alarms per cell">
+            <PriorityMatrix
+              size="sm"
+              label="Configured alarms by consequence and time to respond"
+              rows={AR_ROWS}
+              columns={AR_COLUMNS}
+              rowHeader="Consequence"
+              columnHeader="Time to respond"
+              cell={(row, column) => arCell(row, column, true)}
+              selected={selected}
+              onSelect={(row, column) => setSelected({ row, column })}
+              className="flex-1 justify-center"
+            />
+          </Panel>
+          <Panel className="col-span-6" title="Bad actors" subtitle="Activations · 30 d">
+            <ArActorBars height={230} />
+          </Panel>
+          <Panel className="col-span-6" title="Replay 23-TT-92532" subtitle="Activations · 24 h · per option">
+            <ArReplayBars height={230} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AlarmRationalisationWorkbench() {
+  const [tag, setTag] = useState(AR_ENTRIES[0].tag);
+  const entry = AR_ENTRIES.find((item) => item.tag === tag) ?? AR_ENTRIES[0];
+  return (
+    <LookScope look="studio">
+      <AppFrame
+        brand={{ name: 'Nordkapp', detail: 'Alarm management', mark: <IconFlame /> }}
+        nav={AR_NAV}
+        current="worksheet"
+        title="Rationalisation workbench"
+        subtitle="342 of 1,002 alarms rationalised · review board meets Thursday"
+        status={<StatusPill tone="warning">3 changes waiting</StatusPill>}
+        actions={
+          <Button size="sm">
+            <IconChecklist /> Send for review
+          </Button>
+        }
+      >
+        <Grid>
+          <Panel className="col-span-5" title="Worksheet" subtitle="Select an alarm" padding="none">
+            <ul role="listbox" aria-label="Alarms in the worksheet" className="flex flex-1 flex-col">
+              {AR_ENTRIES.map((item) => {
+                const active = item.tag === tag;
+                const changed = arProposed(item) !== item.current;
+                return (
+                  <li
+                    key={item.tag}
+                    role="option"
+                    aria-selected={active}
+                    tabIndex={0}
+                    onClick={() => setTag(item.tag)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setTag(item.tag);
+                      }
+                    }}
+                    className={`flex flex-1 cursor-pointer items-center gap-3 border-b border-default px-5 py-2.5 text-sm outline-none last:border-b-0 focus-visible:bg-muted-background ${active ? 'bg-info-background' : 'hover:bg-muted-background'}`}
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="font-semibold">{item.text}</span>
+                      <span className="flex flex-wrap gap-x-2 text-medium-foreground">
+                        <TagId>{item.tag}</TagId>
+                        <span>{changed ? `was ${PRIORITY_LABEL[item.current].toLowerCase()}` : 'no change'}</span>
+                      </span>
+                    </span>
+                    <ArPriority priority={arProposed(item)} />
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
+          <Panel
+            className="col-span-7"
+            title={entry.text}
+            subtitle={`Alarm master record · ${entry.tag}`}
+            icon={
+              <IconChip tone={AR_TONE[arProposed(entry)]}>
+                <IconFileText />
+              </IconChip>
+            }
+            actions={<StatusPill tone={AR_REVIEW_TONE[entry.review]}>{entry.review}</StatusPill>}
+            footer={<ArDerived entry={entry} />}
+          >
+            <div className="flex flex-1 flex-col justify-between gap-6">
+              <ArRecordFacts entry={entry} />
+              <ArEntryMatrix entry={entry} size="sm" />
+            </div>
+          </Panel>
+          <Panel className="col-span-8" title="Replay on recorded data" subtitle="23-TT-92532 · 24 hours · current and proposed limit">
+            <ArReplayTrend height={250} />
+          </Panel>
+          <Panel className="col-span-4" title="Result" subtitle="With deadband 1.5 °C and delay 60 s" footer="Tested on 24 hours; the board asks for 30 days.">
+            <div className="flex flex-1 flex-col justify-between gap-4">
+              <Stat variant="plain" size="lg" tone="warning" label="Activations as it is" value={AR_OPTION_COUNTS[0]} target="Limit 145 °C" />
+              <Stat variant="plain" size="lg" tone="success" label="With the proposal" value={AR_OPTION_COUNTS[3]} delta={{ value: AR_OPTION_COUNTS[3] - AR_OPTION_COUNTS[0], decimals: 0, good: 'down' }} target="Limit 147 °C" />
+            </div>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
+  );
+}
+
+function AlarmRationalisationProgramme() {
+  return (
+    <LookScope look="soft">
+      <AppFrame
+        brand={{ name: 'Alarm programme', mark: <IconTarget /> }}
+        nav={AR_NAV.slice(0, 4)}
+        current="overview"
+        title="Rationalisation programme"
+        subtitle="Quarter 1 · Nordkapp gas processing"
+        status={<StatusPill tone="success">On track</StatusPill>}
+      >
+        <Grid>
+          <Panel className="col-span-4" title="Progress" subtitle="Alarms rationalised per area">
+            <div className="grid flex-1 grid-cols-2 place-items-center gap-5">
+              <RingGauge label="Separation" value={96} tone="green" size={112} />
+              <RingGauge label="Compression" value={71} tone="amber" size={112} />
+              <RingGauge label="Export" value={88} tone="blue" size={112} />
+              <RingGauge label="Cooling water" value={52} tone="pink" size={112} />
+            </div>
+          </Panel>
+          <Panel className="col-span-4" title="Priority split" subtitle="Configured alarms today">
+            <div className="flex flex-1 items-center justify-center">
+              <Donut label="Configured alarms by priority" segments={AR_DISTRIBUTION} unit=" %" centerValue="1,002" centerCaption="alarms" legend="bottom" size={168} />
+            </div>
+          </Panel>
+          <div className="col-span-4 grid grid-rows-2 gap-[var(--kit-gap)]">
+            <Stat size="lg" tone="green" icon={<IconUsers />} label="Alarms per operator" value={0.9} decimals={1} unit="per 10 min" delta={{ value: -2.5, good: 'down', caption: 'was 3.4' }} />
+            <Stat size="lg" tone="purple" icon={<IconRepeat />} label="Chattering alarms" value={2} delta={{ value: -9, decimals: 0, good: 'down', caption: 'was 11' }} />
+          </div>
+          <Panel className="col-span-7" title="Next review board" subtitle="Thursday 12 March · 10:00">
+            <ArAgendaRows />
+          </Panel>
+          <Panel className="col-span-5" title="Recent decisions" subtitle="23-TT-92532">
+            <ArAuditRows />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
   );
 }
 
@@ -1159,19 +1052,19 @@ export default definePage({
   id: 'alarm-rationalisation',
   title: 'Alarm rationalisation',
   summary:
-    'The engineering side of alarms, in the manner of ISA-18.2 and EEMUA 191: documenting each alarm, working its priority out from consequence and time to respond, finding bad actors, testing a limit change against history and controlling shelving and change. Priority is computed from a matrix, never typed in.',
+    'The engineering side of alarms, in the manner of ISA-18.2 and EEMUA 191: a master record per alarm, a priority derived from consequence and time to respond, bad actors, limits replayed on recorded data, and the change and shelving records that keep it honest — shown in six looks.',
   guidance: {
     use: [
       'Record cause, consequence, operator action and time to respond for every alarm, then derive the priority.',
       'Replay recorded data against a proposed limit before it goes into a change request.',
-      'Show current and resulting priority side by side, with the reason for each change.',
-      'Give every shelved or suppressed alarm an owner, an approver and a review date.',
+      'Show current and proposed side by side, with the reason for each change.',
+      'Give every shelved or suppressed alarm an owner, an approver and an end date.',
     ],
     avoid: [
       'Setting a priority because the alarm feels important.',
       'Keeping an alarm that has no operator action: make it an event or a work order.',
       'Fixing chattering by raising the limit alone; look at deadband and delay first.',
-      'Hiding a change in a bulk edit with no undo and no audit entry.',
+      'Hiding a change in a bulk edit with no audit entry.',
     ],
   },
   source,
@@ -1179,272 +1072,262 @@ export default definePage({
     {
       id: 'record',
       title: 'Master record and priority',
-      description: 'What is known about one alarm and how its priority follows from it.',
+      description: 'What is written down about one alarm, and how its priority follows from it.',
       specimens: [
         {
-          id: 'AlarmRationMasterRecord',
+          id: 'AlarmRationalisationRecord',
           title: 'Alarm master record',
-          note: 'Pick it for the record of one alarm: limit, consequence, operator action, response time and owner.',
+          note: 'Pick it as the page for one alarm: the four answers on the left, the priority they justify on the right.',
           origin: 'custom',
-          uses: ['industrial/safety/priorityMatrix.ts', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationMasterRecord,
-        },
-        {
-          id: 'AlarmRationPriorityMatrix',
-          title: 'Priority matrix',
-          note: 'Pick it as the reference that every priority in the worksheet is read from.',
-          origin: 'custom',
-          uses: ['industrial/safety/priorityMatrix.ts', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationPriorityMatrix,
-        },
-        {
-          id: 'AlarmRationWorksheetRow',
-          title: 'Worksheet row',
-          note: 'Pick it for one alarm in review: cause to consequence to action, with the priority worked out and compared with today.',
-          origin: 'custom',
-          uses: ['industrial/safety/RationalisationRow.tsx', 'industrial/safety/rationalisationColumns.ts'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmRationWorksheetRow,
+          bleed: true,
+          uses: ['kit/alarm-rationalisation/PriorityMatrix.tsx', 'kit/alarm-rationalisation/priority.ts', 'kit/Panel.tsx'],
+          Component: AlarmRationalisationRecord,
         },
         {
-          id: 'AlarmRationWorksheetLive',
+          id: 'AlarmRationalisationMatrix',
+          title: 'Priority matrix with counts',
+          note: 'Pick it to see where the configured alarms sit and to open the ones in a cell.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/alarm-rationalisation/PriorityMatrix.tsx'],
+          Component: AlarmRationalisationMatrix,
+        },
+        {
+          id: 'AlarmRationalisationCalculator',
           title: 'Priority calculator',
-          note: 'Pick it to teach the matrix: change severity or time and see the priority and any finding.',
+          note: 'Pick it in a review meeting: answer two questions and read the priority.',
           origin: 'custom',
-          uses: ['industrial/safety/priorityMatrix.ts', 'industrial/StatusIndicator.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmRationWorksheetLive,
+          bleed: true,
+          uses: ['kit/alarm-rationalisation/priority.ts', 'kit/Stat.tsx'],
+          Component: AlarmRationalisationCalculator,
         },
         {
-          id: 'AlarmRationMatrixLookup',
-          title: 'Matrix with the cell outlined',
-          note: 'Pick it to show where one alarm falls: choose the inputs and the cell is outlined.',
+          id: 'AlarmRationalisationWorksheet',
+          title: 'Worksheet',
+          note: 'Pick a table when many alarms are reviewed in one sitting; rows whose priority changes carry an edge.',
           origin: 'custom',
-          uses: ['industrial/safety/priorityMatrix.ts', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationMatrixLookup,
-        },
-        {
-          id: 'AlarmRationWorksheetTable',
-          title: 'Worksheet table',
-          note: 'Pick it for a review session: every alarm of a unit, with the rows that change priority marked.',
-          origin: 'custom',
-          uses: ['industrial/safety/RationalisationRow.tsx', 'industrial/safety/rationalisationColumns.ts'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmRationWorksheetTable,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/alarm-rationalisation/priority.ts'],
+          Component: AlarmRationalisationWorksheet,
         },
       ],
     },
     {
       id: 'performance',
       title: 'Distribution and performance',
-      description: 'How the alarm system measures against its targets.',
+      description: 'How the alarm system behaves as a whole, and which alarms spoil it.',
       specimens: [
         {
-          id: 'AlarmRationPriorityDistribution',
+          id: 'AlarmRationalisationKpis',
+          title: 'Before and after',
+          note: 'Pick it to report what rationalisation achieved against the targets an operator can handle.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/StatGroup.tsx', 'kit/Delta.tsx'],
+          Component: AlarmRationalisationKpis,
+        },
+        {
+          id: 'AlarmRationalisationDistribution',
           title: 'Priority distribution',
-          note: 'Pick it for the shape of the system: how many alarms sit at each priority.',
+          note: 'Pick it to compare the configured split with the recommended one.',
           origin: 'custom',
-          uses: ['industrial/operations/DistributionBar.tsx', 'industrial/safety/priorityMatrix.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationPriorityDistribution,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Donut.tsx', 'kit/Bars.tsx'],
+          Component: AlarmRationalisationDistribution,
         },
         {
-          id: 'AlarmRationDistributionVsTarget',
-          title: 'Distribution against target',
-          note: 'Pick it to see how far each priority is from the 80 / 15 / 5 guideline.',
+          id: 'AlarmRationalisationBadActors',
+          title: 'Bad actors',
+          note: 'Pick it to start a review: the few alarms behind most activations, each with a category and a fix.',
           origin: 'custom',
-          uses: ['industrial/safety/priorityMatrix.ts', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationDistributionVsTarget,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/ListRow.tsx', 'kit/StatusPill.tsx'],
+          Component: AlarmRationalisationBadActors,
         },
         {
-          id: 'AlarmRationDocumentation',
+          id: 'AlarmRationalisationCompleteness',
           title: 'Documentation completeness',
-          note: 'Pick it to track the work: how many alarms have each field of their record filled in.',
+          note: 'Pick it to track how much of each area has a complete master record.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmRationDocumentation,
+          bleed: true,
+          uses: ['kit/Meter.tsx', 'kit/Panel.tsx'],
+          Component: AlarmRationalisationCompleteness,
         },
         {
-          id: 'AlarmRationNuisance',
+          id: 'AlarmRationalisationNuisance',
           title: 'Nuisance categories',
-          note: 'Pick it to see what kind of bad behaviour dominates: chattering, standing, stale or duplicate.',
+          note: 'Pick it to show why alarms raise needlessly, which decides the kind of fix.',
           origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmRationNuisance,
-        },
-        {
-          id: 'AlarmRationBeforeAfter',
-          title: 'Before and after KPIs',
-          note: 'Pick it to show what a rationalisation achieved against the targets.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          size: 'full',
-          align: 'stretch',
-          Component: AlarmRationBeforeAfter,
-        },
-        {
-          id: 'AlarmRationBadActors',
-          title: 'Bad-actor review list',
-          note: 'Pick it to decide what to fix first: the loudest alarms with a proposed change each.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          Component: AlarmRationBadActors,
+          bleed: true,
+          uses: ['kit/Donut.tsx', 'kit/Panel.tsx'],
+          Component: AlarmRationalisationNuisance,
         },
       ],
     },
     {
       id: 'limits',
       title: 'Limits, deadband and delay',
-      description: 'Testing a change against recorded data before it is made.',
+      description: 'Testing settings on recorded data before anything changes in the control system.',
       specimens: [
         {
-          id: 'AlarmRationReplayTrend',
-          title: 'Current against proposed limit',
-          note: 'Pick it to justify a limit change: the same history replayed against both limits, with the counts.',
+          id: 'AlarmRationalisationLimit',
+          title: 'Replay a proposed limit',
+          note: 'Pick it to test a limit and a deadband: the trend, the count and the range drawn to scale change together.',
           origin: 'custom',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/safety/replayAlarmCount.ts', 'industrial/ValueReadout.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmRationReplayTrend,
+          bleed: true,
+          uses: ['kit/alarm-rationalisation/LimitScale.tsx', 'kit/alarm-rationalisation/replay.ts', 'kit/TrendLine.tsx'],
+          Component: AlarmRationalisationLimit,
         },
         {
-          id: 'AlarmRationReplayTable',
+          id: 'AlarmRationalisationReplay',
           title: 'Replay of options',
-          note: 'Pick it to compare limit, deadband and delay on one signal side by side.',
+          note: 'Pick it to compare settings step by step and show which one does the work.',
           origin: 'custom',
-          uses: ['industrial/safety/replayAlarmCount.ts'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmRationReplayTable,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/alarm-rationalisation/replay.ts'],
+          Component: AlarmRationalisationReplay,
         },
         {
-          id: 'AlarmRationTuning',
+          id: 'AlarmRationalisationTuning',
           title: 'Deadband and delay suggestion',
-          note: 'Pick it as a starting point for a chattering alarm, by signal type.',
+          note: 'Pick it to give engineers a starting point by signal type instead of a blank field.',
           origin: 'custom',
-          uses: ['industrial/safety/alarmTuning.ts'],
           size: 'md',
-          align: 'stretch',
-          Component: AlarmRationTuning,
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: AlarmRationalisationTuning,
         },
       ],
     },
     {
-      id: 'control',
-      title: 'Shelving, change and records',
-      description: 'The controls around changing what an operator sees.',
+      id: 'change',
+      title: 'Change, shelving and records',
+      description: 'The paper trail: what changes, who approved it, what is silenced and until when.',
       specimens: [
         {
-          id: 'AlarmRationShelving',
-          title: 'Shelving request and approval',
-          note: 'Pick it for temporary removal: a reason and a compensating measure, then approval by someone else.',
+          id: 'AlarmRationalisationChange',
+          title: 'Management of change',
+          note: 'Pick it for a change request: the approval route, each setting current against proposed, and the result on the range.',
           origin: 'custom',
-          uses: ['industrial/workflows/StepList.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationShelving,
-        },
-        {
-          id: 'AlarmRationMoc',
-          title: 'Management of change status',
-          note: 'Pick it on an alarm that is being changed: where the change request stands.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StepList.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationMoc,
-        },
-        {
-          id: 'AlarmRationSuppressionRegister',
-          title: 'Suppression register',
-          note: 'Pick it for audit: every shelved, suppressed or out-of-service alarm with who approved it and when it is reviewed.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmRationSuppressionRegister,
+          bleed: true,
+          uses: ['kit/alarm-rationalisation/StageTrack.tsx', 'kit/alarm-rationalisation/ChangeList.tsx', 'kit/alarm-rationalisation/LimitScale.tsx'],
+          Component: AlarmRationalisationChange,
         },
         {
-          id: 'AlarmRationPhilosophy',
-          title: 'Alarm philosophy checklist',
-          note: 'Pick it to check a worksheet against the site rules, each with the evidence.',
+          id: 'AlarmRationalisationRegister',
+          title: 'Shelving and suppression register',
+          note: 'Pick it to audit what is silenced: expired and overdue entries carry their state on the row edge.',
           origin: 'custom',
-          uses: ['industrial/workflows/ConditionList.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationPhilosophy,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: AlarmRationalisationRegister,
         },
         {
-          id: 'AlarmRationAgenda',
-          title: 'Review meeting agenda',
-          note: 'Pick it to plan the alarm review: items in order, with an owner and a time each.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: AlarmRationAgenda,
-        },
-        {
-          id: 'AlarmRationAuditTrail',
+          id: 'AlarmRationalisationAudit',
           title: 'Audit trail',
-          note: 'Pick it for the history of changes: what, why, who and when.',
+          note: 'Pick it on the record of one alarm to show every decision with who and when.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          Component: AlarmRationAuditTrail,
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/Panel.tsx'],
+          Component: AlarmRationalisationAudit,
+        },
+        {
+          id: 'AlarmRationalisationAgenda',
+          title: 'Review board agenda',
+          note: 'Pick it to run the review meeting: progress against the target and the batches to decide.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/Meter.tsx', 'kit/StatusPill.tsx'],
+          Component: AlarmRationalisationAgenda,
         },
       ],
     },
     {
-      id: 'tools',
-      title: 'Working tools and overview',
-      description: 'The panels used in a rationalisation session.',
+      id: 'looks',
+      title: 'In four looks',
+      description: 'The matrix, the limit scale and the change list built four different ways.',
       specimens: [
         {
-          id: 'AlarmRationBulk',
-          title: 'Bulk re-prioritise',
-          note: 'Pick it to move many alarms at once, with the distribution after the change and an undo.',
+          id: 'AlarmRationalisationBlueprint',
+          title: 'Blueprint',
+          note: 'Pick it for the engineering sheet: outlined matrix cells, a limit scale read like a dimensioned drawing, a title block.',
           origin: 'custom',
-          uses: ['industrial/safety/priorityMatrix.ts', 'industrial/StatusIndicator.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmRationBulk,
+          bleed: true,
+          uses: ['kit/alarm-rationalisation/LimitScale.tsx', 'kit/alarm-rationalisation/ChangeList.tsx', 'kit/alarm-rationalisation/PriorityMatrix.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmRationalisationBlueprint,
         },
         {
-          id: 'AlarmRationWorkbench',
+          id: 'AlarmRationalisationConsole',
+          title: 'Console',
+          note: 'Pick it for the alarm engineer who lives in the worksheet: dense table, solid matrix blocks, hairline panels.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/alarm-rationalisation/PriorityMatrix.tsx', 'kit/Bars.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmRationalisationConsole,
+        },
+        {
+          id: 'AlarmRationalisationPoster',
+          title: 'Poster',
+          note: 'Pick it for the control-room notice board: the four results as blocks and the matrix as a chart to learn by heart.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/Bars.tsx', 'kit/alarm-rationalisation/PriorityMatrix.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmRationalisationPoster,
+        },
+        {
+          id: 'AlarmRationalisationEditorial',
+          title: 'Editorial',
+          note: 'Pick it for the progress report to management: a headline, four figures and one change told in full.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/StatGroup.tsx', 'kit/alarm-rationalisation/ChangeList.tsx', 'kit/alarm-rationalisation/StageTrack.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmRationalisationEditorial,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Two screens ready to drop into a product.',
+      specimens: [
+        {
+          id: 'AlarmRationalisationWorkbench',
           title: 'Rationalisation workbench',
-          note: 'Pick it for the review itself: choose an alarm, set its consequence and time, and see the priority and the unit total.',
+          note: 'Pick it as the working screen: choose an alarm, read its record and derived priority, replay the proposal.',
           origin: 'custom',
-          uses: ['industrial/safety/priorityMatrix.ts', 'industrial/StatusIndicator.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmRationWorkbench,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/alarm-rationalisation/PriorityMatrix.tsx', 'kit/TrendLine.tsx', 'kit/Stat.tsx'],
+          Component: AlarmRationalisationWorkbench,
         },
         {
-          id: 'AlarmRationOverview',
-          title: 'Alarm management overview',
-          note: 'Pick it as the top of an alarm management dashboard: headline measures, distribution and bad actors.',
+          id: 'AlarmRationalisationProgramme',
+          title: 'Programme overview',
+          note: 'Pick it for the people who sponsor the work: progress per area, the split, two results and what is decided next.',
           origin: 'custom',
-          uses: ['industrial/operations/DistributionBar.tsx', 'industrial/LinearGauge.tsx', 'industrial/TrendDelta.tsx', 'industrial/ValueReadout.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: AlarmRationOverview,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/RingGauge.tsx', 'kit/Donut.tsx', 'kit/ListRow.tsx'],
+          Component: AlarmRationalisationProgramme,
         },
       ],
     },

@@ -140,7 +140,7 @@ const VIB_BAND_TONES: Tone[] = VIB_BAND_SHARE.map((share) => (share >= 100 ? 'cr
 
 const VIB_PEAKS = findPeaks(VIB_NOW.lines, 6, 0.5);
 
-const VIB_WAVE = synthWaveform(VIB_NOW.components, { seconds: 0.2, seed: 5, noise: 0.25, impacts: { hz: VIB_BPFO_HZ, amplitude: 7.5 } });
+const VIB_WAVE = synthWaveform(VIB_NOW.components, { seconds: 0.2, seed: 5, noise: 0.25, impacts: { hz: VIB_BPFO_HZ, amplitude: 17 } });
 
 const VIB_WAVE_SMOOTH = synthWaveform(VIB_BASELINE.components, { seconds: 0.2, seed: 5, noise: 0.15 });
 
@@ -162,10 +162,10 @@ const VIB_ORBITS = [
 ] as const;
 
 const VIB_FAULTS: readonly { id: string; title: string; cue: string; condition: MachineCondition; markers: SpectrumMarker[] }[] = [
-  { id: 'unbalance', title: 'Unbalance', cue: 'One tall line at running speed.', condition: { unbalance: 4.2 }, markers: [{ hz: VIB_RUN_HZ, label: '1×', tone: 'accent' }] },
+  { id: 'unbalance', title: 'Unbalance', cue: 'One tall line at running speed.', condition: { unbalance: 3.6 }, markers: [{ hz: VIB_RUN_HZ, label: '1×', tone: 'accent' }] },
   { id: 'misalignment', title: 'Misalignment', cue: 'Second order as high as the first.', condition: { unbalance: 1.8, misalignment: 3 }, markers: [{ hz: VIB_RUN_HZ * 2, label: '2×', tone: 'warning' }] },
-  { id: 'looseness', title: 'Looseness', cue: 'A comb of harmonics and a half order.', condition: { unbalance: 1.6, looseness: 2.6 }, markers: [{ hz: VIB_RUN_HZ * 4.5, label: '3× to 7×', tone: 'purple' }] },
-  { id: 'bearing', title: 'Bearing defect', cue: 'Non-synchronous line with harmonics.', condition: { unbalance: 1.4, bearing: { hz: VIB_BPFO_HZ, amplitude: 2.4 } }, markers: [{ hz: VIB_BPFO_HZ, label: 'BPFO', tone: 'critical' }] },
+  { id: 'looseness', title: 'Looseness', cue: 'Many harmonics and a half order.', condition: { unbalance: 1.6, looseness: 2.6 }, markers: [{ hz: VIB_RUN_HZ * 4.5, label: '3× to 7×', tone: 'purple' }] },
+  { id: 'bearing', title: 'Bearing defect', cue: 'An off-order line with harmonics.', condition: { unbalance: 1.4, bearing: { hz: VIB_BPFO_HZ, amplitude: 2.4 } }, markers: [{ hz: VIB_BPFO_HZ, label: 'BPFO', tone: 'critical' }] },
 ];
 
 function VibZoneIcon({ zone }: { zone: IsoZone }) {
@@ -283,11 +283,11 @@ function VibAnalysisWaveform() {
   return (
     <VibSheet title="Time waveform" subtitle="Pump drive end · 200 ms record" footer={<span>Impacts repeat every 11.3 ms, the period of the outer-race frequency.</span>}>
       <div className="flex flex-col gap-5">
-        <StatGroup columns={3} joined label="Waveform figures">
+        <div className="grid grid-cols-3 gap-4">
           <Stat variant="plain" size="sm" label="RMS" value={rms(VIB_WAVE)} decimals={2} unit="mm/s" />
           <Stat variant="plain" size="sm" label="Peak" value={peak(VIB_WAVE)} decimals={1} unit="mm/s" />
           <Stat variant="plain" size="sm" label="Crest factor" value={crestFactor(VIB_WAVE)} decimals={1} tone="warning" target="Alert above 3.5" />
-        </StatGroup>
+        </div>
         <WaveformPlot label="Time waveform of the pump drive end with the RMS band and the peak marked" samples={VIB_WAVE} milliseconds={200} height={220} />
       </div>
     </VibSheet>
@@ -298,11 +298,11 @@ function VibAnalysisWaveformHealthy() {
   return (
     <VibSheet title="A healthy waveform" subtitle="Same bearing after overhaul · 200 ms record" footer={<span>A smooth, repeating wave: the signal stays close to its RMS band.</span>}>
       <div className="flex flex-col gap-5">
-        <StatGroup columns={3} joined label="Waveform figures">
+        <div className="grid grid-cols-3 gap-4">
           <Stat variant="plain" size="sm" label="RMS" value={rms(VIB_WAVE_SMOOTH)} decimals={2} unit="mm/s" />
           <Stat variant="plain" size="sm" label="Peak" value={peak(VIB_WAVE_SMOOTH)} decimals={1} unit="mm/s" />
           <Stat variant="plain" size="sm" label="Crest factor" value={crestFactor(VIB_WAVE_SMOOTH)} decimals={1} tone="success" target="Alert above 3.5" />
-        </StatGroup>
+        </div>
         <WaveformPlot label="Time waveform of the pump drive end after overhaul" samples={VIB_WAVE_SMOOTH} milliseconds={200} tone="success" height={220} />
       </div>
     </VibSheet>
@@ -375,15 +375,14 @@ function VibAnalysisOverallTrend() {
 
 function VibAnalysisBandAlarms() {
   return (
-    <VibSheet title="Band alarms" subtitle="Highest line in each band as a share of its alarm" footer={<span>Two bands over: running speed is close, the bearing band is at almost twice its alarm.</span>}>
+    <VibSheet title="Band alarms" subtitle="Highest line in each band, per cent of its alarm" footer={<span>Two bands over: running speed is close, the bearing band is at almost twice its alarm.</span>}>
       <Bars
         label="Highest spectral line per frequency band as a percentage of the band alarm"
         categories={VIB_BANDS.map((band) => band.label)}
         series={[{ id: 'share', label: 'Share of alarm', values: VIB_BAND_SHARE }]}
         tones={VIB_BAND_TONES}
-        unit="%"
         showValues
-        limit={{ value: 100, label: 'Alarm', tone: 'critical' }}
+        limit={{ value: 100, label: 'Alarm at', tone: 'critical' }}
         height={300}
       />
     </VibSheet>
@@ -392,15 +391,14 @@ function VibAnalysisBandAlarms() {
 
 const VIB_ZONE_COLUMNS: DataTableColumn<IsoZone>[] = [
   { id: 'zone', header: 'Zone', cell: (zone) => <VibZonePill zone={zone} />, nowrap: true },
-  { id: 'range', header: 'mm/s RMS', numeric: true, nowrap: true, cell: (zone) => ['Below 2.3', '2.3 to 4.5', '4.5 to 7.1', 'Above 7.1'][ISO_ZONES.indexOf(zone)] },
+  { id: 'range', header: 'mm/s RMS', nowrap: true, cell: (zone) => ['Below 2.3', '2.3 to 4.5', '4.5 to 7.1', 'Above 7.1'][ISO_ZONES.indexOf(zone)] },
   { id: 'meaning', header: 'What it means', cell: (zone) => ISO_ZONE_MEANING[zone] },
-  { id: 'points', header: 'Bearings', numeric: true, cell: (zone) => VIB_POINT_DEFS.filter((point) => VIB_READINGS[point.id].zone === zone).length },
 ];
 
 function VibAnalysisZoneKey() {
   return (
     <Canvas>
-      <Panel title="Zone key" subtitle="What each ISO zone allows, and how many bearings sit in it" padding="none" footer={<span>Boundaries for machines above 300 kW on rigid foundations.</span>}>
+      <Panel title="Zone key" subtitle="What each ISO 10816-3 zone allows" padding="none" footer={<span>Boundaries for machines above 300 kW on rigid foundations.</span>}>
         <DataTable label="ISO 10816-3 zones" columns={VIB_ZONE_COLUMNS} rows={ISO_ZONES} rowKey={(zone) => zone} rowTone={(zone) => ISO_ZONE_TONE[zone]} flush />
       </Panel>
     </Canvas>
@@ -446,7 +444,7 @@ function VibAnalysisFaultSignatures() {
               label={`Typical spectrum of ${fault.title.toLowerCase()}`}
               lines={synthSpectrum(machineComponents(VIB_RUN_HZ, fault.condition), { maxHz: 300, lines: 200, seed: 7 })}
               maxHz={300}
-              yMax={5}
+              yMax={4}
               markers={fault.markers}
               tone={fault.markers[0]?.tone ?? 'accent'}
               height={170}
@@ -468,6 +466,16 @@ const VIB_POINT_COLUMNS: DataTableColumn<VibPointRow>[] = [
   { id: 'zone', header: 'Zone', nowrap: true, cell: (row) => <StatusPill tone={ISO_ZONE_TONE[row.reading.zone]}>{`${row.reading.zone} · ${ISO_ZONE_WORD[row.reading.zone]}`}</StatusPill> },
 ];
 
+type VibBandRow = { label: string; range: string; share: number; tone: Tone };
+
+const VIB_BAND_ROWS: VibBandRow[] = VIB_BANDS.map((band, index) => ({ label: band.label, range: `${band.fromHz} to ${band.toHz} Hz`, share: VIB_BAND_SHARE[index], tone: VIB_BAND_TONES[index] }));
+
+const VIB_BAND_COLUMNS: DataTableColumn<VibBandRow>[] = [
+  { id: 'band', header: 'Band', cell: (row) => row.label, nowrap: true },
+  { id: 'range', header: 'Range', cell: (row) => row.range, muted: true, nowrap: true },
+  { id: 'share', header: '% of alarm', numeric: true, cell: (row) => row.share },
+];
+
 function VibAnalysisLookConsole() {
   return (
     <LookScope look="console">
@@ -479,9 +487,14 @@ function VibAnalysisLookConsole() {
             <Stat variant="plain" size="lg" tone="critical" label="Bearing band" value={2.2} decimals={1} unit="mm/s" target="Alarm 1.2" />
             <Stat variant="plain" size="lg" label="Crest factor" value={crestFactor(VIB_WAVE)} decimals={1} target="Alert 3.5" />
           </StatGroup>
-          <Panel className="col-span-4" title="Points" subtitle={VIB_PUMP} padding="none" footer={<span>Route 14 · survey 09:40</span>}>
-            <DataTable label="Measurement points" columns={VIB_POINT_COLUMNS} rows={VIB_POINT_ROWS} rowKey={(row) => row.id} rowTone={(row) => ISO_ZONE_TONE[row.reading.zone]} flush />
-          </Panel>
+          <Grid stack className="col-span-4">
+            <Panel title="Points" subtitle={VIB_PUMP} padding="none">
+              <DataTable label="Measurement points" columns={VIB_POINT_COLUMNS} rows={VIB_POINT_ROWS} rowKey={(row) => row.id} rowTone={(row) => ISO_ZONE_TONE[row.reading.zone]} flush />
+            </Panel>
+            <Panel title="Bands" subtitle="Pump DE · per cent of alarm" padding="none" footer={<span>Route 14 · survey 09:40</span>}>
+              <DataTable label="Band alarms" columns={VIB_BAND_COLUMNS} rows={VIB_BAND_ROWS} rowKey={(row) => row.label} rowTone={(row) => (row.tone === 'accent' ? undefined : row.tone)} flush />
+            </Panel>
+          </Grid>
           <Panel className="col-span-8" title="Spectrum" subtitle="Pump DE · velocity · alarm mask">
             <SpectrumPlot label="Velocity spectrum against the alarm mask, console trace" lines={VIB_NOW.lines} maxHz={VIB_MAX_HZ} markers={VIB_MARKERS} mask={VIB_MASK} height={260} />
           </Panel>
@@ -542,7 +555,7 @@ function VibAnalysisLookSignal() {
           {VIB_POINT_ROWS.map((row) => (
             <Stat
               key={row.id}
-              size="lg"
+              size="md"
               tone={ISO_ZONE_TONE[row.reading.zone]}
               label={row.label}
               state={ISO_ZONE_WORD[row.reading.zone]}
@@ -623,8 +636,12 @@ function VibAnalysisWorkbench() {
             <WaveformPlot label="Time waveform of the pump drive end" samples={VIB_WAVE} milliseconds={200} height={356} />
           )}
         </Panel>
-        <Panel className="col-span-4" title="Peaks" subtitle="Select one to read its likely cause" footer={<span>Recommend bearing replacement at the next window.</span>}>
+        <Panel className="col-span-4" title="Peaks" subtitle="Select one to read its likely cause" footer={<span>Next survey due Thursday 19 March.</span>}>
           <VibPeakRows selectedHz={selectedHz} onSelect={setSelectedHz} />
+          <div data-tone="warning" className="mt-auto flex flex-col gap-2 rounded-(--kit-radius-sm) bg-(--t-soft) p-4 text-(--t-on-soft)">
+            <span className="text-sm font-semibold">Likely cause: outer-race defect</span>
+            <span className="text-sm">Bearing line, its harmonic and a rising crest factor agree. Replace the bearing within three weeks.</span>
+          </div>
         </Panel>
       </Grid>
     </Canvas>
@@ -764,7 +781,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           bleed: true,
-          uses: ['kit/vibration-analysis/WaveformPlot.tsx', 'kit/StatGroup.tsx'],
+          uses: ['kit/vibration-analysis/WaveformPlot.tsx', 'kit/Stat.tsx'],
           Component: VibAnalysisWaveform,
         },
         {
@@ -774,7 +791,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           bleed: true,
-          uses: ['kit/vibration-analysis/WaveformPlot.tsx', 'kit/StatGroup.tsx'],
+          uses: ['kit/vibration-analysis/WaveformPlot.tsx', 'kit/Stat.tsx'],
           Component: VibAnalysisWaveformHealthy,
         },
         {

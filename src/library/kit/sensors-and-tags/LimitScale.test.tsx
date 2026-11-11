@@ -7,6 +7,7 @@ describe(LimitScale.name, () => {
     const { container } = render(<LimitScale label="Discharge pressure" value={48.6} min={0} max={60} unit="barg" limits={{ low: 40, high: 52, highHigh: 55 }} />);
 
     expect(container.querySelectorAll('[data-zone]')).toHaveLength(4);
+    expect(screen.getByText('L 40.0')).toBeInTheDocument();
     expect(screen.getByText('H 52.0')).toBeInTheDocument();
     expect(screen.getByText('HH 55.0')).toBeInTheDocument();
     expect(screen.getByRole('meter', { name: 'Discharge pressure' })).toHaveAttribute('aria-valuetext', '48.6 barg, normal');

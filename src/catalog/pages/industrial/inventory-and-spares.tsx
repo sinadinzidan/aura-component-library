@@ -340,7 +340,7 @@ function InventorySparesReorder() {
         tone="warning"
         actions={<StatusPill tone={ordered ? 'success' : 'warning'}>{ordered ? 'Requested' : stockVerdict(part).word}</StatusPill>}
         footer={
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex w-full items-center justify-between gap-3">
             <span className="text-sm text-(--kit-text-2) tabular-nums">
               {quantity} × {part.unitCost} kNOK = <span className="font-semibold text-(--kit-text)">{quantity * part.unitCost} kNOK</span> · arrives in {part.leadTimeWeeks} weeks
             </span>
@@ -386,7 +386,7 @@ function InventorySparesReservation() {
         icon={<IconBox />}
         actions={<StatusPill tone={picked.length === INVENTORY_SPARES_PICKS.length ? 'success' : 'info'}>{picked.length} of {INVENTORY_SPARES_PICKS.length} picked</StatusPill>}
         footer={
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex w-full items-center justify-between gap-3">
             <span className="text-sm text-(--kit-text-2)">Needed at the compressor hall by 16:00</span>
             <Button size="sm" disabled={picked.length < INVENTORY_SPARES_PICKS.length}>
               Hand over

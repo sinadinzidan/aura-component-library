@@ -15,7 +15,7 @@ import type { SceneTone } from './scenePalette';
 export type SceneLabelProps = {
   /** Anchor point in the scene. The label sits above it on a short stem. */
   position: Vec3;
-  /** Tag or short code, set in monospace. */
+  /** Tag or short code, in the UI typeface at medium weight. */
   tag: string;
   /** Plain-language name after the tag. */
   name?: string;
@@ -37,7 +37,8 @@ export type SceneLabelProps = {
 };
 
 /**
- * A DOM label pinned to a point in the scene: tag in monospace, optional name, value and status.
+ * A DOM label pinned to a point in the scene: tag, optional name, value and status, all in the
+ * UI sans typeface at 12px or more.
  * It is ordinary HTML styled with tokens, so it stays crisp at any zoom and follows the theme.
  * Hidden from assistive technology — the canvas is one image; list the same items beside it.
  */
@@ -57,8 +58,8 @@ export function SceneLabel({ position, tag, name, value, tone, shape = 'dot', se
   const body = (
     <>
       {tone ? <StatusDot tone={tone} shape={shape} size="sm" /> : null}
-      <span className="font-mono font-medium text-base-foreground">{tag}</span>
-      {name ? <span className="text-muted-foreground">{name}</span> : null}
+      <span data-slot="scene-label-tag" className="font-medium text-base-foreground">{tag}</span>
+      {name ? <span className="text-medium-foreground">{name}</span> : null}
       {value ? <span className={cn('tabular-nums', tone ? TONE_TEXT[tone] : 'text-medium-foreground')}>{value}</span> : null}
     </>
   );

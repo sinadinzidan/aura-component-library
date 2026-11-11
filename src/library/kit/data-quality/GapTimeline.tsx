@@ -34,7 +34,7 @@ type GapTimelineProps = {
  */
 export function GapTimeline({ label, rows, start, end, ticks, target = 99, tone = 'accent', className }: GapTimelineProps) {
   const look = useLook();
-  const columns = { gridTemplateColumns: 'minmax(8rem, 13rem) minmax(0, 1fr) 4.5rem' };
+  const columns = { gridTemplateColumns: 'minmax(7rem, min(13rem, 34%)) minmax(0, 1fr) 4.5rem' };
   const gapColor = toneLine('critical');
 
   return (

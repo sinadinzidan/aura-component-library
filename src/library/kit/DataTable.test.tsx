@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { DataTable, type DataTableColumn } from './DataTable';
 
@@ -36,5 +37,39 @@ describe(DataTable.name, () => {
     const [, first, second] = screen.getAllByRole('row');
     expect(first).toHaveClass('kit-tone-critical');
     expect(second.className).not.toMatch(/kit-tone-/);
+  });
+
+  it('makes each row a button that reports the row', async () => {
+    const onRowClick = vi.fn();
+    render(<DataTable label="Work orders" columns={COLUMNS} rows={ROWS} rowKey={(order) => order.id} onRowClick={onRowClick} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Replace transmitter' }));
+
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[1]);
+  });
+
+  it('activates a row from the keyboard', async () => {
+    const onRowClick = vi.fn();
+    render(<DataTable label="Work orders" columns={COLUMNS} rows={ROWS} rowKey={(order) => order.id} onRowClick={onRowClick} />);
+
+    await userEvent.tab();
+    await userEvent.keyboard('{Enter}');
+
+    expect(onRowClick).toHaveBeenCalledWith(ROWS[0]);
+  });
+
+  it('marks the selected row', () => {
+    render(<DataTable label="Work orders" columns={COLUMNS} rows={ROWS} rowKey={(order) => order.id} onRowClick={vi.fn()} selectedKey="WO-2" />);
+
+    const [, first, second] = screen.getAllByRole('row');
+    expect(first).toHaveAttribute('aria-selected', 'false');
+    expect(second).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('stays a plain table without a click handler', () => {
+    render(<DataTable label="Work orders" columns={COLUMNS} rows={ROWS} rowKey={(order) => order.id} />);
+
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('row')[1]).not.toHaveAttribute('aria-selected');
   });
 });

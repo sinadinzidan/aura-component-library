@@ -45,11 +45,12 @@ export function LimitScale({ label, min, max, unit, decimals = 0, markers, bands
   const square = look === 'console' || look === 'poster' || look === 'blueprint' || look === 'editorial';
   const above = markers.filter((marker) => (marker.side ?? 'above') === 'above');
   const below = markers.filter((marker) => marker.side === 'below');
+  const tickDecimals = ticks.every((tick) => Number.isInteger(tick)) ? 0 : decimals;
   const summary = markers.map((marker) => `${marker.label} ${formatNumber(marker.value, decimals)} ${unit}`).join(', ');
 
   return (
     <div role="img" aria-label={`${label}: ${summary}`} data-look={look} className={cx('flex flex-col text-sm text-[var(--kit-text)]', className)}>
-      <div className="relative h-12">
+      <div className="relative mx-5 h-12">
         {above.map((marker) => (
           <span key={marker.id} data-tone={marker.tone} style={{ left: at(marker.value) }} className="absolute bottom-1 flex -translate-x-1/2 flex-col items-center leading-4 whitespace-nowrap">
             <span className="text-xs font-medium text-[var(--kit-text-2)]">{marker.label}</span>
@@ -59,7 +60,7 @@ export function LimitScale({ label, min, max, unit, decimals = 0, markers, bands
           </span>
         ))}
       </div>
-      <div className={cx('relative h-7 bg-[var(--kit-track)]', square ? '' : 'rounded-[var(--kit-radius-sm)]', look === 'blueprint' || look === 'poster' ? 'border border-[var(--kit-text)]' : '')}>
+      <div className={cx('relative mx-5 h-7 bg-[var(--kit-track)]', square ? '' : 'rounded-[var(--kit-radius-sm)]', look === 'blueprint' || look === 'poster' ? 'border border-[var(--kit-text)]' : '')}>
         {bands.map((band) => (
           <span
             key={band.id}
@@ -82,15 +83,15 @@ export function LimitScale({ label, min, max, unit, decimals = 0, markers, bands
           <span style={{ left: at(reading) }} className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border-2 border-[var(--kit-surface)] bg-[var(--kit-text)]" />
         )}
       </div>
-      <div className="relative h-5 border-t border-[var(--kit-rule-strong)]">
+      <div className="relative mx-5 h-5 border-t border-[var(--kit-rule-strong)]">
         {ticks.map((tick) => (
           <span key={tick} style={{ left: at(tick) }} className="absolute top-0 flex -translate-x-1/2 flex-col items-center text-xs text-[var(--kit-text-2)] tabular-nums">
             <span className="h-1.5 w-px bg-[var(--kit-rule-strong)]" />
-            {formatNumber(tick, decimals)}
+            {formatNumber(tick, tickDecimals)}
           </span>
         ))}
       </div>
-      <div className="relative h-11">
+      <div className="relative mx-5 h-11">
         {below.map((marker) => (
           <span key={marker.id} data-tone={marker.tone} style={{ left: at(marker.value) }} className="absolute top-2 flex -translate-x-1/2 flex-col items-center leading-4 whitespace-nowrap">
             <span className="font-semibold text-[var(--t-ink)] tabular-nums">

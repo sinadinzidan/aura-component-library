@@ -8,6 +8,7 @@ import { TableCell } from '../primitives/table/TableCell';
 import { TableHead } from '../primitives/table/TableHead';
 import { TableHeader } from '../primitives/table/TableHeader';
 import { TableRow } from '../primitives/table/TableRow';
+import { TableRowAction } from '../primitives/table/TableRowAction';
 
 import { cx, type Tone } from './tones';
 
@@ -47,6 +48,13 @@ type DataTableProps<Row> = {
   rowKey: (row: Row) => string;
   /** State of a row: an edge bar in most looks, a filled row in soft and signal. */
   rowTone?: (row: Row) => Tone | undefined;
+  /**
+   * Makes each row clickable. The first cell becomes the row's button, so the row is one focus
+   * stop that Enter and Space activate, and a pointer can click anywhere on it.
+   */
+  onRowClick?: (row: Row) => void;
+  /** Key of the row whose detail is showing; it gets `aria-selected` and the look's selected style. */
+  selectedKey?: string | null;
   /** Leave out to let the look choose: compact in console, comfortable elsewhere. */
   density?: Density;
   /** Inside a `Panel padding="none"`: the first and last cells take the panel's padding. */
@@ -59,7 +67,18 @@ type DataTableProps<Row> = {
  * thick status edge in console, ruled lines in editorial, pill rows in soft, full cell borders on
  * a blueprint. The first column names the row.
  */
-export function DataTable<Row>({ label, columns, rows, rowKey, rowTone, density, flush = false, className }: DataTableProps<Row>) {
+export function DataTable<Row>({
+  label,
+  columns,
+  rows,
+  rowKey,
+  rowTone,
+  onRowClick,
+  selectedKey,
+  density,
+  flush = false,
+  className,
+}: DataTableProps<Row>) {
   const look = useLook();
   return (
     <div data-look={look} data-flush={flush} className={cx('kit-table', className)}>
@@ -76,8 +95,15 @@ export function DataTable<Row>({ label, columns, rows, rowKey, rowTone, density,
         <TableBody>
           {rows.map((row) => {
             const tone = rowTone?.(row);
+            const key = rowKey(row);
+            const selectable = onRowClick !== undefined || selectedKey !== undefined;
             return (
-              <TableRow key={rowKey(row)} className={tone && tone !== 'neutral' ? `kit-tone-${tone}` : undefined}>
+              <TableRow
+                key={key}
+                interactive={onRowClick !== undefined}
+                selected={selectable ? key === selectedKey : undefined}
+                className={tone && tone !== 'neutral' ? `kit-tone-${tone}` : undefined}
+              >
                 {columns.map((column, index) => (
                   <TableCell
                     key={column.id}
@@ -87,7 +113,7 @@ export function DataTable<Row>({ label, columns, rows, rowKey, rowTone, density,
                     muted={column.muted}
                     wrap={column.nowrap ? 'nowrap' : undefined}
                   >
-                    {column.cell(row)}
+                    {index === 0 && onRowClick ? <TableRowAction onClick={() => onRowClick(row)}>{column.cell(row)}</TableRowAction> : column.cell(row)}
                   </TableCell>
                 ))}
               </TableRow>
