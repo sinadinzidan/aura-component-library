@@ -432,6 +432,7 @@ export const MANIFEST: readonly ManifestArea[] = [
           { id: 'glass-cockpit', title: 'Glass cockpit', blurb: 'Translucent panels over a live scene.' },
           { id: 'hologram-asset', title: 'Hologram asset', blurb: 'A wireframe machine with scanning readouts.' },
           { id: 'radial-mission-control', title: 'Radial mission control', blurb: 'Everything arranged around one dial.' },
+          { id: 'orbit-mission-control', title: 'Orbit mission control', blurb: 'One large ring with small linked circles orbiting it.' },
           { id: 'neon-terminal', title: 'Neon terminal', blurb: 'A text-mode plant in characters and bars.' },
         ],
       },
