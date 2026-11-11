@@ -230,9 +230,11 @@ function SunburstCrumbs({ explorer }: { explorer: SunburstExplorer }) {
   const trail = pathTo(SUNBURST_TREE, explorer.selected.id);
   return (
     <SunburstFloat className="flex items-center gap-1 p-1.5">
-      <Button variant="ghost" size="sm" disabled={trail.length <= 1} onClick={explorer.up}>
-        <IconArrowBackUp /> Back
-      </Button>
+      {trail.length > 1 ? (
+        <Button variant="ghost" size="sm" onClick={explorer.up}>
+          <IconArrowBackUp /> Back
+        </Button>
+      ) : null}
       <nav aria-label="Path">
         <ol className="flex flex-wrap items-center gap-0.5 pr-2 text-sm">
           {trail.map((node, index) => {
@@ -429,7 +431,9 @@ function SunburstTagTrend({ sensor, height = 190 }: { sensor: TreeSensor; height
 }
 
 function SunburstAlarmList({ node, limit = 2 }: { node: TreeNode; limit?: number }) {
-  const open = node.alarms.filter(isOpenAlarm).slice(0, limit);
+  const allOpen = node.alarms.filter(isOpenAlarm);
+  const open = allOpen.slice(0, limit);
+  const hidden = allOpen.length - open.length;
   if (open.length === 0) {
     return (
       <p className="flex items-center gap-2 text-sm text-[color:var(--kit-text-2)]">
@@ -459,6 +463,11 @@ function SunburstAlarmList({ node, limit = 2 }: { node: TreeNode; limit?: number
           />
         );
       })}
+      {hidden > 0 ? (
+        <li className="pt-2 text-sm text-[color:var(--kit-text-2)]">
+          {hidden} more open {hidden === 1 ? 'alarm' : 'alarms'} on or below this {TREE_LEVEL_LABEL[node.level].toLowerCase()}
+        </li>
+      ) : null}
     </ul>
   );
 }
@@ -559,7 +568,7 @@ function SunburstHierarchyWall() {
             label="Nordkapp plant, 14:00 UTC"
             value={flagged.length}
             unit={`of ${areas.length} areas`}
-            state={flagged.length > 0 ? 'Need attention' : 'All normal'}
+            state={flagged.length > 0 ? 'Needs attention' : 'All normal'}
             stateIcon={<IconAlertOctagon />}
           />
           <div className="grid flex-1 grid-cols-2 gap-4">
@@ -571,6 +580,9 @@ function SunburstHierarchyWall() {
                 label={area.name}
                 value={area.score}
                 unit="health"
+                // The state is the worst one below the area, so say which, or a high score beside
+                // "Critical" reads as a contradiction.
+                target={area.tone === 'success' ? 'Nothing below needs attention' : area.stateLabel}
                 state={area.tone === 'success' ? 'Normal' : area.tone === 'critical' ? 'Critical' : 'Watch'}
                 stateIcon={<SunburstStateIcon tone={area.tone} />}
               />
