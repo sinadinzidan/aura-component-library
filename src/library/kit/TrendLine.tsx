@@ -210,6 +210,10 @@ export function TrendLine({
                 fontSize: 12,
                 fontWeight: 600,
                 fill: toneLine(limit.tone ?? 'neutral'),
+                // A halo in the surface colour keeps the label readable where a series crosses it.
+                stroke: 'var(--kit-halo)',
+                strokeWidth: 4,
+                paintOrder: 'stroke',
                 offset: 6,
               }}
             />

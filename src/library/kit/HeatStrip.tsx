@@ -15,6 +15,8 @@ type HeatStripProps = {
   /** Value that maps to the strongest colour. Defaults to the largest value in all rows. */
   max?: number;
   tone?: Tone;
+  /** Cell height: `lg` when the strip is the main content of its panel. */
+  size?: 'md' | 'lg';
   className?: string;
 };
 
@@ -22,13 +24,13 @@ type HeatStripProps = {
  * Intensity over time as rows of cells: when something happens and how much, at a glance. Cell
  * colour is one tone mixed toward the track, so it stays readable in every look and mode.
  */
-export function HeatStrip({ label, rows, axis, max, tone = 'accent', className }: HeatStripProps) {
+export function HeatStrip({ label, rows, axis, max, tone = 'accent', size = 'md', className }: HeatStripProps) {
   const look = useLook();
   const top = max ?? Math.max(1, ...rows.flatMap((row) => row.values));
   const hasLabels = rows.some((row) => row.label !== '');
 
   return (
-    <div role="img" aria-label={label} data-look={look} className={cx('kit-heat', className)}>
+    <div role="img" aria-label={label} data-look={look} data-size={size} className={cx('kit-heat', className)}>
       {rows.map((row) => (
         <div key={row.label} data-tone={row.tone ?? tone} className="kit-heat-row">
           {hasLabels ? <span className="kit-heat-label">{row.label}</span> : null}

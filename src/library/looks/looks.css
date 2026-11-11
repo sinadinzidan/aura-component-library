@@ -37,6 +37,7 @@
   --kit-track: color-mix(in oklab, var(--kit-text) 9%, transparent);
   --kit-track-h: 8px;
   --kit-track-radius: 999px;
+  --kit-halo: var(--kit-surface);
 }
 
 :where(.dark)[data-look],
@@ -80,6 +81,7 @@
 }
 
 [data-look='console'] {
+  --kit-halo: var(--base-background);
   --kit-surface: var(--base-background);
   --kit-well: var(--mountain-black);
   --kit-rule: var(--mountain-700);
@@ -99,6 +101,7 @@
 }
 
 [data-look='poster'] {
+  --kit-halo: var(--base-background);
   --kit-surface: var(--base-background);
   --kit-text-2: var(--base-foreground);
   --kit-text-3: var(--medium-foreground);
@@ -133,6 +136,7 @@
 }
 
 [data-look='glass'] {
+  --kit-halo: var(--mountain-950);
   --kit-surface: color-mix(in oklab, var(--mountain-white) 7%, transparent);
   --kit-well: color-mix(in oklab, var(--mountain-black) 30%, transparent);
   --kit-text-2: var(--mountain-200);
@@ -156,6 +160,7 @@
 }
 
 [data-look='editorial'] {
+  --kit-halo: var(--base-background);
   --kit-surface: transparent;
   --kit-rule: var(--emphasized);
   --kit-rule-strong: var(--base-foreground);
@@ -193,6 +198,7 @@
 }
 
 [data-look='blueprint'] {
+  --kit-halo: var(--base-background);
   --kit-ink: var(--primary-background);
   --kit-text: var(--kit-ink);
   --kit-text-2: color-mix(in oklab, var(--kit-ink) 86%, var(--base-background));
@@ -229,6 +235,7 @@
 }
 
 [data-look='signal'] {
+  --kit-halo: transparent;
   --kit-surface: var(--mountain-800);
   --kit-text-2: var(--mountain-100);
   --kit-text-3: var(--mountain-300);
@@ -1171,12 +1178,20 @@
 }
 
 .kit-stat[data-look='studio'][data-variant='tile']:not([data-tone='neutral'])[data-emphasis='strong'] {
-  background: linear-gradient(150deg, var(--t-vivid), color-mix(in oklab, var(--t-vivid) 72%, var(--mountain-black)));
+  background: linear-gradient(150deg, color-mix(in oklab, var(--t-vivid) 86%, var(--mountain-white)), var(--t-vivid) 45%, color-mix(in oklab, var(--t-vivid) 70%, var(--dusk-700)));
   border-color: transparent;
   color: var(--t-on-vivid);
   --kit-text: var(--t-on-vivid);
-  --kit-text-2: color-mix(in oklab, var(--t-on-vivid) 88%, transparent);
-  --kit-text-3: color-mix(in oklab, var(--t-on-vivid) 78%, transparent);
+  --kit-text-2: color-mix(in oklab, var(--t-on-vivid) 92%, transparent);
+  --kit-text-3: color-mix(in oklab, var(--t-on-vivid) 84%, transparent);
+  box-shadow: 0 1px 2px var(--effect-shadow-md), 0 16px 28px -16px color-mix(in oklab, var(--t-vivid) 70%, transparent);
+  .kit-chip {
+    background: color-mix(in oklab, var(--t-on-vivid) 18%, transparent);
+    color: var(--t-on-vivid);
+  }
+  .kit-spark {
+    color: var(--t-on-vivid);
+  }
 }
 
 .kit-stat[data-look='console'] {
@@ -2726,6 +2741,11 @@
   --kit-heat-gap: 2px;
   --kit-heat-radius: 3px;
   --kit-heat-h: calc(var(--spacing) * 6);
+}
+
+.kit-heat[data-size='lg'] {
+  --kit-heat-h: calc(var(--spacing) * 9);
+  gap: calc(var(--spacing) * 2);
 }
 
 .kit-heat-row {
