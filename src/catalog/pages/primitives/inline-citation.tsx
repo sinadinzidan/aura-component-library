@@ -14,6 +14,12 @@ import { Message, MessageContent } from '@cognite/aura/components/message';
 import { Source, Sources } from '@cognite/aura/components/sources';
 import { IconBinaryTree, IconCalendarEvent, IconChartLine, IconFileText, IconWorld } from '@cognite/aura/icons';
 
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { definePage } from '../../types';
 
 import source from './inline-citation.tsx?raw';
@@ -358,35 +364,35 @@ function InlineCitationInList() {
 
 function InlineCitationInTable() {
   return (
-    <table className="mx-auto w-full max-w-md text-left text-sm">
-      <thead>
-        <tr className="text-xs text-muted-foreground">
-          <th className="py-2 font-medium">Measurement</th>
-          <th className="py-2 text-right font-medium">Value</th>
-          <th className="py-2 pl-4 font-medium">Source</th>
-        </tr>
-      </thead>
-      <tbody className="text-base-foreground">
-        <tr>
-          <td className="py-2">Drive-end vibration</td>
-          <td className="py-2 text-right tabular-nums">11.6 mm/s</td>
-          <td className="py-2 pl-4">
+    <Table label="Measurements and their sources" className="mx-auto max-w-md">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Measurement</TableHead>
+          <TableHead numeric>Value</TableHead>
+          <TableHead>Source</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableCell>Drive-end vibration</TableCell>
+          <TableCell numeric>11.6 mm/s</TableCell>
+          <TableCell>
             <InlineCitationLink href={VIBRATION_URL} target="_blank" variant="decorative-3">
               23-VT-92740
             </InlineCitationLink>
-          </td>
-        </tr>
-        <tr>
-          <td className="py-2">Discharge pressure</td>
-          <td className="py-2 text-right tabular-nums">48.6 barg</td>
-          <td className="py-2 pl-4">
+          </TableCell>
+        </TableRow>
+        <TableRow>
+          <TableCell>Discharge pressure</TableCell>
+          <TableCell numeric>48.6 barg</TableCell>
+          <TableCell>
             <InlineCitationLink href={`${FUSION}/timeseries/23-PT-92531`} target="_blank" variant="decorative-3">
               23-PT-92531
             </InlineCitationLink>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+          </TableCell>
+        </TableRow>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -673,6 +679,7 @@ export default definePage({
           note: 'Values in a table get a source column rather than chips inside the number cells.',
           origin: 'custom',
           size: 'md',
+          uses: ['primitives/table/Table.tsx'],
           Component: InlineCitationInTable,
         },
       ],

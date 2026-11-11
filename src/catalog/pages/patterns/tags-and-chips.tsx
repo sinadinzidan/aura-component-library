@@ -13,7 +13,6 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from '@cognite/aura/components/popover';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@cognite/aura/components/tooltip';
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -25,24 +24,29 @@ import {
   IconTag,
   IconTool,
   IconUser,
-  IconX,
 } from '@cognite/aura/icons';
 import { useState } from 'react';
 
 import { ConfirmButton } from '../../../library/actions/ConfirmButton';
 import { CopyButton } from '../../../library/actions/CopyButton';
-import { ToggleGroup } from '../../../library/actions/ToggleGroup';
 import { StatusBadge } from '../../../library/display/StatusBadge';
 import { InlineEditText } from '../../../library/forms/InlineEditText';
 import { BreakdownList } from '../../../library/patterns/collections/BreakdownList';
 import { DataTable } from '../../../library/patterns/collections/DataTable';
 import type { DataTableColumn } from '../../../library/patterns/collections/DataTable';
 import { EntityCard } from '../../../library/patterns/collections/EntityCard';
-import { TagInput } from '../../../library/patterns/content/TagInput';
-import { TagList } from '../../../library/patterns/content/TagList';
 import { EditableTagList } from '../../../library/patterns/data-entry/EditableTagList';
-import { FilterChip } from '../../../library/patterns/data-entry/FilterChip';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
+import { Tag } from '../../../library/primitives/tag/Tag';
+import { TagGroup } from '../../../library/primitives/tag/TagGroup';
+import { TagInput } from '../../../library/primitives/tag/TagInput';
+import { TagList } from '../../../library/primitives/tag/TagList';
 import { ASSETS, WORK_ORDERS, findAsset } from '../../data/plant';
 import type { WorkOrder } from '../../data/plant';
 import { definePage } from '../../types';
@@ -80,7 +84,7 @@ const TAG_CHIP_ORDER_COLUMNS: readonly DataTableColumn<WorkOrder>[] = [
     id: 'tags',
     header: 'Labels',
     width: 'w-64',
-    cell: (order) => <TagList label={`Labels on ${order.id}`} tags={TAG_CHIP_ORDER_TAGS[order.id] ?? []} max={2} nowrap />,
+    cell: (order) => <TagList label={`Labels on ${order.id}`} tags={TAG_CHIP_ORDER_TAGS[order.id] ?? []} max={2} size="sm" nowrap />,
   },
 ];
 
@@ -109,24 +113,16 @@ function TagChipStatic() {
 function TagChipWithIcon() {
   return (
     <div className="flex flex-wrap justify-center gap-1.5">
-      <Badge variant="secondary">
-        <IconMapPin /> Nordkapp
-      </Badge>
-      <Badge variant="secondary">
-        <IconEngine /> Compressor
-      </Badge>
-      <Badge variant="secondary">
-        <IconUser /> Aisha Khan
-      </Badge>
-      <Badge variant="secondary">
-        <IconTool /> Corrective
-      </Badge>
+      <Tag icon={<IconMapPin />}>Nordkapp</Tag>
+      <Tag icon={<IconEngine />}>Compressor</Tag>
+      <Tag icon={<IconUser />}>Aisha Khan</Tag>
+      <Tag icon={<IconTool />}>Corrective</Tag>
     </div>
   );
 }
 
 function TagChipKeywords() {
-  return <TagList label="Keywords" tags={['centrifugal', 'dry gas seal', 'API 617', 'anti-surge']} outline />;
+  return <TagList label="Keywords" tags={['centrifugal', 'dry gas seal', 'API 617', 'anti-surge']} variant="outline" />;
 }
 
 function TagChipStatusVsCategory() {
@@ -150,17 +146,25 @@ function TagChipStatusVsCategory() {
       </dd>
       <dt className="text-muted-foreground">Category</dt>
       <dd className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="decorative-2">Compressor</Badge>
-        <Badge variant="decorative-3">Pump</Badge>
-        <Badge variant="decorative-5">Exchanger</Badge>
-        <Badge variant="decorative-6">Valve</Badge>
+        <Tag size="sm" variant="decorative-2">
+          Compressor
+        </Tag>
+        <Tag size="sm" variant="decorative-3">
+          Pump
+        </Tag>
+        <Tag size="sm" variant="decorative-5">
+          Exchanger
+        </Tag>
+        <Tag size="sm" variant="decorative-6">
+          Valve
+        </Tag>
         <span className="text-xs text-muted-foreground">A fixed set. Colour only tells kinds apart.</span>
       </dd>
       <dt className="text-muted-foreground">Label</dt>
       <dd className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="secondary">vibration</Badge>
-        <Badge variant="secondary">critical spare</Badge>
-        <Badge variant="secondary">turnaround 2026</Badge>
+        <Tag size="sm">vibration</Tag>
+        <Tag size="sm">critical spare</Tag>
+        <Tag size="sm">turnaround 2026</Tag>
         <span className="text-xs text-muted-foreground">Free text from people. Always neutral.</span>
       </dd>
     </dl>
@@ -170,8 +174,10 @@ function TagChipStatusVsCategory() {
 function TagChipAssetTag() {
   return (
     <div className="flex flex-col items-center gap-3">
-      <span className="inline-flex items-center gap-1 rounded-md bg-medium-background py-0.5 pl-2 pr-0.5 font-mono text-sm text-base-foreground">
-        {TAG_CHIP_COMPRESSOR.tag}
+      <span className="inline-flex items-center gap-1">
+        <Tag mono size="lg">
+          {TAG_CHIP_COMPRESSOR.tag}
+        </Tag>
         <CopyButton variant="ghost" size="icon-sm" text={TAG_CHIP_COMPRESSOR.tag} label="Copy asset tag" iconOnly />
       </span>
       <span className="text-xs text-muted-foreground">{TAG_CHIP_COMPRESSOR.name}</span>
@@ -200,17 +206,10 @@ function TagChipTruncated() {
   return (
     <div className="flex w-full flex-col gap-2">
       <div className="flex min-w-0 items-center gap-1.5">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Badge variant="secondary" tabIndex={0} className="max-w-56">
-                <span className="truncate">{long}</span>
-              </Badge>
-            }
-          />
-          <TooltipContent>{long}</TooltipContent>
-        </Tooltip>
-        <Badge variant="secondary">vibration</Badge>
+        <Tag tooltip={long} className="max-w-56">
+          {long}
+        </Tag>
+        <Tag>vibration</Tag>
       </div>
       <p className="text-xs text-muted-foreground">Capped at a fixed width; the full label shows on hover and focus.</p>
     </div>
@@ -222,19 +221,7 @@ function TagChipRemovable() {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <ul aria-label="Labels" className="flex list-none flex-wrap justify-center gap-1.5">
-        {tags.map((tag) => (
-          <li key={tag}>
-            <Badge
-              variant="closable"
-              render={<button type="button" aria-label={`Remove ${tag}`} />}
-              onClick={() => setTags(tags.filter((other) => other !== tag))}
-            >
-              {tag} <IconX aria-hidden="true" />
-            </Badge>
-          </li>
-        ))}
-      </ul>
+      <TagList label="Labels" tags={tags} onRemove={(id) => setTags(tags.filter((other) => other !== id))} className="justify-center" />
       {tags.length < 3 ? (
         <Button variant="ghost" size="sm" onClick={() => setTags(TAG_CHIP_LABELS.slice(0, 3))}>
           Restore labels
@@ -332,16 +319,10 @@ function TagChipSuggested() {
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Used on similar work orders:</span>
           {open.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              aria-label={`Add ${tag}`}
-              onClick={() => setTags([...tags, tag])}
-              className="inline-flex h-5 cursor-pointer items-center gap-1 rounded-md border border-dashed border-emphasized px-1.5 text-xs font-medium text-medium-foreground outline-none hover:bg-medium-background focus-visible:shadow-focus-ring"
-            >
-              <IconPlus aria-hidden="true" className="size-3" />
+            <Tag key={tag} size="sm" variant="outline" icon={<IconPlus />} onClick={() => setTags([...tags, tag])}>
+              <span className="sr-only">Add </span>
               {tag}
-            </button>
+            </Tag>
           ))}
         </div>
       ) : (
@@ -367,7 +348,7 @@ function TagChipFilterChips() {
 
   return (
     <div className="flex w-full flex-col items-center gap-3">
-      <ToggleGroup label="Work order type" options={TAG_CHIP_FILTERS} value={types} onValueChange={setTypes} variant="outline" size="sm" />
+      <TagGroup label="Work order type" options={TAG_CHIP_FILTERS} value={types} onValueChange={setTypes} />
       <p className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
         {types.length === 0 ? 'Showing every type.' : `Showing ${types.length} of ${TAG_CHIP_FILTERS.length} types.`}
       </p>
@@ -380,7 +361,7 @@ function TagChipFilterCounts() {
 
   return (
     <div className="flex w-full flex-col items-center gap-3">
-      <ToggleGroup
+      <TagGroup
         label="Alarm state"
         options={[
           { value: 'active', label: 'Active', count: 3 },
@@ -389,8 +370,6 @@ function TagChipFilterCounts() {
         ]}
         value={states}
         onValueChange={setStates}
-        variant="outline"
-        size="sm"
       />
       <p className="text-xs text-muted-foreground">Counts say what a chip will add before it is pressed.</p>
     </div>
@@ -402,10 +381,10 @@ function TagChipChoiceChips() {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <ToggleGroup
+      <TagGroup
         label="Time range"
         selection="single"
-        required
+        allowEmpty={false}
         options={[
           { value: '8h', label: '8 h' },
           { value: '24h', label: '24 h' },
@@ -414,8 +393,6 @@ function TagChipChoiceChips() {
         ]}
         value={range}
         onValueChange={setRange}
-        variant="outline"
-        size="sm"
       />
       <p className="text-xs text-muted-foreground">Exactly one stays pressed.</p>
     </div>
@@ -436,7 +413,15 @@ function TagChipAppliedFilters() {
     <div className="flex w-full flex-col gap-2">
       <div className="flex min-h-7 flex-wrap items-center gap-2">
         {shown.map((chip) => (
-          <FilterChip key={chip.id} label={chip.label} value={chip.value} onRemove={() => setRemoved([...removed, chip.id])} />
+          <Tag
+            key={chip.id}
+            size="lg"
+            label={`${chip.label}: ${chip.value}`}
+            removeLabel={`Remove filter ${chip.label}: ${chip.value}`}
+            onRemove={() => setRemoved([...removed, chip.id])}
+          >
+            <span className="font-normal opacity-70">{chip.label}:</span> {chip.value}
+          </Tag>
         ))}
         {shown.length > 0 ? (
           <Button variant="ghost" size="sm" onClick={() => setRemoved(all.map((chip) => chip.id))}>
@@ -496,7 +481,7 @@ function TagChipOnCard() {
         status={<StatusBadge status={TAG_CHIP_COMPRESSOR.state} />}
         footerNote={findAsset(TAG_CHIP_COMPRESSOR.parentId ?? '')?.name}
       >
-        <TagList label="Labels" tags={TAG_CHIP_LABELS} max={2} />
+        <TagList label="Labels" tags={TAG_CHIP_LABELS} max={2} size="sm" />
       </EntityCard>
     </div>
   );
@@ -515,32 +500,32 @@ function TagChipManagement() {
 
   return (
     <div className="flex w-full flex-col gap-2">
-      <table aria-label="Labels in this project" className="w-full border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-default text-xs text-muted-foreground">
-            <th scope="col" className="py-2 pr-4 font-medium">
-              Label
-            </th>
-            <th scope="col" className="w-24 py-2 pr-4 text-right font-medium">
+      <Table label="Labels in this project">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Label</TableHead>
+            <TableHead numeric className="w-24">
               Used on
-            </th>
-            <th scope="col" className="w-80 py-2 font-medium">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+            <TableHead srOnly className="w-80">
+              Actions
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {tags.map((tag) => (
-            <tr key={tag.id} className="border-b border-default last:border-b-0">
-              <td className="py-1.5 pr-4">
+            <TableRow key={tag.id}>
+              <TableCell>
                 <InlineEditText
                   value={tag.name}
                   label={`name of label ${tag.name}`}
                   onSave={(name) => setTags(tags.map((other) => (other.id === tag.id ? { ...other, name } : other)))}
                 />
-              </td>
-              <td className="py-1.5 pr-4 text-right tabular-nums text-muted-foreground">{tag.uses}</td>
-              <td className="py-1.5">
+              </TableCell>
+              <TableCell numeric muted>
+                {tag.uses}
+              </TableCell>
+              <TableCell>
                 <div className="flex items-center justify-end gap-2">
                   {merging === tag.id ? (
                     <>
@@ -567,11 +552,11 @@ function TagChipManagement() {
                     </>
                   )}
                 </div>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-xs text-muted-foreground">Merging moves every use to the other label. Deleting removes the label from every record.</p>
         {tags.length < TAG_CHIP_MANAGED.length ? (
@@ -596,15 +581,13 @@ function TagChipRecordHeader() {
             <StatusBadge status={TAG_CHIP_COMPRESSOR.state} />
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-md bg-medium-background py-0.5 pl-2 pr-0.5 font-mono text-sm text-base-foreground">
-              {TAG_CHIP_COMPRESSOR.tag}
+            <span className="inline-flex items-center gap-1">
+              <Tag mono>{TAG_CHIP_COMPRESSOR.tag}</Tag>
               <CopyButton variant="ghost" size="icon-sm" text={TAG_CHIP_COMPRESSOR.tag} label="Copy asset tag" iconOnly />
             </span>
-            <Badge variant="decorative-2">Compressor</Badge>
-            <Badge variant="secondary">
-              <IconMapPin /> Nordkapp
-            </Badge>
-            <Badge variant="secondary">Criticality {TAG_CHIP_COMPRESSOR.criticality}</Badge>
+            <Tag variant="decorative-2">Compressor</Tag>
+            <Tag icon={<IconMapPin />}>Nordkapp</Tag>
+            <Tag>Criticality {TAG_CHIP_COMPRESSOR.criticality}</Tag>
           </div>
         </div>
         <Button variant="secondary">Create work order</Button>
@@ -648,7 +631,7 @@ export default definePage({
           title: 'Static tags',
           note: 'Free-text labels on a record that this view cannot change.',
           origin: 'custom',
-          uses: ['patterns/content/TagList.tsx'],
+          uses: ['primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipStatic,
         },
         {
@@ -656,6 +639,7 @@ export default definePage({
           title: 'Tags with icon',
           note: 'When tags of different kinds sit together: the icon says site, type, person or work type.',
           origin: 'custom',
+          uses: ['primitives/tag/Tag.tsx'],
           Component: TagChipWithIcon,
         },
         {
@@ -663,7 +647,7 @@ export default definePage({
           title: 'Colourless keyword chips',
           note: 'Search keywords and specifications that should recede behind the content they describe.',
           origin: 'custom',
-          uses: ['patterns/content/TagList.tsx'],
+          uses: ['primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipKeywords,
         },
         {
@@ -673,6 +657,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/tag/Tag.tsx'],
           Component: TagChipStatusVsCategory,
         },
         {
@@ -680,7 +665,7 @@ export default definePage({
           title: 'Asset tag with copy',
           note: 'Identifiers people paste into other systems: monospace, with a copy button attached.',
           origin: 'custom',
-          uses: ['actions/CopyButton.tsx'],
+          uses: ['actions/CopyButton.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipAssetTag,
         },
         {
@@ -690,7 +675,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/content/TagList.tsx'],
+          uses: ['primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipOverflow,
         },
         {
@@ -700,6 +685,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
+          uses: ['primitives/tag/Tag.tsx'],
           Component: TagChipTruncated,
         },
       ],
@@ -714,6 +700,7 @@ export default definePage({
           title: 'Removable tags',
           note: 'A handful of labels that can be taken off one by one; each chip is its own remove button.',
           origin: 'custom',
+          uses: ['primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipRemovable,
         },
         {
@@ -721,7 +708,7 @@ export default definePage({
           title: 'Tag picker popover',
           note: 'A closed set of labels: pick from a list behind a button instead of typing.',
           origin: 'custom',
-          uses: ['patterns/content/TagList.tsx'],
+          uses: ['primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipPicker,
         },
         {
@@ -740,7 +727,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/content/TagInput.tsx', 'patterns/content/splitTags.ts'],
+          uses: ['primitives/tag/TagInput.tsx', 'primitives/tag/tagText.ts', 'primitives/tag/Tag.tsx'],
           Component: TagChipInput,
         },
         {
@@ -750,7 +737,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/content/TagInput.tsx'],
+          uses: ['primitives/tag/TagInput.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipInputMax,
         },
         {
@@ -760,7 +747,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/content/TagInput.tsx'],
+          uses: ['primitives/tag/TagInput.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipSuggested,
         },
         {
@@ -787,7 +774,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['actions/ToggleGroup.tsx'],
+          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroup.ts'],
           Component: TagChipFilterChips,
         },
         {
@@ -797,7 +784,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['actions/ToggleGroup.tsx'],
+          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroup.ts'],
           Component: TagChipFilterCounts,
         },
         {
@@ -805,7 +792,7 @@ export default definePage({
           title: 'Choice chips',
           note: 'One of a few short options that changes the view at once, such as a time range.',
           origin: 'custom',
-          uses: ['actions/ToggleGroup.tsx'],
+          uses: ['primitives/tag/TagGroup.tsx', 'primitives/tag/Tag.tsx', 'primitives/tag/tagGroup.ts'],
           Component: TagChipChoiceChips,
         },
         {
@@ -815,7 +802,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/data-entry/FilterChip.tsx'],
+          uses: ['primitives/tag/Tag.tsx'],
           Component: TagChipAppliedFilters,
         },
       ],
@@ -842,7 +829,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/content/TagList.tsx'],
+          uses: ['primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipGrouped,
         },
         {
@@ -852,7 +839,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/collections/DataTable.tsx', 'patterns/content/TagList.tsx'],
+          uses: ['patterns/collections/DataTable.tsx', 'primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipInTable,
         },
         {
@@ -861,7 +848,7 @@ export default definePage({
           note: 'Cards in a grid: status in the header, labels in the body, capped so cards stay the same height.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['patterns/collections/EntityCard.tsx', 'patterns/content/TagList.tsx', 'display/StatusBadge.tsx'],
+          uses: ['patterns/collections/EntityCard.tsx', 'primitives/tag/TagList.tsx', 'primitives/tag/Tag.tsx', 'display/StatusBadge.tsx'],
           Component: TagChipOnCard,
         },
         {
@@ -871,7 +858,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['forms/InlineEditText.tsx', 'actions/ConfirmButton.tsx', 'patterns/data-entry/OptionSelect.tsx'],
+          uses: ['forms/InlineEditText.tsx', 'actions/ConfirmButton.tsx', 'patterns/data-entry/OptionSelect.tsx', 'primitives/table/Table.tsx'],
           Component: TagChipManagement,
         },
         {
@@ -881,7 +868,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['display/StatusBadge.tsx', 'actions/CopyButton.tsx', 'patterns/data-entry/EditableTagList.tsx'],
+          uses: ['display/StatusBadge.tsx', 'actions/CopyButton.tsx', 'patterns/data-entry/EditableTagList.tsx', 'primitives/tag/Tag.tsx'],
           Component: TagChipRecordHeader,
         },
       ],

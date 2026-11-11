@@ -11,6 +11,12 @@ import { useEffect, useState } from 'react';
 import { AsyncButton } from '../../../library/actions/AsyncButton';
 import { Delayed } from '../../../library/feedback/Delayed';
 import { RetryBlock } from '../../../library/feedback/RetryBlock';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableMessageRow } from '../../../library/primitives/table/TableMessageRow';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, SENSORS, WORK_ORDERS } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -228,26 +234,26 @@ function LoaderInCard() {
 
 function LoaderInTable() {
   return (
-    <table className="w-full text-left text-sm" aria-busy>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th className="py-2 pr-4 font-medium">Tag</th>
-          <th className="py-2 pr-4 font-medium">Name</th>
-          <th className="py-2 pr-4 font-medium">Value</th>
-          <th className="py-2 font-medium">Quality</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td colSpan={4}>
-            <div role="status" className="flex h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+    <div aria-busy className="w-full">
+      <Table label="Sensors" hover={false}>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Tag</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Value</TableHead>
+            <TableHead>Quality</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableMessageRow colSpan={4}>
+            <div role="status" className="flex h-16 items-center gap-2">
               <Loader aria-hidden />
               Loading sensors…
             </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+          </TableMessageRow>
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -653,6 +659,7 @@ export default definePage({
           note: 'The columns are known but the number of rows is not; headers stay in place.',
           origin: 'custom',
           size: 'md',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableMessageRow.tsx'],
           Component: LoaderInTable,
         },
         {

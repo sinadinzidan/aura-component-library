@@ -18,6 +18,15 @@ import { DistributionStrip } from '../../../library/patterns/collections/Distrib
 import { DonutBreakdown } from '../../../library/patterns/product/DonutBreakdown';
 import { WidgetFrame } from '../../../library/patterns/product/WidgetFrame';
 import type { WidgetAction } from '../../../library/patterns/product/WidgetFrame';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
+import { Timeline } from '../../../library/primitives/timeline/Timeline';
+import { TimelineItem } from '../../../library/primitives/timeline/TimelineItem';
 import { PEOPLE, SITES, WORK_ORDERS, findPerson } from '../../data/plant';
 import { HOUR, MINUTE, REFERENCE_NOW, formatAgo, formatDate, makeValues } from '../../data/series';
 import { definePage } from '../../types';
@@ -109,36 +118,30 @@ function DashStatValue({ value, unit }: { value: string; unit?: string }) {
 
 function DashOrderTable() {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Open work orders, soonest due first</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Work order
-          </th>
-          <th scope="col" className="px-4 py-2 font-medium">
-            Assignee
-          </th>
-          <th scope="col" className="py-2 pl-4 text-right font-medium">
-            Due
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table surface="card">
+      <TableCaption srOnly>Open work orders, soonest due first</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Work order</TableHead>
+          <TableHead>Assignee</TableHead>
+          <TableHead numeric>Due</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {DASH_OPEN_ORDERS.map((order) => (
-          <tr key={order.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-4 font-normal">
-              <span className="flex flex-col">
-                <span className="text-base-foreground">{order.title}</span>
+          <TableRow key={order.id}>
+            <TableCell rowHeader>
+              <span className="flex flex-col font-normal">
+                <span>{order.title}</span>
                 <span className="font-mono text-xs text-muted-foreground">{order.id}</span>
               </span>
-            </th>
-            <td className="px-4 py-2 whitespace-nowrap text-medium-foreground">{findPerson(order.assigneeId)?.name ?? 'Unassigned'}</td>
-            <td className="py-2 pl-4 text-right whitespace-nowrap tabular-nums text-medium-foreground">{formatDate(order.dueAt)}</td>
-          </tr>
+            </TableCell>
+            <TableCell wrap="nowrap">{findPerson(order.assigneeId)?.name ?? 'Unassigned'}</TableCell>
+            <TableCell numeric>{formatDate(order.dueAt)}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -321,20 +324,18 @@ function DashWidgetRegionList() {
 function DashWidgetAgenda() {
   return (
     <WidgetFrame title="Today" description="Thursday 12 March" footer={<span>3 more tomorrow</span>}>
-      <ol className="flex w-full flex-col gap-3">
+      <Timeline label="Today's agenda" layout="time-start" density="compact">
         {DASH_AGENDA.map((event, index) => (
-          <li key={event.id} className="flex gap-3">
-            <time className="w-10 shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground">{event.time}</time>
-            <span className={`flex min-w-0 flex-1 flex-col border-l-2 pl-3 ${index === 0 ? 'border-emphasized' : 'border-default'}`}>
-              <span className="text-sm text-base-foreground">
-                {event.title}
-                {index === 0 ? <span className="ml-2 text-xs text-muted-foreground">Next</span> : null}
-              </span>
-              <span className="text-xs text-muted-foreground">{event.place}</span>
-            </span>
-          </li>
+          <TimelineItem
+            key={event.id}
+            time={event.time}
+            title={event.title}
+            description={event.place}
+            state={index === 0 ? 'current' : 'pending'}
+            meta={index === 0 ? <span className="text-xs text-muted-foreground">Next</span> : undefined}
+          />
         ))}
-      </ol>
+      </Timeline>
     </WidgetFrame>
   );
 }
@@ -723,7 +724,7 @@ export default definePage({
           note: "Today's events in time order, with the next one marked in words.",
           origin: 'custom',
           align: 'stretch',
-          uses: ['patterns/product/WidgetFrame.tsx'],
+          uses: ['patterns/product/WidgetFrame.tsx', 'primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: DashWidgetAgenda,
         },
         {
@@ -769,7 +770,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/product/WidgetFrame.tsx'],
+          uses: ['patterns/product/WidgetFrame.tsx', 'primitives/table/Table.tsx'],
           Component: DashWidgetTable,
         },
         {

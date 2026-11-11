@@ -1,3 +1,12 @@
+import { Table } from '../../primitives/table/Table';
+import type { TableProps } from '../../primitives/table/Table';
+import { TableBody } from '../../primitives/table/TableBody';
+import { TableCaption } from '../../primitives/table/TableCaption';
+import { TableCell } from '../../primitives/table/TableCell';
+import { TableHead } from '../../primitives/table/TableHead';
+import { TableHeader } from '../../primitives/table/TableHeader';
+import { TableRow } from '../../primitives/table/TableRow';
+
 import { describeRows } from './resultFormat';
 import type { Cell, QueryResult } from './sqlTypes';
 
@@ -9,11 +18,19 @@ type ResultsTableProps = {
   emptyText?: string;
   /** Height utility for the scrolling area, for example `max-h-64`. */
   heightClassName?: string;
+  /** The surface the results sit on, so the rows and the sticky header match it. */
+  surface?: TableProps['surface'];
 };
+
+const isTag = (cell: Cell): boolean =>
+  typeof cell === 'string' && /^[0-9A-Z-]+$/.test(cell) && cell.includes('-');
 
 function formatCell(cell: Cell): string {
   if (cell === null) return '—';
-  if (typeof cell === 'number') return Number.isInteger(cell) ? cell.toLocaleString('en-US') : cell.toLocaleString('en-US', { maximumFractionDigits: 3 });
+  if (typeof cell === 'number')
+    return Number.isInteger(cell)
+      ? cell.toLocaleString('en-US')
+      : cell.toLocaleString('en-US', { maximumFractionDigits: 3 });
   return String(cell);
 }
 
@@ -21,39 +38,65 @@ function formatCell(cell: Cell): string {
  * Query results as a semantic table: numbers align right in tabular figures, missing values show
  * a dash, the header stays in view while the rows scroll. A result with no rows says so in words.
  */
-export function ResultsTable({ result, caption, emptyText = 'No rows match. Loosen the conditions in WHERE.', heightClassName = 'max-h-72' }: ResultsTableProps) {
-  const numeric = result.columns.map((_, index) => result.rows.some((row) => typeof row[index] === 'number') && result.rows.every((row) => typeof row[index] === 'number' || row[index] === null));
+export function ResultsTable({
+  result,
+  caption,
+  emptyText = 'No rows match. Loosen the conditions in WHERE.',
+  heightClassName = 'max-h-72',
+  surface = 'base',
+}: ResultsTableProps) {
+  const numeric = result.columns.map(
+    (_, index) =>
+      result.rows.some((row) => typeof row[index] === 'number') &&
+      result.rows.every(
+        (row) => typeof row[index] === 'number' || row[index] === null,
+      ),
+  );
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <output className="text-xs tabular-nums text-muted-foreground">{describeRows(result.rowCount, result.columns.length)}</output>
+      <output className="text-xs tabular-nums text-muted-foreground">
+        {describeRows(result.rowCount, result.columns.length)}
+      </output>
       {result.rowCount === 0 ? (
         <p className="py-4 text-sm text-muted-foreground">{emptyText}</p>
       ) : (
-        <div className={`${heightClassName} min-w-0 overflow-auto rounded-lg border border-default`} tabIndex={0} role="region" aria-label={caption}>
-          <table className="w-full border-collapse text-sm">
-            <caption className="sr-only">{caption}</caption>
-            <thead className="sticky top-0 bg-muted-background">
-              <tr>
+        <div className="min-w-0 rounded-lg border border-default">
+          <Table
+            label={caption}
+            density="compact"
+            stickyHeader
+            surface={surface}
+            className={heightClassName}
+          >
+            <TableCaption srOnly>{caption}</TableCaption>
+            <TableHeader>
+              <TableRow>
                 {result.columns.map((column, index) => (
-                  <th key={column} scope="col" className={`whitespace-nowrap px-3 py-2 font-mono text-xs font-medium text-muted-foreground ${numeric[index] ? 'text-right' : 'text-left'}`}>
-                    {column}
-                  </th>
+                  <TableHead key={column} numeric={numeric[index]}>
+                    <span className="font-mono">{column}</span>
+                  </TableHead>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {result.rows.map((row, rowIndex) => (
-                <tr key={rowIndex} className="border-t border-default">
+                <TableRow key={rowIndex}>
                   {row.map((cell, index) => (
-                    <td key={index} className={`whitespace-nowrap px-3 py-1.5 ${numeric[index] ? 'text-right tabular-nums' : 'text-left'} ${cell === null ? 'text-muted-foreground' : 'text-base-foreground'} ${typeof cell === 'string' && /^[0-9A-Z-]+$/.test(cell) && cell.includes('-') ? 'font-mono text-xs' : ''}`}>
+                    <TableCell
+                      key={index}
+                      numeric={numeric[index]}
+                      mono={isTag(cell)}
+                      muted={cell === null}
+                      wrap="nowrap"
+                    >
                       {formatCell(cell)}
-                    </td>
+                    </TableCell>
                   ))}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

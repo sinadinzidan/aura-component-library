@@ -17,6 +17,13 @@ import { DoDont } from '../../../library/foundations/DoDont';
 import { formatCount } from '../../../library/foundations/formatters';
 import { ConfirmDialog } from '../../../library/overlays/ConfirmDialog';
 import { InfoTooltip } from '../../../library/overlays/InfoTooltip';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { definePage } from '../../types';
 
 import source from './content-and-voice.tsx?raw';
@@ -153,39 +160,31 @@ function VoiceGuideActionLabels() {
 
 function VoiceGuideVerbs() {
   return (
-    <table className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">Approved action verbs and the labels they replace</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-3 font-medium">
-            Use
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            When
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Not
-          </th>
-          <th scope="col" className="py-2 pl-3 font-medium">
-            Example
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Approved action verbs and the labels they replace</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Use</TableHead>
+          <TableHead>When</TableHead>
+          <TableHead>Not</TableHead>
+          <TableHead>Example</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {VERBS.map((verb) => (
-          <tr key={verb.use} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-3 font-medium whitespace-nowrap text-base-foreground">
+          <TableRow key={verb.use}>
+            <TableCell rowHeader wrap="nowrap">
               {verb.use}
-            </th>
-            <td className="px-3 py-2 text-medium-foreground">{verb.when}</td>
-            <td className="px-3 py-2 text-muted-foreground">
+            </TableCell>
+            <TableCell>{verb.when}</TableCell>
+            <TableCell muted>
               <s>{verb.not}</s>
-            </td>
-            <td className="py-2 pl-3 whitespace-nowrap text-base-foreground">{verb.example}</td>
-          </tr>
+            </TableCell>
+            <TableCell wrap="nowrap">{verb.example}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -534,35 +533,29 @@ function VoiceGuideAbbreviations() {
 
 function VoiceGuideTerminology() {
   return (
-    <table className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">Terminology: one word per concept</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-3 font-medium">
-            Write
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Not
-          </th>
-          <th scope="col" className="py-2 pl-3 font-medium">
-            Note
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Terminology: one word per concept</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Write</TableHead>
+          <TableHead>Not</TableHead>
+          <TableHead>Note</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {TERMS.map((term) => (
-          <tr key={term.term} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-3 font-medium whitespace-nowrap text-base-foreground">
+          <TableRow key={term.term}>
+            <TableCell rowHeader wrap="nowrap">
               {term.term}
-            </th>
-            <td className="px-3 py-2 text-muted-foreground">
+            </TableCell>
+            <TableCell muted>
               <s>{term.not}</s>
-            </td>
-            <td className="py-2 pl-3 text-medium-foreground">{term.note}</td>
-          </tr>
+            </TableCell>
+            <TableCell>{term.note}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -587,33 +580,29 @@ function VoiceGuideToneByScenario() {
 
 function VoiceGuideBenchmarks() {
   return (
-    <table className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">Length targets for UI text</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-3 font-medium">
-            Element
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Target
-          </th>
-          <th scope="col" className="py-2 pl-3 font-medium">
-            Maximum
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Length targets for UI text</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Element</TableHead>
+          <TableHead>Target</TableHead>
+          <TableHead>Maximum</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {BENCHMARKS.map((row) => (
-          <tr key={row.element} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-3 font-medium text-base-foreground">
-              {row.element}
-            </th>
-            <td className="px-3 py-2 text-medium-foreground tabular-nums">{row.target}</td>
-            <td className="py-2 pl-3 text-medium-foreground tabular-nums">{row.max}</td>
-          </tr>
+          <TableRow key={row.element}>
+            <TableCell rowHeader>{row.element}</TableCell>
+            <TableCell numeric align="start" wrap="wrap">
+              {row.target}
+            </TableCell>
+            <TableCell numeric align="start" wrap="wrap">
+              {row.max}
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -667,9 +656,10 @@ export default definePage({
           id: 'VoiceGuideVerbs',
           title: 'Pick the verb',
           note: 'When two verbs seem to fit, this table says which one means what.',
-          origin: 'aura',
+          origin: 'custom',
           size: 'full',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: VoiceGuideVerbs,
         },
         {
@@ -874,17 +864,19 @@ export default definePage({
           id: 'VoiceGuideTerminology',
           title: 'Terminology',
           note: 'Look a word up here before introducing a synonym.',
-          origin: 'aura',
+          origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: VoiceGuideTerminology,
         },
         {
           id: 'VoiceGuideBenchmarks',
           title: 'Length targets',
           note: 'A quick check when a string feels long.',
-          origin: 'aura',
+          origin: 'custom',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: VoiceGuideBenchmarks,
         },
       ],

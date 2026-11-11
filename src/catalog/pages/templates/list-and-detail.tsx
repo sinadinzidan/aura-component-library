@@ -50,8 +50,6 @@ import { formatValue, healthStatus, qualityStatus, runStateStatus, toneFromLimit
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { ValueReadout } from '../../../library/industrial/ValueReadout';
 import { TablePagination } from '../../../library/navigation/TablePagination';
-import { Timeline } from '../../../library/patterns/collaboration/Timeline';
-import { TimelineItem } from '../../../library/patterns/collaboration/TimelineItem';
 import { DataTable } from '../../../library/patterns/collections/DataTable';
 import type { DataTableColumn } from '../../../library/patterns/collections/DataTable';
 import { EntityCard } from '../../../library/patterns/collections/EntityCard';
@@ -61,11 +59,20 @@ import { useSelection } from '../../../library/patterns/collections/useSelection
 import { FilterBar } from '../../../library/patterns/data-entry/FilterBar';
 import type { FilterBarChip } from '../../../library/patterns/data-entry/FilterBar';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
-import { Stepper } from '../../../library/patterns/data-entry/Stepper';
 import { PageHeader } from '../../../library/patterns/structure/PageHeader';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
 import { SidePanel } from '../../../library/patterns/structure/SidePanel';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
+import { Timeline } from '../../../library/primitives/timeline/Timeline';
+import { TimelineItem } from '../../../library/primitives/timeline/TimelineItem';
 import { AppShell } from '../../../library/templates/AppShell';
 import { AppTopbar } from '../../../library/templates/AppTopbar';
 import type { AppTopbarCrumb } from '../../../library/templates/AppTopbar';
@@ -885,7 +892,11 @@ function ListDetailTemplateWorkOrder() {
             </Button>
           }
         >
-          <Stepper steps={LIST_DETAIL_ORDER_STEPS} current={2} label="Work order status" />
+          <Stepper label="Work order status" current={2}>
+            {LIST_DETAIL_ORDER_STEPS.map((item) => (
+              <Step key={item.id} label={item.label} />
+            ))}
+          </Stepper>
         </PageHeader>
         <TwoColumn
           aside={
@@ -930,38 +941,34 @@ function ListDetailTemplateWorkOrder() {
           </section>
           <section className="flex flex-col gap-3">
             <SectionHeader title="Parts" count={LIST_DETAIL_PARTS.length} size="sm" />
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-default text-xs text-muted-foreground">
-                  <th scope="col" className="py-2 pr-3 font-medium">
-                    Part
-                  </th>
-                  <th scope="col" className="w-16 py-2 pr-3 text-right font-medium">
+            <Table label="Parts">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Part</TableHead>
+                  <TableHead numeric className="w-16">
                     Qty
-                  </th>
-                  <th scope="col" className="w-28 py-2 font-medium">
-                    Stock
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                  <TableHead className="w-28">Stock</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {LIST_DETAIL_PARTS.map((part) => (
-                  <tr key={part.id} className="border-b border-default last:border-b-0">
-                    <td className="py-2 pr-3">
+                  <TableRow key={part.id}>
+                    <TableCell>
                       <p className="text-base-foreground">{part.name}</p>
                       <p className="font-mono text-xs text-muted-foreground">{part.number}</p>
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums text-medium-foreground">{part.quantity}</td>
-                    <td className="py-2 text-medium-foreground">
+                    </TableCell>
+                    <TableCell numeric>{part.quantity}</TableCell>
+                    <TableCell>
                       <span className="flex items-center gap-1.5">
                         {part.state === 'On order' ? <IconAlertTriangle aria-hidden="true" className="size-4 text-warning-foreground-strong" /> : null}
                         {part.state}
                       </span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </section>
         </TwoColumn>
       </ContentContainer>
@@ -1316,8 +1323,8 @@ export default definePage({
             'templates/AppShell.tsx',
             'templates/ContentContainer.tsx',
             'templates/TwoColumn.tsx',
-            'patterns/collaboration/Timeline.tsx',
-            'patterns/collaboration/TimelineItem.tsx',
+            'primitives/timeline/Timeline.tsx',
+            'primitives/timeline/TimelineItem.tsx',
             'patterns/structure/PropertyList.tsx',
           ],
           Component: ListDetailTemplateActivity,
@@ -1362,7 +1369,14 @@ export default definePage({
             'templates/AppShell.tsx',
             'templates/ContentContainer.tsx',
             'templates/TwoColumn.tsx',
-            'patterns/data-entry/Stepper.tsx',
+            'primitives/stepper/Stepper.tsx',
+            'primitives/stepper/Step.tsx',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableHeader.tsx',
+            'primitives/table/TableBody.tsx',
+            'primitives/table/TableRow.tsx',
+            'primitives/table/TableHead.tsx',
+            'primitives/table/TableCell.tsx',
             'patterns/structure/PageHeader.tsx',
             'patterns/structure/PropertyList.tsx',
             'industrial/operations/PriorityBadge.tsx',

@@ -7,7 +7,6 @@ import { useState } from 'react';
 
 import { MetadataList } from '../../../library/display/MetadataList';
 import { PersonAvatar } from '../../../library/display/PersonAvatar';
-import { EventTimeline } from '../../../library/industrial/operations/EventTimeline';
 import { SignOffBlock } from '../../../library/industrial/workflows/SignOffBlock';
 import type { SignOffSigner } from '../../../library/industrial/workflows/SignOffBlock';
 import { EntityRow } from '../../../library/patterns/collections/EntityRow';
@@ -24,8 +23,11 @@ import { CompareTable } from '../../../library/patterns/workflows/CompareTable';
 import { DecisionForm } from '../../../library/patterns/workflows/DecisionForm';
 import { DiffValue } from '../../../library/patterns/workflows/DiffValue';
 import { SlaIndicator } from '../../../library/patterns/workflows/SlaIndicator';
-import { findPerson } from '../../data/plant';
+import { Timeline } from '../../../library/primitives/timeline/Timeline';
+import { TimelineGroup } from '../../../library/primitives/timeline/TimelineGroup';
+import { TimelineItem } from '../../../library/primitives/timeline/TimelineItem';
 import type { Person } from '../../data/plant';
+import { findPerson } from '../../data/plant';
 import { definePage } from '../../types';
 
 import source from './approvals-and-reviews.tsx?raw';
@@ -430,16 +432,15 @@ function ApprovalReviewChain() {
 function ApprovalReviewHistory() {
   return (
     <div className="w-full max-w-md">
-      <EventTimeline
-        label="Approval history for MOC-2198"
-        events={[
-          { id: 'h1', group: '26 February', time: '08:20', title: 'Requested by Tomás Barros', detail: 'Raise high-high trip on 23-VT-92540 from 11.0 to 12.5 mm/s.' },
-          { id: 'h2', group: '26 February', time: '09:05', title: 'Approved by Liv Wold', detail: 'Shift supervisor. "Agree it trips too early on start-up."' },
-          { id: 'h3', group: '26 February', time: '11:30', title: 'Changes requested by Aisha Khan', detail: 'Asked for the vendor protection limit.', tone: 'warning', shape: 'diamond' },
-          { id: 'h4', group: '26 February', time: '12:10', title: 'Resubmitted by Tomás Barros', detail: 'Attached data sheet DS-23-9101.' },
-          { id: 'h5', group: '26 February', time: '13:45', title: 'Rejected by Aisha Khan', detail: '11.0 mm/s is the machine protection limit.', tone: 'critical', shape: 'square' },
-        ]}
-      />
+      <Timeline label="Approval history for MOC-2198" layout="time-start">
+        <TimelineGroup heading="26 February">
+          <TimelineItem time="08:20" title="Requested by Tomás Barros" description="Raise high-high trip on 23-VT-92540 from 11.0 to 12.5 mm/s." />
+          <TimelineItem time="09:05" title="Approved by Liv Wold" description={'Shift supervisor. "Agree it trips too early on start-up."'} />
+          <TimelineItem time="11:30" title="Changes requested by Aisha Khan" description="Asked for the vendor protection limit." tone="warning" shape="diamond" />
+          <TimelineItem time="12:10" title="Resubmitted by Tomás Barros" description="Attached data sheet DS-23-9101." />
+          <TimelineItem time="13:45" title="Rejected by Aisha Khan" description="11.0 mm/s is the machine protection limit." tone="critical" shape="square" />
+        </TimelineGroup>
+      </Timeline>
     </div>
   );
 }
@@ -906,7 +907,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/operations/EventTimeline.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx', 'primitives/timeline/TimelineGroup.tsx'],
           Component: ApprovalReviewHistory,
         },
         {

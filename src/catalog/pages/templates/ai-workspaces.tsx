@@ -51,6 +51,13 @@ import { PropertyList } from '../../../library/patterns/structure/PropertyList';
 import type { SidebarNavGroup } from '../../../library/patterns/structure/SidebarNav';
 import { DecisionForm } from '../../../library/patterns/workflows/DecisionForm';
 import type { Decision } from '../../../library/patterns/workflows/DecisionForm';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { AgentRunList } from '../../../library/templates-b/AgentRunList';
 import type { AgentRunStep, AgentRunStepStatus } from '../../../library/templates-b/AgentRunList';
 import { PageFrame } from '../../../library/templates-b/PageFrame';
@@ -653,25 +660,27 @@ function AiWorkspaceTemplateChatCanvas() {
               {view === 'chart' ? (
                 <AiwVibrationChart heightClassName="h-96" />
               ) : (
-                <table className="w-full text-left text-sm">
-                  <caption className="sr-only">Drive-end vibration, every eighth hourly value</caption>
-                  <thead>
-                    <tr className="border-b border-default text-xs text-muted-foreground">
-                      <th className="py-2 pr-4 font-medium">Hours ago</th>
-                      <th className="py-2 pr-4 text-right font-medium">Value, {AIW_VIBRATION.unit}</th>
-                      <th className="py-2 text-right font-medium">Margin to limit</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableCaption srOnly>Drive-end vibration, every eighth hourly value</TableCaption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Hours ago</TableHead>
+                      <TableHead numeric>Value, {AIW_VIBRATION.unit}</TableHead>
+                      <TableHead numeric>Margin to limit</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {AIW_VIBRATION_SERIES.filter((_, index) => index % 8 === 7).map((point, index) => (
-                      <tr key={point.t} className="border-b border-default last:border-b-0">
-                        <td className="py-2 pr-4 tabular-nums text-muted-foreground">{40 - index * 8}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums text-base-foreground">{point.v.toFixed(1)}</td>
-                        <td className="py-2 text-right tabular-nums text-medium-foreground">{(AIW_VIBRATION.highLimit - point.v).toFixed(1)}</td>
-                      </tr>
+                      <TableRow key={point.t}>
+                        <TableCell numeric align="start" muted>
+                          {40 - index * 8}
+                        </TableCell>
+                        <TableCell numeric>{point.v.toFixed(1)}</TableCell>
+                        <TableCell numeric>{(AIW_VIBRATION.highLimit - point.v).toFixed(1)}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -706,27 +715,29 @@ function AiWorkspaceTemplateDockedAssistant() {
               }
             />
             <AiwVibrationChart heightClassName="h-44" />
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">Sensors on {AIW_COMPRESSOR.name}</caption>
-              <thead>
-                <tr className="border-b border-default text-xs text-muted-foreground">
-                  <th className="py-2 pr-4 font-medium">Measurement</th>
-                  <th className="py-2 pr-4 font-medium">Tag</th>
-                  <th className="py-2 text-right font-medium">Value</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableCaption srOnly>Sensors on {AIW_COMPRESSOR.name}</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Measurement</TableHead>
+                  <TableHead>Tag</TableHead>
+                  <TableHead numeric>Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {AIW_COMPRESSOR_SENSORS.map((sensor) => (
-                  <tr key={sensor.id} className="border-b border-default last:border-b-0">
-                    <td className="py-2 pr-4 text-base-foreground">{sensor.name}</td>
-                    <td className="py-2 pr-4 font-mono text-xs whitespace-nowrap text-muted-foreground">{sensor.tag}</td>
-                    <td className="py-2 text-right whitespace-nowrap tabular-nums text-base-foreground">
+                  <TableRow key={sensor.id}>
+                    <TableCell>{sensor.name}</TableCell>
+                    <TableCell mono muted>
+                      {sensor.tag}
+                    </TableCell>
+                    <TableCell numeric>
                       {sensor.value.toFixed(sensor.decimals)} <span className="text-muted-foreground">{sensor.unit}</span>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           {open ? (
             <div className="flex w-80 shrink-0">
@@ -775,26 +786,26 @@ function AiWorkspaceTemplateNotebook() {
           <li className="flex flex-col gap-3">
             <AiwNotebookQuestion index={2} text="Compare with the other two compressors this week." />
             <div className="ml-10 flex flex-col gap-3">
-              <table className="w-full text-left text-sm">
-                <caption className="sr-only">Drive-end vibration per compressor, last 7 days</caption>
-                <thead>
-                  <tr className="border-b border-default text-xs text-muted-foreground">
-                    <th className="py-2 pr-4 font-medium">Compressor</th>
-                    <th className="w-40 py-2 pr-4 font-medium">Last 7 days</th>
-                    <th className="py-2 pr-4 text-right font-medium">Latest, mm/s</th>
-                    <th className="py-2 text-right font-medium">Limit</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableCaption srOnly>Drive-end vibration per compressor, last 7 days</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Compressor</TableHead>
+                    <TableHead className="w-40">Last 7 days</TableHead>
+                    <TableHead numeric>Latest, mm/s</TableHead>
+                    <TableHead numeric>Limit</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {AIW_COMPARISON.map((row) => (
-                    <tr key={row.asset.id} className="border-b border-default last:border-b-0">
-                      <td className="py-2 pr-4">
+                    <TableRow key={row.asset.id}>
+                      <TableCell>
                         <span className="flex flex-col">
                           <span className="text-base-foreground">{row.asset.name}</span>
                           <span className="font-mono text-xs text-muted-foreground">{row.asset.tag}</span>
                         </span>
-                      </td>
-                      <td className="py-2 pr-4">
+                      </TableCell>
+                      <TableCell>
                         <Sparkline
                           values={row.values}
                           label={`Drive-end vibration on ${row.asset.tag}, last 7 days`}
@@ -803,13 +814,15 @@ function AiWorkspaceTemplateNotebook() {
                           tone={row.latest > row.limit ? 'critical' : 'neutral'}
                           showLast
                         />
-                      </td>
-                      <td className="py-2 pr-4 text-right tabular-nums text-base-foreground">{row.latest.toFixed(1)}</td>
-                      <td className="py-2 text-right tabular-nums text-muted-foreground">{row.limit.toFixed(1)}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell numeric>{row.latest.toFixed(1)}</TableCell>
+                      <TableCell numeric muted>
+                        {row.limit.toFixed(1)}
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               <MessageResponse>
                 The recompressor **23-KA-9103** went past its trip limit and is down. **23-KA-9101** shows the same rising shape at about a third of the rate. **23-KA-9102** is flat.
               </MessageResponse>
@@ -1140,7 +1153,14 @@ export default definePage({
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/WorkspaceLayout.tsx', 'ai/ChatThread.tsx', 'industrial/charts/TrendChart.tsx'],
+          uses: [
+            'templates-b/PageFrame.tsx',
+            'templates-b/WorkspaceLayout.tsx',
+            'ai/ChatThread.tsx',
+            'industrial/charts/TrendChart.tsx',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableCaption.tsx',
+          ],
           Component: AiWorkspaceTemplateChatCanvas,
         },
         {
@@ -1158,6 +1178,8 @@ export default definePage({
             'patterns/structure/PageHeader.tsx',
             'ai/ChatThread.tsx',
             'industrial/charts/TrendChart.tsx',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableCaption.tsx',
           ],
           Component: AiWorkspaceTemplateDockedAssistant,
         },
@@ -1169,7 +1191,13 @@ export default definePage({
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'industrial/charts/TrendChart.tsx', 'industrial/Sparkline.tsx'],
+          uses: [
+            'templates-b/PageFrame.tsx',
+            'industrial/charts/TrendChart.tsx',
+            'industrial/Sparkline.tsx',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableCaption.tsx',
+          ],
           Component: AiWorkspaceTemplateNotebook,
         },
       ],

@@ -1,5 +1,4 @@
 import { Badge } from '@cognite/aura/components/badge';
-import { Button } from '@cognite/aura/components/button';
 import { Card, CardContent, CardDescription, CardHeader, CardHeaderCenter, CardTitle } from '@cognite/aura/components/card';
 import {
   EmptyState,
@@ -7,7 +6,6 @@ import {
   EmptyStateIcon,
   EmptyStateTitle,
 } from '@cognite/aura/components/empty-state';
-import { Skeleton } from '@cognite/aura/components/skeleton';
 import {
   IconAlertTriangle,
   IconBolt,
@@ -21,18 +19,17 @@ import {
   IconTool,
   IconUserCheck,
 } from '@cognite/aura/icons';
-import { useState } from 'react';
-
 import { PersonAvatar } from '../../../library/display/PersonAvatar';
-import { EventTimeline } from '../../../library/industrial/operations/EventTimeline';
 import { DurationBars } from '../../../library/patterns/collaboration/DurationBars';
-import { MilestoneTrack } from '../../../library/patterns/collaboration/MilestoneTrack';
-import type { Milestone } from '../../../library/patterns/collaboration/MilestoneTrack';
-import { Timeline } from '../../../library/patterns/collaboration/Timeline';
-import { TimelineGap } from '../../../library/patterns/collaboration/TimelineGap';
-import { TimelineItem } from '../../../library/patterns/collaboration/TimelineItem';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
+import { Timeline } from '../../../library/primitives/timeline/Timeline';
+import { TimelineCollapse } from '../../../library/primitives/timeline/TimelineCollapse';
+import { TimelineGroup } from '../../../library/primitives/timeline/TimelineGroup';
+import { TimelineItem } from '../../../library/primitives/timeline/TimelineItem';
+import { TimelineSkeleton } from '../../../library/primitives/timeline/TimelineSkeleton';
 import { ALARMS, WORK_ORDERS } from '../../data/plant';
 import { MINUTE, REFERENCE_NOW, formatTime } from '../../data/series';
 import { definePage } from '../../types';
@@ -46,11 +43,11 @@ const TIMELINE_PATTERN_ORDER = WORK_ORDERS[0];
 const timelinePatternAt = (minutesAgo: number) => REFERENCE_NOW - minutesAgo * MINUTE;
 const timelinePatternTime = (minutesAgo: number) => formatTime(timelinePatternAt(minutesAgo));
 
-const TIMELINE_PATTERN_ORDER_STEPS: readonly Milestone[] = [
-  { id: 'requested', label: 'Requested', detail: `${timelinePatternTime(11)} · Ingrid Haugen`, state: 'done' },
-  { id: 'approved', label: 'Approved', detail: `${timelinePatternTime(8)} · Liv Wold`, state: 'done' },
-  { id: 'progress', label: 'In progress', detail: `${timelinePatternTime(2)} · Tomás Barros`, state: 'current' },
-  { id: 'done', label: 'Done', detail: 'Due 20:00', state: 'pending' },
+const TIMELINE_PATTERN_ORDER_STEPS = [
+  { id: 'requested', label: 'Requested', detail: `${timelinePatternTime(11)} · Ingrid Haugen` },
+  { id: 'approved', label: 'Approved', detail: `${timelinePatternTime(8)} · Liv Wold` },
+  { id: 'progress', label: 'In progress', detail: `${timelinePatternTime(2)} · Tomás Barros` },
+  { id: 'done', label: 'Done', detail: 'Due 20:00' },
 ];
 
 const TIMELINE_PATTERN_PHASES = [
@@ -85,10 +82,10 @@ function TimelinePatternDots() {
 function TimelinePatternIcons() {
   return (
     <Timeline label="Work order events">
-      <TimelineItem marker={<IconAlertTriangle />} title="Alarm raised" time={timelinePatternTime(14)} />
-      <TimelineItem marker={<IconTool />} title="Work order created" time={timelinePatternTime(11)} />
-      <TimelineItem marker={<IconUserCheck />} title="Assigned to Tomás Barros" time={timelinePatternTime(5)} />
-      <TimelineItem marker={<IconMessage />} title="Comment from Liv Wold" time={timelinePatternTime(3)} />
+      <TimelineItem icon={<IconAlertTriangle />} title="Alarm raised" time={timelinePatternTime(14)} />
+      <TimelineItem icon={<IconTool />} title="Work order created" time={timelinePatternTime(11)} />
+      <TimelineItem icon={<IconUserCheck />} title="Assigned to Tomás Barros" time={timelinePatternTime(5)} />
+      <TimelineItem icon={<IconMessage />} title="Comment from Liv Wold" time={timelinePatternTime(3)} />
     </Timeline>
   );
 }
@@ -108,11 +105,17 @@ function TimelinePatternGroupedByDay() {
   return (
     <div className="w-full max-w-lg">
       <Timeline label="History of the interstage cooler" layout="time-start">
-        <TimelineItem heading="Today" time="09:05" title="Cooler outlet temperature high" description="23-TT-91141 · 40.8 °C, limit 40.0 °C" />
-        <TimelineItem time="09:20" title="Acknowledged by Ingrid Haugen" />
-        <TimelineItem heading="Yesterday" time="16:12" title="Tube bundle cleaning moved to week 12" description="WO-104471 · Magnus Solberg" />
-        <TimelineItem time="08:30" title="Scaffolding booked" />
-        <TimelineItem heading="9 Mar" time="14:45" title="Fouling factor above threshold" description="Raised by the heat exchanger monitor" />
+        <TimelineGroup heading="Today" meta="2 events">
+          <TimelineItem time="09:05" title="Cooler outlet temperature high" description="23-TT-91141 · 40.8 °C, limit 40.0 °C" />
+          <TimelineItem time="09:20" title="Acknowledged by Ingrid Haugen" />
+        </TimelineGroup>
+        <TimelineGroup heading="Yesterday" meta="2 events">
+          <TimelineItem time="16:12" title="Tube bundle cleaning moved to week 12" description="WO-104471 · Magnus Solberg" />
+          <TimelineItem time="08:30" title="Scaffolding booked" />
+        </TimelineGroup>
+        <TimelineGroup heading="9 Mar" meta="1 event">
+          <TimelineItem time="14:45" title="Fouling factor above threshold" description="Raised by the heat exchanger monitor" />
+        </TimelineGroup>
       </Timeline>
     </div>
   );
@@ -122,16 +125,16 @@ function TimelinePatternStates() {
   return (
     <div className="w-full max-w-lg">
       <Timeline label="Return to service">
-        <TimelineItem marker={<IconLock />} title="Isolated and locked out" time={timelinePatternTime(2)} />
+        <TimelineItem icon={<IconLock />} title="Isolated and locked out" time={timelinePatternTime(2)} />
         <TimelineItem
-          marker={<IconEye />}
+          icon={<IconEye />}
           state="current"
           title="Bearing inspection"
           time="Now"
           description="Step 4 of 9 · Tomás Barros"
         />
-        <TimelineItem marker={<IconClipboardCheck />} state="pending" title="Balance check" time="Tomorrow 08:00" description="Vendor on site" />
-        <TimelineItem marker={<IconPlayerPlay />} state="pending" title="Restart and run-in" time="Not scheduled" />
+        <TimelineItem icon={<IconClipboardCheck />} state="pending" title="Balance check" time="Tomorrow 08:00" description="Vendor on site" />
+        <TimelineItem icon={<IconPlayerPlay />} state="pending" title="Restart and run-in" time="Not scheduled" />
       </Timeline>
     </div>
   );
@@ -140,17 +143,13 @@ function TimelinePatternStates() {
 function TimelinePatternMilestones() {
   return (
     <div className="w-full max-w-lg">
-      <MilestoneTrack
-        label="Turbine firmware upgrade milestones"
-        markers="dot"
-        milestones={[
-          { id: 'scope', label: 'Scope frozen', detail: '14 Feb', state: 'done' },
-          { id: 'fat', label: 'Factory test', detail: '4 Mar', state: 'done' },
-          { id: 'window', label: 'Outage window', detail: '24 Mar', state: 'current' },
-          { id: 'sat', label: 'Site test', detail: '26 Mar', state: 'pending' },
-          { id: 'handover', label: 'Handover', detail: '2 Apr', state: 'pending' },
-        ]}
-      />
+      <Stepper label="Turbine firmware upgrade milestones" current={2} markers="dot" labelPlacement="below" connector="dashed">
+        <Step label="Scope frozen" description="14 Feb" />
+        <Step label="Factory test" description="4 Mar" />
+        <Step label="Outage window" description="24 Mar" />
+        <Step label="Site test" description="26 Mar" />
+        <Step label="Handover" description="2 Apr" />
+      </Stepper>
     </div>
   );
 }
@@ -158,7 +157,11 @@ function TimelinePatternMilestones() {
 function TimelinePatternStatusSteps() {
   return (
     <div className="w-full max-w-lg">
-      <MilestoneTrack label={`Status of ${TIMELINE_PATTERN_ORDER.id}`} milestones={TIMELINE_PATTERN_ORDER_STEPS} />
+      <Stepper label={`Status of ${TIMELINE_PATTERN_ORDER.id}`} current={2} labelPlacement="below" connector="dashed">
+        {TIMELINE_PATTERN_ORDER_STEPS.map((step) => (
+          <Step key={step.id} label={step.label} description={step.detail} />
+        ))}
+      </Stepper>
     </div>
   );
 }
@@ -166,24 +169,16 @@ function TimelinePatternStatusSteps() {
 function TimelinePatternMilestoneLate() {
   return (
     <div className="w-full max-w-lg">
-      <MilestoneTrack
-        label="Standby start test milestones"
-        milestones={[
-          { id: 'planned', label: 'Planned', detail: '2 Mar', state: 'done' },
-          {
-            id: 'test',
-            label: 'Test run',
-            detail: (
-              <span className="flex items-center gap-1 font-medium text-warning-foreground-strong">
-                <IconAlertTriangle aria-hidden="true" className="size-3.5" />4 d late
-              </span>
-            ),
-            state: 'current',
-          },
-          { id: 'report', label: 'Report', detail: 'Was 10 Mar', state: 'pending' },
-          { id: 'closed', label: 'Closed', state: 'pending' },
-        ]}
-      />
+      <Stepper label="Standby start test milestones" labelPlacement="below" connector="dashed">
+        <Step label="Planned" description="2 Mar" state="complete" />
+        <Step
+          label="Test run"
+          state="warning"
+          description={<span className="font-medium text-warning-foreground-strong">4 d late</span>}
+        />
+        <Step label="Report" description="Was 10 Mar" />
+        <Step label="Closed" />
+      </Stepper>
     </div>
   );
 }
@@ -191,15 +186,11 @@ function TimelinePatternMilestoneLate() {
 function TimelinePatternAlarmLifeCycle() {
   return (
     <div className="w-full max-w-lg">
-      <EventTimeline
-        label="Life cycle of alarm alm-4809"
-        orientation="horizontal"
-        events={[
-          { id: 'raised', title: 'Raised', time: '12:00', tone: 'warning', shape: 'diamond', detail: '6.8 mm/s' },
-          { id: 'ack', title: 'Acknowledged', time: '12:04', detail: 'Ingrid Haugen' },
-          { id: 'cleared', title: 'Cleared', pending: true },
-        ]}
-      />
+      <Timeline label="Life cycle of alarm alm-4809" orientation="horizontal">
+        <TimelineItem title="Raised" time="12:00" tone="warning" shape="diamond" description="6.8 mm/s" />
+        <TimelineItem title="Acknowledged" time="12:04" description="Ingrid Haugen" />
+        <TimelineItem title="Cleared" state="pending" description="Pending" />
+      </Timeline>
     </div>
   );
 }
@@ -220,15 +211,11 @@ function TimelinePatternMiniTracks() {
             <span className="font-mono text-xs text-muted-foreground">{order.id}</span>
             <span className="min-w-0 truncate text-base-foreground">{order.title}</span>
           </span>
-          <MilestoneTrack
-            label={`Status of ${order.id}`}
-            markers="dot"
-            milestones={stages.map((stage, index) => ({
-              id: stage,
-              label: stage,
-              state: index < current ? 'done' : index === current ? 'current' : 'pending',
-            }))}
-          />
+          <Stepper label={`Status of ${order.id}`} current={current} size="sm" markers="dot" labelPlacement="below" connector="dashed">
+            {stages.map((stage) => (
+              <Step key={stage} label={stage} />
+            ))}
+          </Stepper>
         </li>
       ))}
     </ul>
@@ -253,19 +240,19 @@ function TimelinePatternCards() {
   return (
     <div className="w-full max-w-lg">
       <Timeline label="Work order updates">
-        <TimelineItem marker={<IconTool />} title="Work order created" time={timelinePatternTime(11)}>
+        <TimelineItem icon={<IconTool />} title="Work order created" time={timelinePatternTime(11)}>
           <div className="flex flex-col gap-1 rounded-xl border border-default p-3">
             <span className="font-mono text-xs text-muted-foreground">{TIMELINE_PATTERN_ORDER.id}</span>
             <span className="text-sm font-medium text-base-foreground">{TIMELINE_PATTERN_ORDER.title}</span>
             <span className="text-xs text-muted-foreground">Corrective · estimated {TIMELINE_PATTERN_ORDER.estimatedHours} hours</span>
           </div>
         </TimelineItem>
-        <TimelineItem marker={<IconMessage />} title="Liv Wold commented" time={timelinePatternTime(3)}>
+        <TimelineItem icon={<IconMessage />} title="Liv Wold commented" time={timelinePatternTime(3)}>
           <div className="rounded-xl border border-default p-3 text-sm text-base-foreground">
             Restart is on hold until the balance check is signed off. Do not reset the trip.
           </div>
         </TimelineItem>
-        <TimelineItem marker={<IconUserCheck />} title="Tomás Barros started work" time={timelinePatternTime(2)} />
+        <TimelineItem icon={<IconUserCheck />} title="Tomás Barros started work" time={timelinePatternTime(2)} />
       </Timeline>
     </div>
   );
@@ -275,9 +262,9 @@ function TimelinePatternTones() {
   return (
     <div className="w-full max-w-lg">
       <Timeline label="Recompressor state changes" layout="time-start">
-        <TimelineItem time={timelinePatternTime(29)} tone="warning" marker={<IconAlertTriangle />} title="High alarm" description="Vibration 7.4 mm/s, limit 7.1 mm/s" />
+        <TimelineItem time={timelinePatternTime(29)} tone="warning" icon={<IconAlertTriangle />} title="High alarm" description="Vibration 7.4 mm/s, limit 7.1 mm/s" />
         <TimelineItem time={timelinePatternTime(22)} title="Acknowledged" description="Ingrid Haugen" />
-        <TimelineItem time={timelinePatternTime(14)} tone="critical" marker={<IconBolt />} title="Tripped" description="Vibration 11.6 mm/s, trip limit 11.0 mm/s" />
+        <TimelineItem time={timelinePatternTime(14)} tone="critical" icon={<IconBolt />} title="Tripped" description="Vibration 11.6 mm/s, trip limit 11.0 mm/s" />
         <TimelineItem time={timelinePatternTime(2)} title="Isolated" description="Lock-out applied by Tomás Barros" />
         <TimelineItem state="pending" title="Back in service" />
       </Timeline>
@@ -289,11 +276,11 @@ function TimelinePatternAlternating() {
   return (
     <div className="mx-auto w-full max-w-2xl">
       <Timeline label="Recompressor 23-KA-9103, major events" layout="alternate">
-        <TimelineItem marker={<IconFlag />} time="Nov 2019" title="Commissioned" description="First gas through the recompression train" />
-        <TimelineItem marker={<IconTool />} time="Jun 2022" title="First major overhaul" description="Dry gas seals and both journal bearings replaced" />
-        <TimelineItem marker={<IconClipboardCheck />} time="Sep 2024" title="Control system upgrade" description="Anti-surge controller moved to the new platform" />
-        <TimelineItem marker={<IconBolt />} tone="critical" time="12 Mar 2026" title="Trip on high vibration" description="11.6 mm/s at the drive end" />
-        <TimelineItem marker={<IconPlayerPlay />} state="pending" time="Not scheduled" title="Return to service" />
+        <TimelineItem icon={<IconFlag />} time="Nov 2019" title="Commissioned" description="First gas through the recompression train" />
+        <TimelineItem icon={<IconTool />} time="Jun 2022" title="First major overhaul" description="Dry gas seals and both journal bearings replaced" />
+        <TimelineItem icon={<IconClipboardCheck />} time="Sep 2024" title="Control system upgrade" description="Anti-surge controller moved to the new platform" />
+        <TimelineItem icon={<IconBolt />} tone="critical" time="12 Mar 2026" title="Trip on high vibration" description="11.6 mm/s at the drive end" />
+        <TimelineItem icon={<IconPlayerPlay />} state="pending" time="Not scheduled" title="Return to service" />
       </Timeline>
     </div>
   );
@@ -322,45 +309,22 @@ function TimelinePatternCompactCard() {
 }
 
 function TimelinePatternCollapsed() {
-  const [expanded, setExpanded] = useState(false);
-
   return (
-    <div className="flex w-full flex-col gap-2">
-      <Timeline label="Events leading to the trip" layout="time-start">
-        <TimelineItem time="08:40" title="Recompressor started" />
-        {expanded ? (
-          TIMELINE_PATTERN_EARLIER.map((event) => <TimelineItem key={event.id} time={event.time} title={event.title} />)
-        ) : (
-          <TimelineGap count={TIMELINE_PATTERN_EARLIER.length} onExpand={() => setExpanded(true)} />
-        )}
-        <TimelineItem time={timelinePatternTime(29)} title="Vibration high alarm" />
-        <TimelineItem time={timelinePatternTime(14)} title="Tripped" tone="critical" />
-      </Timeline>
-      {expanded ? (
-        <div>
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(false)}>
-            Hide earlier events
-          </Button>
-        </div>
-      ) : null}
-    </div>
+    <Timeline label="Events leading to the trip" layout="time-start">
+      <TimelineItem time="08:40" title="Recompressor started" />
+      <TimelineCollapse showLabel={(count) => `Show ${count} earlier events`} hideLabel={(count) => `Hide ${count} earlier events`}>
+        {TIMELINE_PATTERN_EARLIER.map((event) => (
+          <TimelineItem key={event.id} time={event.time} title={event.title} />
+        ))}
+      </TimelineCollapse>
+      <TimelineItem time={timelinePatternTime(29)} title="Vibration high alarm" />
+      <TimelineItem time={timelinePatternTime(14)} title="Tripped" tone="critical" />
+    </Timeline>
   );
 }
 
 function TimelinePatternLoading() {
-  return (
-    <div role="status" aria-label="Loading timeline" className="flex w-full flex-col gap-5">
-      {['w-3/5', 'w-2/5', 'w-1/2', 'w-1/3'].map((width) => (
-        <div key={width} className="flex items-start gap-3">
-          <Skeleton className="size-6 shrink-0" />
-          <div className="flex min-w-0 flex-1 flex-col gap-2 pt-1">
-            <Skeleton className={`h-3.5 ${width}`} />
-            <Skeleton className="h-3 w-1/4" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  return <TimelineSkeleton items={4} />;
 }
 
 function TimelinePatternEmpty() {
@@ -403,13 +367,11 @@ function TimelinePatternWithPeople() {
           <TimelineItem
             key={step.id}
             time={step.time}
+            avatar={<PersonAvatar name={step.name} colorKey={step.personId} sizes="xxsm" />}
             title={
-              <span className="flex items-center gap-2">
-                <PersonAvatar name={step.name} colorKey={step.personId} sizes="xxsm" />
-                <span>
-                  <span className="font-medium">{step.name}</span> {step.text}
-                </span>
-              </span>
+              <>
+                <span className="font-medium">{step.name}</span> {step.text}
+              </>
             }
           />
         ))}
@@ -428,15 +390,15 @@ function TimelinePatternIncident() {
         actions={<Badge variant="error">Ongoing</Badge>}
       />
       <Timeline label="Incident timeline" layout="time-start">
-        <TimelineItem time={timelinePatternTime(29)} tone="warning" marker={<IconAlertTriangle />} title="Drive-end vibration high" description="23-VT-92740 reached 7.4 mm/s. Limit 7.1 mm/s." />
-        <TimelineItem time={timelinePatternTime(22)} marker={<IconUserCheck />} title="Acknowledged by Ingrid Haugen" />
-        <TimelineItem time={timelinePatternTime(18)} marker={<IconTool />} title="Load reduced to 80%" description="Vibration held at 7.0 mm/s for 3 minutes, then rose again." />
-        <TimelineItem time={timelinePatternTime(14)} tone="critical" marker={<IconBolt />} title="Recompressor tripped" description={`${TIMELINE_PATTERN_TRIP.sensorTag} reached ${TIMELINE_PATTERN_TRIP.value}. Trip limit ${TIMELINE_PATTERN_TRIP.limit}.`} />
-        <TimelineItem time={timelinePatternTime(11)} marker={<IconTool />} title={`${TIMELINE_PATTERN_ORDER.id} raised`} description={TIMELINE_PATTERN_ORDER.title} />
-        <TimelineItem time={timelinePatternTime(8)} marker={<IconFlag />} title="Priority raised to P1 by Liv Wold" />
-        <TimelineItem time={timelinePatternTime(2)} marker={<IconLock />} state="current" title="Isolated, inspection in progress" description="Tomás Barros on site. Step 4 of 9." />
-        <TimelineItem marker={<IconClipboardCheck />} state="pending" title="Balance check" description="Vendor booked for tomorrow 08:00" />
-        <TimelineItem marker={<IconPlayerPlay />} state="pending" title="Restart" />
+        <TimelineItem time={timelinePatternTime(29)} tone="warning" icon={<IconAlertTriangle />} title="Drive-end vibration high" description="23-VT-92740 reached 7.4 mm/s. Limit 7.1 mm/s." />
+        <TimelineItem time={timelinePatternTime(22)} icon={<IconUserCheck />} title="Acknowledged by Ingrid Haugen" />
+        <TimelineItem time={timelinePatternTime(18)} icon={<IconTool />} title="Load reduced to 80%" description="Vibration held at 7.0 mm/s for 3 minutes, then rose again." />
+        <TimelineItem time={timelinePatternTime(14)} tone="critical" icon={<IconBolt />} title="Recompressor tripped" description={`${TIMELINE_PATTERN_TRIP.sensorTag} reached ${TIMELINE_PATTERN_TRIP.value}. Trip limit ${TIMELINE_PATTERN_TRIP.limit}.`} />
+        <TimelineItem time={timelinePatternTime(11)} icon={<IconTool />} title={`${TIMELINE_PATTERN_ORDER.id} raised`} description={TIMELINE_PATTERN_ORDER.title} />
+        <TimelineItem time={timelinePatternTime(8)} icon={<IconFlag />} title="Priority raised to P1 by Liv Wold" />
+        <TimelineItem time={timelinePatternTime(2)} icon={<IconLock />} state="current" title="Isolated, inspection in progress" description="Tomás Barros on site. Step 4 of 9." />
+        <TimelineItem icon={<IconClipboardCheck />} state="pending" title="Balance check" description="Vendor booked for tomorrow 08:00" />
+        <TimelineItem icon={<IconPlayerPlay />} state="pending" title="Restart" />
       </Timeline>
     </div>
   );
@@ -472,17 +434,14 @@ function TimelinePatternWorkOrderLifeCycle() {
       </CardHeader>
       <CardContent>
         <div className="flex w-full flex-col gap-8">
-          <MilestoneTrack
-            label={`Status of ${TIMELINE_PATTERN_ORDER.id}`}
-            milestones={[
-              { id: 'requested', label: 'Requested', detail: timelinePatternTime(11), state: 'done' },
-              { id: 'approved', label: 'Approved', detail: timelinePatternTime(8), state: 'done' },
-              { id: 'planned', label: 'Planned', detail: timelinePatternTime(5), state: 'done' },
-              { id: 'progress', label: 'In progress', detail: `Since ${timelinePatternTime(2)}`, state: 'current' },
-              { id: 'done', label: 'Done', detail: 'Due 20:00', state: 'pending' },
-              { id: 'closed', label: 'Closed', state: 'pending' },
-            ]}
-          />
+          <Stepper label={`Status of ${TIMELINE_PATTERN_ORDER.id}`} current={3} labelPlacement="below" connector="dashed">
+            <Step label="Requested" description={timelinePatternTime(11)} />
+            <Step label="Approved" description={timelinePatternTime(8)} />
+            <Step label="Planned" description={timelinePatternTime(5)} />
+            <Step label="In progress" description={`Since ${timelinePatternTime(2)}`} />
+            <Step label="Done" description="Due 20:00" />
+            <Step label="Closed" />
+          </Stepper>
           <div className="grid w-full gap-8 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-3">
               <h5 className="text-sm font-medium text-base-foreground">Events</h5>
@@ -548,7 +507,7 @@ export default definePage({
           note: 'The plainest history: every event is the same kind of thing.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternDots,
         },
         {
@@ -557,7 +516,7 @@ export default definePage({
           note: 'When a feed mixes alarms, work and comments and readers scan for one kind.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternIcons,
         },
         {
@@ -566,7 +525,7 @@ export default definePage({
           note: 'Operator logs and incident reviews, where people look an event up by its time.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternTimeStart,
         },
         {
@@ -576,7 +535,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx', 'primitives/timeline/TimelineGroup.tsx'],
           Component: TimelinePatternGroupedByDay,
         },
         {
@@ -586,7 +545,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternStates,
         },
       ],
@@ -603,7 +562,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/MilestoneTrack.tsx'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx'],
           Component: TimelinePatternMilestones,
         },
         {
@@ -613,7 +572,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/MilestoneTrack.tsx'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx'],
           Component: TimelinePatternStatusSteps,
         },
         {
@@ -623,7 +582,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/MilestoneTrack.tsx'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx'],
           Component: TimelinePatternMilestoneLate,
         },
         {
@@ -633,7 +592,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/operations/EventTimeline.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternAlarmLifeCycle,
         },
         {
@@ -643,7 +602,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/MilestoneTrack.tsx'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx'],
           Component: TimelinePatternMiniTracks,
         },
         {
@@ -670,7 +629,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternCards,
         },
         {
@@ -680,7 +639,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternTones,
         },
         {
@@ -690,7 +649,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternAlternating,
         },
         {
@@ -699,7 +658,7 @@ export default definePage({
           note: 'The last three events on an asset card or a dashboard tile.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternCompactCard,
         },
       ],
@@ -715,7 +674,7 @@ export default definePage({
           note: 'Keeps the start and the latest events in view. Press the button to unfold the rest.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx', 'patterns/collaboration/TimelineGap.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx', 'primitives/timeline/TimelineCollapse.tsx'],
           Component: TimelinePatternCollapsed,
         },
         {
@@ -724,6 +683,7 @@ export default definePage({
           note: 'While events load: markers and lines of text in the shape of the timeline.',
           origin: 'custom',
           align: 'stretch',
+          uses: ['primitives/timeline/TimelineSkeleton.tsx'],
           Component: TimelinePatternLoading,
         },
         {
@@ -740,7 +700,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx'],
           Component: TimelinePatternPlanned,
         },
         {
@@ -750,7 +710,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx', 'display/PersonAvatar.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx', 'display/PersonAvatar.tsx'],
           Component: TimelinePatternWithPeople,
         },
       ],
@@ -767,7 +727,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/collaboration/Timeline.tsx', 'patterns/collaboration/TimelineItem.tsx', 'patterns/structure/SectionHeader.tsx'],
+          uses: ['primitives/timeline/Timeline.tsx', 'primitives/timeline/TimelineItem.tsx', 'patterns/structure/SectionHeader.tsx'],
           Component: TimelinePatternIncident,
         },
         {
@@ -787,9 +747,10 @@ export default definePage({
           size: 'full',
           align: 'stretch',
           uses: [
-            'patterns/collaboration/MilestoneTrack.tsx',
-            'patterns/collaboration/Timeline.tsx',
-            'patterns/collaboration/TimelineItem.tsx',
+            'primitives/stepper/Stepper.tsx',
+            'primitives/stepper/Step.tsx',
+            'primitives/timeline/Timeline.tsx',
+            'primitives/timeline/TimelineItem.tsx',
             'patterns/collaboration/DurationBars.tsx',
           ],
           Component: TimelinePatternWorkOrderLifeCycle,

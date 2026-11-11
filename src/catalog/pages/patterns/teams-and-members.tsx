@@ -45,6 +45,13 @@ import type { MemberStatus } from '../../../library/patterns/people/MemberRow';
 import { RoleBadge } from '../../../library/patterns/people/RoleBadge';
 import type { MemberRole } from '../../../library/patterns/people/RoleBadge';
 import { RoleSelect } from '../../../library/patterns/people/RoleSelect';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { PEOPLE } from '../../data/plant';
 import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatAgo, formatDate } from '../../data/series';
 import { definePage } from '../../types';
@@ -659,28 +666,20 @@ function TeamMemberTable() {
   );
 
   return (
-    <table className="w-full border-collapse text-sm">
-      <caption className="sr-only">Members of Nordkapp production and their roles</caption>
-      <thead>
-        <tr className="border-b border-default text-left text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Member
-          </th>
-          <th scope="col" className="hidden py-2 pr-4 font-medium lg:table-cell">
-            Title
-          </th>
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Last active
-          </th>
-          <th scope="col" className="w-36 py-2 font-medium">
-            Role
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Members of Nordkapp production and their roles</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Member</TableHead>
+          <TableHead className="hidden lg:table-cell">Title</TableHead>
+          <TableHead>Last active</TableHead>
+          <TableHead className="w-40">Role</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {MEMBERS.map((member) => (
-          <tr key={member.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-4 text-left font-normal">
+          <TableRow key={member.id}>
+            <TableCell rowHeader>
               <span className="flex items-center gap-3">
                 <PersonAvatar name={member.name} colorKey={member.id} sizes="xsm" />
                 <span className="min-w-0">
@@ -694,13 +693,17 @@ function TeamMemberTable() {
                     ) : null}
                     {member.status === 'suspended' ? <Badge variant="warning">Suspended</Badge> : null}
                   </span>
-                  <span className="block truncate text-xs text-muted-foreground">{member.email}</span>
+                  <span className="block truncate text-xs font-normal text-muted-foreground">{member.email}</span>
                 </span>
               </span>
-            </th>
-            <td className="hidden py-2 pr-4 text-muted-foreground lg:table-cell">{member.title}</td>
-            <td className="py-2 pr-4 tabular-nums text-muted-foreground">{formatAgo(member.lastActiveAt)}</td>
-            <td className="py-2">
+            </TableCell>
+            <TableCell muted className="hidden lg:table-cell">
+              {member.title}
+            </TableCell>
+            <TableCell numeric align="start" muted>
+              {formatAgo(member.lastActiveAt)}
+            </TableCell>
+            <TableCell>
               <RoleSelect
                 roles={
                   member.role === 'owner'
@@ -720,35 +723,35 @@ function TeamMemberTable() {
                       : undefined
                 }
               />
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
 function TeamMemberShiftRoster() {
   return (
-    <table className="w-full table-fixed border-collapse text-sm">
-      <caption className="sr-only">Control room roster for the next four days</caption>
-      <thead>
-        <tr className="border-b border-default text-left text-xs text-muted-foreground">
-          <th scope="col" className="w-28 py-2 pr-4 font-medium">
-            Shift
-          </th>
+    <Table layout="fixed" density="comfortable" hover={false}>
+      <TableCaption srOnly>Control room roster for the next four days</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-28">Shift</TableHead>
           {ROSTER_DAYS.map((day, index) => (
-            <th key={day} scope="col" className="py-2 pr-4 font-medium tabular-nums">
-              {WEEKDAY.format(day)} {formatDate(day)}
+            <TableHead key={day}>
+              <span className="tabular-nums">
+                {WEEKDAY.format(day)} {formatDate(day)}
+              </span>
               {index === 0 ? <span className="ml-2 font-normal">Today</span> : null}
-            </th>
+            </TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {ROSTER.map((row) => (
-          <tr key={row.shift} className="border-b border-default align-top last:border-b-0">
-            <th scope="row" className="py-3 pr-4 text-left font-normal">
+          <TableRow key={row.shift}>
+            <TableCell rowHeader className="align-top">
               <span className="flex items-center gap-2 font-medium text-base-foreground">
                 {row.night ? (
                   <IconMoon aria-hidden="true" className="size-4 text-muted-foreground" />
@@ -757,10 +760,10 @@ function TeamMemberShiftRoster() {
                 )}
                 {row.shift}
               </span>
-              <span className="block text-xs tabular-nums text-muted-foreground">{row.hours}</span>
-            </th>
+              <span className="block text-xs font-normal tabular-nums text-muted-foreground">{row.hours}</span>
+            </TableCell>
             {row.crews.map((crew, index) => (
-              <td key={ROSTER_DAYS[index]} className="py-3 pr-4">
+              <TableCell key={ROSTER_DAYS[index]} className="align-top">
                 {crew.length === 0 ? (
                   <Badge variant="warning">Not staffed</Badge>
                 ) : (
@@ -773,12 +776,12 @@ function TeamMemberShiftRoster() {
                     ))}
                   </ul>
                 )}
-              </td>
+              </TableCell>
             ))}
-          </tr>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -1160,7 +1163,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/people/RoleSelect.tsx', 'display/PersonAvatar.tsx'],
+          uses: ['patterns/people/RoleSelect.tsx', 'display/PersonAvatar.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: TeamMemberTable,
         },
         {
@@ -1177,7 +1180,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['display/PersonAvatar.tsx'],
+          uses: ['display/PersonAvatar.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: TeamMemberShiftRoster,
         },
         {

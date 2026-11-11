@@ -1,6 +1,12 @@
 import { IconX } from '@cognite/aura/icons';
 
 import { IconAction } from '../../patterns/collections/IconAction';
+import { Table } from '../../primitives/table/Table';
+import { TableBody } from '../../primitives/table/TableBody';
+import { TableCell } from '../../primitives/table/TableCell';
+import { TableHead } from '../../primitives/table/TableHead';
+import { TableHeader } from '../../primitives/table/TableHeader';
+import { TableRow } from '../../primitives/table/TableRow';
 
 import type { PivotRecord } from './pivot';
 
@@ -39,37 +45,35 @@ export function PivotDrillPanel({ title, records, columns, onClose }: PivotDrill
           <IconX />
         </IconAction>
       </header>
-      <div className="min-h-0 flex-1 overflow-auto">
-        {records.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">No records behind this figure</p>
-        ) : (
-          <table className="w-full border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                {columns.map((column) => (
-                  <th key={column.field} scope="col" className={`sticky top-0 border-b border-default bg-muted-background px-3 py-1.5 text-xs font-medium text-medium-foreground ${column.align === 'end' ? 'text-right' : 'text-left'}`}>
-                    {column.title}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record, index) => (
-                <tr key={index}>
-                  {columns.map((column) => {
-                    const value = record[column.field];
-                    return (
-                      <td key={column.field} className={`whitespace-nowrap border-b border-default px-3 py-1.5 ${column.align === 'end' ? 'text-right tabular-nums' : 'text-left'} ${column.mono ? 'font-mono text-xs' : ''}`}>
-                        {column.format ? column.format(value) : (value ?? '')}
-                      </td>
-                    );
-                  })}
-                </tr>
+      {records.length === 0 ? (
+        <p className="px-4 py-8 text-center text-sm text-muted-foreground">No records behind this figure</p>
+      ) : (
+        <Table label={`${title} records`} density="compact" stickyHeader className="min-h-0 flex-1">
+          <TableHeader>
+            <TableRow>
+              {columns.map((column) => (
+                <TableHead key={column.field} numeric={column.align === 'end'}>
+                  {column.title}
+                </TableHead>
               ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {records.map((record, index) => (
+              <TableRow key={index}>
+                {columns.map((column) => {
+                  const value = record[column.field];
+                  return (
+                    <TableCell key={column.field} numeric={column.align === 'end'} mono={column.mono} wrap="nowrap">
+                      {column.format ? column.format(value) : (value ?? '')}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </section>
   );
 }

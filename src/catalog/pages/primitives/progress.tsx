@@ -17,6 +17,12 @@ import { useEffect, useState } from 'react';
 
 import { formatRemaining } from '../../../library/feedback/formatRemaining';
 import { LabelledProgress } from '../../../library/feedback/LabelledProgress';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { WORK_ORDERS } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -404,29 +410,31 @@ function ProgressFileList() {
 
 function ProgressTableColumn() {
   return (
-    <table className="w-full table-fixed text-left text-sm">
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th className="w-32 py-2 pr-4 font-medium">Work order</th>
-          <th className="py-2 pr-4 font-medium">Title</th>
-          <th className="w-56 py-2 font-medium">Progress</th>
-        </tr>
-      </thead>
-      <tbody className="text-base-foreground">
+    <Table label="Work orders in progress" layout="fixed">
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-32">Work order</TableHead>
+          <TableHead>Title</TableHead>
+          <TableHead className="w-56">Progress</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {ACTIVE_WORK_ORDERS.map((order) => (
-          <tr key={order.id}>
-            <td className="py-2 pr-4 whitespace-nowrap tabular-nums">{order.id}</td>
-            <td className="truncate py-2 pr-4">{order.title}</td>
-            <td className="py-2">
+          <TableRow key={order.id}>
+            <TableCell numeric align="start">
+              {order.id}
+            </TableCell>
+            <TableCell wrap="truncate">{order.title}</TableCell>
+            <TableCell>
               <div className="flex items-center gap-3">
                 <Progress value={order.progress} size="sm" aria-label={`Progress of ${order.id}`} />
                 <span className="w-9 shrink-0 text-right text-xs text-muted-foreground tabular-nums">{order.progress}%</span>
               </div>
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -676,6 +684,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: ProgressTableColumn,
         },
       ],

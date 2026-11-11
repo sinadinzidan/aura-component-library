@@ -41,6 +41,13 @@ import { ErrorPage } from '../../../library/patterns/states/ErrorPage';
 import { PageHeader } from '../../../library/patterns/structure/PageHeader';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
 import type { SidebarNavGroup } from '../../../library/patterns/structure/SidebarNav';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { PageFrame } from '../../../library/templates-b/PageFrame';
 import { ShellPage } from '../../../library/templates-b/ShellPage';
 import { ALARMS, ASSETS, PEOPLE, PLANT_KPIS, SENSORS, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
@@ -121,31 +128,37 @@ function StateShell({
 
 function StateOrderTable({ orders }: { orders: readonly (typeof WORK_ORDERS)[number][] }) {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Work orders</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
+    <Table>
+      <TableCaption srOnly>Work orders</TableCaption>
+      <TableHeader>
+        <TableRow>
           {STATE_ORDER_COLUMNS.map((column) => (
-            <th key={column} className="py-2 pr-4 font-medium whitespace-nowrap last:pr-0">
-              {column}
-            </th>
+            <TableHead key={column}>{column}</TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {orders.map((order) => (
-          <tr key={order.id} className="border-b border-default last:border-b-0">
-            <td className="py-2 pr-4 font-mono text-xs whitespace-nowrap text-muted-foreground">{order.id}</td>
-            <td className="w-full max-w-0 truncate py-2 pr-4 text-base-foreground">{order.title}</td>
-            <td className="py-2 pr-4 font-mono text-xs whitespace-nowrap text-muted-foreground">{findAsset(order.assetId)?.tag}</td>
-            <td className="py-2 pr-4">
+          <TableRow key={order.id}>
+            <TableCell mono muted>
+              {order.id}
+            </TableCell>
+            <TableCell wrap="truncate" className="w-full">
+              {order.title}
+            </TableCell>
+            <TableCell mono muted>
+              {findAsset(order.assetId)?.tag}
+            </TableCell>
+            <TableCell>
               <StatusBadge status={order.status} outline />
-            </td>
-            <td className="py-2 whitespace-nowrap tabular-nums text-muted-foreground">{formatDate(order.dueAt)}</td>
-          </tr>
+            </TableCell>
+            <TableCell numeric align="start" muted>
+              {formatDate(order.dueAt)}
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -755,7 +768,14 @@ export default definePage({
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/ShellPage.tsx', 'feedback/SkeletonTable.tsx', 'patterns/structure/PageHeader.tsx'],
+          uses: [
+            'templates-b/PageFrame.tsx',
+            'templates-b/ShellPage.tsx',
+            'feedback/SkeletonTable.tsx',
+            'patterns/structure/PageHeader.tsx',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableCaption.tsx',
+          ],
           Component: StateTemplateLoadingList,
         },
         {
@@ -795,7 +815,14 @@ export default definePage({
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/ShellPage.tsx', 'patterns/structure/PageHeader.tsx', 'display/StatusBadge.tsx'],
+          uses: [
+            'templates-b/PageFrame.tsx',
+            'templates-b/ShellPage.tsx',
+            'patterns/structure/PageHeader.tsx',
+            'display/StatusBadge.tsx',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableCaption.tsx',
+          ],
           Component: StateTemplateNoResults,
         },
       ],

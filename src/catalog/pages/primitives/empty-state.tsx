@@ -20,6 +20,12 @@ import {
 import { useState } from 'react';
 
 import { RetryBlock } from '../../../library/feedback/RetryBlock';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableMessageRow } from '../../../library/primitives/table/TableMessageRow';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ASSETS } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -276,34 +282,30 @@ function EmptyStateInTable() {
         <Badge variant="secondary">Priority: P1</Badge>
         <Badge variant="secondary">Status: Waiting</Badge>
       </div>
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-default text-xs text-muted-foreground">
-            <th className="py-2 pr-4 font-medium">Work order</th>
-            <th className="py-2 pr-4 font-medium">Title</th>
-            <th className="py-2 pr-4 font-medium">Assignee</th>
-            <th className="py-2 font-medium">Due</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td colSpan={4}>
-              <div className="flex justify-center py-8">
-                <EmptyState type="no-results">
-                  <EmptyStateIcon />
-                  <EmptyStateTitle as="h4">No work orders match these filters</EmptyStateTitle>
-                  <EmptyStateDescription>Remove a filter to see more work orders.</EmptyStateDescription>
-                  <EmptyStateActions>
-                    <Button variant="secondary" size="sm">
-                      Clear filters
-                    </Button>
-                  </EmptyStateActions>
-                </EmptyState>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <Table label="Work orders">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Work order</TableHead>
+            <TableHead>Title</TableHead>
+            <TableHead>Assignee</TableHead>
+            <TableHead>Due</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableMessageRow colSpan={4}>
+            <EmptyState type="no-results">
+              <EmptyStateIcon />
+              <EmptyStateTitle as="h4">No work orders match these filters</EmptyStateTitle>
+              <EmptyStateDescription>Remove a filter to see more work orders.</EmptyStateDescription>
+              <EmptyStateActions>
+                <Button variant="secondary" size="sm">
+                  Clear filters
+                </Button>
+              </EmptyStateActions>
+            </EmptyState>
+          </TableMessageRow>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -629,6 +631,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableMessageRow.tsx'],
           Component: EmptyStateInTable,
         },
         {

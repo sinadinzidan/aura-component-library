@@ -30,6 +30,13 @@ import { CapabilityMatrix } from '../../../library/patterns/people/CapabilityMat
 import { FeatureCard } from '../../../library/patterns/product/FeatureCard';
 import { StatsBand } from '../../../library/patterns/product/StatsBand';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, PEOPLE, PLANT_KPIS, SENSORS } from '../../data/plant';
 import { formatAgo, makeSeries, makeValues } from '../../data/series';
 import { definePage } from '../../types';
@@ -477,33 +484,31 @@ function FeatureSectionIntegrationsGrouped() {
 
 function FeatureSectionComparisonTable() {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Common tasks: across separate systems, and with the plant overview</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Task
-          </th>
-          <th scope="col" className="px-4 py-2 font-medium">
-            Across separate systems
-          </th>
-          <th scope="col" className="py-2 pl-4 font-medium">
-            With the plant overview
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table density="comfortable" hover={false}>
+      <TableCaption srOnly>Common tasks: across separate systems, and with the plant overview</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Task</TableHead>
+          <TableHead>Across separate systems</TableHead>
+          <TableHead>With the plant overview</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {FEATURE_COMPARISON.map((row) => (
-          <tr key={row.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-3 pr-4 align-top font-medium text-base-foreground">
+          <TableRow key={row.id}>
+            <TableCell rowHeader className="align-top">
               {row.task}
-            </th>
-            <td className="px-4 py-3 align-top text-muted-foreground">{row.manual}</td>
-            <td className="py-3 pl-4 align-top text-base-foreground">{row.here}</td>
-          </tr>
+            </TableCell>
+            <TableCell muted className="align-top">
+              {row.manual}
+            </TableCell>
+            <TableCell className="align-top">
+              <span className="text-base-foreground">{row.here}</span>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -818,6 +823,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: FeatureSectionComparisonTable,
         },
         {

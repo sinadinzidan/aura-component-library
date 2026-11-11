@@ -1,5 +1,14 @@
 import type { ReactNode } from 'react';
 
+import { Table } from '../primitives/table/Table';
+import type { TableProps } from '../primitives/table/Table';
+import { TableBody } from '../primitives/table/TableBody';
+import { TableCaption } from '../primitives/table/TableCaption';
+import { TableCell } from '../primitives/table/TableCell';
+import { TableHead } from '../primitives/table/TableHead';
+import { TableHeader } from '../primitives/table/TableHeader';
+import { TableRow } from '../primitives/table/TableRow';
+
 export type FormatExampleRow = {
   id: string;
   /** What is being formatted: "Flow rate", "Missing value". */
@@ -22,72 +31,75 @@ export type FormatExamplesProps = {
   outputHeader?: string;
   /** Header of the code column. Leave the column out by giving no row a `code`. */
   codeHeader?: string;
+  /** The surface the table sits on, so its rows match it. */
+  surface?: TableProps['surface'];
 };
 
 /**
  * Formatting rules as a table: what it is, the function or rule, the result, and optionally the
  * form to avoid. Results are right-aligned with tabular figures so digits line up down the column.
  */
-export function FormatExamples({ caption, rows, outputHeader = 'Result', codeHeader = 'Function' }: FormatExamplesProps) {
+export function FormatExamples({
+  caption,
+  rows,
+  outputHeader = 'Result',
+  codeHeader = 'Function',
+  surface = 'base',
+}: FormatExamplesProps) {
   const hasCode = rows.some((row) => row.code !== undefined);
   const hasAvoid = rows.some((row) => row.avoid !== undefined);
   const hasNote = rows.some((row) => row.note !== undefined);
-  const head = 'px-3 py-2 text-xs font-medium text-muted-foreground';
 
   return (
-    <table data-slot="format-examples" className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">{caption}</caption>
-      <thead>
-        <tr className="border-b border-default">
-          <th scope="col" className={`${head} pl-0`}>
-            Case
-          </th>
-          {hasCode ? (
-            <th scope="col" className={head}>
-              {codeHeader}
-            </th>
-          ) : null}
-          <th scope="col" className={`${head} text-right`}>
-            {outputHeader}
-          </th>
-          {hasAvoid ? (
-            <th scope="col" className={`${head} text-right`}>
-              Avoid
-            </th>
-          ) : null}
-          {hasNote ? (
-            <th scope="col" className={head}>
-              Rule
-            </th>
-          ) : null}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-3 text-sm font-normal text-medium-foreground">
-              {row.label}
-            </th>
-            {hasCode ? (
-              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{row.code}</td>
-            ) : null}
-            <td className="px-3 py-2 text-right font-medium whitespace-nowrap text-base-foreground tabular-nums">
-              {row.output}
-            </td>
-            {hasAvoid ? (
-              <td className="px-3 py-2 text-right whitespace-nowrap text-muted-foreground tabular-nums">
-                {row.avoid ? (
-                  <>
-                    <span className="sr-only">Avoid: </span>
-                    <s>{row.avoid}</s>
-                  </>
-                ) : null}
-              </td>
-            ) : null}
-            {hasNote ? <td className="px-3 py-2 text-xs text-muted-foreground">{row.note}</td> : null}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div data-slot="format-examples" className="w-full min-w-0">
+      <Table hover={false} surface={surface}>
+        <TableCaption srOnly>{caption}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Case</TableHead>
+            {hasCode ? <TableHead>{codeHeader}</TableHead> : null}
+            <TableHead numeric>{outputHeader}</TableHead>
+            {hasAvoid ? <TableHead numeric>Avoid</TableHead> : null}
+            {hasNote ? <TableHead>Rule</TableHead> : null}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell rowHeader>
+                <span className="font-normal text-medium-foreground">
+                  {row.label}
+                </span>
+              </TableCell>
+              {hasCode ? (
+                <TableCell mono muted wrap="wrap">
+                  {row.code}
+                </TableCell>
+              ) : null}
+              <TableCell numeric>
+                <span className="font-medium text-base-foreground">
+                  {row.output}
+                </span>
+              </TableCell>
+              {hasAvoid ? (
+                <TableCell numeric muted>
+                  {row.avoid ? (
+                    <>
+                      <span className="sr-only">Avoid: </span>
+                      <s>{row.avoid}</s>
+                    </>
+                  ) : null}
+                </TableCell>
+              ) : null}
+              {hasNote ? (
+                <TableCell muted>
+                  <span className="text-xs">{row.note}</span>
+                </TableCell>
+              ) : null}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
 }

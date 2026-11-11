@@ -1,9 +1,18 @@
-import { Button } from '@cognite/aura/components/button';
-import { IconArrowDown, IconArrowUp, IconChevronDown, IconChevronRight, IconSelector } from '@cognite/aura/icons';
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useId, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { SelectionCheckbox } from '../../data/SelectionCheckbox';
+import { Table } from '../../primitives/table/Table';
+import { TableBody } from '../../primitives/table/TableBody';
+import { TableCell } from '../../primitives/table/TableCell';
+import { TableDetailRow } from '../../primitives/table/TableDetailRow';
+import { TableExpandCell } from '../../primitives/table/TableExpandCell';
+import { TableFooter } from '../../primitives/table/TableFooter';
+import { TableHead } from '../../primitives/table/TableHead';
+import { TableHeader } from '../../primitives/table/TableHeader';
+import { TableMessageRow } from '../../primitives/table/TableMessageRow';
+import { TableRow } from '../../primitives/table/TableRow';
+import { TableSelectionCell } from '../../primitives/table/TableSelectionCell';
+import { nextTableSort, sortTableRows } from '../../primitives/table/tableSort';
 
 export type DataTableColumn<Row> = {
   id: string;
@@ -58,23 +67,8 @@ type DataTableProps<Row> = {
   empty?: ReactNode;
 };
 
-const SURFACE = {
-  base: { row: 'bg-base-background', hover: 'hover:bg-base-background-hover' },
-  card: { row: 'bg-card-background', hover: 'hover:bg-card-background-hover' },
-} as const;
-
-function compare(a: string | number, b: string | number): number {
-  if (typeof a === 'number' && typeof b === 'number') return a - b;
-  return String(a).localeCompare(String(b), 'en', { numeric: true });
-}
-
-function nextSort(current: DataTableSort | undefined, columnId: string): DataTableSort | undefined {
-  if (current?.columnId !== columnId) return { columnId, direction: 'asc' };
-  return current.direction === 'asc' ? { columnId, direction: 'desc' } : undefined;
-}
-
 /**
- * A small typed table for static data: semantic `<table>` markup with optional sorting, row
+ * A small typed table for static data, built on the `Table` family, with optional sorting, row
  * selection, expandable rows, a summary row and a pinned first column. For a few dozen rows that
  * are already in memory; reach for `@cognite/aura/data-grid` when rows are virtualised, resized
  * or fetched page by page.
@@ -96,153 +90,155 @@ export function DataTable<Row>({
   pinFirstColumn = false,
   empty,
 }: DataTableProps<Row>) {
-  const [sort, setSort] = useState<DataTableSort | undefined>(defaultSort);
-  const [expandedIds, setExpandedIds] = useState<readonly string[]>(defaultExpandedIds);
+  const [sort, setSort] = useState<DataTableSort | null>(defaultSort ?? null);
+  const [expandedIds, setExpandedIds] =
+    useState<readonly string[]>(defaultExpandedIds);
+  const detailId = useId();
 
   const sortedRows = useMemo(() => {
-    const sortValue = columns.find((column) => column.id === sort?.columnId)?.sortValue;
+    const sortValue = columns.find(
+      (column) => column.id === sort?.columnId,
+    )?.sortValue;
     if (!sort || !sortValue) return rows;
-    const factor = sort.direction === 'asc' ? 1 : -1;
-    return [...rows].sort((a, b) => compare(sortValue(a), sortValue(b)) * factor);
+    return sortTableRows(rows, sortValue, sort.direction);
   }, [columns, rows, sort]);
 
   const nameOf = (row: Row) => rowLabel?.(row) ?? getRowId(row);
-  const padY = density === 'dense' ? 'py-1.5' : 'py-2.5';
   const hasFooter = columns.some((column) => column.footer !== undefined);
-  const columnCount = columns.length + (selection ? 1 : 0) + (renderExpanded ? 1 : 0) + (rowActions ? 1 : 0);
-  const pinned = (index: number) =>
-    pinFirstColumn && index === 0 ? 'sticky left-0 z-10 bg-inherit after:absolute after:inset-y-0 after:right-0 after:border-r after:border-default' : '';
-  const alignOf = (column: DataTableColumn<Row>) => (column.align === 'end' ? 'text-right tabular-nums' : 'text-left');
+  const hasLeadingCell =
+    selection !== undefined || renderExpanded !== undefined;
+  const columnCount =
+    columns.length +
+    (selection ? 1 : 0) +
+    (renderExpanded ? 1 : 0) +
+    (rowActions ? 1 : 0);
 
   return (
-    <div className={pinFirstColumn ? 'w-full overflow-x-auto' : 'w-full'}>
-      <table aria-label={label} className="w-full border-collapse text-sm">
-        <thead>
-          <tr className={`border-b border-default text-xs text-muted-foreground ${SURFACE[surface].row}`}>
-            {renderExpanded ? <td className="w-8 py-2 pl-1" /> : null}
-            {selection ? (
-              <th scope="col" className="w-8 py-2 pl-2 pr-1">
-                <SelectionCheckbox
-                  label="Select all rows"
-                  checked={selection.allSelected}
-                  indeterminate={selection.partiallySelected}
-                  disabled={rows.length === 0}
-                  onChange={(checked) => selection.toggleAll(checked)}
-                />
-              </th>
-            ) : null}
-            {columns.map((column, index) => {
-              const direction = sort?.columnId === column.id ? sort.direction : undefined;
-              const SortIcon = direction === 'asc' ? IconArrowUp : direction === 'desc' ? IconArrowDown : IconSelector;
-              return (
-                <th
-                  key={column.id}
-                  scope="col"
-                  aria-sort={column.sortValue ? (direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none') : undefined}
-                  className={`whitespace-nowrap px-3 py-2 font-medium ${alignOf(column)} ${column.width ?? ''} ${pinned(index)}`}
-                >
-                  {column.sortValue ? (
-                    <button
-                      type="button"
-                      onClick={() => setSort(nextSort(sort, column.id))}
-                      className={`inline-flex items-center gap-1 rounded-sm outline-none hover:text-base-foreground focus-visible:shadow-focus-ring ${direction ? 'text-base-foreground' : ''} ${column.align === 'end' ? 'flex-row-reverse' : ''}`}
-                    >
-                      {column.header}
-                      <SortIcon aria-hidden="true" className="size-3.5 shrink-0" />
-                    </button>
-                  ) : (
-                    column.header
-                  )}
-                </th>
-              );
-            })}
-            {rowActions ? (
-              <th scope="col" className="w-10 py-2 pr-1">
-                <span className="sr-only">Actions</span>
-              </th>
-            ) : null}
-          </tr>
-        </thead>
-        <tbody>
-          {sortedRows.length === 0 ? (
-            <tr>
-              <td colSpan={columnCount} className="px-3 py-8">
-                {empty ?? <p className="text-center text-sm text-muted-foreground">Nothing to show.</p>}
-              </td>
-            </tr>
+    <Table
+      label={label}
+      density={density === 'dense' ? 'compact' : 'comfortable'}
+      surface={surface}
+      // The Table pins the first cell of a row, which is only the first data column when no
+      // checkbox or expand cell leads the row; with one, the table scrolls without a pinned column.
+      pinFirstColumn={pinFirstColumn && !hasLeadingCell}
+      scrollable={pinFirstColumn}
+    >
+      <TableHeader>
+        <TableRow>
+          {renderExpanded ? (
+            <TableHead srOnly className="w-px pr-0">
+              Details
+            </TableHead>
           ) : null}
-          {sortedRows.map((row) => {
-            const id = getRowId(row);
-            const isSelected = selection?.isSelected(id) ?? false;
-            const isExpanded = expandedIds.includes(id);
-            const highlighted = isSelected || currentRowId === id;
-            return (
-              <Fragment key={id}>
-                <tr
-                  data-selected={highlighted ? '' : undefined}
-                  aria-selected={selection ? isSelected : undefined}
-                  aria-current={currentRowId === id ? 'true' : undefined}
-                  className={`border-b border-default text-medium-foreground transition-colors last:border-b-0 ${
-                    highlighted ? 'bg-secondary-background' : `${SURFACE[surface].row} ${SURFACE[surface].hover}`
-                  }`}
-                >
-                  {renderExpanded ? (
-                    <td className={`w-8 pl-1 ${padY}`}>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-expanded={isExpanded}
-                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${nameOf(row)}`}
-                        onClick={() =>
-                          setExpandedIds(isExpanded ? expandedIds.filter((other) => other !== id) : [...expandedIds, id])
-                        }
-                      >
-                        {isExpanded ? <IconChevronDown /> : <IconChevronRight />}
-                      </Button>
-                    </td>
-                  ) : null}
-                  {selection ? (
-                    <td className={`w-8 pl-2 pr-1 ${padY}`}>
-                      <SelectionCheckbox
-                        label={`Select ${nameOf(row)}`}
-                        checked={isSelected}
-                        onChange={(checked) => selection.toggle(id, checked)}
-                      />
-                    </td>
-                  ) : null}
-                  {columns.map((column, index) => (
-                    <td key={column.id} className={`px-3 ${padY} ${alignOf(column)} ${column.width ?? ''} ${pinned(index)}`}>
-                      {column.cell(row)}
-                    </td>
-                  ))}
-                  {rowActions ? <td className={`w-10 pr-1 text-right ${padY}`}>{rowActions(row)}</td> : null}
-                </tr>
-                {renderExpanded && isExpanded ? (
-                  <tr className="border-b border-default bg-muted-background last:border-b-0">
-                    <td colSpan={columnCount} className="px-4 py-4">
-                      {renderExpanded(row)}
-                    </td>
-                  </tr>
-                ) : null}
-              </Fragment>
-            );
-          })}
-        </tbody>
-        {hasFooter && sortedRows.length > 0 ? (
-          <tfoot>
-            <tr className={`border-t border-emphasized font-medium text-base-foreground ${SURFACE[surface].row}`}>
-              {renderExpanded ? <td /> : null}
-              {selection ? <td /> : null}
-              {columns.map((column, index) => (
-                <td key={column.id} className={`px-3 ${padY} ${alignOf(column)} ${pinned(index)}`}>
-                  {column.footer}
-                </td>
-              ))}
-              {rowActions ? <td /> : null}
-            </tr>
-          </tfoot>
+          {selection ? (
+            <TableSelectionCell
+              label="Select all rows"
+              checked={selection.allSelected}
+              indeterminate={selection.partiallySelected}
+              disabled={rows.length === 0}
+              onCheckedChange={(checked) => selection.toggleAll(checked)}
+            />
+          ) : null}
+          {columns.map((column) =>
+            column.sortValue ? (
+              <TableHead
+                key={column.id}
+                numeric={column.align === 'end'}
+                className={column.width}
+                sortDirection={
+                  sort?.columnId === column.id ? sort.direction : 'none'
+                }
+                onSort={() => setSort(nextTableSort(sort, column.id))}
+              >
+                {column.header}
+              </TableHead>
+            ) : (
+              <TableHead
+                key={column.id}
+                numeric={column.align === 'end'}
+                className={column.width}
+              >
+                {column.header}
+              </TableHead>
+            ),
+          )}
+          {rowActions ? <TableHead srOnly>Actions</TableHead> : null}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {sortedRows.length === 0 ? (
+          <TableMessageRow colSpan={columnCount}>
+            {empty ?? 'Nothing to show.'}
+          </TableMessageRow>
         ) : null}
-      </table>
-    </div>
+        {sortedRows.map((row) => {
+          const id = getRowId(row);
+          const isSelected = selection?.isSelected(id) ?? false;
+          const isExpanded = expandedIds.includes(id);
+          const rowDetailId = `${detailId}-${id}`;
+          return (
+            <Fragment key={id}>
+              <TableRow
+                selected={selection ? isSelected : undefined}
+                current={currentRowId === id}
+              >
+                {renderExpanded ? (
+                  <TableExpandCell
+                    label={nameOf(row)}
+                    expanded={isExpanded}
+                    controls={rowDetailId}
+                    onExpandedChange={(next) =>
+                      setExpandedIds(
+                        next
+                          ? [...expandedIds, id]
+                          : expandedIds.filter((other) => other !== id),
+                      )
+                    }
+                  />
+                ) : null}
+                {selection ? (
+                  <TableSelectionCell
+                    label={`Select ${nameOf(row)}`}
+                    checked={isSelected}
+                    onCheckedChange={(checked) => selection.toggle(id, checked)}
+                  />
+                ) : null}
+                {columns.map((column) => (
+                  <TableCell
+                    key={column.id}
+                    numeric={column.align === 'end'}
+                    className={column.width}
+                  >
+                    {column.cell(row)}
+                  </TableCell>
+                ))}
+                {rowActions ? (
+                  <TableCell actions>{rowActions(row)}</TableCell>
+                ) : null}
+              </TableRow>
+              {renderExpanded && isExpanded ? (
+                <TableDetailRow colSpan={columnCount} id={rowDetailId}>
+                  {renderExpanded(row)}
+                </TableDetailRow>
+              ) : null}
+            </Fragment>
+          );
+        })}
+      </TableBody>
+      {hasFooter && sortedRows.length > 0 ? (
+        <TableFooter>
+          <TableRow>
+            {renderExpanded ? <TableCell /> : null}
+            {selection ? <TableCell /> : null}
+            {columns.map((column) => (
+              <TableCell key={column.id} numeric={column.align === 'end'}>
+                {column.footer}
+              </TableCell>
+            ))}
+            {rowActions ? <TableCell /> : null}
+          </TableRow>
+        </TableFooter>
+      ) : null}
+    </Table>
   );
 }

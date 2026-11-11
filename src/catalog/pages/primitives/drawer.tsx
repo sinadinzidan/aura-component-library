@@ -31,6 +31,14 @@ import { DrawerFooter } from '../../../library/primitives/drawer/DrawerFooter';
 import { DrawerHeader } from '../../../library/primitives/drawer/DrawerHeader';
 import { DrawerTitle } from '../../../library/primitives/drawer/DrawerTitle';
 import { DrawerTrigger } from '../../../library/primitives/drawer/DrawerTrigger';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
+import { TableRowAction } from '../../../library/primitives/table/TableRowAction';
 import { ALARMS, ASSETS, SENSORS, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
 import { REFERENCE_NOW, formatAgo, formatDateTime } from '../../data/series';
 import { definePage } from '../../types';
@@ -228,29 +236,31 @@ function DrawerPrimRowDetail() {
   const asset = alarm ? findAsset(alarm.assetId) : undefined;
   return (
     <div className="w-full max-w-lg">
-      <table className="w-full text-left text-sm">
-        <caption className="sr-only">Active alarms</caption>
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="py-2 pr-3 font-medium">Alarm</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Asset</th>
-            <th scope="col" className="py-2 text-right font-medium">Raised</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableCaption srOnly>Active alarms</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Alarm</TableHead>
+            <TableHead>Asset</TableHead>
+            <TableHead numeric>Raised</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {ALARMS.slice(0, 4).map((row) => (
-            <tr key={row.id} className="border-t border-default">
-              <td className="py-1 pr-3">
-                <Button variant="ghost" size="sm" onClick={() => setSelected(row.id)}>
-                  {row.message}
-                </Button>
-              </td>
-              <td className="py-1 pr-3 font-mono text-xs text-muted-foreground">{findAsset(row.assetId)?.tag}</td>
-              <td className="py-1 text-right text-muted-foreground tabular-nums">{formatAgo(row.raisedAt)}</td>
-            </tr>
+            <TableRow key={row.id} interactive current={row.id === selected}>
+              <TableCell>
+                <TableRowAction onClick={() => setSelected(row.id)}>{row.message}</TableRowAction>
+              </TableCell>
+              <TableCell mono muted>
+                {findAsset(row.assetId)?.tag}
+              </TableCell>
+              <TableCell numeric muted>
+                {formatAgo(row.raisedAt)}
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <Drawer open={selected !== null} onOpenChange={(next) => (next ? undefined : setSelected(null))}>
         <DrawerContent>
           <DrawerHeader>
@@ -801,7 +811,7 @@ export default definePage({
       description: 'What goes in the header, body and footer.',
       specimens: [
         { id: 'DrawerPrimForm', title: 'Form with sticky footer', note: 'An edit form: the body scrolls, Cancel and Save stay in view.', origin: 'custom', uses: ['primitives/drawer/DrawerContent.tsx', 'primitives/drawer/DrawerFooter.tsx', 'forms/FormField.tsx'], Component: DrawerPrimForm },
-        { id: 'DrawerPrimRowDetail', title: 'Detail of a selected row', note: 'Open the record from a table row without losing the list behind the scrim.', origin: 'custom', size: 'md', align: 'stretch', uses: ['primitives/drawer/DrawerContent.tsx', 'display/MetadataList.tsx', 'industrial/StatusIndicator.tsx'], Component: DrawerPrimRowDetail },
+        { id: 'DrawerPrimRowDetail', title: 'Detail of a selected row', note: 'Open the record from a table row without losing the list behind the scrim.', origin: 'custom', size: 'md', align: 'stretch', uses: ['primitives/drawer/DrawerContent.tsx', 'display/MetadataList.tsx', 'industrial/StatusIndicator.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx', 'primitives/table/TableRowAction.tsx'], Component: DrawerPrimRowDetail },
         { id: 'DrawerPrimFilters', title: 'Filters', note: 'Many filters that would crowd a toolbar; apply them together from the footer.', origin: 'custom', uses: ['primitives/drawer/DrawerContent.tsx', 'forms/FormField.tsx'], Component: DrawerPrimFilters },
         { id: 'DrawerPrimTabs', title: 'With tabs', note: 'A record with parallel views; the tabs sit under the header and the body scrolls.', origin: 'custom', uses: ['primitives/drawer/DrawerContent.tsx', 'display/StatusBadge.tsx'], Component: DrawerPrimTabs },
         { id: 'DrawerPrimLongContent', title: 'Scrollable long content', note: 'Procedures and permits: the body scrolls, the actions stay in view.', origin: 'custom', uses: ['primitives/drawer/DrawerBody.tsx'], Component: DrawerPrimLongContent },

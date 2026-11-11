@@ -20,6 +20,12 @@ import { useState } from 'react';
 
 import { PageNumbers } from '../../../library/navigation/PageNumbers';
 import { TablePagination } from '../../../library/navigation/TablePagination';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, SENSORS, findAsset } from '../../data/plant';
 import { formatAgo } from '../../data/series';
 import { definePage } from '../../types';
@@ -489,28 +495,30 @@ function PaginationUnderTable() {
 
   return (
     <div className="flex w-full flex-col gap-3">
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-default text-xs text-muted-foreground">
-            <th className="py-2 pr-4 font-medium">Tag</th>
-            <th className="py-2 pr-4 font-medium">Name</th>
-            <th className="py-2 pr-4 font-medium">Asset</th>
-            <th className="py-2 text-right font-medium">Value</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table label="Sensors">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Tag</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead>Asset</TableHead>
+            <TableHead numeric>Value</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((sensor) => (
-            <tr key={sensor.id}>
-              <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{sensor.tag}</td>
-              <td className="py-2 pr-4 text-base-foreground">{sensor.name}</td>
-              <td className="py-2 pr-4 text-medium-foreground">{findAsset(sensor.assetId)?.name}</td>
-              <td className="py-2 text-right tabular-nums text-base-foreground">
+            <TableRow key={sensor.id}>
+              <TableCell mono muted>
+                {sensor.tag}
+              </TableCell>
+              <TableCell>{sensor.name}</TableCell>
+              <TableCell>{findAsset(sensor.assetId)?.name}</TableCell>
+              <TableCell numeric>
                 {sensor.value} {sensor.unit}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <TablePagination
         page={page}
         pageSize={pageSize}
@@ -785,7 +793,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['navigation/TablePagination.tsx', 'navigation/PageNumbers.tsx'],
+          uses: ['navigation/TablePagination.tsx', 'navigation/PageNumbers.tsx', 'primitives/table/Table.tsx'],
           Component: PaginationUnderTable,
         },
       ],

@@ -25,7 +25,7 @@ import {
 import { Input } from '@cognite/aura/components/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@cognite/aura/components/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@cognite/aura/components/tooltip';
-import { IconCheck, IconHistory, IconKey, IconPlus, IconRobot, IconRotate, IconTrash, IconX } from '@cognite/aura/icons';
+import { IconHistory, IconKey, IconPlus, IconRobot, IconRotate, IconTrash, IconX } from '@cognite/aura/icons';
 import { useState } from 'react';
 
 import { ConfirmButton } from '../../../library/actions/ConfirmButton';
@@ -44,6 +44,15 @@ import { ExpiryBadge } from '../../../library/patterns/people/ExpiryBadge';
 import { getExpiryState } from '../../../library/patterns/people/expiryState';
 import { maskSecret } from '../../../library/patterns/people/maskSecret';
 import { SecretField } from '../../../library/patterns/people/SecretField';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatAgo, formatDate, formatDateTime, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
@@ -303,34 +312,11 @@ function ApiKeyTokenRotateSteps() {
 
   return (
     <div className="flex w-full max-w-lg flex-col gap-4">
-      <ol className="flex flex-col gap-4">
-        {ROTATE_STEPS.map((entry, index) => {
-          const done = index < step;
-          const current = index === step;
-          return (
-            <li key={entry.title} aria-current={current ? 'step' : undefined} className="flex items-start gap-3">
-              <span
-                className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ${
-                  done
-                    ? 'bg-success-background text-success-foreground'
-                    : current
-                      ? 'bg-primary-background text-primary-foreground'
-                      : 'bg-muted-background text-muted-foreground'
-                }`}
-              >
-                {done ? <IconCheck aria-hidden="true" className="size-3.5" /> : index + 1}
-              </span>
-              <div className="flex min-w-0 flex-col gap-1">
-                <p className={`text-sm font-medium ${done || current ? 'text-base-foreground' : 'text-muted-foreground'}`}>
-                  {entry.title}
-                  <span className="sr-only">{done ? ', done' : current ? ', current step' : ', not started'}</span>
-                </p>
-                {current ? <p className="text-xs text-muted-foreground">{entry.detail}</p> : null}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+      <Stepper label="Rotate the historian extractor key" orientation="vertical" current={step}>
+        {ROTATE_STEPS.map((entry, index) => (
+          <Step key={entry.title} label={entry.title} description={index === step ? entry.detail : undefined} />
+        ))}
+      </Stepper>
       <div className="flex items-center gap-2">
         {finished ? (
           <>
@@ -528,39 +514,31 @@ function ApiKeyTokenIpAllowList() {
 
 function ApiKeyTokenUsageSparkline() {
   return (
-    <table className="w-full max-w-lg border-collapse text-sm">
-      <caption className="sr-only">Requests per key over the last 30 days</caption>
-      <thead>
-        <tr className="border-b border-default text-left text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Key
-          </th>
-          <th scope="col" className="w-32 py-2 pr-4 font-medium">
-            Last 30 days
-          </th>
-          <th scope="col" className="py-2 text-right font-medium">
-            Requests a day
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table className="max-w-lg">
+      <TableCaption srOnly>Requests per key over the last 30 days</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Key</TableHead>
+          <TableHead className="w-32">Last 30 days</TableHead>
+          <TableHead numeric>Requests a day</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {KEYS.filter((key) => key.revokedAt === null).map((key) => (
-          <tr key={key.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-4 text-left font-medium text-base-foreground">
-              {key.name}
-            </th>
-            <td className="py-2 pr-4">
+          <TableRow key={key.id}>
+            <TableCell rowHeader>{key.name}</TableCell>
+            <TableCell>
               {key.daily === 0 ? (
                 <span className="text-xs text-muted-foreground">No requests</span>
               ) : (
                 <Sparkline values={usageOf(key)} label={`Requests a day for ${key.name}, last 30 days`} height={24} decimals={0} />
               )}
-            </td>
-            <td className="py-2 text-right tabular-nums text-base-foreground">{NUMBER.format(key.daily)}</td>
-          </tr>
+            </TableCell>
+            <TableCell numeric>{NUMBER.format(key.daily)}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -640,53 +618,45 @@ function ApiKeyTokenExpiringNotice() {
 
 function ApiKeyTokenTable() {
   return (
-    <table className="w-full border-collapse text-sm">
-      <caption className="sr-only">API keys in Nordkapp production</caption>
-      <thead>
-        <tr className="border-b border-default text-left text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Name
-          </th>
-          <th scope="col" className="hidden py-2 pr-4 font-medium lg:table-cell">
-            Key
-          </th>
-          <th scope="col" className="hidden py-2 pr-4 font-medium md:table-cell">
-            Scope
-          </th>
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Created
-          </th>
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Last used
-          </th>
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Status
-          </th>
-          <th scope="col" className="w-9 py-2">
-            <span className="sr-only">Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>API keys in Nordkapp production</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Name</TableHead>
+          <TableHead className="hidden lg:table-cell">Key</TableHead>
+          <TableHead className="hidden md:table-cell">Scope</TableHead>
+          <TableHead>Created</TableHead>
+          <TableHead>Last used</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead srOnly>Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {KEYS.map((key) => {
           const state = getExpiryState({ expiresAt: key.expiresAt, revokedAt: key.revokedAt, now: REFERENCE_NOW });
           const dead = state === 'revoked' || state === 'expired';
           return (
-            <tr key={key.id} className="border-b border-default last:border-b-0">
-              <th scope="row" className="py-2 pr-4 text-left font-normal">
-                <span className={`block font-medium ${dead ? 'text-muted-foreground' : 'text-base-foreground'}`}>{key.name}</span>
-                <span className="block text-xs text-muted-foreground">{key.owner}</span>
-              </th>
-              <td className="hidden py-2 pr-4 font-mono text-xs text-muted-foreground lg:table-cell">
+            <TableRow key={key.id}>
+              <TableCell rowHeader>
+                <span className={`block ${dead ? 'text-muted-foreground' : ''}`}>{key.name}</span>
+                <span className="block text-xs font-normal text-muted-foreground">{key.owner}</span>
+              </TableCell>
+              <TableCell mono muted className="hidden lg:table-cell">
                 {maskSecret(key.value, KEY_MASK)}
-              </td>
-              <td className="hidden py-2 pr-4 text-muted-foreground md:table-cell">{key.scope}</td>
-              <td className="py-2 pr-4 tabular-nums text-muted-foreground">{formatDate(key.createdAt)}</td>
-              <td className="py-2 pr-4 tabular-nums text-muted-foreground">{lastUsed(key)}</td>
-              <td className="py-2 pr-4">
+              </TableCell>
+              <TableCell muted className="hidden md:table-cell">
+                {key.scope}
+              </TableCell>
+              <TableCell muted wrap="nowrap">
+                <span className="tabular-nums">{formatDate(key.createdAt)}</span>
+              </TableCell>
+              <TableCell muted wrap="nowrap">
+                <span className="tabular-nums">{lastUsed(key)}</span>
+              </TableCell>
+              <TableCell>
                 <ExpiryBadge expiresAt={key.expiresAt} revokedAt={key.revokedAt} now={REFERENCE_NOW} />
-              </td>
-              <td className="py-2">
+              </TableCell>
+              <TableCell actions>
                 <RowActionsMenu
                   label={`Actions for ${key.name}`}
                   actions={[
@@ -697,12 +667,12 @@ function ApiKeyTokenTable() {
                       : { id: 'revoke', label: 'Revoke key', icon: <IconTrash />, onSelect: () => undefined, destructive: true },
                   ]}
                 />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           );
         })}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -924,7 +894,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['actions/ConfirmButton.tsx'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx', 'actions/ConfirmButton.tsx'],
           Component: ApiKeyTokenRotateSteps,
         },
         {
@@ -997,7 +967,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/Sparkline.tsx'],
+          uses: ['primitives/table/Table.tsx', 'industrial/Sparkline.tsx'],
           Component: ApiKeyTokenUsageSparkline,
         },
         {
@@ -1046,7 +1016,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/people/ExpiryBadge.tsx', 'patterns/people/expiryState.ts', 'patterns/people/maskSecret.ts', 'data/RowActionsMenu.tsx'],
+          uses: ['patterns/people/ExpiryBadge.tsx', 'patterns/people/expiryState.ts', 'patterns/people/maskSecret.ts', 'data/RowActionsMenu.tsx', 'primitives/table/Table.tsx'],
           Component: ApiKeyTokenTable,
         },
         {

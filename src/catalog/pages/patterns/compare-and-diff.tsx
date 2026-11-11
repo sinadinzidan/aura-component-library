@@ -20,6 +20,12 @@ import { MergeChoiceRow } from '../../../library/patterns/workflows/MergeChoiceR
 import type { MergeSide } from '../../../library/patterns/workflows/MergeChoiceRow';
 import { TextDiff } from '../../../library/patterns/workflows/TextDiff';
 import { diffStats, wordDiff } from '../../../library/patterns/workflows/wordDiff';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { PLANT_KPIS, SENSORS, findAsset } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -77,9 +83,6 @@ const CONFIG_AFTER = `{
 
 const SETTINGS_BEFORE = { 'limits.high': '145.0', 'limits.highHigh': '155.0', delaySeconds: '0', priority: 'high', shelvable: 'true' };
 const SETTINGS_AFTER = { 'limits.low': '85.0', 'limits.high': '148.0', 'limits.highHigh': '155.0', delaySeconds: '10', priority: 'high' };
-
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2 align-baseline';
 
 function CompareDiffChangeMarkers() {
   return (
@@ -278,27 +281,25 @@ function CompareDiffLimitReview() {
           </div>
         </div>
       </div>
-      <table aria-label={`Limit changes for ${sensor.tag}`} className="w-full border-collapse text-sm">
-        <tbody>
+      <Table label={`Limit changes for ${sensor.tag}`}>
+        <TableBody>
           {PRESSURE_LIMITS.map((limit) => {
             const before = limit.before?.toFixed(1);
             const after = limit.after?.toFixed(1);
             return (
-              <tr key={limit.id} className="border-t border-default">
-                <th scope="row" className={`${TD} text-left font-normal text-muted-foreground`}>
-                  {limit.name}
-                </th>
-                <td className={`${TD} text-right`}>
+              <TableRow key={limit.id}>
+                <TableCell rowHeader>{limit.name}</TableCell>
+                <TableCell align="end">
                   <DiffValue before={before} after={after} unit={sensor.unit} />
-                </td>
-                <td className={`${TD} w-28`}>
+                </TableCell>
+                <TableCell className="w-28">
                   <ChangeMarker kind={changeBetween(before, after)} />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -373,36 +374,30 @@ function CompareDiffConfigJson() {
 function CompareDiffKeyValues() {
   const rows = diffKeyValues(SETTINGS_BEFORE, SETTINGS_AFTER);
   return (
-    <table aria-label="Changed keys in the alarm configuration" className="w-full max-w-md border-collapse text-sm">
-      <thead>
-        <tr className="border-b border-default">
-          <th scope="col" className={TH}>
-            Key
-          </th>
-          <th scope="col" className={`${TH} text-right`}>
-            Value
-          </th>
-          <th scope="col" className={TH}>
-            Change
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="Changed keys in the alarm configuration" className="max-w-md">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Key</TableHead>
+          <TableHead align="end">Value</TableHead>
+          <TableHead>Change</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((row) => (
-          <tr key={row.key} className="border-b border-default">
-            <th scope="row" className={`${TD} text-left font-mono text-xs font-normal text-base-foreground`}>
+          <TableRow key={row.key}>
+            <TableCell rowHeader mono>
               {row.key}
-            </th>
-            <td className={`${TD} text-right`}>
+            </TableCell>
+            <TableCell align="end">
               <DiffValue before={row.before} after={row.after} mono />
-            </td>
-            <td className={TD}>
+            </TableCell>
+            <TableCell>
               <ChangeMarker kind={row.change} />
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -514,57 +509,53 @@ function CompareDiffAssets() {
   const readings = SENSORS.filter((sensor) => sensor.assetId === '23-ka-9101');
   const format = (value: number, decimals: number) => new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
   return (
-    <table aria-label="1st and 2nd stage compressor, readings side by side" className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="border-b border-default">
-          <th scope="col" className={TH}>
-            Reading
-          </th>
+    <Table label="1st and 2nd stage compressor, readings side by side">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Reading</TableHead>
           {[first, second].map((asset) => (
-            <th key={asset?.id} scope="col" className={`${TH} text-right`}>
+            <TableHead key={asset?.id} align="end">
               <span className="flex flex-col items-end gap-1">
                 <span className="text-sm text-base-foreground">
                   <span className="font-mono">{asset?.tag}</span> {asset?.name}
                 </span>
                 {asset ? <StatusBadge status={asset.state} /> : null}
               </span>
-            </th>
+            </TableHead>
           ))}
-          <th scope="col" className={`${TH} text-right`}>
-            Difference
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr className="border-b border-default">
-          <th scope="row" className={`${TD} text-left font-normal text-muted-foreground`}>
-            Health score
-          </th>
-          <td className={`${TD} text-right tabular-nums text-base-foreground`}>{first?.healthScore}</td>
-          <td className={`${TD} text-right tabular-nums text-base-foreground`}>{second?.healthScore}</td>
-          <td className={`${TD} text-right tabular-nums text-muted-foreground`}>{numericDelta(first?.healthScore ?? 0, second?.healthScore ?? 0, 0).text}</td>
-        </tr>
+          <TableHead numeric>Difference</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        <TableRow>
+          <TableCell rowHeader>Health score</TableCell>
+          <TableCell numeric>{first?.healthScore}</TableCell>
+          <TableCell numeric>{second?.healthScore}</TableCell>
+          <TableCell numeric muted>
+            {numericDelta(first?.healthScore ?? 0, second?.healthScore ?? 0, 0).text}
+          </TableCell>
+        </TableRow>
         {readings.map((sensor) => {
           const other = SECOND_STAGE[sensor.name];
           const nearLimit = sensor.value > sensor.highLimit * 0.95;
           return (
-            <tr key={sensor.id} className="border-b border-default">
-              <th scope="row" className={`${TD} text-left font-normal text-muted-foreground`}>
-                {sensor.name}
-              </th>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>
+            <TableRow key={sensor.id}>
+              <TableCell rowHeader>{sensor.name}</TableCell>
+              <TableCell numeric>
                 {format(sensor.value, sensor.decimals)} <span className="text-muted-foreground">{sensor.unit}</span>
                 {nearLimit ? <span className="block text-xs font-medium text-warning-foreground-strong">Near high limit</span> : null}
-              </td>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>
+              </TableCell>
+              <TableCell numeric>
                 {format(other, sensor.decimals)} <span className="text-muted-foreground">{sensor.unit}</span>
-              </td>
-              <td className={`${TD} text-right tabular-nums text-muted-foreground`}>{numericDelta(sensor.value, other, sensor.decimals).text}</td>
-            </tr>
+              </TableCell>
+              <TableCell numeric muted>
+                {numericDelta(sensor.value, other, sensor.decimals).text}
+              </TableCell>
+            </TableRow>
           );
         })}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -618,40 +609,34 @@ const THREE_WAY = [
 
 function CompareDiffThreeWay() {
   return (
-    <table aria-label="Three-way summary of the alarm configuration" className="w-full border-collapse text-sm">
-      <thead>
-        <tr className="border-b border-default">
-          <th scope="col" className={TH}>
-            Setting
-          </th>
-          <th scope="col" className={`${TH} text-right`}>
-            Base
-          </th>
-          <th scope="col" className={`${TH} text-right`}>
-            Theirs
-          </th>
-          <th scope="col" className={`${TH} text-right`}>
-            Yours
-          </th>
-          <th scope="col" className={TH}>
-            Outcome
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="Three-way summary of the alarm configuration">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Setting</TableHead>
+          <TableHead numeric>Base</TableHead>
+          <TableHead numeric>Theirs</TableHead>
+          <TableHead numeric>Yours</TableHead>
+          <TableHead>Outcome</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {THREE_WAY.map((row) => {
           const side = (value: string) => (value === row.base ? 'text-muted-foreground' : 'font-medium text-base-foreground');
           const both = row.theirs !== row.base && row.yours !== row.base;
           const none = row.theirs === row.base && row.yours === row.base;
           return (
-            <tr key={row.id} className="border-b border-default">
-              <th scope="row" className={`${TD} text-left font-normal text-muted-foreground`}>
-                {row.label}
-              </th>
-              <td className={`${TD} text-right tabular-nums text-muted-foreground`}>{row.base}</td>
-              <td className={`${TD} text-right tabular-nums ${side(row.theirs)}`}>{row.theirs}</td>
-              <td className={`${TD} text-right tabular-nums ${side(row.yours)}`}>{row.yours}</td>
-              <td className={TD}>
+            <TableRow key={row.id}>
+              <TableCell rowHeader>{row.label}</TableCell>
+              <TableCell numeric muted>
+                {row.base}
+              </TableCell>
+              <TableCell numeric>
+                <span className={side(row.theirs)}>{row.theirs}</span>
+              </TableCell>
+              <TableCell numeric>
+                <span className={side(row.yours)}>{row.yours}</span>
+              </TableCell>
+              <TableCell>
                 {both ? (
                   <span className="whitespace-nowrap text-xs font-medium text-warning-foreground-strong">Conflict, choose</span>
                 ) : none ? (
@@ -659,12 +644,12 @@ function CompareDiffThreeWay() {
                 ) : (
                   <ChangeMarker kind="changed" label={`Takes ${row.theirs !== row.base ? 'theirs' : 'yours'}`} />
                 )}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           );
         })}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -949,7 +934,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/workflows/DiffValue.tsx', 'patterns/workflows/ChangeMarker.tsx', 'patterns/workflows/changeKind.ts'],
+          uses: ['patterns/workflows/DiffValue.tsx', 'patterns/workflows/ChangeMarker.tsx', 'patterns/workflows/changeKind.ts', 'primitives/table/Table.tsx'],
           Component: CompareDiffLimitReview,
         },
       ],
@@ -996,7 +981,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/content/diffKeyValues.ts', 'patterns/workflows/DiffValue.tsx', 'patterns/workflows/ChangeMarker.tsx'],
+          uses: ['patterns/content/diffKeyValues.ts', 'patterns/workflows/DiffValue.tsx', 'patterns/workflows/ChangeMarker.tsx', 'primitives/table/Table.tsx'],
           Component: CompareDiffKeyValues,
         },
         {
@@ -1043,7 +1028,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['display/StatusBadge.tsx', 'patterns/workflows/compareRows.ts'],
+          uses: ['primitives/table/Table.tsx', 'display/StatusBadge.tsx', 'patterns/workflows/compareRows.ts'],
           Component: CompareDiffAssets,
         },
         {
@@ -1090,7 +1075,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/workflows/ChangeMarker.tsx'],
+          uses: ['primitives/table/Table.tsx', 'patterns/workflows/ChangeMarker.tsx'],
           Component: CompareDiffThreeWay,
         },
         {

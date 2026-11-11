@@ -18,6 +18,13 @@ import { DonutBreakdown } from '../../../library/patterns/product/DonutBreakdown
 import { PlanCard } from '../../../library/patterns/product/PlanCard';
 import { UsageMeter } from '../../../library/patterns/product/UsageMeter';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { definePage } from '../../types';
 
 import source from './pricing-and-plans.tsx?raw';
@@ -163,49 +170,41 @@ function PricingPlanCards({ period }: { period: BillingPeriod }) {
   );
 }
 
-function PricingInvoiceTable({ rows }: { rows: readonly (typeof PRICING_INVOICES)[number][] }) {
+function PricingInvoiceTable({ rows, surface = 'base' }: { rows: readonly (typeof PRICING_INVOICES)[number][]; surface?: 'base' | 'card' }) {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Invoices, newest first</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Invoice
-          </th>
-          <th scope="col" className="px-4 py-2 font-medium">
-            Period
-          </th>
-          <th scope="col" className="px-4 py-2 font-medium">
-            Status
-          </th>
-          <th scope="col" className="px-4 py-2 text-right font-medium">
-            Amount
-          </th>
-          <th scope="col" className="py-2 pl-2">
-            <span className="sr-only">Download</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table surface={surface}>
+      <TableCaption srOnly>Invoices, newest first</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Invoice</TableHead>
+          <TableHead>Period</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead numeric>Amount</TableHead>
+          <TableHead srOnly>Download</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((invoice) => (
-          <tr key={invoice.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-4 font-mono text-xs font-normal text-base-foreground">
+          <TableRow key={invoice.id}>
+            <TableCell rowHeader mono>
               {invoice.id}
-            </th>
-            <td className="px-4 py-2 text-medium-foreground">{invoice.period}</td>
-            <td className="px-4 py-2">
+            </TableCell>
+            <TableCell>{invoice.period}</TableCell>
+            <TableCell>
               <Badge variant={invoice.status === 'Paid' ? 'success' : 'warning'}>{invoice.status}</Badge>
-            </td>
-            <td className="px-4 py-2 text-right tabular-nums text-base-foreground">{pricingEuro(invoice.amount)}</td>
-            <td className="py-1 pl-2 text-right">
+            </TableCell>
+            <TableCell numeric>
+              <span className="text-base-foreground">{pricingEuro(invoice.amount)}</span>
+            </TableCell>
+            <TableCell actions>
               <IconAction label={`Download ${invoice.id} as PDF`}>
                 <IconDownload />
               </IconAction>
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -286,16 +285,14 @@ function PricingPlanEnterpriseContact() {
 
 function PricingPlanComparisonTable() {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">What each plan includes</caption>
-      <thead>
-        <tr className="border-b border-default">
-          <th scope="col" className="py-3 pr-4 text-xs font-medium text-muted-foreground">
-            Included
-          </th>
+    <Table density="comfortable">
+      <TableCaption srOnly>What each plan includes</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="align-bottom">Included</TableHead>
           {PRICING_PLANS.map((plan) => (
-            <th key={plan.id} scope="col" className="w-1/4 px-4 py-3 align-bottom">
-              <span className="flex flex-col gap-1">
+            <TableHead key={plan.id} className="w-1/4 align-bottom">
+              <span className="flex flex-col gap-1 py-1">
                 <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-base-foreground">
                   {plan.name}
                   {plan.id === 'team' ? <Badge>Recommended</Badge> : null}
@@ -304,28 +301,23 @@ function PricingPlanComparisonTable() {
                   {plan.monthly === null ? 'Custom' : `${pricingEuro(plan.monthly)} per month`}
                 </span>
               </span>
-            </th>
+            </TableHead>
           ))}
-        </tr>
-      </thead>
-      <tbody>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {PRICING_COMPARISON.map((row) => (
-          <tr key={row.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2.5 pr-4 font-normal text-medium-foreground">
-              {row.label}
-            </th>
+          <TableRow key={row.id}>
+            <TableCell rowHeader>{row.label}</TableCell>
             {row.values.map((value, index) => (
-              <td
-                key={PRICING_PLANS[index].id}
-                className={`px-4 py-2.5 tabular-nums ${value === 'Not included' ? 'text-muted-foreground' : 'text-base-foreground'}`}
-              >
-                {value}
-              </td>
+              <TableCell key={PRICING_PLANS[index].id} muted={value === 'Not included'}>
+                <span className="tabular-nums">{value}</span>
+              </TableCell>
             ))}
-          </tr>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -748,7 +740,7 @@ function PricingPlanBillingPage() {
           </CardHeaderEnd>
         </CardHeader>
         <CardContent>
-          <PricingInvoiceTable rows={PRICING_INVOICES.slice(0, 3)} />
+          <PricingInvoiceTable rows={PRICING_INVOICES.slice(0, 3)} surface="card" />
         </CardContent>
       </Card>
       <Card>
@@ -852,6 +844,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: PricingPlanComparisonTable,
         },
       ],
@@ -1006,7 +999,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/collections/IconAction.tsx'],
+          uses: ['patterns/collections/IconAction.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: PricingPlanInvoiceList,
         },
         {
@@ -1052,7 +1045,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/product/UsageMeter.tsx', 'patterns/collections/IconAction.tsx'],
+          uses: ['patterns/product/UsageMeter.tsx', 'patterns/collections/IconAction.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: PricingPlanBillingPage,
         },
       ],

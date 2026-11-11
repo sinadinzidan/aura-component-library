@@ -32,14 +32,21 @@ import { FormSection } from '../../../library/patterns/data-entry/FormSection';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
 import { SaveBar } from '../../../library/patterns/data-entry/SaveBar';
 import { SettingRow } from '../../../library/patterns/data-entry/SettingRow';
-import { Stepper } from '../../../library/patterns/data-entry/Stepper';
-import type { StepperStep } from '../../../library/patterns/data-entry/Stepper';
 import { WizardFrame } from '../../../library/patterns/data-entry/WizardFrame';
 import { PageHeader } from '../../../library/patterns/structure/PageHeader';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
 import { SidebarNav } from '../../../library/patterns/structure/SidebarNav';
 import type { SidebarNavGroup } from '../../../library/patterns/structure/SidebarNav';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { suggestMapping } from '../../../library/patterns/workflows/columnMapping';
 import type { ColumnMapping, TargetField } from '../../../library/patterns/workflows/columnMapping';
 import { MappingTable } from '../../../library/patterns/workflows/MappingTable';
@@ -93,7 +100,7 @@ const FORM_SETTINGS_UNIT_OPTIONS = [
   { value: 'rpm', label: 'rpm' },
 ];
 
-const FORM_SETTINGS_ROUND_STEPS: readonly StepperStep[] = [
+const FORM_SETTINGS_ROUND_STEPS = [
   { id: 'basics', label: 'Basics' },
   { id: 'route', label: 'Route' },
   { id: 'schedule', label: 'Schedule' },
@@ -106,7 +113,7 @@ const FORM_SETTINGS_INTERVALS = [
   { value: 'weekly', label: 'Weekly', description: 'Every Monday on the day shift.' },
 ];
 
-const FORM_SETTINGS_CHANGE_STEPS: readonly StepperStep[] = [
+const FORM_SETTINGS_CHANGE_STEPS = [
   { id: 'tag', label: 'Tag', description: '23-VT-92540' },
   { id: 'limits', label: 'New limits', description: 'High 7.1 to 7.5 mm/s' },
   { id: 'reason', label: 'Justification', description: 'Vendor recommendation' },
@@ -141,7 +148,7 @@ const FORM_SETTINGS_EVENTS = [
   { id: 'handover', label: 'Shift handover published', detail: 'For your crew' },
 ];
 
-const FORM_SETTINGS_IMPORT_STEPS: readonly StepperStep[] = [
+const FORM_SETTINGS_IMPORT_STEPS = [
   { id: 'upload', label: 'Upload file' },
   { id: 'map', label: 'Map columns' },
   { id: 'validate', label: 'Validate' },
@@ -519,7 +526,11 @@ function FormSettingsTemplateReview() {
         <PageHeader title="Review and submit" description="Check the request. Nothing changes in the control system until both approvers accept it." />
         <div className="grid grid-cols-1 gap-8 @3xl:grid-cols-4">
           <div className="@3xl:col-span-1">
-            <Stepper steps={FORM_SETTINGS_CHANGE_STEPS} current={4} orientation="vertical" label="Request steps" />
+            <Stepper label="Request steps" current={4} orientation="vertical">
+              {FORM_SETTINGS_CHANGE_STEPS.map((item) => (
+                <Step key={item.id} label={item.label} description={item.description} />
+              ))}
+            </Stepper>
           </div>
           <div className="flex min-w-0 flex-col gap-6 @3xl:col-span-3">
             {groups.map((group) => (
@@ -673,30 +684,28 @@ function FormSettingsTemplateSettingsTabs() {
             <Button>Save profile</Button>
           </TabsPanel>
           <TabsPanel value="notifications">
-            <table className="w-full text-left text-sm">
-              <caption className="sr-only">Notification channels per event</caption>
-              <thead>
-                <tr className="border-b border-default text-xs text-muted-foreground">
-                  <th scope="col" className="py-2 pr-3 font-medium">
-                    Event
-                  </th>
-                  <th scope="col" className="w-24 py-2 text-center font-medium">
+            <Table density="comfortable">
+              <TableCaption srOnly>Notification channels per event</TableCaption>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Event</TableHead>
+                  <TableHead align="center" className="w-24">
                     In app
-                  </th>
-                  <th scope="col" className="w-24 py-2 text-center font-medium">
+                  </TableHead>
+                  <TableHead align="center" className="w-24">
                     Email
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {FORM_SETTINGS_EVENTS.map((event) => (
-                  <tr key={event.id} className="border-b border-default last:border-b-0">
-                    <th scope="row" className="py-3 pr-3 font-normal">
-                      <span className="block text-base-foreground">{event.label}</span>
-                      <span className="block text-xs text-muted-foreground">{event.detail}</span>
-                    </th>
+                  <TableRow key={event.id}>
+                    <TableCell rowHeader>
+                      <span className="block">{event.label}</span>
+                      <span className="block text-xs font-normal text-muted-foreground">{event.detail}</span>
+                    </TableCell>
                     {['app', 'email'].map((channel) => (
-                      <td key={channel} className="py-3 text-center">
+                      <TableCell key={channel} align="center">
                         <span className="inline-flex">
                           <CheckboxItemControl
                             aria-label={`${event.label}, ${channel === 'app' ? 'in app' : 'email'}`}
@@ -704,12 +713,12 @@ function FormSettingsTemplateSettingsTabs() {
                             onCheckedChange={(checked) => toggle(`${event.id}-${channel}`, checked)}
                           />
                         </span>
-                      </td>
+                      </TableCell>
                     ))}
-                  </tr>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </TabsPanel>
           <TabsPanel value="appearance" className="max-w-xl">
             <ChoiceCardGroup
@@ -868,7 +877,11 @@ function FormSettingsTemplateImport() {
     >
       <ContentContainer width="detail">
         <PageHeader title="Import tags" description="Bring instrument tags in from a spreadsheet. Nothing is created before the last step." />
-        <Stepper steps={FORM_SETTINGS_IMPORT_STEPS} current={step} onStepSelect={last ? undefined : setStep} label="Import steps" />
+        <Stepper label="Import steps" current={step} onStepSelect={last ? undefined : setStep}>
+          {FORM_SETTINGS_IMPORT_STEPS.map((item) => (
+            <Step key={item.id} label={item.label} />
+          ))}
+        </Stepper>
         {step === 0 ? (
           <div className="flex flex-col gap-4">
             <DropZone
@@ -1194,7 +1207,6 @@ export default definePage({
             'templates/AppShell.tsx',
             'templates/ContentContainer.tsx',
             'patterns/data-entry/WizardFrame.tsx',
-            'patterns/data-entry/Stepper.tsx',
             'forms/ChoiceCardGroup.tsx',
             'patterns/structure/PropertyList.tsx',
           ],
@@ -1213,7 +1225,8 @@ export default definePage({
             'templates/AppShell.tsx',
             'templates/ContentContainer.tsx',
             'templates/StickyFooter.tsx',
-            'patterns/data-entry/Stepper.tsx',
+            'primitives/stepper/Stepper.tsx',
+            'primitives/stepper/Step.tsx',
             'patterns/structure/PropertyList.tsx',
             'patterns/structure/SectionHeader.tsx',
           ],
@@ -1232,7 +1245,8 @@ export default definePage({
             'templates/AppShell.tsx',
             'templates/ContentContainer.tsx',
             'templates/StickyFooter.tsx',
-            'patterns/data-entry/Stepper.tsx',
+            'primitives/stepper/Stepper.tsx',
+            'primitives/stepper/Step.tsx',
             'patterns/workflows/MappingTable.tsx',
             'patterns/content/DropZone.tsx',
           ],
@@ -1279,6 +1293,13 @@ export default definePage({
             'patterns/structure/PageHeader.tsx',
             'forms/FormField.tsx',
             'forms/ChoiceCardGroup.tsx',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableHeader.tsx',
+            'primitives/table/TableBody.tsx',
+            'primitives/table/TableRow.tsx',
+            'primitives/table/TableHead.tsx',
+            'primitives/table/TableCell.tsx',
+            'primitives/table/TableCaption.tsx',
           ],
           Component: FormSettingsTemplateSettingsTabs,
         },

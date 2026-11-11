@@ -53,18 +53,21 @@ import { DateRangePresetPicker } from '../../../library/navigation/DateRangePres
 import type { DateRange } from '../../../library/navigation/DateRangePresetPicker';
 import { FilterPopover } from '../../../library/overlays/FilterPopover';
 import { FilterBar } from '../../../library/patterns/data-entry/FilterBar';
-import { FilterChip } from '../../../library/patterns/data-entry/FilterChip';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
-import { ALARMS, ASSETS, PEOPLE, SITES, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableMessageRow } from '../../../library/primitives/table/TableMessageRow';
+import { TableRow } from '../../../library/primitives/table/TableRow';
+import { Tag } from '../../../library/primitives/tag/Tag';
 import type { Severity } from '../../data/plant';
+import { ALARMS, ASSETS, PEOPLE, SITES, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
 import { REFERENCE_NOW, formatAgo, formatDate } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './filter-bars.tsx?raw';
-
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-
-const TD = 'px-3 py-2 text-sm text-base-foreground';
 
 const ROW = 'border-t border-default';
 
@@ -308,10 +311,20 @@ function FilterBarChipAnatomy() {
   const hide = (id: string) => setVisible((current) => current.filter((item) => item !== id));
   return (
     <div className="flex flex-col items-start gap-2">
-      {visible.includes('single') ? <FilterChip label="Site" value="Nordkapp" onRemove={() => hide('single')} /> : null}
-      {visible.includes('multi') ? <FilterChip label="Type" value="3 selected" onRemove={() => hide('multi')} /> : null}
+      {visible.includes('single') ? (
+        <Tag size="lg" removeLabel="Remove filter Site: Nordkapp" onRemove={() => hide('single')}>
+          Site: Nordkapp
+        </Tag>
+      ) : null}
+      {visible.includes('multi') ? (
+        <Tag size="lg" removeLabel="Remove filter Type: 3 selected" onRemove={() => hide('multi')}>
+          Type: 3 selected
+        </Tag>
+      ) : null}
       {visible.includes('range') ? (
-        <FilterChip label="Health score" value="40–80" onRemove={() => hide('range')} />
+        <Tag size="lg" removeLabel="Remove filter Health score: 40–80" onRemove={() => hide('range')}>
+          Health score: 40–80
+        </Tag>
       ) : null}
       {visible.length === 0 ? (
         <Button variant="ghost" size="sm" onClick={() => setVisible(['single', 'multi', 'range'])}>
@@ -587,33 +600,33 @@ function FilterBarColumnVisibility() {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <table className="w-full table-fixed border-collapse">
-        <thead>
-          <tr>
-            <th className={TH}>Work order</th>
-            {Object.entries(COLUMN_LABELS).map(([id, label]) =>
-              columns.includes(id) ? (
-                <th key={id} className={TH}>
-                  {label}
-                </th>
-              ) : null
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          <tr className={ROW}>
-            <td className={`${TD} truncate font-medium`}>{order.id}</td>
-            {columns.includes('asset') ? <td className={`${TD} truncate`}>{findAsset(order.assetId)?.tag}</td> : null}
-            {columns.includes('priority') ? <td className={TD}>{order.priority}</td> : null}
+      <Table label="Work orders" layout="fixed">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Work order</TableHead>
+            {Object.entries(COLUMN_LABELS).map(([id, label]) => (columns.includes(id) ? <TableHead key={id}>{label}</TableHead> : null))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell rowHeader wrap="truncate">
+              {order.id}
+            </TableCell>
+            {columns.includes('asset') ? <TableCell wrap="truncate">{findAsset(order.assetId)?.tag}</TableCell> : null}
+            {columns.includes('priority') ? <TableCell>{order.priority}</TableCell> : null}
             {columns.includes('status') ? (
-              <td className={TD}>
+              <TableCell>
                 <StatusBadge status={order.status} outline />
-              </td>
+              </TableCell>
             ) : null}
-            {columns.includes('due') ? <td className={`${TD} tabular-nums`}>{formatDate(order.dueAt)}</td> : null}
-          </tr>
-        </tbody>
-      </table>
+            {columns.includes('due') ? (
+              <TableCell>
+                <span className="tabular-nums">{formatDate(order.dueAt)}</span>
+              </TableCell>
+            ) : null}
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -789,37 +802,35 @@ function FilterBarCompactTable() {
           </Tooltip>
         </div>
       </div>
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className={TH}>Work order</th>
-            <th className={TH}>Title</th>
-            <th className={TH}>Asset</th>
-            <th className={TH}>Status</th>
-            <th className={`${TH} text-right`}>Due</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table label="Work orders">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Work order</TableHead>
+            <TableHead>Title</TableHead>
+            <TableHead>Asset</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead numeric>Due</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((order) => (
-            <tr key={order.id} className={ROW}>
-              <td className={`${TD} whitespace-nowrap font-medium`}>{order.id}</td>
-              <td className={TD}>{order.title}</td>
-              <td className={`${TD} whitespace-nowrap text-muted-foreground`}>{findAsset(order.assetId)?.tag}</td>
-              <td className={TD}>
+            <TableRow key={order.id}>
+              <TableCell rowHeader wrap="nowrap">
+                {order.id}
+              </TableCell>
+              <TableCell>{order.title}</TableCell>
+              <TableCell muted wrap="nowrap">
+                {findAsset(order.assetId)?.tag}
+              </TableCell>
+              <TableCell>
                 <StatusBadge status={order.status} outline />
-              </td>
-              <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>{formatDate(order.dueAt)}</td>
-            </tr>
+              </TableCell>
+              <TableCell numeric>{formatDate(order.dueAt)}</TableCell>
+            </TableRow>
           ))}
-          {rows.length === 0 ? (
-            <tr className={ROW}>
-              <td colSpan={5} className={`${TD} py-6 text-center text-muted-foreground`}>
-                No work orders match. Clear the search or pick another status.
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
+          {rows.length === 0 ? <TableMessageRow colSpan={5}>No work orders match. Clear the search or pick another status.</TableMessageRow> : null}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -899,35 +910,31 @@ function FilterBarFacetedSidebar() {
         <output aria-live="polite" className="flex h-7 items-center text-sm tabular-nums text-muted-foreground">
           {rows.length} of {EQUIPMENT.length} assets
         </output>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className={TH}>Tag</th>
-              <th className={TH}>Name</th>
-              <th className={TH}>Type</th>
-              <th className={TH}>State</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table label="Assets">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tag</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>State</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.slice(0, 7).map((asset) => (
-              <tr key={asset.id} className={ROW}>
-                <td className={`${TD} whitespace-nowrap font-medium`}>{asset.tag}</td>
-                <td className={TD}>{asset.name}</td>
-                <td className={`${TD} text-muted-foreground`}>{TYPE_LABELS[asset.type] ?? asset.type}</td>
-                <td className={TD}>
+              <TableRow key={asset.id}>
+                <TableCell rowHeader wrap="nowrap">
+                  {asset.tag}
+                </TableCell>
+                <TableCell>{asset.name}</TableCell>
+                <TableCell muted>{TYPE_LABELS[asset.type] ?? asset.type}</TableCell>
+                <TableCell>
                   <StatusBadge status={asset.state} outline />
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-            {rows.length === 0 ? (
-              <tr className={ROW}>
-                <td colSpan={4} className={`${TD} py-6 text-center text-muted-foreground`}>
-                  No assets match. Clear a filter to see more.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+            {rows.length === 0 ? <TableMessageRow colSpan={4}>No assets match. Clear a filter to see more.</TableMessageRow> : null}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
@@ -1298,7 +1305,7 @@ export default definePage({
           note: 'How to word a chip: one value as text, many as a count, a range with its two ends.',
           origin: 'custom',
           size: 'sm',
-          uses: ['patterns/data-entry/FilterChip.tsx'],
+          uses: ['primitives/tag/Tag.tsx'],
           Component: FilterBarChipAnatomy,
         },
         {
@@ -1374,7 +1381,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['display/StatusBadge.tsx'],
+          uses: ['primitives/table/Table.tsx', 'display/StatusBadge.tsx'],
           Component: FilterBarColumnVisibility,
         },
         {
@@ -1420,7 +1427,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/data-entry/OptionSelect.tsx', 'display/StatusBadge.tsx'],
+          uses: ['patterns/data-entry/OptionSelect.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableMessageRow.tsx', 'display/StatusBadge.tsx'],
           Component: FilterBarCompactTable,
         },
         {
@@ -1430,7 +1437,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['display/StatusBadge.tsx'],
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableMessageRow.tsx', 'display/StatusBadge.tsx'],
           Component: FilterBarFacetedSidebar,
         },
       ],

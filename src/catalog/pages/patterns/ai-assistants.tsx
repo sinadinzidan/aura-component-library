@@ -42,7 +42,6 @@ import { Sparkline } from '../../../library/industrial/Sparkline';
 import { severityStatus } from '../../../library/industrial/status';
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { IconAction } from '../../../library/patterns/collections/IconAction';
-import { FilterChip } from '../../../library/patterns/data-entry/FilterChip';
 import { AssistantPanel } from '../../../library/patterns/product/AssistantPanel';
 import { DraftReview } from '../../../library/patterns/product/DraftReview';
 import { InsightCard } from '../../../library/patterns/product/InsightCard';
@@ -50,6 +49,7 @@ import { parseFilterQuery } from '../../../library/patterns/product/parseFilterQ
 import type { FilterTerm, ParsedFilter } from '../../../library/patterns/product/parseFilterQuery';
 import type { AgentTask } from '../../../library/patterns/product/summarizeTasks';
 import { TaskProgressList } from '../../../library/patterns/product/TaskProgressList';
+import { Tag } from '../../../library/primitives/tag/Tag';
 import { ALARMS, ASSETS, SENSORS } from '../../data/plant';
 import { formatAgo, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
@@ -434,12 +434,14 @@ function AiAssistantFilterBar() {
       <div className="flex min-h-7 flex-wrap items-center gap-2">
         {filters.length === 0 ? <span className="text-sm text-muted-foreground">No filters recognised. Try "critical alarms this week".</span> : null}
         {filters.map((filter) => (
-          <FilterChip
+          <Tag
             key={filter.property}
-            label={filter.property}
-            value={filter.value}
+            size="lg"
+            removeLabel={`Remove filter ${filter.property}: ${filter.value}`}
             onRemove={() => setFilters((current) => current.filter((entry) => entry.property !== filter.property))}
-          />
+          >
+            {`${filter.property}: ${filter.value}`}
+          </Tag>
         ))}
       </div>
       <p className="text-xs text-muted-foreground">
@@ -920,7 +922,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/product/parseFilterQuery.ts', 'patterns/data-entry/FilterChip.tsx'],
+          uses: ['patterns/product/parseFilterQuery.ts', 'primitives/tag/Tag.tsx'],
           Component: AiAssistantFilterBar,
         },
       ],

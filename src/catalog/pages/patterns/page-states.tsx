@@ -46,6 +46,12 @@ import { SkeletonList } from '../../../library/feedback/SkeletonList';
 import { SkeletonTable } from '../../../library/feedback/SkeletonTable';
 import { StateBlock } from '../../../library/patterns/states/StateBlock';
 import type { RegionStatus } from '../../../library/patterns/states/StateBlock';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, ASSETS, PLANT_KPIS, SENSORS, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
 import { formatDate } from '../../data/series';
 import { definePage } from '../../types';
@@ -103,28 +109,34 @@ function PageStatePanel({
 /** Rows of the work order table, shared by the specimens that show real content. */
 function PageStateOrderTable({ orders }: { orders: readonly (typeof WORK_ORDERS)[number][] }) {
   return (
-    <table className="w-full text-left text-sm">
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th className="whitespace-nowrap py-2 pr-4 font-medium">Work order</th>
-          <th className="py-2 pr-4 font-medium">Title</th>
-          <th className="py-2 pr-4 font-medium">Status</th>
-          <th className="py-2 font-medium">Due</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="Work orders">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Work order</TableHead>
+          <TableHead>Title</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Due</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {orders.map((order) => (
-          <tr key={order.id} className="border-b border-default last:border-b-0">
-            <td className="whitespace-nowrap py-2 pr-4 tabular-nums text-muted-foreground">{order.id}</td>
-            <td className="max-w-0 w-full truncate py-2 pr-4 text-base-foreground">{order.title}</td>
-            <td className="py-2 pr-4">
+          <TableRow key={order.id}>
+            <TableCell mono muted>
+              {order.id}
+            </TableCell>
+            <TableCell wrap="truncate" className="w-full">
+              <span className="text-base-foreground">{order.title}</span>
+            </TableCell>
+            <TableCell>
               <StatusBadge status={order.status} outline />
-            </td>
-            <td className="whitespace-nowrap py-2 text-muted-foreground">{formatDate(order.dueAt)}</td>
-          </tr>
+            </TableCell>
+            <TableCell wrap="nowrap" muted>
+              {formatDate(order.dueAt)}
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -972,7 +984,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['display/StatusBadge.tsx'],
+          uses: ['display/StatusBadge.tsx', 'primitives/table/Table.tsx'],
           Component: PageStateFilteredEmpty,
         },
         {
@@ -1058,6 +1070,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
+          uses: ['display/StatusBadge.tsx', 'primitives/table/Table.tsx'],
           Component: PageStateStale,
         },
         {
@@ -1110,7 +1123,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['display/StatusBadge.tsx'],
+          uses: ['display/StatusBadge.tsx', 'primitives/table/Table.tsx'],
           Component: PageStateWarningSummary,
         },
       ],

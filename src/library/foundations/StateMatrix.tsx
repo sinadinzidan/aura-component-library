@@ -1,5 +1,14 @@
 import type { ReactNode } from 'react';
 
+import { Table } from '../primitives/table/Table';
+import type { TableProps } from '../primitives/table/Table';
+import { TableBody } from '../primitives/table/TableBody';
+import { TableCaption } from '../primitives/table/TableCaption';
+import { TableCell } from '../primitives/table/TableCell';
+import { TableHead } from '../primitives/table/TableHead';
+import { TableHeader } from '../primitives/table/TableHeader';
+import { TableRow } from '../primitives/table/TableRow';
+
 export type StateMatrixColumn = {
   id: string;
   label: string;
@@ -23,55 +32,69 @@ export type StateMatrixProps = {
   rows: readonly StateMatrixRow[];
   /** Tighter cells for wide matrices. */
   dense?: boolean;
+  /** The surface the matrix sits on, so its rows match it. */
+  surface?: TableProps['surface'];
 };
 
 /**
  * A grid of the same control in each interaction state: one row per control, one column per
  * state. A real table, so each example is announced with its control and state.
  */
-export function StateMatrix({ caption, rowHeader = 'Control', columns, rows, dense = false }: StateMatrixProps) {
-  const cell = dense ? 'px-2 py-2' : 'px-3 py-3';
-
+export function StateMatrix({
+  caption,
+  rowHeader = 'Control',
+  columns,
+  rows,
+  dense = false,
+  surface = 'base',
+}: StateMatrixProps) {
   return (
-    <table data-slot="state-matrix" className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">{caption}</caption>
-      <thead>
-        <tr className="border-b border-default">
-          <th scope="col" className={`${cell} text-xs font-medium text-muted-foreground`}>
-            {rowHeader}
-          </th>
-          {columns.map((column) => (
-            <th key={column.id} scope="col" className={`${cell} align-bottom text-xs font-medium text-muted-foreground`}>
-              {column.label}
-              {column.hint ? <span className="block font-normal">{column.hint}</span> : null}
-            </th>
+    <div data-slot="state-matrix" className="w-full min-w-0">
+      {/* Rows do not highlight under the pointer: the cells demonstrate hover states of their own. */}
+      <Table
+        density={dense ? 'compact' : 'comfortable'}
+        hover={false}
+        surface={surface}
+      >
+        <TableCaption srOnly>{caption}</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="align-bottom">{rowHeader}</TableHead>
+            {columns.map((column) => (
+              <TableHead key={column.id} className="align-bottom">
+                {column.label}
+                {column.hint ? (
+                  <span className="block font-normal">{column.hint}</span>
+                ) : null}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.id}>
+              <TableCell rowHeader wrap="nowrap">
+                {row.label}
+              </TableCell>
+              {columns.map((column) => {
+                const content = row.cells[column.id];
+                return (
+                  <TableCell key={column.id}>
+                    {content === undefined || content === null ? (
+                      <span className="text-muted-foreground">
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">Not applicable</span>
+                      </span>
+                    ) : (
+                      content
+                    )}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
           ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <tr key={row.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className={`${cell} text-sm font-medium whitespace-nowrap text-base-foreground`}>
-              {row.label}
-            </th>
-            {columns.map((column) => {
-              const content = row.cells[column.id];
-              return (
-                <td key={column.id} className={`${cell} align-middle`}>
-                  {content === undefined || content === null ? (
-                    <span className="text-muted-foreground">
-                      <span aria-hidden="true">—</span>
-                      <span className="sr-only">Not applicable</span>
-                    </span>
-                  ) : (
-                    content
-                  )}
-                </td>
-              );
-            })}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+        </TableBody>
+      </Table>
+    </div>
   );
 }

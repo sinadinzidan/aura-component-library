@@ -25,6 +25,12 @@ import { useEffect, useRef, useState } from 'react';
 
 import { PersonAvatar } from '../../../library/display/PersonAvatar';
 import { StatusBadge } from '../../../library/display/StatusBadge';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, ASSETS, PEOPLE, SENSORS, WORK_ORDERS, childrenOf, findAsset, findPerson } from '../../data/plant';
 import type { Sensor, WorkOrder } from '../../data/plant';
 import { formatAgo, formatDate, formatTime } from '../../data/series';
@@ -126,34 +132,34 @@ function ScrollAreaBothAxes() {
   return (
     <div className="w-full max-w-md overflow-hidden rounded-xl border border-default">
       <ScrollArea className="h-56 w-full" aria-label="Sensor limits">
-        <table className="w-max text-left text-sm">
-          <thead>
-            <tr className="text-xs text-muted-foreground">
-              <th className="px-4 py-2 font-medium">Tag</th>
-              <th className="px-4 py-2 font-medium">Name</th>
-              <th className="px-4 py-2 text-right font-medium">Value</th>
-              <th className="px-4 py-2 text-right font-medium">Low</th>
-              <th className="px-4 py-2 text-right font-medium">High</th>
-              <th className="px-4 py-2 text-right font-medium">Range</th>
-              <th className="px-4 py-2 font-medium">Quality</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table label="Sensors" className="w-max">
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tag</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead numeric>Value</TableHead>
+              <TableHead numeric>Low</TableHead>
+              <TableHead numeric>High</TableHead>
+              <TableHead numeric>Range</TableHead>
+              <TableHead>Quality</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {SENSORS.map((sensor) => (
-              <tr key={sensor.id} className="border-t border-default">
-                <td className="px-4 py-2 font-mono text-xs text-medium-foreground">{sensor.tag}</td>
-                <td className="px-4 py-2 text-base-foreground">{sensor.name}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-base-foreground">{formatSensorValue(sensor)}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-medium-foreground">{sensor.lowLimit}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-medium-foreground">{sensor.highLimit}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-medium-foreground">
+              <TableRow key={sensor.id}>
+                <TableCell mono>{sensor.tag}</TableCell>
+                <TableCell wrap="nowrap">{sensor.name}</TableCell>
+                <TableCell numeric>{formatSensorValue(sensor)}</TableCell>
+                <TableCell numeric>{sensor.lowLimit}</TableCell>
+                <TableCell numeric>{sensor.highLimit}</TableCell>
+                <TableCell numeric>
                   {sensor.rangeMin}–{sensor.rangeMax}
-                </td>
-                <td className="px-4 py-2 text-medium-foreground">{sensor.quality}</td>
-              </tr>
+                </TableCell>
+                <TableCell>{sensor.quality}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </ScrollArea>
     </div>
   );
@@ -658,9 +664,10 @@ export default definePage({
           id: 'ScrollAreaBothAxes',
           title: 'Both axes',
           note: 'A small table that is wider and taller than its slot.',
-          origin: 'aura',
+          origin: 'custom',
           size: 'md',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: ScrollAreaBothAxes,
         },
         {

@@ -22,6 +22,12 @@ import { CollapsibleSection } from '../../../library/patterns/structure/Collapsi
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
 import type { Property } from '../../../library/patterns/structure/PropertyList';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ASSETS, PEOPLE, SENSORS, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
 import { DAY, MINUTE, REFERENCE_NOW, formatAgo, formatDate, formatDateTime, formatTime } from '../../data/series';
 import { definePage } from '../../types';
@@ -440,32 +446,30 @@ function KeyValueMetaJson() {
 
 function KeyValueMetaTable() {
   return (
-    <table aria-label="Metadata of 23-PT-92531" className="w-full border-collapse text-left text-sm">
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Key
-          </th>
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Value
-          </th>
-          <th scope="col" className="py-2 font-medium">
-            Type
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="Metadata of 23-PT-92531">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Key</TableHead>
+          <TableHead>Value</TableHead>
+          <TableHead>Type</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {KEY_VALUE_TABLE.map((row) => (
-          <tr key={row.key} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-4 font-mono text-xs font-normal text-muted-foreground">
+          <TableRow key={row.key}>
+            <TableCell rowHeader mono>
               {row.key}
-            </th>
-            <td className={`py-2 pr-4 text-base-foreground ${row.mono ? 'font-mono text-xs' : 'tabular-nums'}`}>{row.value}</td>
-            <td className="py-2 text-xs text-muted-foreground">{row.type}</td>
-          </tr>
+            </TableCell>
+            <TableCell mono={row.mono} wrap="wrap">
+              <span className="text-base-foreground tabular-nums">{row.value}</span>
+            </TableCell>
+            <TableCell muted>
+              <span className="text-xs">{row.type}</span>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -868,6 +872,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: KeyValueMetaTable,
         },
         {

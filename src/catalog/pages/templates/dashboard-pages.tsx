@@ -34,6 +34,12 @@ import { StatRow } from '../../../library/patterns/collections/StatRow';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
 import { PageHeader } from '../../../library/patterns/structure/PageHeader';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { AppShell } from '../../../library/templates/AppShell';
 import { AppTopbar } from '../../../library/templates/AppTopbar';
 import type { AppTopbarCrumb } from '../../../library/templates/AppTopbar';
@@ -863,26 +869,22 @@ function DashboardTemplateReport() {
             temperature limitation described above.
           </p>
           <Figure number={1} kind="Table" caption="Work orders by status at month end.">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-default text-xs text-muted-foreground">
-                  <th scope="col" className="py-2 font-medium">
-                    Status
-                  </th>
-                  <th scope="col" className="py-2 text-right font-medium">
-                    Work orders
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table label="Work orders by status at month end">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead numeric>Work orders</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {DASHBOARD_ORDER_STATUS_ROWS.map((row) => (
-                  <tr key={row.status} className="border-b border-default last:border-b-0">
-                    <td className="py-2 text-medium-foreground">{row.status}</td>
-                    <td className="py-2 text-right tabular-nums text-base-foreground">{row.count}</td>
-                  </tr>
+                  <TableRow key={row.status}>
+                    <TableCell>{row.status}</TableCell>
+                    <TableCell numeric>{row.count}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </Figure>
         </section>
       </ContentContainer>
@@ -1196,6 +1198,7 @@ export default definePage({
             'patterns/collections/StatRow.tsx',
             'industrial/analytics/Figure.tsx',
             'industrial/charts/TrendChart.tsx',
+            'primitives/table/Table.tsx',
           ],
           Component: DashboardTemplateReport,
         },

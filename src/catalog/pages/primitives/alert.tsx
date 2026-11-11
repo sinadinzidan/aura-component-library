@@ -16,6 +16,12 @@ import { useState } from 'react';
 
 import { createMemoryDismissalStore } from '../../../library/feedback/dismissalStore';
 import { DismissibleAlert } from '../../../library/feedback/DismissibleAlert';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { SENSORS } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -369,27 +375,31 @@ function AlertAboveTable() {
           <AlertButton variant="ghost">Show all sites</AlertButton>
         </AlertActions>
       </Alert>
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-default text-xs text-muted-foreground">
-            <th className="py-2 pr-4 font-medium">Work order</th>
-            <th className="py-2 pr-4 font-medium">Title</th>
-            <th className="py-2 font-medium">Priority</th>
-          </tr>
-        </thead>
-        <tbody className="text-base-foreground">
-          <tr>
-            <td className="py-2 pr-4 tabular-nums">WO-104482</td>
-            <td className="py-2 pr-4">Inspect recompressor drive-end bearing</td>
-            <td className="py-2">P1</td>
-          </tr>
-          <tr>
-            <td className="py-2 pr-4 tabular-nums">WO-104479</td>
-            <td className="py-2 pr-4">Replace bearing temperature transmitter</td>
-            <td className="py-2">P2</td>
-          </tr>
-        </tbody>
-      </table>
+      <Table label="Work orders">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Work order</TableHead>
+            <TableHead>Title</TableHead>
+            <TableHead>Priority</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell numeric align="start">
+              WO-104482
+            </TableCell>
+            <TableCell>Inspect recompressor drive-end bearing</TableCell>
+            <TableCell>P1</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell numeric align="start">
+              WO-104479
+            </TableCell>
+            <TableCell>Replace bearing temperature transmitter</TableCell>
+            <TableCell>P2</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -724,6 +734,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: AlertAboveTable,
         },
       ],

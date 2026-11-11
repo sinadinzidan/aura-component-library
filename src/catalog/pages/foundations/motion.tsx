@@ -12,6 +12,11 @@ import { Replay } from '../../../library/foundations/Replay';
 import { useSimulatedWait } from '../../../library/foundations/useSimulatedWait';
 import { formatReading } from '../../../library/industrial/status';
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { usePrefersReducedMotion } from '../../../library/three/usePrefersReducedMotion';
 import { ALARMS, findAsset, WORK_ORDERS } from '../../data/plant';
 import { formatAgo } from '../../data/series';
@@ -118,37 +123,43 @@ function MotionGuideEasings() {
 function MotionGuideReference() {
   return (
     <div className="grid w-full grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2">
-      <table className="w-full border-collapse text-left text-sm">
-        <caption className="pb-2 text-left text-xs font-medium text-muted-foreground">Duration bands</caption>
-        <tbody>
+      <Table>
+        <TableCaption side="top">Duration bands</TableCaption>
+        <TableBody>
           {DURATIONS.map((band) => (
-            <tr key={band.id} className="border-t border-default">
-              <th scope="row" className="py-2 pr-3 font-medium whitespace-nowrap text-base-foreground">
+            <TableRow key={band.id}>
+              <TableCell rowHeader wrap="nowrap">
                 {band.name}
-              </th>
-              <td className="py-2 pr-3 text-right whitespace-nowrap text-base-foreground tabular-nums">
-                {formatMs(band.ms)}
-              </td>
-              <td className="py-2 pr-3 font-mono text-xs whitespace-nowrap text-muted-foreground">{band.className}</td>
-              <td className="py-2 text-xs text-muted-foreground">{band.use}</td>
-            </tr>
+              </TableCell>
+              <TableCell numeric>{formatMs(band.ms)}</TableCell>
+              <TableCell mono muted>
+                {band.className}
+              </TableCell>
+              <TableCell muted>
+                <span className="text-xs">{band.use}</span>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
-      <table className="w-full border-collapse text-left text-sm">
-        <caption className="pb-2 text-left text-xs font-medium text-muted-foreground">Easing curves</caption>
-        <tbody>
+        </TableBody>
+      </Table>
+      <Table>
+        <TableCaption side="top">Easing curves</TableCaption>
+        <TableBody>
           {EASINGS.map((easing) => (
-            <tr key={easing.id} className="border-t border-default">
-              <th scope="row" className="py-2 pr-3 font-medium whitespace-nowrap text-base-foreground">
+            <TableRow key={easing.id}>
+              <TableCell rowHeader wrap="nowrap">
                 {easing.name}
-              </th>
-              <td className="py-2 pr-3 font-mono text-xs whitespace-nowrap text-muted-foreground">{easing.curve}</td>
-              <td className="py-2 text-xs text-muted-foreground">{easing.use}</td>
-            </tr>
+              </TableCell>
+              <TableCell mono muted>
+                {easing.curve}
+              </TableCell>
+              <TableCell muted>
+                <span className="text-xs">{easing.use}</span>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -803,7 +814,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['foundations/motion.ts'],
+          uses: ['foundations/motion.ts', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: MotionGuideReference,
         },
         {

@@ -1,5 +1,12 @@
 import type { ReactNode } from 'react';
 
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ThemeScope } from '../../../library/themes/ThemeScope';
 import { ConditionRow } from '../../../library/tools/query-builder/ConditionRow';
 import { GroupBlock } from '../../../library/tools/query-builder/GroupBlock';
@@ -276,29 +283,25 @@ const OPERATOR_KINDS: readonly { kind: FieldKind; label: string; example: QueryF
 
 function QueryBuilderOperatorSets() {
   return (
-    <table className="w-full text-left text-sm">
-      <caption className="sr-only">Operators offered for each field type</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Field type
-          </th>
-          <th scope="col" className="py-2 font-medium">
-            Operators
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Operators offered for each field type</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Field type</TableHead>
+          <TableHead>Operators</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {OPERATOR_KINDS.map((entry) => (
-          <tr key={entry.kind} className="border-b border-default align-top last:border-b-0">
-            <th scope="row" className="py-2 pr-4 font-medium whitespace-nowrap text-base-foreground">
+          <TableRow key={entry.kind}>
+            <TableCell rowHeader wrap="nowrap" className="align-top">
               {entry.label}
-            </th>
-            <td className="py-2 text-medium-foreground">{operatorsFor(entry.kind).map((op) => operatorLabel(op)).join(' · ')}</td>
-          </tr>
+            </TableCell>
+            <TableCell className="align-top">{operatorsFor(entry.kind).map((op) => operatorLabel(op)).join(' · ')}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -497,7 +500,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['tools/query-builder/queryModel.ts'],
+          uses: ['tools/query-builder/queryModel.ts', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: QueryBuilderOperatorSets,
         },
       ],

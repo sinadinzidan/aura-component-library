@@ -30,8 +30,8 @@ import { Callout } from '../../../library/patterns/content/Callout';
 import { GlossaryTerm } from '../../../library/patterns/content/GlossaryTerm';
 import { MarkdownPreview } from '../../../library/patterns/content/MarkdownPreview';
 import { Prose } from '../../../library/patterns/content/Prose';
-import { TagList } from '../../../library/patterns/content/TagList';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
+import { TagList } from '../../../library/primitives/tag/TagList';
 import { PEOPLE, SENSORS } from '../../data/plant';
 import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatAgo, formatDate, formatDateTime, formatTime } from '../../data/series';
 import { definePage } from '../../types';
@@ -281,7 +281,7 @@ function RichNoteCard() {
       <p className="text-sm leading-6 text-base-foreground">
         Cooler outlet transmitter reads 2 °C high against the local gauge. Treat readings above 39 °C as uncertain until it is calibrated.
       </p>
-      <TagList label="Linked to" tags={['23-TT-91141', '23-HA-9114']} mono />
+      <TagList label="Linked to" tags={['23-TT-91141', '23-HA-9114']} size="sm" mono />
     </article>
   );
 }
@@ -694,7 +694,7 @@ function RichNoteProcedure() {
             { label: 'Revision', value: '4, in review' },
             { label: 'Owner', value: RICH_NOTE_ENGINEER.name },
             { label: 'Last changed', value: formatDateTime(REFERENCE_NOW - 2 * DAY) },
-            { label: 'Applies to', value: <TagList label="Applies to" tags={['23-KA-9103']} mono /> },
+            { label: 'Applies to', value: <TagList label="Applies to" tags={['23-KA-9103']} size="sm" mono /> },
           ]}
         />
       </aside>
@@ -789,7 +789,7 @@ export default definePage({
           note: 'One note in a list or on an asset page: who, when, the text and what it is linked to.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['display/PersonAvatar.tsx', 'patterns/content/TagList.tsx'],
+          uses: ['display/PersonAvatar.tsx', 'primitives/tag/TagList.tsx'],
           Component: RichNoteCard,
         },
         {
@@ -976,7 +976,7 @@ export default definePage({
             'patterns/content/Prose.tsx',
             'patterns/content/Callout.tsx',
             'patterns/content/GlossaryTerm.tsx',
-            'patterns/content/TagList.tsx',
+            'primitives/tag/TagList.tsx',
             'patterns/structure/PropertyList.tsx',
           ],
           Component: RichNoteProcedure,

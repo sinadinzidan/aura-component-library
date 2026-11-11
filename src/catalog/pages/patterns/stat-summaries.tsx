@@ -16,6 +16,12 @@ import type { DataTableColumn } from '../../../library/patterns/collections/Data
 import { DistributionStrip } from '../../../library/patterns/collections/DistributionStrip';
 import { IconAction } from '../../../library/patterns/collections/IconAction';
 import { StatRow } from '../../../library/patterns/collections/StatRow';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, ASSETS, PEOPLE, PLANT_KPIS, WORK_ORDERS } from '../../data/plant';
 import type { RunState, Severity } from '../../data/plant';
 import { makeValues } from '../../data/series';
@@ -234,39 +240,35 @@ function StatSummaryThisVsLast() {
   ] as const;
 
   return (
-    <table aria-label="This week against last week" className="w-full text-sm">
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 text-left font-medium">
-            Measure
-          </th>
-          <th scope="col" className="py-2 text-right font-medium">
-            This week
-          </th>
-          <th scope="col" className="py-2 text-right font-medium">
-            Last week
-          </th>
-          <th scope="col" className="py-2 text-right font-medium">
-            Change
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="This week against last week" density="comfortable">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Measure</TableHead>
+          <TableHead numeric>This week</TableHead>
+          <TableHead numeric>Last week</TableHead>
+          <TableHead numeric>Change</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((row) => (
-          <tr key={row.label} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2.5 text-left font-normal text-medium-foreground">
-              {row.label}
-              {row.unit ? <span className="ml-1.5 text-xs text-muted-foreground">{row.unit}</span> : null}
-            </th>
-            <td className="py-2.5 text-right font-semibold tabular-nums text-base-foreground">{formatValue(row.now, row.decimals)}</td>
-            <td className="py-2.5 text-right tabular-nums text-muted-foreground">{formatValue(row.before, row.decimals)}</td>
-            <td className="py-2.5 text-right">
+          <TableRow key={row.label}>
+            <TableCell rowHeader>
+              <span className="font-normal text-medium-foreground">{row.label}</span>
+              {row.unit ? <span className="ml-1.5 text-xs font-normal text-muted-foreground">{row.unit}</span> : null}
+            </TableCell>
+            <TableCell numeric>
+              <span className="font-semibold text-base-foreground">{formatValue(row.now, row.decimals)}</span>
+            </TableCell>
+            <TableCell numeric muted>
+              {formatValue(row.before, row.decimals)}
+            </TableCell>
+            <TableCell numeric>
               <TrendDelta value={row.now} reference={row.before} format="percent" goodDirection={row.good} />
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -767,7 +769,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/TrendDelta.tsx'],
+          uses: ['industrial/TrendDelta.tsx', 'primitives/table/Table.tsx'],
           Component: StatSummaryThisVsLast,
         },
       ],

@@ -22,6 +22,13 @@ import { formatDelta, formatReading, formatValue, severityStatus } from '../../.
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
 import { TrendDelta } from '../../../library/industrial/TrendDelta';
 import { ValueReadout } from '../../../library/industrial/ValueReadout';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, findAsset, PLANT_KPIS, SENSORS, WORK_ORDERS } from '../../data/plant';
 import { DAY, formatAgo, formatDate, formatDateTime, formatTime, HOUR, MINUTE, REFERENCE_NOW } from '../../data/series';
 import { definePage } from '../../types';
@@ -436,49 +443,37 @@ function FormatGuidePlurals() {
 
 function FormatGuideAlarmTable() {
   return (
-    <table className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">Alarms with formatted values, limits and timestamps</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-3 font-medium">
-            Raised (UTC)
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Severity
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Tag
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Alarm
-          </th>
-          <th scope="col" className="px-3 py-2 text-right font-medium">
-            Value
-          </th>
-          <th scope="col" className="py-2 pl-3 text-right font-medium">
-            Age
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Alarms with formatted values, limits and timestamps</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Raised (UTC)</TableHead>
+          <TableHead>Severity</TableHead>
+          <TableHead>Tag</TableHead>
+          <TableHead>Alarm</TableHead>
+          <TableHead numeric>Value</TableHead>
+          <TableHead numeric>Age</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {TABLE_ALARMS.map((alarm) => (
-          <tr key={alarm.id} className="border-b border-default last:border-b-0">
-            <td className="py-2 pr-3 whitespace-nowrap text-base-foreground tabular-nums">
+          <TableRow key={alarm.id}>
+            <TableCell numeric align="start">
               {formatTableTimestamp(alarm.raisedAt)}
-            </td>
-            <td className="px-3 py-2">
+            </TableCell>
+            <TableCell>
               <StatusIndicator {...severityStatus(alarm.severity)} size="sm" />
-            </td>
-            <td className="px-3 py-2 font-mono text-xs whitespace-nowrap text-base-foreground">{alarm.sensorTag}</td>
-            <td className="px-3 py-2 text-medium-foreground">{alarm.message}</td>
-            <td className="px-3 py-2 text-right whitespace-nowrap text-base-foreground tabular-nums">{alarm.value}</td>
-            <td className="py-2 pl-3 text-right whitespace-nowrap text-muted-foreground tabular-nums">
+            </TableCell>
+            <TableCell mono>{alarm.sensorTag}</TableCell>
+            <TableCell>{alarm.message}</TableCell>
+            <TableCell numeric>{alarm.value}</TableCell>
+            <TableCell numeric muted>
               {formatDuration(REFERENCE_NOW - alarm.raisedAt)}
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -807,7 +802,13 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['foundations/formatters.ts', 'industrial/StatusIndicator.tsx', 'industrial/status.ts'],
+          uses: [
+            'foundations/formatters.ts',
+            'industrial/StatusIndicator.tsx',
+            'industrial/status.ts',
+            'primitives/table/Table.tsx',
+            'primitives/table/TableCaption.tsx',
+          ],
           Component: FormatGuideAlarmTable,
         },
         {

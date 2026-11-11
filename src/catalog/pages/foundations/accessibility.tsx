@@ -16,6 +16,13 @@ import { useSimulatedWait } from '../../../library/foundations/useSimulatedWait'
 import { Sparkline } from '../../../library/industrial/Sparkline';
 import { formatReading, runStateStatus, TONE_DOT } from '../../../library/industrial/status';
 import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, ASSETS, SENSORS } from '../../data/plant';
 import { formatTime, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
@@ -369,31 +376,25 @@ function A11yGuideChartAlt() {
         {showTable ? 'Hide data table' : 'Show data table'}
       </Button>
       {showTable ? (
-        <table className="w-full border-collapse text-left text-sm">
-          <caption className="sr-only">Discharge pressure every 6 hours</caption>
-          <thead>
-            <tr className="border-b border-default text-xs text-muted-foreground">
-              <th scope="col" className="py-1 pr-3 font-medium">
-                Time (UTC)
-              </th>
-              <th scope="col" className="py-1 text-right font-medium">
-                Pressure
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table density="compact">
+          <TableCaption srOnly>Discharge pressure every 6 hours</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Time (UTC)</TableHead>
+              <TableHead numeric>Pressure</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {PRESSURE_SAMPLES.map((point) => (
-              <tr key={point.t} className="border-b border-default last:border-b-0">
-                <th scope="row" className="py-1 pr-3 font-normal text-base-foreground tabular-nums">
+              <TableRow key={point.t}>
+                <TableCell rowHeader numeric align="start">
                   {formatTime(point.t)}
-                </th>
-                <td className="py-1 text-right text-base-foreground tabular-nums">
-                  {formatReading(point.v, PRESSURE.unit, 1)}
-                </td>
-              </tr>
+                </TableCell>
+                <TableCell numeric>{formatReading(point.v, PRESSURE.unit, 1)}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       ) : null}
     </div>
   );
@@ -404,37 +405,27 @@ function A11yGuideTableSemantics() {
 
   return (
     <div className="flex w-full flex-col gap-3">
-      <table className="w-full border-collapse text-left text-sm">
-        <caption className="pb-2 text-left text-xs font-medium text-muted-foreground">
-          1st stage compressor, current readings
-        </caption>
-        <thead>
-          <tr className="border-b border-default text-xs text-muted-foreground">
-            <th scope="col" className="py-2 pr-3 font-medium">
-              Measurement
-            </th>
-            <th scope="col" className="px-3 py-2 font-medium">
-              Tag
-            </th>
-            <th scope="col" className="py-2 pl-3 text-right font-medium">
-              Value
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table>
+        <TableCaption side="top">1st stage compressor, current readings</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Measurement</TableHead>
+            <TableHead>Tag</TableHead>
+            <TableHead numeric>Value</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {sensors.map((sensor) => (
-            <tr key={sensor.id} className="border-b border-default last:border-b-0">
-              <th scope="row" className="py-2 pr-3 font-normal text-base-foreground">
-                {sensor.name}
-              </th>
-              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{sensor.tag}</td>
-              <td className="py-2 pl-3 text-right text-base-foreground tabular-nums">
-                {formatReading(sensor.value, sensor.unit, sensor.decimals)}
-              </td>
-            </tr>
+            <TableRow key={sensor.id}>
+              <TableCell rowHeader>{sensor.name}</TableCell>
+              <TableCell mono muted>
+                {sensor.tag}
+              </TableCell>
+              <TableCell numeric>{formatReading(sensor.value, sensor.unit, sensor.decimals)}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <p className="font-mono text-xs text-muted-foreground">
         &lt;caption&gt; · &lt;th scope=&quot;col&quot;&gt; · &lt;th scope=&quot;row&quot;&gt;
       </p>
@@ -599,33 +590,27 @@ function A11yGuideHeadingOutline() {
 
 function A11yGuideAltText() {
   return (
-    <table className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">Alt text and naming by image type</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-3 font-medium">
-            Type
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Approach
-          </th>
-          <th scope="col" className="py-2 pl-3 font-medium">
-            Example
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Alt text and naming by image type</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Type</TableHead>
+          <TableHead>Approach</TableHead>
+          <TableHead>Example</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {ALT_TEXT.map((row) => (
-          <tr key={row.type} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-3 font-medium text-base-foreground">
-              {row.type}
-            </th>
-            <td className="px-3 py-2 text-medium-foreground">{row.approach}</td>
-            <td className="py-2 pl-3 font-mono text-xs text-muted-foreground">{row.example}</td>
-          </tr>
+          <TableRow key={row.type}>
+            <TableCell rowHeader>{row.type}</TableCell>
+            <TableCell>{row.approach}</TableCell>
+            <TableCell mono muted wrap="wrap">
+              {row.example}
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -666,33 +651,27 @@ function A11yGuideReducedMotion() {
 
 function A11yGuideResponsibility() {
   return (
-    <table className="w-full border-collapse text-left text-sm">
-      <caption className="sr-only">What Aura handles and what you verify</caption>
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-3 font-medium">
-            Concern
-          </th>
-          <th scope="col" className="px-3 py-2 font-medium">
-            Aura handles
-          </th>
-          <th scope="col" className="py-2 pl-3 font-medium">
-            You verify
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>What Aura handles and what you verify</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Concern</TableHead>
+          <TableHead>Aura handles</TableHead>
+          <TableHead>You verify</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {RESPONSIBILITY.map((row) => (
-          <tr key={row.concern} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-3 font-medium whitespace-nowrap text-base-foreground">
+          <TableRow key={row.concern}>
+            <TableCell rowHeader wrap="nowrap">
               {row.concern}
-            </th>
-            <td className="px-3 py-2 text-muted-foreground">{row.aura}</td>
-            <td className="py-2 pl-3 text-medium-foreground">{row.you}</td>
-          </tr>
+            </TableCell>
+            <TableCell muted>{row.aura}</TableCell>
+            <TableCell>{row.you}</TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -827,16 +806,17 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/Sparkline.tsx', 'industrial/status.ts'],
+          uses: ['industrial/Sparkline.tsx', 'industrial/status.ts', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: A11yGuideChartAlt,
         },
         {
           id: 'A11yGuideTableSemantics',
           title: 'Tables with caption and scope',
           note: 'Any static table: a caption, column headers and a row header per row.',
-          origin: 'aura',
+          origin: 'custom',
           size: 'md',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: A11yGuideTableSemantics,
         },
       ],
@@ -924,9 +904,10 @@ export default definePage({
           id: 'A11yGuideAltText',
           title: 'Alt text and icon naming',
           note: 'Images, illustrations and icons, by the job they do.',
-          origin: 'aura',
+          origin: 'custom',
           size: 'md',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: A11yGuideAltText,
         },
         {
@@ -949,9 +930,10 @@ export default definePage({
           id: 'A11yGuideResponsibility',
           title: 'Aura and you',
           note: 'What the primitives already do, and what stays your job when you compose them.',
-          origin: 'aura',
+          origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: A11yGuideResponsibility,
         },
         {

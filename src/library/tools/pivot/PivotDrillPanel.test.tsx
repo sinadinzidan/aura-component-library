@@ -33,6 +33,22 @@ describe(PivotDrillPanel.name, () => {
     expect(screen.getByText('3 h')).toBeInTheDocument();
   });
 
+  it('lays the records out as a named table with numbers right-aligned in tabular figures', () => {
+    renderPanel();
+
+    expect(screen.getByRole('table', { name: 'Compression, Jan records' })).toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Work order', 'Hours']);
+    expect(screen.getByRole('cell', { name: '8 h' })).toHaveClass('text-right', 'tabular-nums');
+    expect(screen.getByRole('cell', { name: 'WO-104482' })).toHaveClass('font-mono');
+  });
+
+  it('keeps the column headers in view in a keyboard-reachable scroll area', () => {
+    renderPanel();
+
+    expect(screen.getByRole('region', { name: 'Compression, Jan records, scrollable' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('columnheader', { name: 'Hours' })).toHaveClass('sticky', 'top-0');
+  });
+
   it('uses the singular for one record', () => {
     renderPanel([{ id: 'WO-104482', hours: 8 }]);
 

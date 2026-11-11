@@ -47,6 +47,13 @@ import { SaveBar } from '../../../library/patterns/data-entry/SaveBar';
 import { SaveStatus } from '../../../library/patterns/data-entry/SaveStatus';
 import type { SaveState } from '../../../library/patterns/data-entry/SaveStatus';
 import { SettingRow } from '../../../library/patterns/data-entry/SettingRow';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { PEOPLE, SITES } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -398,49 +405,47 @@ function SettingsNotificationMatrix() {
     'failed:email',
   ]);
   return (
-    <table className="w-full max-w-2xl border-collapse">
-      <caption className="pb-2 text-left text-sm font-semibold text-base-foreground">Notify me when</caption>
-      <thead>
-        <tr>
-          <th className="py-2 pr-3 text-left text-xs font-medium text-muted-foreground">Event</th>
-          {NOTIFICATION_CHANNELS.map((channel) => (
-            <th key={channel.id} className="w-20 px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-              {channel.label}
-            </th>
+    <div className="flex w-full max-w-2xl flex-col gap-2">
+      <p aria-hidden="true" className="px-3 text-sm font-semibold text-base-foreground">
+        Notify me when
+      </p>
+      <Table label="Notify me when" density="comfortable">
+        <TableCaption>Trips always notify you in the app.</TableCaption>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Event</TableHead>
+            {NOTIFICATION_CHANNELS.map((channel) => (
+              <TableHead key={channel.id} className="w-20">
+                {channel.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {NOTIFICATION_EVENTS.map((event) => (
+            <TableRow key={event.id}>
+              <TableCell rowHeader>
+                <span className="font-normal">{event.label}</span>
+              </TableCell>
+              {NOTIFICATION_CHANNELS.map((channel) => {
+                const key = `${event.id}:${channel.id}`;
+                const locked = event.id === 'trip' && channel.id === 'app';
+                return (
+                  <TableCell key={channel.id}>
+                    <SelectionCheckbox
+                      label={`${event.label}, ${channel.label}${locked ? ', always on' : ''}`}
+                      checked={enabled.includes(key)}
+                      disabled={locked}
+                      onChange={() => setEnabled(toggleIn(enabled, key))}
+                    />
+                  </TableCell>
+                );
+              })}
+            </TableRow>
           ))}
-        </tr>
-      </thead>
-      <tbody>
-        {NOTIFICATION_EVENTS.map((event) => (
-          <tr key={event.id} className="border-t border-default">
-            <th scope="row" className="py-2.5 pr-3 text-left text-sm font-normal text-base-foreground">
-              {event.label}
-            </th>
-            {NOTIFICATION_CHANNELS.map((channel) => {
-              const key = `${event.id}:${channel.id}`;
-              const locked = event.id === 'trip' && channel.id === 'app';
-              return (
-                <td key={channel.id} className="px-3 py-2.5">
-                  <SelectionCheckbox
-                    label={`${event.label}, ${channel.label}${locked ? ', always on' : ''}`}
-                    checked={enabled.includes(key)}
-                    disabled={locked}
-                    onChange={() => setEnabled(toggleIn(enabled, key))}
-                  />
-                </td>
-              );
-            })}
-          </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colSpan={4} className="pt-2 text-xs text-muted-foreground">
-            Trips always notify you in the app.
-          </td>
-        </tr>
-      </tfoot>
-    </table>
+        </TableBody>
+      </Table>
+    </div>
   );
 }
 
@@ -1147,7 +1152,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['data/SelectionCheckbox.tsx'],
+          uses: ['data/SelectionCheckbox.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: SettingsNotificationMatrix,
         },
         {

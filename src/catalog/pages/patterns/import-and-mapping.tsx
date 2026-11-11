@@ -17,14 +17,22 @@ import { FileTypeIcon } from '../../../library/patterns/content/FileTypeIcon';
 import { EditableCell } from '../../../library/patterns/data-entry/EditableCell';
 import { FormSection } from '../../../library/patterns/data-entry/FormSection';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
-import { Stepper } from '../../../library/patterns/data-entry/Stepper';
-import type { StepperStep } from '../../../library/patterns/data-entry/Stepper';
+import type { StepperStep } from '../../../library/patterns/data-entry/stepStatus';
 import { WizardFrame } from '../../../library/patterns/data-entry/WizardFrame';
 import { missingRequiredFields, suggestMapping } from '../../../library/patterns/workflows/columnMapping';
 import type { TargetField } from '../../../library/patterns/workflows/columnMapping';
 import { MappingTable } from '../../../library/patterns/workflows/MappingTable';
 import type { SourceColumn } from '../../../library/patterns/workflows/MappingTable';
 import { ValidationSummaryCard } from '../../../library/patterns/workflows/ValidationSummaryCard';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
+import { TagList } from '../../../library/primitives/tag/TagList';
 import { SENSORS } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -72,14 +80,16 @@ const COUNTS = { valid: 1246, warnings: 26, errors: 12 };
 const formatLimit = (value: number, decimals: number): string =>
   new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
 
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2 align-middle';
 
 function ImportMappingStepper() {
   const [current, setCurrent] = useState(1);
   return (
     <div className="flex w-full flex-col gap-4">
-      <Stepper steps={IMPORT_STEPS} current={current} label="Import tags" onStepSelect={setCurrent} />
+      <Stepper label="Import tags" current={current} onStepSelect={setCurrent}>
+        {IMPORT_STEPS.map((step) => (
+          <Step key={step.id} label={step.label} />
+        ))}
+      </Stepper>
       <div className="flex items-center justify-between gap-3">
         <p aria-live="polite" className="text-sm text-muted-foreground">
           Step {current + 1} of {IMPORT_STEPS.length}: {IMPORT_STEPS[current].description} Completed steps are links back.
@@ -264,33 +274,35 @@ function ImportMappingPreview() {
   ];
   return (
     <div className="flex w-full flex-col gap-2">
-      <table aria-label={`First rows of ${FILE.name}`} className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-default">
-            <th scope="col" className={`${TH} w-10 text-right`}>
+      <Table label={`First rows of ${FILE.name}`}>
+        <TableHeader>
+          <TableRow>
+            <TableHead numeric className="w-10">
               Row
-            </th>
+            </TableHead>
             {headers.map((header, index) => (
-              <th key={header.field} scope="col" className={`${TH} ${index > 2 ? 'text-right' : ''}`}>
+              <TableHead key={header.field} numeric={index > 2}>
                 <span className="block text-base-foreground">{header.field}</span>
                 <span className="block font-mono font-normal">{header.column}</span>
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((sensor, index) => (
-            <tr key={sensor.id} className="border-b border-default">
-              <td className={`${TD} text-right text-xs tabular-nums text-muted-foreground`}>{index + 2}</td>
-              <td className={`${TD} font-mono text-xs text-base-foreground`}>{sensor.tag}</td>
-              <td className={`${TD} text-base-foreground`}>{sensor.name}</td>
-              <td className={`${TD} text-muted-foreground`}>{sensor.unit}</td>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{formatLimit(sensor.lowLimit, sensor.decimals)}</td>
-              <td className={`${TD} text-right tabular-nums text-base-foreground`}>{formatLimit(sensor.highLimit, sensor.decimals)}</td>
-            </tr>
+            <TableRow key={sensor.id}>
+              <TableCell numeric muted>
+                <span className="text-xs">{index + 2}</span>
+              </TableCell>
+              <TableCell mono>{sensor.tag}</TableCell>
+              <TableCell>{sensor.name}</TableCell>
+              <TableCell muted>{sensor.unit}</TableCell>
+              <TableCell numeric>{formatLimit(sensor.lowLimit, sensor.decimals)}</TableCell>
+              <TableCell numeric>{formatLimit(sensor.highLimit, sensor.decimals)}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <p className="text-xs tabular-nums text-muted-foreground">Showing rows 2–6 of {NUMBER.format(FILE.rows + 1)}. Field names on top, the file's own headers under them.</p>
     </div>
   );
@@ -313,13 +325,7 @@ function ImportMappingColumnInspector() {
       />
       <div className="flex flex-col gap-1">
         <span className="text-xs text-muted-foreground">Sample values</span>
-        <ul className="flex flex-wrap gap-1.5">
-          {['52', '15', '145', '7.1', '10500', '5O.0'].map((value) => (
-            <li key={value} className="rounded-md bg-medium-background px-1.5 py-0.5 font-mono text-xs text-base-foreground">
-              {value}
-            </li>
-          ))}
-        </ul>
+        <TagList label="Sample values" size="sm" mono tags={['52', '15', '145', '7.1', '10500', '5O.0']} />
       </div>
     </div>
   );
@@ -391,35 +397,29 @@ function ImportMappingErrorRows() {
   const fixed = ERROR_ROWS.filter((row) => values[row.id] !== undefined).length;
   return (
     <div className="flex w-full flex-col gap-2">
-      <table aria-label="Rows with errors" className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-default">
-            <th scope="col" className={`${TH} w-14 text-right`}>
+      <Table label="Rows with errors">
+        <TableHeader>
+          <TableRow>
+            <TableHead numeric className="w-14">
               Row
-            </th>
-            <th scope="col" className={TH}>
-              Tag
-            </th>
-            <th scope="col" className={TH}>
-              Field
-            </th>
-            <th scope="col" className={`${TH} w-48`}>
-              Value
-            </th>
-            <th scope="col" className={TH}>
-              Problem
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+            </TableHead>
+            <TableHead>Tag</TableHead>
+            <TableHead>Field</TableHead>
+            <TableHead className="w-48">Value</TableHead>
+            <TableHead>Problem</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {ERROR_ROWS.map((row) => {
             const isFixed = values[row.id] !== undefined;
             return (
-              <tr key={row.id} data-fixed={isFixed ? 'true' : undefined} className="border-b border-default">
-                <td className={`${TD} text-right text-xs tabular-nums text-muted-foreground`}>{row.row}</td>
-                <td className={`${TD} font-mono text-xs text-base-foreground`}>{row.tag}</td>
-                <td className={`${TD} text-muted-foreground`}>{row.field}</td>
-                <td className="px-1 py-1 align-middle">
+              <TableRow key={row.id}>
+                <TableCell numeric muted>
+                  <span className="text-xs">{row.row}</span>
+                </TableCell>
+                <TableCell mono>{row.tag}</TableCell>
+                <TableCell muted>{row.field}</TableCell>
+                <TableCell>
                   <EditableCell
                     label={`${row.field} in row ${row.row}`}
                     value={values[row.id] ?? row.value}
@@ -428,8 +428,8 @@ function ImportMappingErrorRows() {
                     validate={row.check}
                     onSave={(value) => setValues({ ...values, [row.id]: value })}
                   />
-                </td>
-                <td className={TD}>
+                </TableCell>
+                <TableCell>
                   {isFixed ? (
                     <span className="flex items-center gap-1.5 text-xs font-medium text-success-foreground-strong">
                       <IconCircleCheck aria-hidden="true" className="size-3.5 shrink-0" />
@@ -441,12 +441,12 @@ function ImportMappingErrorRows() {
                       {row.reason}
                     </span>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <div className="flex items-center justify-between gap-3">
         <p aria-live="polite" className="text-xs tabular-nums text-muted-foreground">
           Showing 4 of 12 rows with errors · {fixed} fixed here. Edit a value to fix it in place; the file itself is not changed.
@@ -828,7 +828,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/data-entry/Stepper.tsx'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx'],
           Component: ImportMappingStepper,
         },
         {
@@ -913,6 +913,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: ImportMappingPreview,
         },
         {
@@ -921,7 +922,7 @@ export default definePage({
           note: 'One column up close when a match is in doubt: fill rate, range and what will not parse.',
           origin: 'custom',
           align: 'stretch',
-          uses: ['display/MetadataList.tsx'],
+          uses: ['display/MetadataList.tsx', 'primitives/tag/TagList.tsx'],
           Component: ImportMappingColumnInspector,
         },
       ],
@@ -958,7 +959,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/data-entry/EditableCell.tsx'],
+          uses: ['primitives/table/Table.tsx', 'patterns/data-entry/EditableCell.tsx'],
           Component: ImportMappingErrorRows,
         },
         {

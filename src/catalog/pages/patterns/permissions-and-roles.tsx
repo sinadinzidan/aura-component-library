@@ -63,6 +63,13 @@ import { MemberRow } from '../../../library/patterns/people/MemberRow';
 import { RoleBadge } from '../../../library/patterns/people/RoleBadge';
 import type { MemberRole } from '../../../library/patterns/people/RoleBadge';
 import { RoleSelect } from '../../../library/patterns/people/RoleSelect';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { PEOPLE } from '../../data/plant';
 import { DAY, HOUR, REFERENCE_NOW, formatAgo, formatDateTime } from '../../data/series';
 import { definePage } from '../../types';
@@ -712,39 +719,31 @@ function PermissionRoleNoAccessState() {
 
 function PermissionRoleGroupMapping() {
   return (
-    <table className="w-full border-collapse text-sm">
-      <caption className="sr-only">Directory groups and the role each one gets</caption>
-      <thead>
-        <tr className="border-b border-default text-left text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Directory group
-          </th>
-          <th scope="col" className="py-2 pr-4 text-right font-medium">
-            Members
-          </th>
-          <th scope="col" className="py-2 pr-4 font-medium">
-            Scope
-          </th>
-          <th scope="col" className="py-2 font-medium">
-            Role
-          </th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table>
+      <TableCaption srOnly>Directory groups and the role each one gets</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Directory group</TableHead>
+          <TableHead numeric>Members</TableHead>
+          <TableHead>Scope</TableHead>
+          <TableHead>Role</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {GROUP_MAPPING.map((row) => (
-          <tr key={row.id} className="border-b border-default last:border-b-0">
-            <th scope="row" className="py-2 pr-4 text-left font-mono text-sm font-normal text-base-foreground">
+          <TableRow key={row.id}>
+            <TableCell rowHeader mono>
               {row.group}
-            </th>
-            <td className="py-2 pr-4 text-right tabular-nums text-base-foreground">{row.members}</td>
-            <td className="py-2 pr-4 text-muted-foreground">{row.scope}</td>
-            <td className="py-2">
+            </TableCell>
+            <TableCell numeric>{row.members}</TableCell>
+            <TableCell muted>{row.scope}</TableCell>
+            <TableCell>
               <RoleBadge role={row.role} />
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -1141,7 +1140,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/people/RoleBadge.tsx'],
+          uses: ['patterns/people/RoleBadge.tsx', 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'],
           Component: PermissionRoleGroupMapping,
         },
         {

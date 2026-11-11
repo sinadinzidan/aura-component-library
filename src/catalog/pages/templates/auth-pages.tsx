@@ -24,13 +24,14 @@ import { ChoiceCardGroup } from '../../../library/forms/ChoiceCardGroup';
 import { FormField } from '../../../library/forms/FormField';
 import { PasswordInput } from '../../../library/forms/PasswordInput';
 import { KpiTile } from '../../../library/industrial/KpiTile';
-import { Stepper } from '../../../library/patterns/data-entry/Stepper';
 import { AuthCard } from '../../../library/patterns/people/AuthCard';
 import { OneTimeCodeInput } from '../../../library/patterns/people/OneTimeCodeInput';
 import { PasswordStrength } from '../../../library/patterns/people/PasswordStrength';
 import { RoleBadge } from '../../../library/patterns/people/RoleBadge';
 import { ErrorPage } from '../../../library/patterns/states/ErrorPage';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
 import { BrandMark } from '../../../library/templates-b/BrandMark';
 import { CenteredPage } from '../../../library/templates-b/CenteredPage';
 import { PageFrame } from '../../../library/templates-b/PageFrame';
@@ -429,7 +430,11 @@ function AuthTemplateSignUpSteps() {
           </>
         }
       >
-        <Stepper label="Create your account" steps={AUTH_SIGN_UP_STEPS} current={step} onStepSelect={setStep} />
+        <Stepper label="Create your account" current={step} onStepSelect={setStep}>
+          {AUTH_SIGN_UP_STEPS.map((item) => (
+            <Step key={item.id} label={item.label} />
+          ))}
+        </Stepper>
         <section className="flex flex-col gap-6 rounded-xl border border-default bg-base-background p-6">
           <div className="flex flex-col gap-1">
             <p className="text-xs tabular-nums text-muted-foreground">
@@ -937,11 +942,12 @@ export default definePage({
             'templates-b/PageFrame.tsx',
             'templates-b/CenteredPage.tsx',
             'templates-b/BrandMark.tsx',
-            'patterns/data-entry/Stepper.tsx',
             'patterns/people/PasswordStrength.tsx',
             'forms/ChoiceCardGroup.tsx',
             'forms/FormField.tsx',
             'forms/PasswordInput.tsx',
+            'primitives/stepper/Stepper.tsx',
+            'primitives/stepper/Step.tsx',
           ],
           Component: AuthTemplateSignUpSteps,
         },

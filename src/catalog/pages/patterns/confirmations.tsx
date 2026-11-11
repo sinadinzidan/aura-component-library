@@ -41,6 +41,12 @@ import { StatusBadge } from '../../../library/display/StatusBadge';
 import { SingleToaster } from '../../../library/feedback/SingleToaster';
 import { ConfirmDialog } from '../../../library/overlays/ConfirmDialog';
 import { UnsavedChangesPrompt } from '../../../library/patterns/states/UnsavedChangesPrompt';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, PEOPLE, findAsset } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -428,22 +434,24 @@ function ConfirmationUnsavedWithSave() {
 
 function ConfirmationLabelPairs() {
   return (
-    <table className="w-full max-w-xs text-left text-sm">
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th className="py-2 pr-4 font-medium">Instead of</th>
-          <th className="py-2 font-medium">Write</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="Button labels: instead of and write" className="max-w-xs">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Instead of</TableHead>
+          <TableHead>Write</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {LABEL_PAIRS.map((pair) => (
-          <tr key={pair.avoid} className="border-b border-default last:border-b-0">
-            <td className="py-2 pr-4 text-muted-foreground">{pair.avoid}</td>
-            <td className="py-2 font-medium text-base-foreground">{pair.write}</td>
-          </tr>
+          <TableRow key={pair.avoid}>
+            <TableCell muted>{pair.avoid}</TableCell>
+            <TableCell>
+              <span className="font-medium text-base-foreground">{pair.write}</span>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -1133,6 +1141,7 @@ export default definePage({
           title: 'Button labels',
           note: 'Writing the buttons: each one says what it does, so the choice is clear without the body text.',
           origin: 'custom',
+          uses: ['primitives/table/Table.tsx'],
           Component: ConfirmationLabelPairs,
         },
       ],

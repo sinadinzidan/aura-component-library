@@ -22,7 +22,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { ConfirmButton } from '../../../library/actions/ConfirmButton';
 import { ShortcutHint } from '../../../library/actions/ShortcutHint';
-import { SelectionCheckbox } from '../../../library/data/SelectionCheckbox';
 import { MetadataList } from '../../../library/display/MetadataList';
 import { FormField } from '../../../library/forms/FormField';
 import { InlineEditText } from '../../../library/forms/InlineEditText';
@@ -35,15 +34,18 @@ import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect'
 import { SaveBar } from '../../../library/patterns/data-entry/SaveBar';
 import { SaveStatus } from '../../../library/patterns/data-entry/SaveStatus';
 import type { SaveState } from '../../../library/patterns/data-entry/SaveStatus';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
+import { TableSelectionCell } from '../../../library/primitives/table/TableSelectionCell';
 import { PEOPLE, SENSORS, WORK_ORDERS, findAsset } from '../../data/plant';
 import { REFERENCE_NOW } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './inline-editing.tsx?raw';
-
-const TH = 'px-2 py-2 text-left text-xs font-medium text-muted-foreground';
-
-const TD = 'px-2 py-1 text-sm text-base-foreground';
 
 const ROW = 'border-t border-default';
 
@@ -213,29 +215,31 @@ function InlineEditTableCells() {
     setRows((current) => current.map((row) => (row.tag === tag ? { ...row, ...patch } : row)));
 
   return (
-    <table className="w-full table-fixed border-collapse">
-      <thead>
-        <tr>
-          <th className={`${TH} w-32`}>Tag</th>
-          <th className={TH}>Name</th>
-          <th className={`${TH} w-40 text-right`}>High limit</th>
-          <th className={`${TH} w-40`}>Severity</th>
-          <th className={`${TH} w-44`}>Next calibration</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="High limits of the compressor sensors" layout="fixed" density="compact">
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-32">Tag</TableHead>
+          <TableHead>Name</TableHead>
+          <TableHead numeric className="w-40">High limit</TableHead>
+          <TableHead className="w-40">Severity</TableHead>
+          <TableHead className="w-44">Next calibration</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {rows.map((row) => (
-          <tr key={row.tag} className={ROW}>
-            <td className={`${TD} whitespace-nowrap font-medium`}>{row.tag}</td>
-            <td className={TD}>
+          <TableRow key={row.tag}>
+            <TableCell rowHeader wrap="nowrap">
+              {row.tag}
+            </TableCell>
+            <TableCell>
               <EditableCell
                 value={row.name}
                 label={`Name of ${row.tag}`}
                 validate={(text) => (text === '' ? 'Enter a name.' : null)}
                 onSave={(name) => update(row.tag, { name })}
               />
-            </td>
-            <td className={TD}>
+            </TableCell>
+            <TableCell>
               <EditableCell
                 value={row.high}
                 unit={row.unit}
@@ -245,8 +249,8 @@ function InlineEditTableCells() {
                 validate={(text) => (isNumber(text) ? null : 'Enter a number.')}
                 onSave={(high) => update(row.tag, { high })}
               />
-            </td>
-            <td className={TD}>
+            </TableCell>
+            <TableCell>
               <OptionSelect
                 aria-label={`Severity for ${row.tag}`}
                 size="sm"
@@ -255,8 +259,8 @@ function InlineEditTableCells() {
                 onValueChange={(severity) => update(row.tag, { severity })}
                 width="compact"
               />
-            </td>
-            <td className={TD}>
+            </TableCell>
+            <TableCell>
               <div role="group" aria-label={`Next calibration for ${row.tag}`}>
                 <DatePicker
                   value={row.calibration}
@@ -264,11 +268,11 @@ function InlineEditTableCells() {
                   format="D MMM YYYY"
                 />
               </div>
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -292,114 +296,118 @@ function InlineEditRowMode() {
   const titleError = draft.title.trim() === '' ? 'Enter a title.' : null;
 
   return (
-    <table className="w-full table-fixed border-collapse">
-      <thead>
-        <tr>
-          <th className={`${TH} w-28`}>Work order</th>
-          <th className={TH}>Title</th>
-          <th className={`${TH} w-28`}>Priority</th>
-          <th className={`${TH} w-32`}>Estimate</th>
-          <th className={`${TH} w-40 text-right`}>
-            <span className="sr-only">Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {orders.map((order) =>
-          order.id === editingId ? (
-            <tr key={order.id} className={`${ROW} bg-muted-background`}>
-              <td className={`${TD} whitespace-nowrap font-medium`}>{order.id}</td>
-              <td className={TD}>
-                <Input
-                  aria-label={`Title of ${order.id}`}
-                  aria-invalid={titleError ? true : undefined}
-                  value={draft.title}
-                  onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                />
-              </td>
-              <td className={TD}>
-                <OptionSelect
-                  aria-label={`Priority of ${order.id}`}
-                  options={PRIORITY_OPTIONS}
-                  value={draft.priority}
-                  onValueChange={(priority) => setDraft({ ...draft, priority })}
-                  width="compact"
-                />
-              </td>
-              <td className={TD}>
-                <UnitNumberInput
-                  aria-label={`Estimate for ${order.id}`}
-                  value={draft.hours}
-                  onValueChange={(hours) => setDraft({ ...draft, hours })}
-                  unit="h"
-                  min={1}
-                  max={40}
-                  hideStepper
-                />
-              </td>
-              <td className={`${TD} text-right`}>
-                <div className="flex justify-end gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
-                    Cancel
-                  </Button>
+    <div className="flex w-full flex-col gap-2">
+      <Table label="Work orders" layout="fixed" density="compact">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-28">Work order</TableHead>
+            <TableHead>Title</TableHead>
+            <TableHead className="w-28">Priority</TableHead>
+            <TableHead className="w-32">Estimate</TableHead>
+            <TableHead srOnly className="w-40">
+                Actions
+              </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {orders.map((order) =>
+            order.id === editingId ? (
+              <TableRow key={order.id} current>
+                <TableCell rowHeader wrap="nowrap">
+                {order.id}
+              </TableCell>
+                <TableCell>
+                  <Input
+                    aria-label={`Title of ${order.id}`}
+                    aria-invalid={titleError ? true : undefined}
+                    value={draft.title}
+                    onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                  />
+                </TableCell>
+                <TableCell>
+                  <OptionSelect
+                    aria-label={`Priority of ${order.id}`}
+                    options={PRIORITY_OPTIONS}
+                    value={draft.priority}
+                    onValueChange={(priority) => setDraft({ ...draft, priority })}
+                    width="compact"
+                  />
+                </TableCell>
+                <TableCell>
+                  <UnitNumberInput
+                    aria-label={`Estimate for ${order.id}`}
+                    value={draft.hours}
+                    onValueChange={(hours) => setDraft({ ...draft, hours })}
+                    unit="h"
+                    min={1}
+                    max={40}
+                    hideStepper
+                  />
+                </TableCell>
+                <TableCell align="end">
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => setEditingId(null)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (titleError) return;
+                        setOrders((current) =>
+                          current.map((item) =>
+                            item.id === order.id
+                              ? {
+                                  ...item,
+                                  title: draft.title.trim(),
+                                  priority: draft.priority,
+                                  hours: draft.hours ?? item.hours,
+                                }
+                              : item
+                          )
+                        );
+                        setEditingId(null);
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              <TableRow key={order.id}>
+                <TableCell rowHeader wrap="nowrap" className="h-10">
+                  {order.id}
+                </TableCell>
+                <TableCell wrap="truncate">{order.title}</TableCell>
+                <TableCell>{order.priority}</TableCell>
+                <TableCell>
+                  <span className="tabular-nums">{order.hours} h</span>
+                </TableCell>
+                <TableCell align="end">
                   <Button
+                    variant="ghost"
                     size="sm"
+                    aria-label={`Edit ${order.id}`}
+                    disabled={editingId !== null}
                     onClick={() => {
-                      if (titleError) return;
-                      setOrders((current) =>
-                        current.map((item) =>
-                          item.id === order.id
-                            ? {
-                                ...item,
-                                title: draft.title.trim(),
-                                priority: draft.priority,
-                                hours: draft.hours ?? item.hours,
-                              }
-                            : item
-                        )
-                      );
-                      setEditingId(null);
+                      setDraft({ title: order.title, priority: order.priority, hours: order.hours });
+                      setEditingId(order.id);
                     }}
                   >
-                    Save
+                    Edit
                   </Button>
-                </div>
-              </td>
-            </tr>
-          ) : (
-            <tr key={order.id} className={ROW}>
-              <td className={`${TD} whitespace-nowrap py-2.5 font-medium`}>{order.id}</td>
-              <td className={`${TD} truncate`}>{order.title}</td>
-              <td className={TD}>{order.priority}</td>
-              <td className={`${TD} tabular-nums`}>{order.hours} h</td>
-              <td className={`${TD} text-right`}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Edit ${order.id}`}
-                  disabled={editingId !== null}
-                  onClick={() => {
-                    setDraft({ title: order.title, priority: order.priority, hours: order.hours });
-                    setEditingId(order.id);
-                  }}
-                >
-                  Edit
-                </Button>
-              </td>
-            </tr>
-          )
-        )}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colSpan={5} className="px-2 pt-2 text-xs text-muted-foreground" aria-live="polite">
-            {editingId === null
-              ? 'Select Edit to change a row.'
-              : (titleError ?? `Editing ${editingId}. Save or cancel before you edit another row.`)}
-          </td>
-        </tr>
-      </tfoot>
-    </table>
+                </TableCell>
+              </TableRow>
+            )
+          )}
+        </TableBody>
+      </Table>
+      <p aria-live="polite" className="px-2 text-xs text-muted-foreground">
+        {editingId === null
+          ? 'Select Edit to change a row.'
+          : (titleError ?? `Editing ${editingId}. Save or cancel before you edit another row.`)}
+      </p>
+    </div>
   );
 }
 
@@ -434,22 +442,26 @@ function InlineEditAddRow() {
 
   return (
     <div className="flex w-full flex-col gap-2">
-      <table className="w-full table-fixed border-collapse">
-        <thead>
-          <tr>
-            <th className={TH}>Shelved tag</th>
-            <th className={`${TH} w-32`}>Hours</th>
-            <th className={`${TH} w-44`}>
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table label="Shelving rules" layout="fixed" density="compact">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Shelved tag</TableHead>
+            <TableHead className="w-32">Hours</TableHead>
+            <TableHead srOnly className="w-44">
+              Actions
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((row) => (
-            <tr key={row.id} className={ROW}>
-              <td className={`${TD} py-2.5 font-medium`}>{row.tag}</td>
-              <td className={`${TD} tabular-nums`}>{row.hours} h</td>
-              <td className={`${TD} text-right`}>
+            <TableRow key={row.id}>
+              <TableCell rowHeader className="h-10">
+                {row.tag}
+              </TableCell>
+              <TableCell>
+                <span className="tabular-nums">{row.hours} h</span>
+              </TableCell>
+              <TableCell align="end">
                 <ConfirmButton
                   size="sm"
                   confirmLabel="Remove rule"
@@ -458,12 +470,12 @@ function InlineEditAddRow() {
                 >
                   Remove
                 </ConfirmButton>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
           {adding ? (
-            <tr className={ROW}>
-              <td className={TD}>
+            <TableRow>
+              <TableCell>
                 <Input
                   aria-label="Tag to shelve"
                   aria-invalid={error !== null && tag.trim() === '' ? true : undefined}
@@ -478,8 +490,8 @@ function InlineEditAddRow() {
                     if (event.key === 'Escape') setAdding(false);
                   }}
                 />
-              </td>
-              <td className={TD}>
+              </TableCell>
+              <TableCell>
                 <Input
                   aria-label="Hours to shelve"
                   inputMode="numeric"
@@ -493,8 +505,8 @@ function InlineEditAddRow() {
                     if (event.key === 'Escape') setAdding(false);
                   }}
                 />
-              </td>
-              <td className={`${TD} text-right`}>
+              </TableCell>
+              <TableCell align="end">
                 <div className="flex justify-end gap-1">
                   <Button variant="ghost" size="sm" onClick={() => setAdding(false)}>
                     Cancel
@@ -503,11 +515,11 @@ function InlineEditAddRow() {
                     Add rule
                   </Button>
                 </div>
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : null}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       {adding ? (
         <p role="alert" className="px-2 text-sm text-critical-foreground-strong empty:hidden">
           {error}
@@ -600,43 +612,39 @@ function InlineEditBulk() {
           <span className="text-sm text-muted-foreground">Select rows to change them together.</span>
         )}
       </div>
-      <table className="w-full table-fixed border-collapse">
-        <thead>
-          <tr>
-            <th className={`${TH} w-10`}>
-              <SelectionCheckbox
-                label="Select all work orders"
-                checked={allSelected}
-                indeterminate={selected.length > 0 && !allSelected}
-                onChange={(checked) => setSelected(checked ? orders.map((order) => order.id) : [])}
-              />
-            </th>
-            <th className={`${TH} w-28`}>Work order</th>
-            <th className={TH}>Title</th>
-            <th className={`${TH} w-24`}>Priority</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table label="Work orders" density="compact">
+        <TableHeader>
+          <TableRow>
+            <TableSelectionCell
+              label="Select all work orders"
+              checked={allSelected}
+              indeterminate={selected.length > 0 && !allSelected}
+              onCheckedChange={(checked) => setSelected(checked ? orders.map((order) => order.id) : [])}
+            />
+            <TableHead className="w-28">Work order</TableHead>
+            <TableHead>Title</TableHead>
+            <TableHead className="w-24">Priority</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {orders.map((order) => (
-            <tr key={order.id} className={selected.includes(order.id) ? `${ROW} bg-muted-background` : ROW}>
-              <td className={`${TD} py-2.5`}>
-                <SelectionCheckbox
-                  label={`Select ${order.id}`}
-                  checked={selected.includes(order.id)}
-                  onChange={(checked) =>
-                    setSelected((current) =>
-                      checked ? [...current, order.id] : current.filter((id) => id !== order.id)
-                    )
-                  }
-                />
-              </td>
-              <td className={`${TD} whitespace-nowrap font-medium`}>{order.id}</td>
-              <td className={`${TD} truncate`}>{order.title}</td>
-              <td className={TD}>{order.priority}</td>
-            </tr>
+            <TableRow key={order.id} selected={selected.includes(order.id)}>
+              <TableSelectionCell
+                label={`Select ${order.id}`}
+                checked={selected.includes(order.id)}
+                onCheckedChange={(checked) =>
+                  setSelected((current) => (checked ? [...current, order.id] : current.filter((id) => id !== order.id)))
+                }
+              />
+              <TableCell rowHeader wrap="nowrap">
+              {order.id}
+            </TableCell>
+              <TableCell wrap="truncate">{order.title}</TableCell>
+              <TableCell>{order.priority}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -998,23 +1006,23 @@ function InlineEditUnsavedBar() {
 
   return (
     <div className="flex w-full max-w-md flex-col gap-3">
-      <table className="w-full table-fixed border-collapse">
-        <thead>
-          <tr>
-            <th className={TH}>Tag</th>
-            <th className={`${TH} w-40 text-right`}>High limit</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table label="High limits" layout="fixed" density="compact">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Tag</TableHead>
+            <TableHead numeric className="w-40">High limit</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {tags.map((tag) => (
-            <tr key={tag} className={ROW}>
-              <td className={`${TD} font-medium`}>
+            <TableRow key={tag}>
+              <TableCell rowHeader>
                 {tag}
                 {values[tag] === saved[tag] ? null : (
                   <span className="pl-2 text-xs font-normal text-muted-foreground">was {saved[tag]}</span>
                 )}
-              </td>
-              <td className={TD}>
+              </TableCell>
+              <TableCell>
                 <EditableCell
                   value={values[tag] ?? ''}
                   unit={units[tag]}
@@ -1024,11 +1032,11 @@ function InlineEditUnsavedBar() {
                   validate={(text) => (isNumber(text) ? null : 'Enter a number.')}
                   onSave={(next) => setValues((current) => ({ ...current, [tag]: next }))}
                 />
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <SaveBar
         dirtyCount={dirtyCount}
         cleanText="All limits saved"
@@ -1238,7 +1246,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/data-entry/EditableCell.tsx', 'patterns/data-entry/OptionSelect.tsx'],
+          uses: ['primitives/table/Table.tsx', 'patterns/data-entry/EditableCell.tsx', 'patterns/data-entry/OptionSelect.tsx'],
           Component: InlineEditTableCells,
         },
         {
@@ -1248,7 +1256,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['patterns/data-entry/OptionSelect.tsx', 'forms/UnitNumberInput.tsx'],
+          uses: ['primitives/table/Table.tsx', 'patterns/data-entry/OptionSelect.tsx', 'forms/UnitNumberInput.tsx'],
           Component: InlineEditRowMode,
         },
         {
@@ -1258,7 +1266,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['actions/ConfirmButton.tsx'],
+          uses: ['primitives/table/Table.tsx', 'actions/ConfirmButton.tsx'],
           Component: InlineEditAddRow,
         },
         {
@@ -1278,7 +1286,7 @@ export default definePage({
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['data/SelectionCheckbox.tsx', 'patterns/data-entry/OptionSelect.tsx'],
+          uses: ['primitives/table/Table.tsx', 'primitives/table/TableSelectionCell.tsx', 'patterns/data-entry/OptionSelect.tsx'],
           Component: InlineEditBulk,
         },
       ],
@@ -1387,7 +1395,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/data-entry/EditableCell.tsx', 'patterns/data-entry/SaveBar.tsx'],
+          uses: ['primitives/table/Table.tsx', 'patterns/data-entry/EditableCell.tsx', 'patterns/data-entry/SaveBar.tsx'],
           Component: InlineEditUnsavedBar,
         },
         {

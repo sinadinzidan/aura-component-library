@@ -31,6 +31,13 @@ import { ContextMenuSub } from '../../../library/primitives/context-menu/Context
 import { ContextMenuSubContent } from '../../../library/primitives/context-menu/ContextMenuSubContent';
 import { ContextMenuSubTrigger } from '../../../library/primitives/context-menu/ContextMenuSubTrigger';
 import { ContextMenuTrigger } from '../../../library/primitives/context-menu/ContextMenuTrigger';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, ASSETS, SENSORS, findAsset } from '../../data/plant';
 import { formatAgo, makeValues } from '../../data/series';
 import { definePage } from '../../types';
@@ -295,25 +302,25 @@ function ContextMenuPrimSubmenu() {
 function ContextMenuPrimTableRow() {
   const assets = ASSETS.filter((asset) => asset.type === 'compressor').slice(0, 3);
   return (
-    <table className="w-full max-w-md text-left text-sm">
-      <caption className="sr-only">Compressors</caption>
-      <thead>
-        <tr className="text-xs text-muted-foreground">
-          <th scope="col" className="py-2 pr-3 font-medium">Tag</th>
-          <th scope="col" className="py-2 pr-3 font-medium">Name</th>
-          <th scope="col" className="py-2 text-right font-medium">Health</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table className="max-w-md">
+      <TableCaption srOnly>Compressors</TableCaption>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Tag</TableHead>
+          <TableHead>Name</TableHead>
+          <TableHead numeric>Health</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {assets.map((asset) => (
           <ContextMenu key={asset.id}>
-            <ContextMenuTrigger
-              focusable
-              render={<tr className="border-t border-default hover:bg-base-background-hover" />}
-            >
-              <td className="py-2 pr-3 font-mono text-xs text-base-foreground">{asset.tag}</td>
-              <td className="py-2 pr-3 text-base-foreground">{asset.name}</td>
-              <td className="py-2 text-right text-muted-foreground tabular-nums">{asset.healthScore}</td>
+            {/* The trigger has to render the row element itself, and TableRow takes no ref or event props. */}
+            <ContextMenuTrigger focusable render={<tr className="group/row hover:bg-base-background-hover" />}>
+              <TableCell mono>{asset.tag}</TableCell>
+              <TableCell>{asset.name}</TableCell>
+              <TableCell numeric muted>
+                {asset.healthScore}
+              </TableCell>
             </ContextMenuTrigger>
             <ContextMenuContent>
               <ContextMenuItem>Open {asset.tag}</ContextMenuItem>
@@ -326,8 +333,8 @@ function ContextMenuPrimTableRow() {
             </ContextMenuContent>
           </ContextMenu>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -758,7 +765,7 @@ export default definePage({
       title: 'Targets',
       description: 'What people right-click in an industrial app.',
       specimens: [
-        { id: 'ContextMenuPrimTableRow', title: 'Table row', note: 'Each row owns a menu for its asset; the row is a tab stop.', origin: 'custom', size: 'md', align: 'stretch', uses: U('ContextMenuTrigger', 'ContextMenuContent'), Component: ContextMenuPrimTableRow },
+        { id: 'ContextMenuPrimTableRow', title: 'Table row', note: 'Each row owns a menu for its asset; the row is a tab stop.', origin: 'custom', size: 'md', align: 'stretch', uses: [...U('ContextMenuTrigger', 'ContextMenuContent'), 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'], Component: ContextMenuPrimTableRow },
         { id: 'ContextMenuPrimCard', title: 'Card', note: 'Open, pin or copy a link from the card without a corner button.', origin: 'custom', uses: U('ContextMenuTrigger'), Component: ContextMenuPrimCard },
         { id: 'ContextMenuPrimTreeNode', title: 'Tree node', note: 'Hierarchy nodes with open, expand and copy path.', origin: 'custom', uses: U('ContextMenuTrigger'), Component: ContextMenuPrimTreeNode },
         { id: 'ContextMenuPrimChartPoint', title: 'Chart point', note: 'The menu is labelled with the nearest point under the pointer.', origin: 'custom', size: 'md', align: 'stretch', uses: U('ContextMenuTrigger', 'ContextMenuLabel'), Component: ContextMenuPrimChartPoint },

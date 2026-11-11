@@ -50,6 +50,12 @@ import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect'
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
 import { SidePanel } from '../../../library/patterns/structure/SidePanel';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { PEOPLE, WORK_ORDERS } from '../../data/plant';
 import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatDateTime, formatTime } from '../../data/series';
 import { definePage } from '../../types';
@@ -557,29 +563,31 @@ function ActivityAuditFieldHistory() {
   return (
     <div className="flex w-full max-w-lg flex-col gap-3">
       <SectionHeader title="High limit" description="23-TT-92532 · Discharge temperature" size="sm" as="h4" />
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-default text-xs text-muted-foreground">
-            <th scope="col" className="py-2 pr-3 font-medium">Value</th>
-            <th scope="col" className="py-2 pr-3 font-medium">Set by</th>
-            <th scope="col" className="py-2 text-right font-medium">When</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table label="High limit history for 23-TT-92532">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Value</TableHead>
+            <TableHead>Set by</TableHead>
+            <TableHead align="end">When</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {versions.map((version) => (
-            <tr key={version.id} className="border-b border-default last:border-b-0">
-              <td className="py-2 pr-3">
+            <TableRow key={version.id}>
+              <TableCell>
                 <span className="flex items-center gap-2">
-                  <span className={`tabular-nums ${version.current ? 'font-medium text-base-foreground' : 'text-medium-foreground'}`}>{version.value}</span>
+                  <span className={`tabular-nums ${version.current ? 'font-medium text-base-foreground' : ''}`}>{version.value}</span>
                   {version.current ? <Badge variant="secondary">Current</Badge> : null}
                 </span>
-              </td>
-              <td className="py-2 pr-3 text-medium-foreground">{version.by}</td>
-              <td className="py-2 text-right tabular-nums text-muted-foreground">{version.when}</td>
-            </tr>
+              </TableCell>
+              <TableCell>{version.by}</TableCell>
+              <TableCell numeric muted>
+                {version.when}
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -966,7 +974,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/structure/SectionHeader.tsx'],
+          uses: ['patterns/structure/SectionHeader.tsx', 'primitives/table/Table.tsx'],
           Component: ActivityAuditFieldHistory,
         },
         {

@@ -35,6 +35,12 @@ import type { ReactElement } from 'react';
 import { OverflowActions } from '../../../library/data/OverflowActions';
 import type { OverflowAction } from '../../../library/data/OverflowActions';
 import { PersonAvatar } from '../../../library/display/PersonAvatar';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ASSETS, PEOPLE, SENSORS, sensorsOf } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -570,18 +576,18 @@ function OverflowListFilterChips() {
 
 function OverflowListTableCell() {
   return (
-    <table className="w-full max-w-lg table-fixed text-left text-sm">
-      <thead>
-        <tr className="text-xs text-muted-foreground">
-          <th className="w-2/5 py-2 pr-4 font-medium">Equipment</th>
-          <th className="py-2 font-medium">Sensors</th>
-        </tr>
-      </thead>
-      <tbody>
+    <Table label="Equipment and sensors" layout="fixed" className="max-w-lg">
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-2/5">Equipment</TableHead>
+          <TableHead>Sensors</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {OVERFLOW_EQUIPMENT.map((asset) => (
-          <tr key={asset.id} className="border-t border-default">
-            <td className="truncate py-2 pr-4 text-base-foreground">{asset.name}</td>
-            <td className="py-2">
+          <TableRow key={asset.id}>
+            <TableCell wrap="truncate">{asset.name}</TableCell>
+            <TableCell>
               <OverflowList collapseOrder="desc" overflowComponent={OverflowListCount} className="gap-1.5">
                 {sensorsOf(asset.id).map((sensor) => (
                   <Badge key={sensor.id} variant="secondary">
@@ -589,11 +595,11 @@ function OverflowListTableCell() {
                   </Badge>
                 ))}
               </OverflowList>
-            </td>
-          </tr>
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -809,9 +815,10 @@ export default definePage({
           id: 'OverflowListTableCell',
           title: 'In table cells',
           note: 'A tag column where rows have very different numbers of tags.',
-          origin: 'aura',
+          origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: OverflowListTableCell,
         },
       ],

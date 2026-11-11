@@ -9,6 +9,11 @@ import { MetadataList } from '../../../library/display/MetadataList';
 import { Pane } from '../../../library/primitives/resizable/Pane';
 import { PaneHandle } from '../../../library/primitives/resizable/PaneHandle';
 import { ResizablePanes } from '../../../library/primitives/resizable/ResizablePanes';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCaption } from '../../../library/primitives/table/TableCaption';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ALARMS, ASSETS, SENSORS, findAsset } from '../../data/plant';
 import { formatAgo } from '../../data/series';
 import { definePage } from '../../types';
@@ -342,21 +347,23 @@ function ResizablePrimEditorPreview() {
         <PaneHandle />
         <Pane label="Preview" minSize={25}>
           <ResizablePrimBox title="Preview" detail="4 rows">
-            <table className="w-full pt-2 text-left text-xs">
-              <caption className="sr-only">Query result</caption>
-              <tbody>
+            <Table density="compact">
+              <TableCaption srOnly>Query result</TableCaption>
+              <TableBody>
                 {SENSORS.filter((sensor) => sensor.assetId === '23-ka-9101')
                   .slice(0, 4)
                   .map((sensor) => (
-                    <tr key={sensor.id} className="border-t border-default">
-                      <td className="py-1 pr-2 font-mono text-muted-foreground">{sensor.tag}</td>
-                      <td className="py-1 text-right text-base-foreground tabular-nums">
+                    <TableRow key={sensor.id}>
+                      <TableCell mono muted>
+                        {sensor.tag}
+                      </TableCell>
+                      <TableCell numeric>
                         {sensor.value.toLocaleString('en-US')} {sensor.unit}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </ResizablePrimBox>
         </Pane>
       </ResizablePanes>
@@ -645,7 +652,7 @@ export default definePage({
       description: 'Resizable panes in working screens.',
       specimens: [
         { id: 'ResizablePrimMasterDetail', title: 'Master-detail', note: 'A list beside the selected record, both scrolling on their own.', origin: 'custom', size: 'lg', align: 'stretch', uses: U('ResizablePanes', 'PaneHandle'), Component: ResizablePrimMasterDetail },
-        { id: 'ResizablePrimEditorPreview', title: 'Editor and preview', note: 'A query next to its result; drag to give either more room.', origin: 'custom', size: 'lg', align: 'stretch', uses: U('ResizablePanes'), Component: ResizablePrimEditorPreview },
+        { id: 'ResizablePrimEditorPreview', title: 'Editor and preview', note: 'A query next to its result; drag to give either more room.', origin: 'custom', size: 'lg', align: 'stretch', uses: [...U('ResizablePanes'), 'primitives/table/Table.tsx', 'primitives/table/TableCaption.tsx'], Component: ResizablePrimEditorPreview },
         { id: 'ResizablePrimTreeContentInspector', title: 'Tree, content and inspector', note: 'Three columns where both outer panes collapse.', origin: 'custom', size: 'full', align: 'stretch', uses: U('ResizablePanes', 'Pane'), Component: ResizablePrimTreeContentInspector },
         { id: 'ResizablePrimConsoleUnderCanvas', title: 'Console under a canvas', note: 'A process canvas with run output underneath.', origin: 'custom', size: 'lg', align: 'stretch', uses: U('ResizablePanes', 'PaneHandle'), Component: ResizablePrimConsoleUnderCanvas },
         { id: 'ResizablePrimIdeLayout', title: 'Nested splits', note: 'Explorer beside a vertical editor and output split: groups nest freely.', origin: 'custom', size: 'full', align: 'stretch', uses: U('ResizablePanes', 'Pane', 'PaneHandle'), Component: ResizablePrimIdeLayout },

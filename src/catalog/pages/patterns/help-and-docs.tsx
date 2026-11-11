@@ -48,7 +48,7 @@ import {
   IconTimeline,
 } from '@cognite/aura/icons';
 import { useState } from 'react';
-import type { MouseEvent, ReactNode } from 'react';
+import type { MouseEvent } from 'react';
 
 import { CopyButton } from '../../../library/actions/CopyButton';
 import { ShortcutHint } from '../../../library/actions/ShortcutHint';
@@ -64,6 +64,14 @@ import { Prose } from '../../../library/patterns/content/Prose';
 import { ShortcutSheet } from '../../../library/patterns/content/ShortcutSheet';
 import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
 import { SidePanel } from '../../../library/patterns/structure/SidePanel';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { DAY, HOUR, MINUTE, REFERENCE_NOW, formatAgo, formatDate, formatDateTime } from '../../data/series';
 import { definePage } from '../../types';
 
@@ -206,18 +214,6 @@ function HelpDocLinkRow({ title, detail, external = false }: { title: string; de
       </a>
       <span className="shrink-0 text-xs text-muted-foreground">{detail}</span>
     </li>
-  );
-}
-
-function HelpDocMarker({ children, done = false }: { children: ReactNode; done?: boolean }) {
-  return (
-    <span
-      className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ${
-        done ? 'bg-medium-background text-base-foreground' : 'border border-emphasized text-muted-foreground'
-      }`}
-    >
-      {children}
-    </span>
   );
 }
 
@@ -487,37 +483,35 @@ function HelpDocApiSnippet() {
           Returns the newest datapoint for each time series, at or before a given time. Needs read access to the data set.
         </p>
       </div>
-      <table aria-label="Request body fields" className="w-full border-collapse text-left text-sm">
-        <thead>
-          <tr className="border-b border-default text-xs text-muted-foreground">
-            <th scope="col" className="py-2 pr-4 font-medium">
-              Field
-            </th>
-            <th scope="col" className="py-2 pr-4 font-medium">
-              Type
-            </th>
-            <th scope="col" className="py-2 font-medium">
-              Description
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr className="border-b border-default align-top">
-            <th scope="row" className="py-2 pr-4 font-mono text-xs font-normal text-base-foreground">
+      <Table label="Request body fields">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Field</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Description</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow>
+            <TableCell rowHeader mono className="align-top">
               externalId
-            </th>
-            <td className="py-2 pr-4 text-xs text-muted-foreground">string, required</td>
-            <td className="py-2 text-base-foreground">The tag of the time series, for example 23-PT-92531.</td>
-          </tr>
-          <tr className="align-top">
-            <th scope="row" className="py-2 pr-4 font-mono text-xs font-normal text-base-foreground">
+            </TableCell>
+            <TableCell muted wrap="nowrap" className="align-top">
+              <span className="text-xs">string, required</span>
+            </TableCell>
+            <TableCell className="align-top">The tag of the time series, for example 23-PT-92531.</TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell rowHeader mono className="align-top">
               before
-            </th>
-            <td className="py-2 pr-4 text-xs text-muted-foreground">string, optional</td>
-            <td className="py-2 text-base-foreground">Latest time to look at. Defaults to now.</td>
-          </tr>
-        </tbody>
-      </table>
+            </TableCell>
+            <TableCell muted wrap="nowrap" className="align-top">
+              <span className="text-xs">string, optional</span>
+            </TableCell>
+            <TableCell className="align-top">Latest time to look at. Defaults to now.</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
       <CodeBlock code={HELP_DOC_CURL} language="bash">
         <Tooltip>
           <TooltipTrigger render={<CodeBlockCopyButton aria-label="Copy request" />} />
@@ -642,15 +636,11 @@ function HelpDocGettingStarted() {
   return (
     <div className="flex w-full flex-col gap-4">
       <SectionHeader title="Getting started" description={`${remaining} of ${HELP_DOC_GUIDE.length} steps left, about 7 minutes`} size="sm" as="h3" />
-      <ol className="flex list-none flex-col gap-3">
-        {HELP_DOC_GUIDE.map((step, index) => (
-          <li key={step.id} className="flex items-center gap-3">
-            <HelpDocMarker done={step.done}>{step.done ? <IconCircleCheck aria-label="Done" className="size-4" /> : index + 1}</HelpDocMarker>
-            <span className={`min-w-0 flex-1 text-sm ${step.done ? 'text-muted-foreground' : 'font-medium text-base-foreground'}`}>{step.title}</span>
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{step.time}</span>
-          </li>
+      <Stepper label="Getting started" orientation="vertical" size="sm" current={HELP_DOC_GUIDE.findIndex((step) => !step.done)}>
+        {HELP_DOC_GUIDE.map((step) => (
+          <Step key={step.id} label={step.title} meta={step.time} />
         ))}
-      </ol>
+      </Stepper>
       <Button variant="secondary" size="sm" className="self-start">
         Continue with step 3
       </Button>
@@ -1076,6 +1066,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: HelpDocApiSnippet,
         },
         {
@@ -1119,7 +1110,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/structure/SectionHeader.tsx'],
+          uses: ['patterns/structure/SectionHeader.tsx', 'primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx'],
           Component: HelpDocGettingStarted,
         },
         {

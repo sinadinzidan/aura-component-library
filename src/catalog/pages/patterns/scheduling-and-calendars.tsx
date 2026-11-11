@@ -34,6 +34,12 @@ import type { MonthEntry } from '../../../library/patterns/workflows/MonthGrid';
 import { TimeSlotPicker } from '../../../library/patterns/workflows/TimeSlotPicker';
 import { WeekGrid } from '../../../library/patterns/workflows/WeekGrid';
 import type { WeekGridEvent } from '../../../library/patterns/workflows/WeekGrid';
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { PEOPLE, findPerson } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -459,37 +465,40 @@ const ROSTER: readonly { personId: string; codes: readonly ShiftCode[] }[] = [
   { personId: 'jn', codes: ['off', 'off', 'D', 'D', 'D', 'N', 'N'] },
 ];
 
-const ROSTER_TH = 'px-2 py-2 text-center text-xs font-medium tabular-nums text-muted-foreground';
-
 function ScheduleCalShiftRoster() {
   return (
     <div className="flex w-full flex-col gap-3">
-      <table aria-label="Shift roster, week 11" className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-default">
-            <th scope="col" className="px-2 py-2 text-left text-xs font-medium text-muted-foreground">
-              Person
-            </th>
+      <Table label="Shift roster, week 11">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Person</TableHead>
             {FULL_WEEK.map((day, index) => (
-              <th key={day} scope="col" aria-current={index === 3 ? 'date' : undefined} className={`${ROSTER_TH} ${index === 3 ? 'text-base-foreground' : ''}`}>
-                {day}
-              </th>
+              <TableHead key={day} align="center">
+                {index === 3 ? (
+                  <span className="text-base-foreground tabular-nums">
+                    {day}
+                    <span className="sr-only"> (today)</span>
+                  </span>
+                ) : (
+                  <span className="tabular-nums">{day}</span>
+                )}
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {ROSTER.map((row) => {
             const person = findPerson(row.personId);
             return (
-              <tr key={row.personId} className="border-b border-default">
-                <th scope="row" className="px-2 py-2 text-left font-normal">
-                  <span className="flex flex-col">
+              <TableRow key={row.personId}>
+                <TableCell rowHeader>
+                  <span className="flex flex-col font-normal">
                     <span className="text-sm text-base-foreground">{person?.name}</span>
                     <span className="text-xs text-muted-foreground">{person?.role}</span>
                   </span>
-                </th>
+                </TableCell>
                 {row.codes.map((code, index) => (
-                  <td key={FULL_WEEK[index]} className="px-2 py-2 text-center">
+                  <TableCell key={FULL_WEEK[index]} align="center">
                     {code === 'off' ? (
                       <span className="text-xs text-muted-foreground">
                         <span aria-hidden="true">–</span>
@@ -500,13 +509,13 @@ function ScheduleCalShiftRoster() {
                         {code}
                       </Badge>
                     )}
-                  </td>
+                  </TableCell>
                 ))}
-              </tr>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <ul aria-label="Legend" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {SHIFTS.map(({ id, code, name, hours }) => (
           <li key={id} className="flex items-center gap-1.5 tabular-nums">
@@ -1024,6 +1033,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
+          uses: ['primitives/table/Table.tsx'],
           Component: ScheduleCalShiftRoster,
         },
         {

@@ -5,6 +5,12 @@ import { Skeleton } from '@cognite/aura/components/skeleton';
 import { IconCircleCheckFilled, IconCircleDashed, IconSparkles } from '@cognite/aura/icons';
 import { useEffect, useState } from 'react';
 
+import { Table } from '../../../library/primitives/table/Table';
+import { TableBody } from '../../../library/primitives/table/TableBody';
+import { TableCell } from '../../../library/primitives/table/TableCell';
+import { TableHead } from '../../../library/primitives/table/TableHead';
+import { TableHeader } from '../../../library/primitives/table/TableHeader';
+import { TableRow } from '../../../library/primitives/table/TableRow';
 import { ASSETS } from '../../data/plant';
 import { definePage } from '../../types';
 
@@ -286,30 +292,28 @@ function ShimmerSummaryCard() {
 
 function ShimmerTableCell() {
   return (
-    <table className="w-full max-w-md text-left text-sm">
-      <thead>
-        <tr className="border-b border-default text-xs text-muted-foreground">
-          <th className="py-2 pr-4 font-medium">Asset</th>
-          <th className="py-2 pr-4 font-medium">Health</th>
-          <th className="py-2 font-medium">Predicted in 30 days</th>
-        </tr>
-      </thead>
-      <tbody className="text-base-foreground">
+    <Table label="Predicted health" className="max-w-md">
+      <TableHeader>
+        <TableRow>
+          <TableHead>Asset</TableHead>
+          <TableHead>Health</TableHead>
+          <TableHead>Predicted in 30 days</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {HEALTH_ROWS.map((asset, index) => (
-          <tr key={asset.id}>
-            <td className="py-2 pr-4">{asset.name}</td>
-            <td className="py-2 pr-4 tabular-nums">{asset.healthScore}</td>
-            <td className="py-2 tabular-nums">
-              {index === 0 ? (
-                '66'
-              ) : (
-                <Shimmer as="span">Calculating…</Shimmer>
-              )}
-            </td>
-          </tr>
+          <TableRow key={asset.id}>
+            <TableCell>{asset.name}</TableCell>
+            <TableCell numeric align="start">
+              {asset.healthScore}
+            </TableCell>
+            <TableCell numeric align="start">
+              {index === 0 ? '66' : <Shimmer as="span">Calculating…</Shimmer>}
+            </TableCell>
+          </TableRow>
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }
 
@@ -546,6 +550,7 @@ export default definePage({
           note: 'A calculated column fills in row by row; pending cells say so.',
           origin: 'custom',
           size: 'md',
+          uses: ['primitives/table/Table.tsx'],
           Component: ShimmerTableCell,
         },
         {
