@@ -5,6 +5,7 @@ import { IconCode } from '@cognite/aura/icons';
 
 import type { Specimen, SpecimenAlign, SpecimenSize, SpecimenSurface } from '../types';
 
+import { FitToWidth } from './FitToWidth';
 import { SpecimenBoundary } from './SpecimenBoundary';
 
 const SPAN: Record<SpecimenSize, string> = {
@@ -37,9 +38,14 @@ const SURFACE: Record<SpecimenSurface, string> = {
 type SpecimenCardProps = {
   specimen: Specimen;
   onViewCode: (specimenId: string) => void;
+  /**
+   * Design width for full-width specimens that are whole screens. In a narrower preview they are
+   * scaled down to fit instead of reflowing.
+   */
+  fitWidth?: number;
 };
 
-export function SpecimenCard({ specimen, onViewCode }: SpecimenCardProps) {
+export function SpecimenCard({ specimen, onViewCode, fitWidth }: SpecimenCardProps) {
   const { id, title, note, origin, size = 'sm', align = 'center', surface = 'base', bleed = false, Component } = specimen;
 
   return (
@@ -58,7 +64,13 @@ export function SpecimenCard({ specimen, onViewCode }: SpecimenCardProps) {
         }
       >
         <SpecimenBoundary>
-          <Component />
+          {fitWidth !== undefined && size === 'full' ? (
+            <FitToWidth designWidth={fitWidth}>
+              <Component />
+            </FitToWidth>
+          ) : (
+            <Component />
+          )}
         </SpecimenBoundary>
       </div>
       <footer className="flex min-h-20 items-start gap-3 border-t border-default px-4 py-3">

@@ -64,6 +64,7 @@ data components — all on Aura tokens so everything picked from it looks like o
 - FR-012: Users MUST be able to search pages and variants and jump to a result.
 - FR-013: Current page, theme, search text and open variant MUST be synced to the host so reload and shared links restore them; outside Fusion the same state MUST be kept in the URL.
 - FR-014: Pages MUST load on demand so opening the library does not load every page's code. A page that fails to load MUST be retried automatically, and if it still fails the user MUST be offered a "Try again" action that loads it without reloading the app.
+- FR-030: Full-screen dashboards and templates MUST be shown at their desktop design width and scaled down to fit a narrower preview, so they never reflow into overlapping or squeezed panels.
 - FR-015: Icon-only controls MUST have an accessible name and a tooltip; every chart MUST have a text label.
 
 ## Success Criteria

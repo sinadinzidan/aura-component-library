@@ -96,6 +96,13 @@ function PageHeader({ location, page, onJump }: PageHeaderProps) {
 
 type PageViewProps = { location: PageLocation };
 
+/**
+ * Dashboards and templates are whole desktop screens, drawn for the preview width of a 1440px
+ * window. In a narrower preview they are scaled to fit instead of reflowing.
+ */
+const SCREEN_AREAS: ReadonlySet<string> = new Set(['dashboards', 'templates']);
+const SCREEN_DESIGN_WIDTH = 1152;
+
 export function PageView({ location }: PageViewProps) {
   const result = useCatalogPage(location);
   const { state, openSpecimen, closeSpecimen } = useCatalogViewModel();
@@ -165,6 +172,7 @@ export function PageView({ location }: PageViewProps) {
                     key={specimen.id}
                     specimen={specimen}
                     onViewCode={(specimenId) => openSpecimen(location.page.id, specimenId)}
+                    fitWidth={SCREEN_AREAS.has(location.area.id) ? SCREEN_DESIGN_WIDTH : undefined}
                   />
                 ))}
               </div>
