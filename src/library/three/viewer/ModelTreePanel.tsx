@@ -31,14 +31,13 @@ const ROW_ACTION = 'focus-visible:outline-2 focus-visible:outline-[var(--ring-de
  */
 export function ModelTreePanel({ tree, visibility, selectedId = null, onToggle, onIsolate, onSelect, onShowAll, className }: ModelTreePanelProps) {
   const rows = flattenAssemblies(tree);
-  const anyChange = visibility.hiddenIds.length > 0 || visibility.isolatedId !== null;
 
   return (
     <div data-slot="model-tree-panel" className={cn('flex w-full min-w-0 flex-col gap-2', className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">{visibility.isolatedId ? 'One group isolated' : visibility.hiddenIds.length > 0 ? `${visibility.hiddenIds.length} hidden` : 'All shown'}</span>
         {onShowAll ? (
-          <Button variant="ghost" size="sm" disabled={!anyChange} onClick={onShowAll}>
+          <Button variant="ghost" size="sm" onClick={onShowAll}>
             Show all
           </Button>
         ) : null}

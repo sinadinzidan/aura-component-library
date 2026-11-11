@@ -37,7 +37,7 @@ export function PipelineScene({ route, cameraKp, mode = 'rail', insets, ...corri
   const pose = useMemo(() => railPose(route, kpToDistance(route, cameraKp, PIPELINE_TOTAL_KM), { height: 5.5, back: 13, lookAhead: 20 }), [route, cameraKp]);
   const overview = useMemo(() => {
     const end = route.samples[route.samples.length - 1]?.position ?? [0, 0, 0];
-    return frameBounds({ min: [-15, 0, -30], max: [end[0] + 15, 20, 30] }, { aspect, padding: 0.62, view: 'perspective' });
+    return frameBounds({ min: [-15, 0, -30], max: [end[0] + 15, 20, 30] }, { aspect, padding: 0.5, view: 'perspective' });
   }, [route, aspect]);
 
   return (

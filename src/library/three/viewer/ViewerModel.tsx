@@ -116,7 +116,9 @@ export function ViewerModel({ parts = VIEWER_PARTS, display = {}, colorMode = 'n
               }
             >
               <PartGeometry part={part} />
+              {/* The shader forces full opacity while a material is opaque, so switching to translucent needs a new material, not a changed one. */}
               <meshStandardMaterial
+                key={translucent ? 'translucent' : 'opaque'}
                 color={colors[colorKey]}
                 roughness={0.6}
                 metalness={0.12}

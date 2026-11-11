@@ -70,6 +70,18 @@ describe(ViewerModel.name, () => {
     await view.unmount();
   });
 
+  it('swaps in a new material when a part becomes translucent', async () => {
+    const view = await renderScene(<ViewerModel colors={COLORS} />);
+    const before = partMeshes(view.objects()).map(materialOf);
+
+    await view.rerender(<ViewerModel colors={COLORS} xray />);
+    const after = partMeshes(view.objects()).map(materialOf);
+
+    expect(after.every((material, index) => material !== before[index] && material.transparent)).toBe(true);
+
+    await view.unmount();
+  });
+
   it('colours parts by the chosen mode', async () => {
     const view = await renderScene(<ViewerModel colors={COLORS} colorMode="health" />);
     const colours = new Set(partMeshes(view.objects()).map((mesh) => materialOf(mesh).color.getStyle()));

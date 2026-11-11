@@ -65,9 +65,9 @@ describe(ModelTreePanel.name, () => {
     expect(onShowAll).toHaveBeenCalled();
   });
 
-  it('disables show all when nothing is changed', () => {
+  it('keeps show all enabled, so focus is never lost when it is pressed', () => {
     setup();
 
-    expect(screen.getByRole('button', { name: 'Show all' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Show all' })).toBeEnabled();
   });
 });

@@ -475,7 +475,7 @@ function Subsea3dPartRiser() {
   const top = [30, 36, 0] as const;
   const seabed = [-6, 0.3, 0] as const;
   const points = lazyWavePoints(top, seabed, { segments: 32 });
-  const target = frameBounds({ min: [-8, 0, -6], max: [32, 38, 6] }, { aspect: 1.4, padding: 1.05, view: 'perspective' });
+  const target = frameBounds({ min: [-8, 0, -6], max: [32, 38, 6] }, { aspect: 1.4, padding: 0.72, view: 'perspective' });
 
   return (
     <Subsea3dStage label="Flexible riser in a lazy-wave shape: a steep descent, a sag bend, a buoyant hog bend and a gentle run to the seabed" className="h-80">
