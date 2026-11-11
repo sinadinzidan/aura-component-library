@@ -619,7 +619,7 @@ function Platform3dConsole({ initial = INITIAL_PLATFORM_STATE, still = false }: 
           </div>
         </div>
 
-        <aside aria-label="Equipment and faceplate" className="flex w-[20.5rem] shrink-0 flex-col gap-px @5xl:w-[23rem]">
+        <aside aria-label="Equipment and faceplate" className="flex w-[23rem] shrink-0 flex-col gap-px">
           <Panel className="min-h-0 flex-1" padding="none" title="Equipment" subtitle={level ? level.name : 'All decks'}>
             <div className="min-h-0 flex-1 overflow-y-auto">
               <Platform3dEquipmentTable levelId={state.levelId} selectedId={state.equipmentId} onSelect={(levelId, equipmentId) => dispatch({ type: 'selectEquipment', levelId, equipmentId })} />

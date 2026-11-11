@@ -71,16 +71,19 @@ export function DialGauge({
 }: DialGaugeProps) {
   const { id: look, chart } = useLookDefinition();
   const mode = variant ?? (look === 'blueprint' || look === 'editorial' ? 'needle' : 'arc');
+  const hairline = mode === 'needle' && (look === 'blueprint' || look === 'editorial');
   const hasTicks = ticks !== undefined && ticks > 1;
-  const margin = hasTicks ? 26 : zones.length > 0 ? 10 : 4;
+  const zoneRing = zones.length > 0 && mode === 'arc';
+  const margin = hasTicks ? (zoneRing ? 34 : 30) : zones.length > 0 ? 10 : 4;
   const radiusOuter = size / 2 - margin;
-  const width = Math.max(3, Math.min(radiusOuter * chart.ring, radiusOuter * 0.34));
+  const arcWidth = Math.max(3, Math.min(radiusOuter * chart.ring, radiusOuter * 0.34));
+  const width = mode === 'needle' ? Math.max(arcWidth, 7) : arcWidth;
   const radius = radiusOuter - width / 2;
   const ox = size / 2;
   const oy = size / 2;
   const angle = (point: number) => START + rangeShare(point, min, max) * SWEEP;
   const cap = chart.barRadius === 0 ? 'butt' : 'round';
-  const bottom = oy + radiusOuter * Math.sin(Math.PI / 4) + (hasTicks ? 22 : 24);
+  const bottom = oy + radiusOuter * Math.sin(Math.PI / 4) + (hasTicks ? 30 : 24);
   const height = Math.min(size, Math.ceil(bottom));
   const shown = value === null ? '—' : formatNumber(value, decimals);
   const tickValues = hasTicks ? Array.from({ length: ticks }, (_, index) => min + ((max - min) * index) / (ticks - 1)) : [];
@@ -104,10 +107,15 @@ export function DialGauge({
     >
       <div className="relative shrink-0" style={{ width: size, height }}>
         <svg viewBox={`0 0 ${size} ${height}`} width={size} height={height} aria-hidden="true" fill="none" className="absolute inset-0 overflow-visible">
-          <path d={arc(ox, oy, radius, START, START + SWEEP)} stroke="var(--kit-track)" strokeWidth={width} strokeLinecap={cap} />
+          <path
+            d={arc(ox, oy, radius, START, START + SWEEP)}
+            stroke={hairline ? 'color-mix(in oklab, var(--kit-text) 24%, transparent)' : 'var(--kit-track)'}
+            strokeWidth={width}
+            strokeLinecap={cap}
+          />
           {zones.map((zone) =>
             mode === 'needle' ? (
-              <path key={`${zone.from}-${zone.to}`} data-tone={zone.tone} d={arc(ox, oy, radius, angle(zone.from), angle(zone.to))} stroke="var(--t-line)" strokeWidth={Math.max(width, 5)} />
+              <path key={`${zone.from}-${zone.to}`} data-tone={zone.tone} d={arc(ox, oy, radius, angle(zone.from), angle(zone.to))} stroke="var(--t-line)" strokeWidth={width} />
             ) : (
               <path key={`${zone.from}-${zone.to}`} data-tone={zone.tone} d={arc(ox, oy, radiusOuter + 5, angle(zone.from), angle(zone.to))} stroke="var(--t-line)" strokeWidth="3" />
             )
@@ -123,9 +131,9 @@ export function DialGauge({
           ) : null}
           {tickValues.map((tick) => {
             const degrees = angle(tick);
-            const [x1, y1] = polar(ox, oy, radiusOuter + (zones.length > 0 && mode === 'arc' ? 9 : 3), degrees);
-            const [x2, y2] = polar(ox, oy, radiusOuter + (zones.length > 0 && mode === 'arc' ? 13 : 8), degrees);
-            const [tx, ty] = polar(ox, oy, radiusOuter + 19, degrees);
+            const [x1, y1] = polar(ox, oy, radiusOuter + (zoneRing ? 10 : 3), degrees);
+            const [x2, y2] = polar(ox, oy, radiusOuter + (zoneRing ? 15 : 8), degrees);
+            const [tx, ty] = polar(ox, oy, radiusOuter + (zoneRing ? 26 : 20), degrees);
             return (
               <g key={tick}>
                 <path d={`M${x1.toFixed(2)} ${y1.toFixed(2)}L${x2.toFixed(2)} ${y2.toFixed(2)}`} stroke="var(--kit-rule-strong)" strokeWidth="1.25" />

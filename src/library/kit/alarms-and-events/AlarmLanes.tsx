@@ -87,8 +87,8 @@ export function AlarmLanes({ label, lanes, ticks, totalHeader = 'Standing', clas
       <div className={cx(columns, 'border-t border-[var(--kit-rule-strong)] pt-2 text-xs text-[var(--kit-text-2)]')}>
         <span />
         <span className="flex justify-between tabular-nums">
-          {ticks.map((tick) => (
-            <span key={tick}>{tick}</span>
+          {ticks.map((tick, index) => (
+            <span key={`${index}-${tick}`}>{tick}</span>
           ))}
         </span>
         <span />

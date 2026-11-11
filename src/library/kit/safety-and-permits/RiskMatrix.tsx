@@ -60,7 +60,7 @@ export function RiskMatrix({ label, likelihoods = LIKELIHOODS, consequences = CO
               const name = `${likelihoods[likelihood - 1]}, ${consequences[consequence - 1]}: ${rating.label} ${rating.score}${mark ? `, ${mark.toLowerCase()}` : ''}`;
               const body = (
                 <>
-                  <span className="text-sm font-semibold tabular-nums">{count ?? rating.score}</span>
+                  <span className="text-sm font-semibold tabular-nums">{counts ? (count ?? '') : rating.score}</span>
                   {mark ? <span className="text-xs leading-none font-semibold">{mark}</span> : null}
                 </>
               );

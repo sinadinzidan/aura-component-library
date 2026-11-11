@@ -45,18 +45,17 @@ export function PermitCard({ number, title, kind, icon, state, location, tag, ho
   return (
     <Panel tone={filled ? status.tone : 'neutral'} className={cx('h-full', className)} footer={actions}>
       <div className="flex flex-1 flex-col gap-4" data-state={state}>
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           <IconChip tone={status.tone}>{icon}</IconChip>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-(--kit-text-2)">
-              {kind} · <span className="tabular-nums">{number}</span>
-            </p>
-            <p className="text-base leading-snug font-semibold text-(--kit-text)">{title}</p>
-          </div>
+          <p className="min-w-0 flex-1 text-sm font-medium text-(--kit-text-2)">
+            {kind}
+            <span className="block tabular-nums">{number}</span>
+          </p>
           <StatusPill tone={status.tone} variant={filled ? 'outline' : 'soft'}>
             {status.label}
           </StatusPill>
         </div>
+        <p className="text-base leading-snug font-semibold text-(--kit-text)">{title}</p>
         {reason ? <p className="text-sm text-(--kit-text-2)">{reason}</p> : null}
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <div className="min-w-0">

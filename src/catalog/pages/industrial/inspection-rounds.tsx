@@ -1,796 +1,834 @@
 import { Button } from '@cognite/aura/components/button';
-import { Card } from '@cognite/aura/components/card';
-import { CheckboxGroup, CheckboxItem, CheckboxItemControl, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
-import { Input } from '@cognite/aura/components/input';
-import { Label } from '@cognite/aura/components/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@cognite/aura/components/select';
-import { Textarea } from '@cognite/aura/components/textarea';
-import { IconBarcode, IconCamera, IconCheck, IconCloudCheck, IconCloudOff, IconCloudUpload, IconMinus, IconX } from '@cognite/aura/icons';
-import { useId, useState } from 'react';
+import { CheckboxItem, CheckboxItemControl, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
+import {
+  SegmentedControl,
+  SegmentedControlButton,
+  SegmentedControlList,
+} from '@cognite/aura/components/segmented-control';
+import {
+  IconAlertTriangle,
+  IconCamera,
+  IconCircleCheck,
+  IconClipboardCheck,
+  IconClock,
+  IconCloudOff,
+  IconCloudUpload,
+  IconPlayerSkipForward,
+  IconRefresh,
+  IconRoute,
+  IconTool,
+} from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { PersonAvatar } from '../../../library/display/PersonAvatar';
-import { LabelledProgress } from '../../../library/feedback/LabelledProgress';
-import { UnitNumberInput } from '../../../library/forms/UnitNumberInput';
-import { PriorityBadge } from '../../../library/industrial/operations/PriorityBadge';
-import { SeverityBadge } from '../../../library/industrial/operations/SeverityBadge';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { formatValue } from '../../../library/industrial/status';
-import type { Severity, StatusDescriptor } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { CheckpointRow } from '../../../library/industrial/workflows/CheckpointRow';
-import type { CheckpointReading, CheckpointResult } from '../../../library/industrial/workflows/CheckpointRow';
-import { PagePreview } from '../../../library/industrial/workflows/PagePreview';
-import { SignOffBlock } from '../../../library/industrial/workflows/SignOffBlock';
-import type { SignOffSigner } from '../../../library/industrial/workflows/SignOffBlock';
-import { StepList } from '../../../library/industrial/workflows/StepList';
-import type { StepListItem } from '../../../library/industrial/workflows/StepList';
-import { TagChip } from '../../../library/industrial/workflows/TagChip';
-import { isWithinLimits } from '../../../library/industrial/workflows/workflow';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { IconChip } from '../../../library/kit/IconChip';
+import { CheckpointList } from '../../../library/kit/inspection-rounds/CheckpointList';
+import { ReadingEntry } from '../../../library/kit/inspection-rounds/ReadingEntry';
+import { ResultStrip } from '../../../library/kit/inspection-rounds/ResultStrip';
+import { RoundCard, type RoundState } from '../../../library/kit/inspection-rounds/RoundCard';
+import {
+  RESULT_TONE,
+  RESULT_WORD,
+  judgeReading,
+  roundProgress,
+  type Checkpoint,
+  type CheckpointResult,
+} from '../../../library/kit/inspection-rounds/rounds';
+import { RouteStepper, type RouteStop } from '../../../library/kit/inspection-rounds/RouteStepper';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
+import { makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './inspection-rounds.tsx?raw';
 
-type Checkpoint = {
-  id: string;
-  name: string;
-  tag: string;
-  result: CheckpointResult;
-  reading?: CheckpointReading;
-  note?: string;
-};
-
-/** The compression area morning round, R-23-A, as it stands at 14:00. */
-const CHECKPOINTS: readonly Checkpoint[] = [
-  { id: 'c1', name: '1st stage lube oil level', tag: '23-KA-9101', result: 'pass', reading: { value: 68, unit: '%', low: 40, high: 90 } },
-  { id: 'c2', name: '1st stage seal gas filter differential', tag: '23-KA-9101', result: 'pass', reading: { value: 0.4, unit: 'bar', decimals: 1, high: 1 } },
-  { id: 'c3', name: '1st stage drive-end vibration, handheld', tag: '23-KA-9101', result: 'pass', reading: { value: 6.8, unit: 'mm/s', decimals: 1, high: 7.1 } },
-  { id: 'c4', name: 'Interstage cooler leak check', tag: '23-HA-9114', result: 'pass' },
-  { id: 'c5', name: 'Cooler outlet temperature, local gauge', tag: '23-HA-9114', result: 'fail', reading: { value: 41.5, unit: '°C', decimals: 1, low: 20, high: 40 } },
-  { id: 'c6', name: '2nd stage lube oil level', tag: '23-KA-9102', result: 'pass', reading: { value: 72, unit: '%', low: 40, high: 90 } },
-  { id: 'c7', name: 'Recompressor bearing housing', tag: '23-KA-9103', result: 'fail', note: 'Oil in sight glass is dark, housing hot to the touch.' },
-  { id: 'c8', name: 'Recompressor casing drain valve', tag: '23-KA-9103', result: 'skip', note: 'Area barricaded for the bearing inspection.' },
-  { id: 'c9', name: 'Gas turbine enclosure, visual', tag: '23-GT-9001', result: 'pending' },
-  { id: 'c10', name: 'Turbine lube oil tank level', tag: '23-GT-9001', result: 'pending' },
-  { id: 'c11', name: 'Fuel gas skid leak check', tag: '23-GT-9001', result: 'pending' },
-  { id: 'c12', name: 'Housekeeping and escape routes', tag: 'NK-23', result: 'pending' },
+const INSPECTION_ROUNDS_CHECKPOINTS: Checkpoint[] = [
+  { id: 'cp-1', tag: '20-PT-10010', name: 'Separator pressure', location: 'Inlet deck', unit: 'barg', low: 11, high: 15, value: 13.1, result: 'pass' },
+  { id: 'cp-2', tag: '20-LT-10012', name: 'Separator level', location: 'Inlet deck', unit: '%', low: 30, high: 70, value: 54.3, result: 'pass' },
+  { id: 'cp-3', tag: '23-PT-92531', name: 'Discharge pressure', location: 'Compressor hall, level 2', unit: 'barg', low: 40, high: 52, value: 48.6, result: 'pass' },
+  { id: 'cp-4', tag: '23-VT-92540', name: 'Drive-end vibration', location: 'Compressor hall, level 2', unit: 'mm/s', high: 7.1, value: 7.6, result: 'fail', note: '0.5 above the high limit' },
+  { id: 'cp-5', tag: '23-KA-9101', name: 'Lube oil sight glass', location: 'Compressor hall, level 1', result: 'pass' },
+  { id: 'cp-6', tag: '23-HA-9114', name: 'Cooler flanges, leak check', location: 'Cooler deck', result: 'skipped', note: 'Scaffolding blocks access' },
+  { id: 'cp-7', tag: '23-TT-91141', name: 'Cooler outlet temperature', location: 'Cooler deck', unit: '°C', low: 20, high: 40, result: 'pending' },
+  { id: 'cp-8', tag: '27-IT-20013', name: 'Export pump motor current', location: 'Export pump room', unit: 'A', low: 40, high: 95, result: 'pending' },
 ];
 
-const countResult = (result: CheckpointResult): number => CHECKPOINTS.filter((checkpoint) => checkpoint.result === result).length;
-const DONE = CHECKPOINTS.length - countResult('pending');
+const INSPECTION_ROUNDS_RESULTS: CheckpointResult[] = INSPECTION_ROUNDS_CHECKPOINTS.map((checkpoint) => checkpoint.result);
 
-type Round = {
+type InspectionRoundsRound = {
   id: string;
   name: string;
   area: string;
-  operator: string | null;
-  done: number;
-  total: number;
-  findings: number;
-  due: string;
-  state: 'in-progress' | 'scheduled' | 'done' | 'overdue';
-  overdueBy?: string;
+  state: RoundState;
+  timing: string;
+  assignee: string;
+  results: CheckpointResult[];
 };
 
-const ROUNDS: readonly Round[] = [
-  { id: 'R-23-A', name: 'Compression area, morning round', area: 'NK-23', operator: 'Tomás Barros', done: DONE, total: CHECKPOINTS.length, findings: 2, due: 'Today 14:30', state: 'in-progress' },
-  { id: 'R-20-A', name: 'Inlet and separation round', area: 'NK-20', operator: 'Ingrid Haugen', done: 0, total: 9, findings: 0, due: 'Today 16:00', state: 'scheduled' },
-  { id: 'R-27-W', name: 'Export pumps, weekly', area: 'NK-27', operator: 'Jonas Nyberg', done: 8, total: 8, findings: 1, due: 'Today 12:00', state: 'done' },
-  { id: 'R-40-A', name: 'Cooling water round', area: 'NK-40', operator: null, done: 0, total: 6, findings: 0, due: 'Today 10:00', state: 'overdue', overdueBy: '4 h' },
-  { id: 'R-FG-M', name: 'Fire and gas detectors, monthly', area: 'NK', operator: 'Jonas Nyberg', done: 14, total: 22, findings: 0, due: '10 Mar', state: 'overdue', overdueBy: '2 d' },
-];
-
-const ROUND_STATE: Record<Round['state'], StatusDescriptor> = {
-  'in-progress': { tone: 'info', label: 'In progress', shape: 'ring' },
-  scheduled: { tone: 'neutral', label: 'Scheduled', shape: 'ring' },
-  done: { tone: 'success', label: 'Completed', shape: 'dot' },
-  overdue: { tone: 'critical', label: 'Overdue', shape: 'diamond' },
-};
-
-type Finding = { id: string; title: string; tag: string; severity: Severity; checkpoint: string; description: string; workOrder?: string };
-
-const FINDINGS: readonly Finding[] = [
-  { id: 'F-0318', title: 'Dark oil and hot bearing housing', tag: '23-KA-9103', severity: 'high', checkpoint: 'Recompressor bearing housing', description: 'Oil in the drive-end sight glass is dark and the housing is too hot to hold a hand on. Consistent with the vibration trip at 13:46.', workOrder: 'WO-104482' },
-  { id: 'F-0319', title: 'Cooler outlet above local limit', tag: '23-HA-9114', severity: 'medium', checkpoint: 'Cooler outlet temperature, local gauge', description: 'Local gauge reads 41.5 °C against a 40 °C limit. Tube bundle cleaning is already planned.' },
-  { id: 'F-0311', title: 'Weeping gland on pump B suction valve', tag: '27-PA-2001B', severity: 'low', checkpoint: 'Export pump B, visual', description: 'Slight weep at the gland, a few drops a minute. Monitor on next round.' },
-];
-
-const ROUTE_STOPS: readonly StepListItem[] = [
-  { id: 's1', label: '1st stage', detail: '3 of 3', state: 'done' },
-  { id: 's2', label: 'Cooler', detail: '2 of 2', state: 'done' },
-  { id: 's3', label: '2nd stage', detail: '1 of 1', state: 'done' },
-  { id: 's4', label: 'Recompressor', detail: '1 skipped', state: 'held' },
-  { id: 's5', label: 'Gas turbine', detail: '0 of 3', state: 'active' },
-  { id: 's6', label: 'Area', detail: '0 of 1', state: 'pending' },
-];
-
-const ROUTE_VERTICAL: readonly StepListItem[] = [
-  { id: 'v1', label: '1st stage compressor', detail: '23-KA-9101 · 3 checkpoints, all pass', state: 'done', meta: <RouteTime>13:12</RouteTime> },
-  { id: 'v2', label: 'Interstage cooler', detail: '23-HA-9114 · 1 pass, 1 fail', state: 'failed', meta: <RouteTime>13:24</RouteTime> },
-  { id: 'v3', label: '2nd stage compressor', detail: '23-KA-9102 · 1 checkpoint, pass', state: 'done', meta: <RouteTime>13:31</RouteTime> },
-  { id: 'v4', label: 'Recompressor', detail: '23-KA-9103 · 1 fail, 1 skipped', state: 'failed', meta: <RouteTime>13:52</RouteTime> },
-  { id: 'v5', label: 'Gas turbine', detail: '23-GT-9001 · 3 checkpoints to go', state: 'active' },
-  { id: 'v6', label: 'Housekeeping and escape routes', detail: 'NK-23 · 1 checkpoint', state: 'pending' },
-];
-
-const HISTORY: readonly { date: string; value: number; operator: string }[] = [
-  { date: '12 Mar', value: 41.5, operator: 'Tomás Barros' },
-  { date: '11 Mar', value: 39.8, operator: 'Tomás Barros' },
-  { date: '10 Mar', value: 39.1, operator: 'Jonas Nyberg' },
-  { date: '9 Mar', value: 38.6, operator: 'Tomás Barros' },
-  { date: '8 Mar', value: 38.0, operator: 'Ingrid Haugen' },
-  { date: '7 Mar', value: 37.4, operator: 'Tomás Barros' },
-];
-
-const SKIP_REASONS = [
-  { value: 'access', label: 'No safe access' },
-  { value: 'out-of-service', label: 'Equipment out of service' },
-  { value: 'permit', label: 'Blocked by a work permit' },
-  { value: 'other', label: 'Other' },
-];
-
-const SIGNERS: readonly SignOffSigner[] = [
-  { id: 'operator', role: 'Field operator', name: 'Tomás Barros', state: 'pending' },
-  { id: 'supervisor', role: 'Shift supervisor', name: 'Liv Wold', state: 'pending' },
-];
-
-const SYNC: Record<'synced' | 'offline' | 'syncing', { label: string; detail: string; icon: typeof IconCloudCheck; tone: string }> = {
-  synced: { label: 'Synced', detail: 'All readings uploaded 13:58', icon: IconCloudCheck, tone: 'text-muted-foreground' },
-  offline: { label: 'Saved on this device', detail: '3 readings waiting for a connection', icon: IconCloudOff, tone: 'text-warning-foreground-strong' },
-  syncing: { label: 'Syncing', detail: 'Uploading 2 of 3 readings', icon: IconCloudUpload, tone: 'text-info-foreground-strong' },
-};
-
-const RESULT_OPTIONS: readonly { value: Exclude<CheckpointResult, 'pending'>; label: string; icon: typeof IconCheck }[] = [
-  { value: 'pass', label: 'Pass', icon: IconCheck },
-  { value: 'fail', label: 'Fail', icon: IconX },
-  { value: 'skip', label: 'Skip', icon: IconMinus },
-];
-
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
-
-function RouteTime({ children }: { children: string }) {
-  return <span className="text-xs text-muted-foreground tabular-nums">{children}</span>;
-}
-
-function SyncLine({ state }: { state: keyof typeof SYNC }) {
-  const { label, detail, icon: Icon, tone } = SYNC[state];
-  return (
-    <div className="flex items-center gap-2">
-      <Icon aria-hidden className={`size-4 shrink-0 ${tone}`} />
-      <div className="flex min-w-0 flex-col">
-        <span className="text-sm text-base-foreground">{label}</span>
-        <span className="text-xs text-muted-foreground tabular-nums">{detail}</span>
-      </div>
-    </div>
-  );
-}
-
-/** Pass, fail and skip as three toggle buttons; exactly one can be pressed. */
-function ResultButtons({ value, onChange, size = 'default' }: { value: CheckpointResult; onChange: (value: CheckpointResult) => void; size?: 'default' | 'lg' }) {
-  return (
-    <div role="group" aria-label="Checkpoint result" className="grid w-full grid-cols-3 gap-2">
-      {RESULT_OPTIONS.map((option) => {
-        const Icon = option.icon;
-        const pressed = value === option.value;
-        return (
-          <Button key={option.value} size={size} variant={pressed ? 'default' : 'outline'} aria-pressed={pressed} className="w-full" onClick={() => onChange(pressed ? 'pending' : option.value)}>
-            <Icon /> {option.label}
-          </Button>
-        );
-      })}
-    </div>
-  );
-}
-
-function RoundCard({ round }: { round: Round }) {
-  const overdue = round.state === 'overdue';
-  return (
-    <Card className="w-full max-w-xs gap-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-medium text-base-foreground">{round.name}</span>
-          <span className="text-xs text-muted-foreground">
-            <span className="font-mono">{round.id}</span> · {round.operator ?? 'Not assigned'}
-          </span>
-        </div>
-        <StatusIndicator variant="badge" {...ROUND_STATE[round.state]} />
-      </div>
-      <LabelledProgress label="Checkpoints" value={round.done} max={round.total} valueText={`${round.done} of ${round.total}`} size="sm" />
-      <div className="flex items-center justify-between gap-3 text-xs tabular-nums">
-        <span className={overdue ? 'font-medium text-critical-foreground-strong' : 'text-muted-foreground'}>{overdue ? `Due ${round.due} · ${round.overdueBy} late` : `Due ${round.due}`}</span>
-        <span className="text-muted-foreground">
-          {round.findings} {round.findings === 1 ? 'finding' : 'findings'}
-        </span>
-      </div>
-    </Card>
-  );
-}
-
-function InspectionRoundCard() {
-  return <RoundCard round={ROUNDS[0]} />;
-}
-
-function InspectionRoundCardOverdue() {
-  return <RoundCard round={ROUNDS[3]} />;
-}
-
-function InspectionRoundCardDone() {
-  return <RoundCard round={ROUNDS[2]} />;
-}
-
-function InspectionRoundSchedule() {
-  return (
-    <ul aria-label="Rounds scheduled today" className="flex w-full max-w-lg flex-col divide-y divide-default">
-      {ROUNDS.slice(0, 4).map((round) => (
-        <li key={round.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_5.5rem] items-center gap-3 py-2">
-          <div className="flex min-w-0 flex-col">
-            <span className="truncate text-sm text-base-foreground">{round.name}</span>
-            <span className="truncate text-xs text-muted-foreground">
-              <span className="font-mono">{round.id}</span> · {round.total} checkpoints · {round.operator ?? 'Not assigned'}
-            </span>
-          </div>
-          <StatusIndicator size="sm" {...ROUND_STATE[round.state]} />
-          <span className="text-right text-xs text-muted-foreground tabular-nums">{round.due}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function InspectionRoundOverdue() {
-  const overdue = ROUNDS.filter((round) => round.state === 'overdue');
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Overdue rounds</span>
-        <span className="text-xs text-muted-foreground tabular-nums">{overdue.length} overdue · longest first</span>
-      </div>
-      <ul className="flex flex-col divide-y divide-default">
-        {[...overdue].reverse().map((round) => (
-          <li key={round.id} className="flex items-center gap-3 py-2">
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm text-base-foreground">{round.name}</span>
-              <span className="truncate text-xs text-muted-foreground tabular-nums">
-                {round.done} of {round.total} checkpoints · {round.operator ?? 'Not assigned'}
-              </span>
-            </div>
-            <span className="shrink-0 text-xs font-medium text-critical-foreground-strong tabular-nums">{round.overdueBy} late</span>
-            <Button variant="secondary" size="sm">
-              {round.operator ? 'Continue round' : 'Assign round'}
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function InspectionRoundCheckpointRow() {
-  return (
-    <div className="flex w-full max-w-lg flex-col divide-y divide-default">
-      {[CHECKPOINTS[2], CHECKPOINTS[4], CHECKPOINTS[7], CHECKPOINTS[8]].map((checkpoint) => (
-        <CheckpointRow
-          key={checkpoint.id}
-          index={CHECKPOINTS.indexOf(checkpoint) + 1}
-          name={checkpoint.name}
-          tag={checkpoint.tag}
-          result={checkpoint.result}
-          reading={checkpoint.reading}
-          note={checkpoint.note}
-        />
-      ))}
-    </div>
-  );
-}
-
-function InspectionRoundReadingEntry() {
-  const id = useId();
-  const checkpoint = CHECKPOINTS[4];
-  const [value, setValue] = useState<number | null>(41.5);
-  const outside = value !== null && !isWithinLimits(value, 20, 40);
-  return (
-    <div className="flex w-full max-w-sm flex-col gap-3">
-      <div className="flex flex-col">
-        <span className="text-sm font-medium text-base-foreground">{checkpoint.name}</span>
-        <span className="font-mono text-xs text-muted-foreground">{checkpoint.tag}</span>
-      </div>
-      <div className="flex flex-col">
-        <Label htmlFor={id}>Reading</Label>
-        <UnitNumberInput id={id} value={value} onValueChange={setValue} unit="°C" step={0.1} aria-describedby={`${id}-limits`} aria-invalid={outside} />
-        <p id={`${id}-limits`} role={outside ? 'alert' : undefined} className={`pt-1 text-xs tabular-nums ${outside ? 'font-medium text-warning-foreground-strong' : 'text-muted-foreground'}`}>
-          {outside ? 'Outside limits 20–40 °C. Check the gauge, then save it as a finding.' : value === null ? 'Enter the value on the local gauge. Limits 20–40 °C.' : 'Within limits 20–40 °C.'}
-        </p>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground tabular-nums">Last round 39.8 °C</span>
-        <Button size="sm" variant={outside ? 'secondary' : 'default'} disabled={value === null}>
-          {outside ? 'Save as finding' : 'Save reading'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function InspectionRoundResultControl() {
-  const [result, setResult] = useState<CheckpointResult>('pass');
-  return (
-    <div className="flex w-full max-w-xs flex-col gap-3">
-      <div className="flex flex-col">
-        <span className="text-sm font-medium text-base-foreground">Interstage cooler leak check</span>
-        <span className="text-xs text-muted-foreground">No visible leaks at flanges or drain.</span>
-      </div>
-      <ResultButtons value={result} onChange={setResult} />
-    </div>
-  );
-}
-
-function InspectionRoundOfflineSaved() {
-  return (
-    <div className="flex w-full max-w-xs flex-col gap-3 rounded-xl bg-muted-background p-3">
-      <SyncLine state="offline" />
-      <p className="text-xs text-muted-foreground">You can finish the round offline. Readings upload when the tablet is back in range.</p>
-    </div>
-  );
-}
-
-function InspectionRoundSyncStates() {
-  return (
-    <div className="flex flex-col gap-4">
-      <SyncLine state="synced" />
-      <SyncLine state="syncing" />
-      <SyncLine state="offline" />
-    </div>
-  );
-}
-
-function InspectionRoundChecklist() {
-  const id = useId();
-  const items = ['Guards and covers in place', 'No oil on the baseplate', 'No unusual noise', 'Local instruments readable'];
-  const [checked, setChecked] = useState<readonly string[]>(items.slice(0, 3));
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">2nd stage compressor, visual checks</span>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {checked.length} of {items.length}
-        </span>
-      </div>
-      <CheckboxGroup aria-label="Visual checks">
-        {items.map((item) => (
-          <CheckboxItem key={item}>
-            <CheckboxItemControl
-              checked={checked.includes(item)}
-              onCheckedChange={(isChecked) => setChecked((current) => (isChecked ? [...current, item] : current.filter((entry) => entry !== item)))}
-            />
-            <CheckboxItemLabel>{item}</CheckboxItemLabel>
-          </CheckboxItem>
-        ))}
-      </CheckboxGroup>
-      <div className="grid grid-cols-[6rem_6rem_minmax(0,1fr)] items-start gap-3">
-        <PagePreview kind="photo" label="Photo 1, pressure gauge 23-PI-9211" caption="Photo 1" />
-        <button
-          type="button"
-          className="flex aspect-4/3 w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-emphasized text-xs text-muted-foreground hover:bg-muted-background focus-visible:shadow-focus-ring focus-visible:outline-none"
-        >
-          <IconCamera aria-hidden className="size-5" />
-          Add photo
-        </button>
-        <div className="flex flex-col">
-          <Label htmlFor={id}>Note</Label>
-          <Textarea id={id} rows={2} defaultValue="Glass on 23-PI-9211 is fogged; reading taken from the transmitter." />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InspectionRoundTagConfirm() {
-  const id = useId();
-  const expected = '23-HA-9114';
-  const [tag, setTag] = useState('23-HA-9114');
-  const entered = tag.trim().toUpperCase();
-  const state = entered === '' ? 'empty' : entered === expected ? 'match' : 'mismatch';
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Confirm the equipment</span>
-        <span className="text-xs text-muted-foreground">
-          Expected <TagChip tag={expected} />
-        </span>
-      </div>
-      <div className="grid grid-cols-[8rem_minmax(0,1fr)] items-stretch gap-4">
-        <div className="flex flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-emphasized p-3 text-center text-xs text-muted-foreground">
-          <IconBarcode aria-hidden className="size-8" />
-          Point the camera at the tag plate
-        </div>
-        <div className="flex flex-col justify-center">
-          <Label htmlFor={id}>Or type the tag</Label>
-          <Input id={id} value={tag} onChange={(event) => setTag(event.target.value)} aria-invalid={state === 'mismatch'} aria-describedby={`${id}-state`} />
-          <p
-            id={`${id}-state`}
-            role={state === 'mismatch' ? 'alert' : 'status'}
-            className={`flex items-center gap-1 pt-1 text-xs ${state === 'match' ? 'text-success-foreground-strong' : state === 'mismatch' ? 'font-medium text-critical-foreground-strong' : 'text-muted-foreground'}`}
-          >
-            {state === 'match' ? <IconCheck aria-hidden className="size-3.5" /> : null}
-            {state === 'mismatch' ? <IconX aria-hidden className="size-3.5" /> : null}
-            {state === 'match' ? 'Tag matches. Interstage cooler.' : state === 'mismatch' ? `This is not ${expected}. Check that you are at the right unit.` : 'Scan or type the tag on the equipment.'}
-          </p>
-        </div>
-      </div>
-      <div className="flex justify-end">
-        <Button size="sm" disabled={state !== 'match'}>
-          Start checkpoint
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function InspectionRoundHistory() {
-  const values = [...HISTORY].reverse().map((entry) => entry.value);
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-3">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-medium text-base-foreground">Cooler outlet temperature, local gauge</span>
-          <span className="text-xs text-muted-foreground">
-            <span className="font-mono">23-HA-9114</span> · last 6 rounds · limit 40 °C
-          </span>
-        </div>
-        <div className="w-28 shrink-0">
-          <Sparkline values={values} label="Cooler outlet temperature, last 6 rounds" unit="°C" limit={40} tone="warning" height={32} showLast />
-        </div>
-      </div>
-      <ul className="flex flex-col divide-y divide-default">
-        {HISTORY.map((entry) => {
-          const outside = !isWithinLimits(entry.value, 20, 40);
-          return (
-            <li key={entry.date} className="grid grid-cols-[4rem_minmax(0,1fr)_5rem_4.5rem] items-center gap-3 py-1.5">
-              <span className="text-xs text-muted-foreground tabular-nums">{entry.date}</span>
-              <span className="truncate text-xs text-muted-foreground">{entry.operator}</span>
-              <ValueReadout size="xs" value={entry.value} unit="°C" decimals={1} tone={outside ? 'warning' : 'neutral'} className="justify-end" />
-              <span className={`text-right text-xs ${outside ? 'font-medium text-warning-foreground-strong' : 'text-muted-foreground'}`}>{outside ? 'Outside' : 'Within'}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-function InspectionRoundSkipReason() {
-  const id = useId();
-  const [reason, setReason] = useState('permit');
-  return (
-    <div className="flex w-full max-w-sm flex-col gap-3">
-      <div className="flex flex-col">
-        <span className="text-sm font-medium text-base-foreground">Skip this checkpoint</span>
-        <span className="text-xs text-muted-foreground">
-          Recompressor casing drain valve · <span className="font-mono">23-KA-9103</span>
-        </span>
-      </div>
-      <div className="flex flex-col">
-        <Label htmlFor={`${id}-reason`}>Reason</Label>
-        <Select items={SKIP_REASONS} value={reason} onValueChange={setReason}>
-          <SelectTrigger id={`${id}-reason`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SKIP_REASONS.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="flex flex-col">
-        <Label htmlFor={`${id}-note`}>Note for the next round</Label>
-        <Textarea id={`${id}-note`} rows={2} defaultValue="Area barricaded for the bearing inspection." />
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm">
-          Cancel
-        </Button>
-        <Button variant="secondary" size="sm">
-          Skip checkpoint
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function InspectionRoundStepper() {
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-base-foreground">{ROUNDS[0].name}</p>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-mono">{ROUNDS[0].id}</span> · 6 stops · {CHECKPOINTS.length} checkpoints
-          </p>
-        </div>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {DONE} of {CHECKPOINTS.length} checked
-        </span>
-      </div>
-      <StepList orientation="horizontal" label="Route progress, compression area round" steps={ROUTE_STOPS} />
-    </div>
-  );
-}
-
-function InspectionRoundSummary() {
-  const rows: readonly { label: string; result: CheckpointResult }[] = [
-    { label: 'Pass', result: 'pass' },
-    { label: 'Fail', result: 'fail' },
-    { label: 'Skipped', result: 'skip' },
-    { label: 'Not checked', result: 'pending' },
+function inspectionRoundsResults(pass: number, fail: number, skipped: number, pending: number): CheckpointResult[] {
+  return [
+    ...Array.from({ length: pass }, (): CheckpointResult => 'pass'),
+    ...Array.from({ length: fail }, (): CheckpointResult => 'fail'),
+    ...Array.from({ length: skipped }, (): CheckpointResult => 'skipped'),
+    ...Array.from({ length: pending }, (): CheckpointResult => 'pending'),
   ];
-  return (
-    <div className="flex w-full max-w-56 flex-col gap-3">
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">Findings this round</span>
-        <ValueReadout value={2} tone="warning" />
-      </div>
-      <dl className="flex flex-col gap-2 border-t border-default pt-3">
-        {rows.map((row) => (
-          <div key={row.result} className="flex items-baseline justify-between gap-3">
-            <dt className="text-xs text-muted-foreground">{row.label}</dt>
-            <dd>
-              <ValueReadout size="xs" value={countResult(row.result)} tone={row.result === 'fail' ? 'critical' : 'neutral'} />
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+}
+
+const INSPECTION_ROUNDS_ROUNDS: InspectionRoundsRound[] = [
+  { id: 'r-1', name: 'Compressor hall', area: 'NK-23 · every 8 hours', state: 'in-progress', timing: 'Due 15:00', assignee: 'Tomás Barros', results: INSPECTION_ROUNDS_RESULTS },
+  { id: 'r-2', name: 'Export pump room', area: 'NK-27 · every 12 hours', state: 'overdue', timing: 'Due 08:00, 6 h late', assignee: 'Unassigned', results: inspectionRoundsResults(0, 0, 0, 10) },
+  { id: 'r-3', name: 'Inlet deck', area: 'NK-20 · every 8 hours', state: 'done', timing: 'Finished 11:42', assignee: 'Jonas Nyberg', results: inspectionRoundsResults(11, 0, 1, 0) },
+  { id: 'r-4', name: 'Cooling water', area: 'NK-40 · daily', state: 'scheduled', timing: 'Starts 18:00', assignee: 'Jonas Nyberg', results: inspectionRoundsResults(0, 0, 0, 9) },
+  { id: 'r-5', name: 'Safety showers', area: 'Site · weekly', state: 'done', timing: 'Finished 09:15', assignee: 'Liv Wold', results: inspectionRoundsResults(13, 1, 0, 0) },
+];
+
+const INSPECTION_ROUNDS_STATE_TONE: Record<RoundState, Tone> = {
+  scheduled: 'neutral',
+  'in-progress': 'info',
+  overdue: 'critical',
+  done: 'success',
+};
+
+const INSPECTION_ROUNDS_STATE_WORD: Record<RoundState, string> = {
+  scheduled: 'Scheduled',
+  'in-progress': 'In progress',
+  overdue: 'Overdue',
+  done: 'Done',
+};
+
+const INSPECTION_ROUNDS_COLUMNS: DataTableColumn<InspectionRoundsRound>[] = [
+  {
+    id: 'round',
+    header: 'Round',
+    cell: (round) => (
+      <span className="flex flex-col">
+        <span className="font-medium">{round.name}</span>
+        <span className="text-xs text-(--kit-text-2)">{round.area}</span>
+      </span>
+    ),
+  },
+  { id: 'route', header: 'Route', width: 'w-56', cell: (round) => <ResultStrip label={round.name} results={round.results} /> },
+  {
+    id: 'done',
+    header: 'Done',
+    numeric: true,
+    nowrap: true,
+    cell: (round) => {
+      const progress = roundProgress(round.results);
+      return `${progress.done} of ${progress.total}`;
+    },
+  },
+  { id: 'findings', header: 'Findings', numeric: true, cell: (round) => roundProgress(round.results).failed },
+  { id: 'who', header: 'Operator', muted: true, nowrap: true, cell: (round) => round.assignee },
+  { id: 'when', header: 'Timing', muted: true, nowrap: true, cell: (round) => round.timing },
+  { id: 'state', header: 'State', nowrap: true, cell: (round) => <StatusPill tone={INSPECTION_ROUNDS_STATE_TONE[round.state]}>{INSPECTION_ROUNDS_STATE_WORD[round.state]}</StatusPill> },
+];
+
+const INSPECTION_ROUNDS_CHECKPOINT_COLUMNS: DataTableColumn<Checkpoint>[] = [
+  { id: 'name', header: 'Checkpoint', cell: (checkpoint) => checkpoint.name },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (checkpoint) => <TagId>{checkpoint.tag}</TagId> },
+  { id: 'where', header: 'Location', muted: true, cell: (checkpoint) => checkpoint.location },
+  { id: 'value', header: 'Reading', numeric: true, nowrap: true, cell: (checkpoint) => (checkpoint.value === undefined ? '—' : `${checkpoint.value.toFixed(1)} ${checkpoint.unit ?? ''}`) },
+  {
+    id: 'limits',
+    header: 'Limits',
+    numeric: true,
+    muted: true,
+    nowrap: true,
+    cell: (checkpoint) => (checkpoint.high === undefined ? 'Visual' : `${checkpoint.low === undefined ? '' : `${checkpoint.low}–`}${checkpoint.high}`),
+  },
+  { id: 'result', header: 'Result', nowrap: true, cell: (checkpoint) => <StatusPill tone={RESULT_TONE[checkpoint.result]}>{RESULT_WORD[checkpoint.result]}</StatusPill> },
+];
+
+const INSPECTION_ROUNDS_STOPS: RouteStop[] = [
+  { id: 'inlet', name: 'Inlet deck', detail: '2 of 2 checkpoints', state: 'done' },
+  { id: 'hall', name: 'Compressor hall', detail: '3 of 3 checkpoints', state: 'issue' },
+  { id: 'cooler', name: 'Cooler deck', detail: '1 of 2 checkpoints', state: 'current' },
+  { id: 'export', name: 'Export pump room', detail: '0 of 1 checkpoints', state: 'upcoming' },
+];
+
+type InspectionRoundsFinding = { id: string; title: string; tag: string; detail: string; tone: Tone; word: string; age: string };
+
+const INSPECTION_ROUNDS_FINDINGS: InspectionRoundsFinding[] = [
+  { id: 'f-1', title: 'Drive-end vibration above limit', tag: '23-VT-92540', detail: '7.6 mm/s against 7.1 mm/s · photo attached', tone: 'critical', word: 'High', age: '12 min ago' },
+  { id: 'f-2', title: 'Oil film on cooler drip tray', tag: '23-HA-9114', detail: 'About 0.2 l · wiped, source not found', tone: 'warning', word: 'Medium', age: '3 h ago' },
+  { id: 'f-3', title: 'Eyewash station seal broken', tag: 'NK-23-SS-04', detail: 'Flushed and resealed on the round', tone: 'info', word: 'Fixed on site', age: '5 h ago' },
+  { id: 'f-4', title: 'Tag plate unreadable', tag: '27-PA-2001B', detail: 'New plate ordered, WO-104491', tone: 'neutral', word: 'Low', age: 'Yesterday' },
+];
+
+const INSPECTION_ROUNDS_HISTORY = makeValues({ seed: 14, points: 14, base: 6.2, amplitude: 0.3, noise: 0.15, drift: 1.3, decimals: 1 });
+
+const INSPECTION_ROUNDS_HISTORY_LABELS = ['27 Feb', '28 Feb', '1 Mar', '2 Mar', '3 Mar', '4 Mar', '5 Mar', '6 Mar', '7 Mar', '8 Mar', '9 Mar', '10 Mar', '11 Mar', '12 Mar'];
+
+const INSPECTION_ROUNDS_SKIP_REASONS = ['No safe access', 'Equipment isolated', 'Instrument out of service', 'Out of time'];
+
+type InspectionRoundsChoice = 'pass' | 'fail' | 'skipped';
+
+function isInspectionRoundsChoice(value: string): value is InspectionRoundsChoice {
+  return value === 'pass' || value === 'fail' || value === 'skipped';
+}
+
+/** One sheet of the page: a look scope with its canvas. Without a look it follows the app's look. */
+function InspectionRoundsSheet({ look, children }: { look?: LookId; children: ReactNode }) {
+  const canvas = <Canvas className="h-full">{children}</Canvas>;
+  return look ? (
+    <LookScope look={look} className="h-full w-full">
+      {canvas}
+    </LookScope>
+  ) : (
+    <div className="h-full w-full">{canvas}</div>
   );
 }
 
-function InspectionRoundRouteList() {
+function InspectionRoundsCards() {
   return (
-    <div className="w-full max-w-lg">
-      <StepList label="Route, compression area round" steps={ROUTE_VERTICAL} />
-    </div>
+    <InspectionRoundsSheet>
+      <Grid>
+        <RoundCard
+          className="col-span-4"
+          {...INSPECTION_ROUNDS_ROUNDS[0]}
+          icon={<IconRoute />}
+          action={<Button size="sm">Continue</Button>}
+        />
+        <RoundCard
+          className="col-span-4"
+          {...INSPECTION_ROUNDS_ROUNDS[1]}
+          icon={<IconClock />}
+          action={
+            <Button size="sm" variant="secondary">
+              Assign
+            </Button>
+          }
+        />
+        <RoundCard
+          className="col-span-4"
+          {...INSPECTION_ROUNDS_ROUNDS[2]}
+          icon={<IconCircleCheck />}
+          action={
+            <Button size="sm" variant="ghost">
+              Open report
+            </Button>
+          }
+        />
+      </Grid>
+    </InspectionRoundsSheet>
   );
 }
 
-function InspectionRoundFindingsList() {
+function InspectionRoundsSchedule() {
   return (
-    <div className="flex w-full max-w-lg flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Findings</span>
-        <span className="text-xs text-muted-foreground tabular-nums">{FINDINGS.length} open · 1 with a work order</span>
-      </div>
-      <ul className="flex flex-col divide-y divide-default">
-        {FINDINGS.map((finding) => (
-          <li key={finding.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-3 py-2">
-            <SeverityBadge severity={finding.severity} />
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-sm text-base-foreground">{finding.title}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                <span className="font-mono">{finding.tag}</span> · {finding.id}
-              </span>
-            </div>
-            <span className="text-right font-mono text-xs text-muted-foreground">{finding.workOrder ?? 'No work order'}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <InspectionRoundsSheet>
+      <Grid>
+        <StatGroup className="col-span-12" columns={4} label="Rounds today">
+          <Stat label="Rounds today" value={5} icon={<IconClipboardCheck />} tone="blue" target="2 done, 1 in progress" />
+          <Stat label="Checkpoints done" value={34} unit="of 53" icon={<IconCircleCheck />} tone="green" target="64 % of today's route" />
+          <Stat label="Open findings" value={2} icon={<IconAlertTriangle />} tone="critical" target="1 high, 1 medium" />
+          <Stat label="Overdue" value={1} icon={<IconClock />} tone="amber" target="Export pump room, 6 h late" />
+        </StatGroup>
+        <Panel className="col-span-12" title="Today's rounds" subtitle="Thursday 12 March, day shift" padding="none">
+          <DataTable
+            label="Today's rounds"
+            flush
+            columns={INSPECTION_ROUNDS_COLUMNS}
+            rows={INSPECTION_ROUNDS_ROUNDS}
+            rowKey={(round) => round.id}
+            rowTone={(round) => (round.state === 'overdue' ? 'critical' : undefined)}
+          />
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
   );
 }
 
-function InspectionRoundFinding() {
-  const finding = FINDINGS[1];
-  const [workOrder, setWorkOrder] = useState<string | null>(null);
+function InspectionRoundsRoute() {
   return (
-    <Card className="w-full max-w-lg">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 flex-col">
-          <span className="text-sm font-medium text-base-foreground">{finding.title}</span>
-          <span className="text-xs text-muted-foreground">
-            <span className="font-mono">{finding.id}</span> · {finding.checkpoint}
-          </span>
-        </div>
-        <SeverityBadge severity={finding.severity} />
-      </div>
-      <p className="text-sm text-base-foreground">{finding.description}</p>
-      <div className="grid grid-cols-[6rem_minmax(0,1fr)] items-center gap-3">
-        <PagePreview kind="photo" label="Photo of the local temperature gauge on the interstage cooler" caption="Photo 1" />
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
-          <dt className="text-muted-foreground">Equipment</dt>
-          <dd className="font-mono text-base-foreground">{finding.tag}</dd>
-          <dt className="text-muted-foreground">Reading</dt>
-          <dd className="text-base-foreground tabular-nums">41.5 °C · limit 40 °C</dd>
-          <dt className="text-muted-foreground">Found by</dt>
-          <dd className="text-base-foreground tabular-nums">Tomás Barros · 13:24</dd>
-        </dl>
-      </div>
-      <div className="flex items-center justify-between gap-4 border-t border-default pt-4">
-        {workOrder ? (
-          <span className="flex items-center gap-2 text-sm text-base-foreground">
-            <IconCheck aria-hidden className="size-4 text-success-foreground-strong" />
-            Work order <span className="font-mono">{workOrder}</span> created
-            <PriorityBadge priority="P3" />
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">No work order yet. Related: WO-104471, tube bundle cleaning.</span>
-        )}
-        <Button size="sm" variant={workOrder ? 'ghost' : 'default'} onClick={() => setWorkOrder(workOrder ? null : 'WO-104491')}>
-          {workOrder ? 'Undo' : 'Create work order'}
-        </Button>
-      </div>
-    </Card>
+    <InspectionRoundsSheet>
+      <Panel
+        title="Compressor hall round"
+        subtitle="Four areas, eight checkpoints, about 45 minutes"
+        icon={<IconRoute />}
+        actions={<StatusPill tone="info">In progress</StatusPill>}
+        footer={<span className="text-sm text-(--kit-text-2)">Started 13:20 by Tomás Barros · 25 minutes on the route</span>}
+      >
+        <RouteStepper label="Route progress, compressor hall round" stops={INSPECTION_ROUNDS_STOPS} />
+      </Panel>
+    </InspectionRoundsSheet>
   );
 }
 
-function InspectionRoundSignOff() {
-  const [signers, setSigners] = useState(SIGNERS);
-  const operatorSigned = signers[0].state === 'signed';
+function InspectionRoundsCheckpoints() {
+  const [current, setCurrent] = useState('cp-7');
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <span className="text-sm font-medium text-base-foreground">Sign off the round</span>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {DONE} of {CHECKPOINTS.length} checked · {countResult('fail')} failed · {countResult('skip')} skipped with a reason
-        </span>
-      </div>
-      <SignOffBlock
-        label="Sign-off, compression area round"
-        signers={signers}
-        currentSignerId="operator"
-        onSign={(id) => setSigners((current) => current.map((signer) => (signer.id === id ? { ...signer, state: 'signed', at: '12 Mar, 14:26' } : signer)))}
-      />
-      <p className="text-xs text-muted-foreground">
-        {operatorSigned ? 'Sent to the shift supervisor for countersignature.' : 'Four checkpoints are not checked. Signing now records them as not done.'}
-      </p>
-    </div>
+    <InspectionRoundsSheet>
+      <Panel title="Checkpoints" subtitle="Select a stop to open it" padding="tight">
+        <CheckpointList label="Checkpoints, compressor hall round" checkpoints={INSPECTION_ROUNDS_CHECKPOINTS.slice(2, 7)} current={current} onSelect={setCurrent} />
+      </Panel>
+    </InspectionRoundsSheet>
   );
 }
 
-function InspectionRoundTable() {
+function InspectionRoundsReading() {
+  const [value, setValue] = useState('41.3');
   return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-3xl border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Round
-            </th>
-            <th scope="col" className={TH}>
-              Operator
-            </th>
-            <th scope="col" className={TH}>
-              State
-            </th>
-            <th scope="col" className={`${TH} w-40`}>
-              Checkpoints
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Findings
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Due
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {ROUNDS.map((round) => (
-            <tr key={round.id} className="border-t border-default">
-              <td className={TD}>
-                <div className="flex min-w-0 flex-col">
-                  <span className="text-base-foreground">{round.name}</span>
-                  <span className="font-mono text-xs text-muted-foreground">{round.id}</span>
-                </div>
-              </td>
-              <td className={TD}>
-                {round.operator ? (
-                  <span className="flex items-center gap-2 whitespace-nowrap text-base-foreground">
-                    <PersonAvatar name={round.operator} sizes="xxsm" />
-                    {round.operator}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">Not assigned</span>
-                )}
-              </td>
-              <td className={TD}>
-                <StatusIndicator size="sm" {...ROUND_STATE[round.state]} detail={round.overdueBy} />
-              </td>
-              <td className={TD}>
-                <div className="flex items-center gap-2">
-                  <div role="img" aria-label={`${round.done} of ${round.total} checkpoints`} className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted-background">
-                    <span className="block h-full rounded-full bg-chart-1-450" style={{ width: `${(round.done / round.total) * 100}%` }} />
-                  </div>
-                  <span className="w-12 text-right text-xs text-muted-foreground tabular-nums">
-                    {round.done}/{round.total}
-                  </span>
-                </div>
-              </td>
-              <td className={`${TD} text-right tabular-nums ${round.findings > 0 ? 'font-medium text-base-foreground' : 'text-muted-foreground'}`}>{formatValue(round.findings)}</td>
-              <td className={`${TD} text-right whitespace-nowrap text-muted-foreground tabular-nums`}>{round.due}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function InspectionRoundTablet() {
-  const id = useId();
-  const [currentId, setCurrentId] = useState('c9');
-  const [results, setResults] = useState<Record<string, CheckpointResult>>({});
-  const current = CHECKPOINTS.find((checkpoint) => checkpoint.id === currentId) ?? CHECKPOINTS[8];
-  const resultOf = (checkpoint: Checkpoint): CheckpointResult => results[checkpoint.id] ?? checkpoint.result;
-  const done = CHECKPOINTS.filter((checkpoint) => resultOf(checkpoint) !== 'pending').length;
-  const index = CHECKPOINTS.indexOf(current);
-  return (
-    <div className="mx-auto flex h-144 w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-default bg-base-background">
-      <header className="flex items-center justify-between gap-4 border-b border-default px-4 py-3">
-        <div className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-medium text-base-foreground">{ROUNDS[0].name}</span>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {done} of {CHECKPOINTS.length} checked · due 14:30
-          </span>
-        </div>
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-warning-foreground-strong">
-          <IconCloudOff aria-hidden className="size-4" />
-          Offline · saved on this device
-        </span>
-      </header>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <nav aria-label="Checkpoints" className="min-h-0 overflow-y-auto border-r border-default p-2">
-          <ul className="flex flex-col">
-            {CHECKPOINTS.map((checkpoint, position) => (
-              <li key={checkpoint.id}>
-                <button
-                  type="button"
-                  aria-current={checkpoint.id === current.id ? 'step' : undefined}
-                  onClick={() => setCurrentId(checkpoint.id)}
-                  className={`w-full rounded-lg px-2 text-left hover:bg-muted-background focus-visible:shadow-focus-ring focus-visible:outline-none ${checkpoint.id === current.id ? 'bg-muted-background' : ''}`}
-                >
-                  <CheckpointRow index={position + 1} name={checkpoint.name} tag={checkpoint.tag} result={resultOf(checkpoint)} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-        <section aria-label="Current checkpoint" className="flex min-h-0 flex-col gap-4 overflow-y-auto p-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs text-muted-foreground tabular-nums">
-              Checkpoint {index + 1} of {CHECKPOINTS.length}
-            </span>
-            <h3 className="text-xl font-semibold text-base-foreground">{current.name}</h3>
-            <span>
-              <TagChip tag={current.tag} />
-            </span>
-          </div>
-          <p className="text-sm text-muted-foreground">Look for leaks, loose insulation and unusual noise. Record the result, add a photo if anything is off.</p>
-          <ResultButtons size="lg" value={resultOf(current)} onChange={(value) => setResults((state) => ({ ...state, [current.id]: value }))} />
-          <div className="grid grid-cols-[7rem_minmax(0,1fr)] items-start gap-3">
-            <button
-              type="button"
-              className="flex aspect-4/3 w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-emphasized text-xs text-muted-foreground hover:bg-muted-background focus-visible:shadow-focus-ring focus-visible:outline-none"
-            >
-              <IconCamera aria-hidden className="size-5" />
+    <InspectionRoundsSheet>
+      <Panel
+        title="Cooler outlet temperature"
+        subtitle="Checkpoint 7 of 8 · Cooler deck"
+        actions={<TagId variant="chip">23-TT-91141</TagId>}
+        footer={
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="ghost" size="sm">
+              <IconCamera />
               Add photo
-            </button>
-            <div className="flex flex-col">
-              <Label htmlFor={id}>Note</Label>
-              <Textarea id={id} rows={2} placeholder="Optional for a pass, required for a fail or skip" />
+            </Button>
+            <Button size="sm">Save and continue</Button>
+          </div>
+        }
+      >
+        <ReadingEntry label="Local gauge reading" unit="°C" value={value} onChange={setValue} low={20} high={40} min={0} max={60} previous={38.9} />
+      </Panel>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsVerdict() {
+  const [choice, setChoice] = useState<InspectionRoundsChoice>('skipped');
+  const [reason, setReason] = useState(INSPECTION_ROUNDS_SKIP_REASONS[0]);
+  const tone = RESULT_TONE[choice];
+  return (
+    <InspectionRoundsSheet>
+      <Panel
+        title="Cooler flanges, leak check"
+        subtitle="Checkpoint 6 of 8 · visual check"
+        actions={<StatusPill tone={tone}>{RESULT_WORD[choice]}</StatusPill>}
+        footer={<span className="text-sm text-(--kit-text-2)">{choice === 'skipped' ? `Skipped: ${reason.toLowerCase()}. The supervisor is told at sign-off.` : choice === 'fail' ? 'A finding is raised when you save.' : 'Nothing more is needed.'}</span>}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-(--kit-text-2)">Look for wet flanges, staining or dripping on all four cooler nozzles.</p>
+          <SegmentedControl
+            value={choice}
+            onValueChange={(value: string) => {
+              if (isInspectionRoundsChoice(value)) setChoice(value);
+            }}
+          >
+            <SegmentedControlList aria-label="Result">
+              <SegmentedControlButton value="pass">Pass</SegmentedControlButton>
+              <SegmentedControlButton value="fail">Fail</SegmentedControlButton>
+              <SegmentedControlButton value="skipped">Skip</SegmentedControlButton>
+            </SegmentedControlList>
+          </SegmentedControl>
+          {choice === 'skipped' ? (
+            <div role="radiogroup" aria-label="Reason for skipping" className="grid grid-cols-2 gap-2">
+              {INSPECTION_ROUNDS_SKIP_REASONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={option === reason}
+                  onClick={() => setReason(option)}
+                  className={`rounded-(--kit-radius-sm) border px-3 py-2 text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-(--kit-accent) ${option === reason ? 'kit-tone-warning border-(--t-solid) bg-(--t-soft) text-(--t-on-soft)' : 'border-(--kit-rule-strong) text-(--kit-text)'}`}
+                >
+                  {option}
+                </button>
+              ))}
             </div>
-          </div>
-          <div className="mt-auto flex items-center justify-between gap-3 border-t border-default pt-4">
-            <Button variant="ghost" size="lg" disabled={index === 0} onClick={() => setCurrentId(CHECKPOINTS[index - 1].id)}>
-              Previous
+          ) : null}
+        </div>
+      </Panel>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsSync() {
+  return (
+    <InspectionRoundsSheet>
+      <Panel
+        title="Saved on this tablet"
+        subtitle="No signal in the compressor hall since 13:31"
+        icon={<IconCloudOff />}
+        tone="warning"
+        actions={
+          <Button size="sm" variant="secondary">
+            <IconRefresh />
+            Try now
+          </Button>
+        }
+        footer={<span className="text-sm text-(--kit-text-2)">Readings are kept on the tablet and sent in order when it reconnects.</span>}
+      >
+        <div className="flex flex-col">
+          <ListRow
+            tone="success"
+            leading={
+              <IconChip tone="success" size="sm">
+                <IconCircleCheck />
+              </IconChip>
+            }
+            title="Discharge pressure, 48.6 barg"
+            meta="Sent 13:29"
+            trailing={<StatusPill tone="success">Synced</StatusPill>}
+          />
+          <ListRow
+            tone="warning"
+            leading={
+              <IconChip tone="warning" size="sm">
+                <IconCloudOff />
+              </IconChip>
+            }
+            title="Drive-end vibration, 7.6 mm/s"
+            meta="Saved 13:34 · with 1 photo"
+            trailing={<StatusPill tone="warning">Waiting</StatusPill>}
+          />
+          <ListRow
+            tone="warning"
+            leading={
+              <IconChip tone="warning" size="sm">
+                <IconCloudOff />
+              </IconChip>
+            }
+            title="Lube oil sight glass, pass"
+            meta="Saved 13:38"
+            trailing={<StatusPill tone="warning">Waiting</StatusPill>}
+          />
+          <ListRow
+            tone="info"
+            leading={
+              <IconChip tone="info" size="sm">
+                <IconCloudUpload />
+              </IconChip>
+            }
+            title="Cooler flanges, skipped"
+            meta="Sending now"
+            trailing={<StatusPill tone="info">Sending</StatusPill>}
+          />
+        </div>
+      </Panel>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsHistory() {
+  return (
+    <InspectionRoundsSheet>
+      <Panel title="Drive-end vibration" subtitle="Field readings from the last 14 rounds" actions={<TagId variant="chip">23-VT-92540</TagId>}>
+        <TrendLine
+          label="Drive-end vibration field readings over the last 14 rounds, against the high limit"
+          labels={INSPECTION_ROUNDS_HISTORY_LABELS}
+          unit="mm/s"
+          decimals={1}
+          height={220}
+          yDomain={[5, 9]}
+          series={[{ id: 'reading', label: 'Field reading', values: INSPECTION_ROUNDS_HISTORY, tone: 'accent' }]}
+          limits={[{ value: 7.1, label: 'High limit', tone: 'critical' }]}
+          bands={[{ from: 5, to: 7.1, tone: 'success' }]}
+          notes="Readings have climbed steadily since 6 March and now sit above the high limit."
+        />
+      </Panel>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsFindings() {
+  return (
+    <InspectionRoundsSheet>
+      <Panel title="Findings" subtitle="Raised on rounds in the last 24 hours" icon={<IconAlertTriangle />} actions={<Button size="sm" variant="ghost">View all</Button>}>
+        <div className="flex flex-col">
+          {INSPECTION_ROUNDS_FINDINGS.map((finding) => (
+            <ListRow
+              key={finding.id}
+              tone={finding.tone}
+              title={finding.title}
+              meta={
+                <>
+                  <TagId>{finding.tag}</TagId> · {finding.detail}
+                </>
+              }
+              trailing={
+                <span className="flex flex-col items-end gap-1">
+                  <StatusPill tone={finding.tone}>{finding.word}</StatusPill>
+                  <span className="text-xs text-(--kit-text-2)">{finding.age}</span>
+                </span>
+              }
+            />
+          ))}
+        </div>
+      </Panel>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsSignOff() {
+  const [confirmed, setConfirmed] = useState(false);
+  const [signed, setSigned] = useState(false);
+  const progress = roundProgress(inspectionRoundsResults(11, 1, 1, 0));
+  return (
+    <InspectionRoundsSheet>
+      <Panel
+        title="Sign off the round"
+        subtitle="Inlet deck round · finished 11:42"
+        icon={<IconClipboardCheck />}
+        actions={<StatusPill tone={signed ? 'success' : 'neutral'}>{signed ? 'Signed' : 'Not signed'}</StatusPill>}
+        footer={
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-(--kit-text-2)">{signed ? 'Signed by Jonas Nyberg at 11:44. Sent to Liv Wold.' : 'Signing sends the round to the shift supervisor.'}</span>
+            <Button size="sm" disabled={!confirmed || signed} onClick={() => setSigned(true)}>
+              Sign off
             </Button>
-            <Button size="lg" disabled={index === CHECKPOINTS.length - 1} onClick={() => setCurrentId(CHECKPOINTS[index + 1].id)}>
-              Next checkpoint
-            </Button>
           </div>
-        </section>
-      </div>
-    </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <StatGroup joined columns={3} label="Round summary">
+            <Stat variant="plain" size="sm" label="Passed" value={progress.passed} tone="success" />
+            <Stat variant="plain" size="sm" label="Failed" value={progress.failed} tone="critical" />
+            <Stat variant="plain" size="sm" label="Skipped" value={progress.skipped} tone="warning" />
+          </StatGroup>
+          <ResultStrip label="Inlet deck round" results={inspectionRoundsResults(11, 1, 1, 0)} size="lg" />
+          <CheckboxItem>
+            <CheckboxItemControl checked={confirmed} disabled={signed} onCheckedChange={(checked) => setConfirmed(checked === true)} />
+            <CheckboxItemLabel>I walked the route and the readings are mine</CheckboxItemLabel>
+          </CheckboxItem>
+        </div>
+      </Panel>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsConsole() {
+  const progress = roundProgress(INSPECTION_ROUNDS_RESULTS);
+  return (
+    <InspectionRoundsSheet look="console">
+      <Grid>
+        <StatGroup className="col-span-12" columns={5} label="Compressor hall round">
+          <Stat variant="plain" label="Round" value="NK-23" target="Compressor hall · due 15:00" />
+          <Stat variant="plain" label="Done" value={progress.done} unit={`of ${progress.total}`} tone="info" target={`${progress.percent} % of the route`} />
+          <Stat variant="plain" label="Passed" value={progress.passed} tone="success" target="Within limits" />
+          <Stat variant="plain" label="Failed" value={progress.failed} tone="critical" target="Vibration, 23-VT-92540" />
+          <Stat variant="plain" label="Skipped" value={progress.skipped} tone="warning" target="No access, cooler deck" />
+        </StatGroup>
+        <Panel className="col-span-12" title="Checkpoints" subtitle="In route order" padding="none">
+          <DataTable
+            label="Checkpoints in route order"
+            flush
+            columns={INSPECTION_ROUNDS_CHECKPOINT_COLUMNS}
+            rows={INSPECTION_ROUNDS_CHECKPOINTS}
+            rowKey={(checkpoint) => checkpoint.id}
+            rowTone={(checkpoint) => (checkpoint.result === 'fail' || checkpoint.result === 'skipped' ? RESULT_TONE[checkpoint.result] : undefined)}
+          />
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsPoster() {
+  return (
+    <InspectionRoundsSheet look="poster">
+      <Grid>
+        <Stat className="col-span-5" size="hero" tone="blue" label="Checkpoints done today" value={34} unit="of 53" />
+        <Stat className="col-span-4" size="hero" tone="pink" label="Open findings" value={2} />
+        <Stat className="col-span-3" size="hero" tone="amber" label="Overdue rounds" value={1} />
+        <Panel className="col-span-12" title="Rounds today">
+          <div className="flex flex-col gap-4">
+            {INSPECTION_ROUNDS_ROUNDS.slice(0, 4).map((round) => {
+              const progress = roundProgress(round.results);
+              return (
+                <div key={round.id} className="grid grid-cols-[14rem_minmax(0,1fr)_5rem_7.5rem] items-center gap-4">
+                  <span className="text-base font-semibold">{round.name}</span>
+                  <ResultStrip label={round.name} results={round.results} size="lg" />
+                  <span className="text-right text-base font-semibold tabular-nums">
+                    {progress.done}/{progress.total}
+                  </span>
+                  <StatusPill className="justify-self-end" tone={INSPECTION_ROUNDS_STATE_TONE[round.state]}>
+                    {INSPECTION_ROUNDS_STATE_WORD[round.state]}
+                  </StatusPill>
+                </div>
+              );
+            })}
+          </div>
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsBlueprint() {
+  return (
+    <InspectionRoundsSheet look="blueprint">
+      <Grid>
+        <Panel className="col-span-12" title="Route sheet" subtitle="Compressor hall round · rev C · 8 checkpoints">
+          <RouteStepper label="Route sheet, compressor hall round" stops={INSPECTION_ROUNDS_STOPS} />
+        </Panel>
+        <Panel className="col-span-7" title="Checkpoints 3 to 6" subtitle="Compressor hall and cooler deck" padding="tight">
+          <CheckpointList label="Checkpoints 3 to 6" checkpoints={INSPECTION_ROUNDS_CHECKPOINTS.slice(2, 6)} current="cp-4" />
+        </Panel>
+        <Panel className="col-span-5" title="Reading 23-VT-92540" subtitle="Drive-end vibration, taken 13:34">
+          <ReadingEntry label="Handheld meter" unit="mm/s" value="7.6" onChange={() => undefined} high={7.1} min={0} max={15} previous={6.8} />
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsSignal() {
+  return (
+    <InspectionRoundsSheet look="signal">
+      <Grid>
+        <Stat className="col-span-3" size="lg" tone="critical" state="Overdue" stateIcon={<IconClock />} label="Export pump room" value="0 of 10" target="Due 08:00 · unassigned" />
+        <Stat className="col-span-3" size="lg" tone="warning" state="Finding" stateIcon={<IconAlertTriangle />} label="Compressor hall" value="6 of 8" target="Vibration above limit" />
+        <Stat className="col-span-3" size="lg" tone="success" state="Done" stateIcon={<IconCircleCheck />} label="Inlet deck" value="12 of 12" target="Finished 11:42" />
+        <Stat className="col-span-3" size="lg" tone="neutral" state="Later" stateIcon={<IconClock />} label="Cooling water" value="0 of 9" target="Starts 18:00" />
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsGlass() {
+  return (
+    <InspectionRoundsSheet look="glass">
+      <Grid>
+        <Panel className="col-span-7" title="Round completion" subtitle="Share of checkpoints done today, by area">
+          <div className="flex h-full items-center justify-around gap-4">
+            <RingGauge label="Inlet deck" value={100} tone="green" size={124} />
+            <RingGauge label="Compressor hall" value={75} tone="sky" size={124} />
+            <RingGauge label="Export pump room" value={0} tone="pink" size={124} />
+            <RingGauge label="Cooling water" value={0} tone="neutral" size={124} />
+          </div>
+        </Panel>
+        <Panel className="col-span-5" title="Next on the route" subtitle="Compressor hall round" footer={<Button size="sm">Open checkpoint 7</Button>}>
+          <div className="flex flex-col">
+            <ListRow tone="accent" title="Cooler outlet temperature" meta="23-TT-91141 · Cooler deck" trailing={<StatusPill tone="accent">Next</StatusPill>} />
+            <ListRow title="Export pump motor current" meta="27-IT-20013 · Export pump room" trailing={<StatusPill>To do</StatusPill>} />
+          </div>
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsEditorial() {
+  return (
+    <InspectionRoundsSheet look="editorial">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          eyebrow="Round report · Thursday 12 March"
+          title="One reading over its limit, one stop not reached"
+          description="Tomás Barros walked the compressor hall round between 13:20 and 14:05. Vibration at the drive end read 7.6 mm/s; the cooler flanges could not be reached past the scaffolding."
+        />
+        <StatGroup className="col-span-12" columns={4} label="Round figures">
+          <Stat variant="plain" size="lg" label="Checkpoints done" value={6} unit="of 8" />
+          <Stat variant="plain" size="lg" label="Within limits" value={4} />
+          <Stat variant="plain" size="lg" label="Findings" value={1} tone="critical" />
+          <Stat variant="plain" size="lg" label="Time on route" value={45} unit="min" />
+        </StatGroup>
+        <Panel className="col-span-12" title="The route, stop by stop">
+          <CheckpointList label="The route, stop by stop" checkpoints={INSPECTION_ROUNDS_CHECKPOINTS.slice(2, 6)} />
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsSoft() {
+  return (
+    <InspectionRoundsSheet look="soft">
+      <Grid>
+        <SectionHeader className="col-span-12" size="sm" level={4} title="Good afternoon, Tomás" description="Two stops left on your round. One round is waiting for someone." />
+        <RoundCard className="col-span-6" {...INSPECTION_ROUNDS_ROUNDS[0]} icon={<IconRoute />} action={<Button size="sm">Continue</Button>} />
+        <RoundCard
+          className="col-span-6"
+          {...INSPECTION_ROUNDS_ROUNDS[3]}
+          icon={<IconClock />}
+          action={
+            <Button size="sm" variant="secondary">
+              Start early
+            </Button>
+          }
+        />
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsFieldScreen() {
+  const [checkpoints, setCheckpoints] = useState(INSPECTION_ROUNDS_CHECKPOINTS);
+  const [currentId, setCurrentId] = useState('cp-7');
+  const [draft, setDraft] = useState('');
+  const current = checkpoints.find((checkpoint) => checkpoint.id === currentId) ?? checkpoints[0];
+  const index = checkpoints.indexOf(current);
+  const progress = roundProgress(checkpoints.map((checkpoint) => checkpoint.result));
+  const hasReading = current.unit !== undefined;
+  const parsed = draft.trim() === '' ? undefined : Number(draft);
+
+  const record = (result: CheckpointResult, value?: number, note?: string) => {
+    const updated = checkpoints.map((checkpoint) => (checkpoint.id === current.id ? { ...checkpoint, result, value: value ?? checkpoint.value, note } : checkpoint));
+    setCheckpoints(updated);
+    const next = updated.find((checkpoint) => checkpoint.result === 'pending');
+    if (next) setCurrentId(next.id);
+    setDraft('');
+  };
+
+  const select = (id: string) => {
+    setCurrentId(id);
+    setDraft('');
+  };
+
+  return (
+    <InspectionRoundsSheet>
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="sm"
+          level={4}
+          title="Compressor hall round"
+          description={`${progress.done} of ${progress.total} checkpoints · due 15:00`}
+          actions={
+            <StatusPill tone={progress.failed > 0 ? 'critical' : 'info'} icon={progress.failed > 0 ? <IconAlertTriangle /> : undefined}>
+              {progress.failed > 0 ? `${progress.failed} ${progress.failed === 1 ? 'finding' : 'findings'}` : 'In progress'}
+            </StatusPill>
+          }
+        />
+        <div className="col-span-12">
+          <ResultStrip label="Compressor hall round" results={checkpoints.map((checkpoint) => checkpoint.result)} size="lg" />
+        </div>
+        <Panel className="col-span-5" title="Route" subtitle="Tap a stop to open it" padding="tight">
+          <CheckpointList label="Route, compressor hall round" checkpoints={checkpoints} current={current.id} onSelect={select} density="compact" />
+        </Panel>
+        <Panel
+          className="col-span-7"
+          title={current.name}
+          subtitle={`Checkpoint ${index + 1} of ${checkpoints.length} · ${current.location}`}
+          actions={<TagId variant="chip">{current.tag}</TagId>}
+          footer={
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Button variant="ghost" size="sm" onClick={() => record('skipped', undefined, 'Skipped: no safe access')}>
+                <IconPlayerSkipForward />
+                Skip with a reason
+              </Button>
+              {hasReading ? (
+                <Button
+                  size="sm"
+                  disabled={parsed === undefined || Number.isNaN(parsed)}
+                  onClick={() => {
+                    if (parsed === undefined) return;
+                    const verdict = judgeReading(parsed, current.low, current.high);
+                    record(verdict.result, parsed, verdict.result === 'fail' ? verdict.text : undefined);
+                  }}
+                >
+                  Save reading
+                </Button>
+              ) : (
+                <span className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => record('fail', undefined, 'Failed the visual check')}>
+                    Fail
+                  </Button>
+                  <Button size="sm" onClick={() => record('pass')}>
+                    Pass
+                  </Button>
+                </span>
+              )}
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            {current.result === 'pending' ? null : (
+              <p data-tone={RESULT_TONE[current.result]} className="rounded-(--kit-radius-sm) bg-(--t-soft) px-3 py-2 text-sm font-medium text-(--t-on-soft)">
+                Recorded: {RESULT_WORD[current.result].toLowerCase()}
+                {current.note ? ` · ${current.note}` : ''}. Saving again replaces it.
+              </p>
+            )}
+            {hasReading ? (
+              <ReadingEntry
+                label="Reading"
+                unit={current.unit ?? ''}
+                value={draft}
+                onChange={setDraft}
+                low={current.low}
+                high={current.high}
+                min={0}
+                max={Math.round((current.high ?? 100) * 1.5)}
+                previous={current.value}
+              />
+            ) : (
+              <p className="text-sm text-(--kit-text-2)">Visual check. Look, listen and smell for leaks, loose guards and anything that has changed since the last round.</p>
+            )}
+            <div className="border-t border-(--kit-rule) pt-4">
+              <p className="text-sm font-medium">How to take it</p>
+              <p className="mt-1 text-sm text-(--kit-text-2)">
+                {hasReading ? 'Read the local gauge, not the control room value. Wait until the needle is steady, then type what you see.' : 'Stand at the marked spot. Compare with the reference photo before you decide.'}
+              </p>
+            </div>
+            <StatGroup joined columns={4} label="Earlier rounds at this stop">
+              <Stat variant="plain" size="sm" label="Today 06:00" value={hasReading ? (current.high ?? 0) * 0.94 : 'Pass'} decimals={1} unit={current.unit} />
+              <Stat variant="plain" size="sm" label="Yesterday 22:00" value={hasReading ? (current.high ?? 0) * 0.92 : 'Pass'} decimals={1} unit={current.unit} />
+              <Stat variant="plain" size="sm" label="Yesterday 14:00" value={hasReading ? (current.high ?? 0) * 0.93 : 'Pass'} decimals={1} unit={current.unit} />
+              <Stat variant="plain" size="sm" label="Yesterday 06:00" value={hasReading ? (current.high ?? 0) * 0.9 : 'Pass'} decimals={1} unit={current.unit} />
+            </StatGroup>
+          </div>
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
+  );
+}
+
+function InspectionRoundsSupervisor() {
+  return (
+    <InspectionRoundsSheet>
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="sm"
+          level={4}
+          title="Operator rounds"
+          description="Nordkapp · day shift, Thursday 12 March"
+          actions={
+            <Button size="sm" variant="secondary">
+              <IconTool />
+              Plan rounds
+            </Button>
+          }
+        />
+        <Stat className="col-span-3" label="Completed on time" value={92} unit="%" icon={<IconCircleCheck />} tone="green" delta={{ value: 3, decimals: 0, unit: ' pts', caption: 'vs last week' }} target="Target 95 %" />
+        <Stat className="col-span-3" label="Checkpoints done" value={34} unit="of 53" icon={<IconClipboardCheck />} tone="blue" target="19 left this shift" />
+        <Stat className="col-span-3" label="Open findings" value={2} icon={<IconAlertTriangle />} tone="critical" delta={{ value: 1, decimals: 0, good: 'down', caption: 'since 06:00' }} target="1 high" />
+        <Stat className="col-span-3" label="Overdue rounds" value={1} icon={<IconClock />} tone="amber" target="Export pump room" />
+        <Panel className="col-span-8" title="Today's rounds" subtitle="Route strip shows each checkpoint in order" padding="none">
+          <DataTable
+            label="Today's rounds"
+            flush
+            columns={INSPECTION_ROUNDS_COLUMNS.filter((column) => column.id !== 'when' && column.id !== 'findings')}
+            rows={INSPECTION_ROUNDS_ROUNDS}
+            rowKey={(round) => round.id}
+            rowTone={(round) => (round.state === 'overdue' ? 'critical' : undefined)}
+          />
+        </Panel>
+        <Panel className="col-span-4" title="Rounds on time" subtitle="Share completed before the due time, per day">
+          <Bars
+            label="Share of rounds completed on time per day, against the 95 % target"
+            categories={['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu']}
+            series={[{ id: 'on-time', label: 'On time', values: [96, 100, 94, 88, 97, 95, 92] }]}
+            tones={['success', 'success', 'warning', 'critical', 'success', 'success', 'warning']}
+            unit="%"
+            limit={{ value: 95, label: 'Target', tone: 'neutral' }}
+            height={220}
+          />
+        </Panel>
+      </Grid>
+    </InspectionRoundsSheet>
   );
 }
 
@@ -798,19 +836,19 @@ export default definePage({
   id: 'inspection-rounds',
   title: 'Inspection rounds',
   summary:
-    'Operator rounds from the schedule to the sign-off: routes with checkpoints, the result and reading taken at each, findings that become work orders, and screens sized for a tablet in the field.',
+    'Operator rounds from plan to sign-off: the round as a card, the route as numbered stops, a field reading typed against its limits, findings and the supervisor view. Every part is shown in several looks.',
   guidance: {
     use: [
-      'Give every checkpoint one of four results in a marker and a word: pass, fail, skipped, not checked.',
-      'Judge a reading against its limits as it is typed, and offer the next step when it is outside.',
-      'Ask for a reason whenever a checkpoint is skipped.',
-      'Say where data is stored when the device is offline, and when it will sync.',
+      'Show the route in walking order so a failure is found by where it is.',
+      'Judge a reading against its limits the moment it is typed.',
+      'Ask for a reason when a checkpoint is skipped.',
+      'Say when readings are only saved on the device.',
     ],
     avoid: [
-      'Small touch targets on field screens; use large buttons for the result.',
-      'A finding with no route to a work order.',
-      'Hiding unchecked checkpoints at sign-off; count them in the summary.',
-      'Red for a round that is merely scheduled; keep critical for overdue.',
+      'A bare percentage for a round: say how many of how many.',
+      'Hiding skipped checkpoints inside the done count.',
+      'Small touch targets on a screen used with gloves.',
+      'Signing off a round with unsent readings.',
     ],
   },
   source,
@@ -818,235 +856,225 @@ export default definePage({
     {
       id: 'rounds',
       title: 'Rounds',
-      description: 'A round as a card, and the day’s rounds as a schedule.',
+      description: 'A round as a card, a schedule and a route.',
       specimens: [
         {
-          id: 'InspectionRoundCard',
-          title: 'Round card',
-          note: 'Pick it for a round in progress: route, operator, checkpoints done of total, due time and findings.',
+          id: 'InspectionRoundsCards',
+          title: 'Round cards',
+          note: 'Pick cards for an operator home screen: each round with its count, route strip and next action.',
           origin: 'custom',
-          uses: ['feedback/LabelledProgress.tsx', 'industrial/StatusIndicator.tsx'],
-          align: 'stretch',
-          Component: InspectionRoundCard,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/inspection-rounds/RoundCard.tsx', 'kit/inspection-rounds/ResultStrip.tsx', 'kit/Panel.tsx'],
+          Component: InspectionRoundsCards,
         },
         {
-          id: 'InspectionRoundCardOverdue',
-          title: 'Round card, overdue',
-          note: 'Pick the same card when the due time has passed: the state turns critical and says how late it is.',
-          origin: 'custom',
-          uses: ['feedback/LabelledProgress.tsx', 'industrial/StatusIndicator.tsx'],
-          align: 'stretch',
-          Component: InspectionRoundCardOverdue,
-        },
-        {
-          id: 'InspectionRoundCardDone',
-          title: 'Round card, completed',
-          note: 'Pick it in the history: all checkpoints done, with the number of findings it produced.',
-          origin: 'custom',
-          uses: ['feedback/LabelledProgress.tsx', 'industrial/StatusIndicator.tsx'],
-          align: 'stretch',
-          Component: InspectionRoundCardDone,
-        },
-        {
-          id: 'InspectionRoundSchedule',
+          id: 'InspectionRoundsSchedule',
           title: 'Round schedule',
-          note: 'Pick it for today’s plan: each round with its size, who walks it, its state and when it is due.',
+          note: 'Pick the table when a shift has more rounds than fit as cards and they are compared row by row.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundSchedule,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/StatGroup.tsx', 'kit/inspection-rounds/ResultStrip.tsx', 'kit/inspection-rounds/rounds.ts'],
+          Component: InspectionRoundsSchedule,
         },
         {
-          id: 'InspectionRoundOverdue',
-          title: 'Overdue rounds',
-          note: 'Pick it for a supervisor: only what is late, longest first, with the action that moves it.',
+          id: 'InspectionRoundsRoute',
+          title: 'Route progress',
+          note: 'Pick the stepper when the round crosses several areas and the operator needs to know where they are on it.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundOverdue,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/inspection-rounds/RouteStepper.tsx', 'kit/Panel.tsx'],
+          Component: InspectionRoundsRoute,
         },
       ],
     },
     {
       id: 'checkpoints',
       title: 'Checkpoints and readings',
-      description: 'What happens at one stop: confirming the equipment, taking a reading, recording the result.',
+      description: 'What the operator does at each stop.',
       specimens: [
         {
-          id: 'InspectionRoundCheckpointRow',
-          title: 'Checkpoint rows',
-          note: 'Pick it as the line for a checkpoint: pass, fail, skipped or not checked, with the reading and its limits.',
+          id: 'InspectionRoundsCheckpoints',
+          title: 'Checkpoint list',
+          note: 'Pick it as the route view: numbered stops with tag, reading, limits and result, each selectable.',
           origin: 'custom',
-          uses: ['industrial/workflows/CheckpointRow.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundCheckpointRow,
+          bleed: true,
+          uses: ['kit/inspection-rounds/CheckpointList.tsx', 'kit/Panel.tsx'],
+          Component: InspectionRoundsCheckpoints,
         },
         {
-          id: 'InspectionRoundReadingEntry',
-          title: 'Reading entry with limits',
-          note: 'Pick it to type a field reading: unit in the field, limits beneath, and a warning the moment it is outside. Change the value to try.',
+          id: 'InspectionRoundsReading',
+          title: 'Reading against limits',
+          note: 'Pick it wherever a number is typed in the field: the verdict changes as the value is entered.',
           origin: 'custom',
-          uses: ['forms/UnitNumberInput.tsx', 'industrial/workflows/workflow.ts'],
           size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundReadingEntry,
+          bleed: true,
+          uses: ['kit/inspection-rounds/ReadingEntry.tsx', 'kit/TagId.tsx'],
+          Component: InspectionRoundsReading,
         },
         {
-          id: 'InspectionRoundResultControl',
-          title: 'Pass, fail, skip',
-          note: 'Pick it to record a result with one tap: three equal buttons, the chosen one filled.',
+          id: 'InspectionRoundsVerdict',
+          title: 'Pass, fail or skip with a reason',
+          note: 'Pick it for visual checks: three large choices, and a skip always carries its reason.',
           origin: 'custom',
-          align: 'stretch',
-          Component: InspectionRoundResultControl,
+          size: 'md',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx', 'kit/inspection-rounds/rounds.ts'],
+          Component: InspectionRoundsVerdict,
         },
         {
-          id: 'InspectionRoundOfflineSaved',
+          id: 'InspectionRoundsSync',
           title: 'Saved offline',
-          note: 'Pick it when the device has no connection: say the data is safe on the device and what happens next.',
+          note: 'Pick it when the device loses signal on the route: say what is waiting and that nothing is lost.',
           origin: 'custom',
-          align: 'stretch',
-          Component: InspectionRoundOfflineSaved,
-        },
-        {
-          id: 'InspectionRoundSyncStates',
-          title: 'Sync states',
-          note: 'Pick one of three lines for the header of a field screen: synced, syncing or saved on the device.',
-          origin: 'custom',
-          Component: InspectionRoundSyncStates,
-        },
-        {
-          id: 'InspectionRoundChecklist',
-          title: 'Checklist with photo and note',
-          note: 'Pick it for visual checks at one stop: tick items, attach a photo, add a note.',
-          origin: 'custom',
-          uses: ['industrial/workflows/PagePreview.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundChecklist,
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/IconChip.tsx', 'kit/Panel.tsx'],
+          Component: InspectionRoundsSync,
         },
         {
-          id: 'InspectionRoundTagConfirm',
-          title: 'Tag confirmation step',
-          note: 'Pick it before a checkpoint opens: scan or type the tag, and block the step if it is the wrong unit. Edit the tag to try.',
-          origin: 'custom',
-          uses: ['industrial/workflows/TagChip.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundTagConfirm,
-        },
-        {
-          id: 'InspectionRoundHistory',
+          id: 'InspectionRoundsHistory',
           title: 'Checkpoint history',
-          note: 'Pick it beside a reading: the last rounds as a sparkline and a list, so a slow drift is seen in the field.',
+          note: 'Pick it beside a reading that looks wrong: the last rounds show whether it is a drift or a one-off.',
           origin: 'custom',
-          uses: ['industrial/Sparkline.tsx', 'industrial/ValueReadout.tsx', 'industrial/workflows/workflow.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundHistory,
-        },
-        {
-          id: 'InspectionRoundSkipReason',
-          title: 'Skip with a reason',
-          note: 'Pick it when a checkpoint cannot be done: a reason from a short list and a note for the next round.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundSkipReason,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Panel.tsx'],
+          Component: InspectionRoundsHistory,
         },
       ],
     },
     {
-      id: 'progress',
-      title: 'Progress, findings and sign-off',
-      description: 'Where the round stands, what it found, and how it is closed.',
+      id: 'findings-and-sign-off',
+      title: 'Findings and sign-off',
+      description: 'What comes out of a round.',
       specimens: [
         {
-          id: 'InspectionRoundStepper',
-          title: 'Route progress stepper',
-          note: 'Pick it across the top of a round: one step per stop, with done, current, and stops that had a skip.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StepList.tsx'],
-          size: 'lg',
-          align: 'stretch',
-          Component: InspectionRoundStepper,
-        },
-        {
-          id: 'InspectionRoundSummary',
-          title: 'Round summary',
-          note: 'Pick it at the end of a round: findings first, then the count of each result.',
-          origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx'],
-          align: 'stretch',
-          Component: InspectionRoundSummary,
-        },
-        {
-          id: 'InspectionRoundRouteList',
-          title: 'Route as a list',
-          note: 'Pick it when stops need detail: each with its equipment, what was found there and when it was visited.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StepList.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundRouteList,
-        },
-        {
-          id: 'InspectionRoundFindingsList',
+          id: 'InspectionRoundsFindings',
           title: 'Findings list',
-          note: 'Pick it to review what rounds found: severity first, and whether a work order exists.',
+          note: 'Pick it for the hand-over from operator to maintenance: what was found, where, and how serious.',
           origin: 'custom',
-          uses: ['industrial/operations/SeverityBadge.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundFindingsList,
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: InspectionRoundsFindings,
         },
         {
-          id: 'InspectionRoundFinding',
-          title: 'Finding card',
-          note: 'Pick it for one defect: severity, description, photo and context, with create work order as the next step. Click to try.',
+          id: 'InspectionRoundsSignOff',
+          title: 'Round sign-off',
+          note: 'Pick it as the last step: the summary, a statement to confirm and one button that sends the round on.',
           origin: 'custom',
-          uses: ['industrial/operations/SeverityBadge.tsx', 'industrial/operations/PriorityBadge.tsx', 'industrial/workflows/PagePreview.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundFinding,
-        },
-        {
-          id: 'InspectionRoundSignOff',
-          title: 'Sign-off block',
-          note: 'Pick it to close a round: the counts being signed for, then operator and supervisor. Click sign off to try.',
-          origin: 'custom',
-          uses: ['industrial/workflows/SignOffBlock.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: InspectionRoundSignOff,
+          bleed: true,
+          uses: ['kit/StatGroup.tsx', 'kit/inspection-rounds/ResultStrip.tsx', 'kit/Panel.tsx'],
+          Component: InspectionRoundsSignOff,
         },
       ],
     },
     {
-      id: 'screens',
-      title: 'Tables and field screens',
-      description: 'All rounds in one table, and a round as it looks on a tablet.',
+      id: 'looks',
+      title: 'In other looks',
+      description: 'The same round as a console table, poster blocks, a route drawing, state tiles, rings, a report and friendly cards.',
       specimens: [
         {
-          id: 'InspectionRoundTable',
-          title: 'Operator-round table',
-          note: 'Pick it as the register of rounds: operator, state, checkpoint progress, findings and due time.',
+          id: 'InspectionRoundsConsole',
+          title: 'Console checkpoint table',
+          note: 'Pick it in the control room, where the round is followed from a desk and density matters.',
           origin: 'custom',
-          uses: ['display/PersonAvatar.tsx', 'industrial/StatusIndicator.tsx', 'industrial/status.ts'],
           size: 'full',
-          align: 'stretch',
-          Component: InspectionRoundTable,
+          bleed: true,
+          uses: ['kit/StatGroup.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: InspectionRoundsConsole,
         },
         {
-          id: 'InspectionRoundTablet',
-          title: 'Tablet round screen',
-          note: 'Pick it as the field layout: checkpoints on the left, the current one on the right with large result buttons. Tap through to try.',
+          id: 'InspectionRoundsPoster',
+          title: 'Poster round board',
+          note: 'Pick it for the crew room screen: three counts and every round as a strip of blocks.',
           origin: 'custom',
-          uses: ['industrial/workflows/CheckpointRow.tsx', 'industrial/workflows/TagChip.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: InspectionRoundTablet,
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/inspection-rounds/ResultStrip.tsx', 'looks/LookScope.tsx'],
+          Component: InspectionRoundsPoster,
+        },
+        {
+          id: 'InspectionRoundsBlueprint',
+          title: 'Blueprint route sheet',
+          note: 'Pick it for the printed route sheet kept with the procedure: outlined stops and ruled readings.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/inspection-rounds/RouteStepper.tsx', 'kit/inspection-rounds/CheckpointList.tsx', 'kit/inspection-rounds/ReadingEntry.tsx', 'looks/LookScope.tsx'],
+          Component: InspectionRoundsBlueprint,
+        },
+        {
+          id: 'InspectionRoundsSignal',
+          title: 'Signal round tiles',
+          note: 'Pick it for a wall screen: one tile per round, filled with its state.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: InspectionRoundsSignal,
+        },
+        {
+          id: 'InspectionRoundsGlass',
+          title: 'Glass completion rings',
+          note: 'Pick it for a showpiece overview: completion per area as rings, with the next stops beside them.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/RingGauge.tsx', 'kit/ListRow.tsx', 'looks/LookScope.tsx'],
+          Component: InspectionRoundsGlass,
+        },
+        {
+          id: 'InspectionRoundsEditorial',
+          title: 'Editorial round report',
+          note: 'Pick it for the report sent after the round: a headline that says what was found, then the route.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/SectionHeader.tsx', 'kit/StatGroup.tsx', 'kit/inspection-rounds/CheckpointList.tsx', 'looks/LookScope.tsx'],
+          Component: InspectionRoundsEditorial,
+        },
+        {
+          id: 'InspectionRoundsSoft',
+          title: 'Soft operator home',
+          note: 'Pick it for a handheld app used by many crews: roomy cards, pills and one clear next step.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/inspection-rounds/RoundCard.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: InspectionRoundsSoft,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions that can be dropped into a product.',
+      specimens: [
+        {
+          id: 'InspectionRoundsFieldScreen',
+          title: 'Tablet round screen',
+          note: 'Pick it as the working screen on the route: save a reading or a check and it moves to the next stop.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/inspection-rounds/CheckpointList.tsx', 'kit/inspection-rounds/ReadingEntry.tsx', 'kit/inspection-rounds/ResultStrip.tsx', 'kit/inspection-rounds/rounds.ts'],
+          Component: InspectionRoundsFieldScreen,
+        },
+        {
+          id: 'InspectionRoundsSupervisor',
+          title: 'Supervisor overview',
+          note: 'Pick it for the shift supervisor: compliance, the rounds table and the on-time trend on one screen.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/DataTable.tsx', 'kit/Bars.tsx', 'kit/inspection-rounds/ResultStrip.tsx'],
+          Component: InspectionRoundsSupervisor,
         },
       ],
     },

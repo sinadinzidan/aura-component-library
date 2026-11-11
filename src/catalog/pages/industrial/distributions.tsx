@@ -1,550 +1,1011 @@
-import { Button } from '@cognite/aura/components/button';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
+import {
+  IconAlertOctagon,
+  IconAlertTriangle,
+  IconArrowsHorizontal,
+  IconBell,
+  IconChartHistogram,
+  IconCircleCheck,
+  IconClock,
+  IconGauge,
+  IconShieldExclamation,
+  IconTemperature,
+  IconWaveSine,
+} from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { BoxPlotRows } from '../../../library/industrial/charts/BoxPlotRows';
-import { CategoryChart } from '../../../library/industrial/charts/CategoryChart';
-import { ChartPlaceholder } from '../../../library/industrial/charts/ChartPlaceholder';
-import { HeatMapGrid } from '../../../library/industrial/charts/HeatMapGrid';
-import { HeatScaleLegend } from '../../../library/industrial/charts/HeatScaleLegend';
-import { Histogram } from '../../../library/industrial/charts/Histogram';
-import { countByRiskLevel } from '../../../library/industrial/charts/risk';
-import type { RiskItem } from '../../../library/industrial/charts/risk';
-import { RiskMatrix } from '../../../library/industrial/charts/RiskMatrix';
-import { ScatterPlot } from '../../../library/industrial/charts/ScatterPlot';
-import { boxStats, bucketize, correlation, quantile } from '../../../library/industrial/charts/stats';
-import type { BoxStats } from '../../../library/industrial/charts/stats';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { TONE_ZONE_BG, formatValue } from '../../../library/industrial/status';
-import { ASSETS } from '../../data/plant';
-import { DAY, HOUR, REFERENCE_NOW, createRandom, formatDate, makeValues } from '../../data/series';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { BoxRows, type BoxRow } from '../../../library/kit/distributions/BoxRows';
+import { HeatGrid, type HeatGridRow } from '../../../library/kit/distributions/HeatGrid';
+import { Histogram } from '../../../library/kit/distributions/Histogram';
+import { RISK_LABEL, RISK_LEVELS, RISK_TONE, countByRiskLevel, riskLevel, type RiskItem } from '../../../library/kit/distributions/risk';
+import { RiskMatrix, type RiskCell } from '../../../library/kit/distributions/RiskMatrix';
+import { ScatterPlot, type ScatterPoint } from '../../../library/kit/distributions/ScatterPlot';
+import { boxStats, bucketize, correlation, cumulativeShare, linearTicks, quantile } from '../../../library/kit/distributions/stats';
+import { Donut, type DonutSegment } from '../../../library/kit/Donut';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Legend } from '../../../library/kit/Legend';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
+import { ASSETS, type Asset } from '../../data/plant';
+import { DAY, REFERENCE_NOW, createRandom, formatDate, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './distributions.tsx?raw';
 
-const NOW = REFERENCE_NOW;
-const EQUIPMENT = ASSETS.filter((asset) => !['site', 'area', 'system'].includes(asset.type));
-const round = (value: number, decimals = 1): number => Math.round(value * 10 ** decimals) / 10 ** decimals;
-const share = (values: readonly number[], test: (value: number) => boolean): number => Math.round((values.filter(test).length / values.length) * 100);
+const DIST_EQUIPMENT = ASSETS.filter((asset) => !['site', 'area', 'system'].includes(asset.type));
+
+const distRound = (value: number, decimals = 1): number => Math.round(value * 10 ** decimals) / 10 ** decimals;
+
+const distShare = (values: readonly number[], test: (value: number) => boolean): number => (values.filter(test).length / values.length) * 100;
 
 /** Hourly averages for the last 30 days. */
-const PRESSURE_30D = makeValues({ seed: 11, points: 720, base: 48.2, amplitude: 1.5, noise: 0.6, cycles: 30 });
-const TEMPERATURE_30D = makeValues({ seed: 13, points: 720, base: 139.6, amplitude: 3.2, noise: 1.5, cycles: 30 });
-const PRESSURE_BINS = bucketize(PRESSURE_30D, { bins: 16, min: 44, max: 52 });
-const TEMPERATURE_BINS = bucketize(TEMPERATURE_30D, { bins: 20, min: 130, max: 150 });
-const HOURS_ABOVE_145 = TEMPERATURE_30D.filter((value) => value > 145).length;
+const DIST_PRESSURE = makeValues({ seed: 11, points: 720, base: 48.2, amplitude: 1.5, noise: 0.6, cycles: 30 });
 
-/** The same pressure split by shift: nights run a little lower and tighter. */
-const isNight = (index: number): boolean => index % 24 < 6 || index % 24 >= 22;
-const PRESSURE_DAY_BINS = bucketize(PRESSURE_30D.filter((_, index) => !isNight(index)), { bins: 16, min: 44, max: 52 });
-const PRESSURE_NIGHT_BINS = bucketize(PRESSURE_30D.filter((_, index) => isNight(index)), { bins: 16, min: 44, max: 52 });
+const DIST_TEMPERATURE = makeValues({ seed: 13, points: 720, base: 139.6, amplitude: 3.2, noise: 1.5, cycles: 30 });
 
-const PRESSURE_CDF = PRESSURE_BINS.reduce<{ category: string; cumulative: number }[]>((rows, bin) => {
-  const previous = rows[rows.length - 1]?.cumulative ?? 0;
-  return [...rows, { category: formatValue(bin.to, 1), cumulative: round(previous + (bin.count / PRESSURE_30D.length) * 100) }];
-}, []);
+const DIST_PRESSURE_RANGE = { bins: 16, min: 44, max: 52 };
 
-const RUN_STATE_SHARE = [
-  { category: 'Running', hours: 618 },
-  { category: 'Standby', hours: 52 },
-  { category: 'Maintenance', hours: 28 },
-  { category: 'Tripped', hours: 14 },
-  { category: 'Stopped', hours: 8 },
+const DIST_TEMPERATURE_RANGE = { bins: 20, min: 130, max: 150 };
+
+const DIST_PRESSURE_BINS = bucketize(DIST_PRESSURE, DIST_PRESSURE_RANGE);
+
+const DIST_TEMPERATURE_BINS = bucketize(DIST_TEMPERATURE, DIST_TEMPERATURE_RANGE);
+
+const DIST_HOURS_ABOVE = DIST_TEMPERATURE.filter((value) => value > 145).length;
+
+const distIsNight = (index: number): boolean => index % 24 < 6 || index % 24 >= 22;
+
+const DIST_DAY_BINS = bucketize(
+  DIST_PRESSURE.filter((_, index) => !distIsNight(index)),
+  DIST_PRESSURE_RANGE
+);
+
+const DIST_NIGHT_BINS = bucketize(
+  DIST_PRESSURE.filter((_, index) => distIsNight(index)).map((value) => value - 0.7),
+  DIST_PRESSURE_RANGE
+);
+
+const DIST_PRESSURE_CDF = cumulativeShare(DIST_PRESSURE_BINS).map((value) => distRound(value));
+
+const DIST_CDF_LABELS = DIST_PRESSURE_BINS.map((_, index) => formatNumber(44 + (index + 1) * 0.5, 1));
+
+const DIST_RUN_STATES: DonutSegment[] = [
+  { label: 'Running', value: 618, tone: 'success' },
+  { label: 'Standby', value: 52, tone: 'info' },
+  { label: 'Maintenance', value: 28, tone: 'warning' },
+  { label: 'Tripped', value: 14, tone: 'critical' },
+  { label: 'Stopped', value: 8, tone: 'neutral' },
+];
+
+const DIST_TRIP_CAUSES = [
+  { cause: 'High vibration', trips: 9 },
+  { cause: 'Lube oil pressure', trips: 6 },
+  { cause: 'Surge protection', trips: 4 },
+  { cause: 'Instrument fault', trips: 3 },
+  { cause: 'Operator stop', trips: 2 },
 ];
 
 /** Drive-end vibration per machine over 30 days, mm/s. */
-const VIBRATION_ROWS: { label: string; stats: BoxStats; tone?: 'warning' | 'critical' }[] = [
-  { name: '1st stage compressor', seed: 14, base: 5.6, noise: 0.5 },
-  { name: '2nd stage compressor', seed: 24, base: 3.9, noise: 0.3 },
-  { name: 'Recompressor', seed: 41, base: 6.4, noise: 0.9 },
-  { name: 'Compressor gas turbine', seed: 34, base: 4.4, noise: 0.35 },
-  { name: 'Export pump A', seed: 44, base: 2.6, noise: 0.25 },
-  { name: 'Export pump B', seed: 54, base: 2.9, noise: 0.2 },
-].flatMap((machine) => {
+const DIST_VIBRATION: BoxRow[] = [
+  { id: '23-ka-9101', name: '1st stage compressor', tag: '23-KA-9101', seed: 14, base: 5.6, noise: 0.5 },
+  { id: '23-ka-9102', name: '2nd stage compressor', tag: '23-KA-9102', seed: 24, base: 3.9, noise: 0.3 },
+  { id: '23-ka-9103', name: 'Recompressor', tag: '23-KA-9103', seed: 41, base: 6.4, noise: 0.9 },
+  { id: '23-gt-9001', name: 'Compressor gas turbine', tag: '23-GT-9001', seed: 34, base: 4.4, noise: 0.35 },
+  { id: '27-pa-2001a', name: 'Export pump A', tag: '27-PA-2001A', seed: 44, base: 2.6, noise: 0.25 },
+  { id: '27-pa-2001b', name: 'Export pump B', tag: '27-PA-2001B', seed: 54, base: 2.9, noise: 0.2 },
+].map((machine) => {
   const stats = boxStats(makeValues({ seed: machine.seed, points: 720, base: machine.base, amplitude: machine.noise, noise: machine.noise, cycles: 9, min: 0.5 }));
-  if (!stats) return [];
-  return [{ label: machine.name, stats, tone: stats.max >= 11 ? ('critical' as const) : stats.q3 > 7.1 ? ('warning' as const) : undefined }];
+  const tone: Tone = stats.max >= 9 ? 'critical' : stats.q3 > 6 ? 'warning' : 'accent';
+  return { id: machine.id, label: machine.name, sublabel: machine.tag, stats, tone };
 });
 
-/** Time each reading spent in its normal, warning and trip zones over 30 days, in percent. */
-const TIME_IN_ZONE = [
+/** Share of the last 30 days each reading spent in its normal, warning and trip zones. */
+const DIST_TIME_IN_ZONE = [
   { name: 'Discharge pressure', normal: 98, warning: 2, critical: 0 },
-  { name: 'Discharge temperature', normal: 100 - share(TEMPERATURE_30D, (value) => value > 145), warning: share(TEMPERATURE_30D, (value) => value > 145), critical: 0 },
+  { name: 'Discharge temperature', normal: 93, warning: 7, critical: 0 },
   { name: 'Drive-end vibration', normal: 81, warning: 17, critical: 2 },
   { name: 'Separator level', normal: 96, warning: 4, critical: 0 },
 ];
 
 /** Discharge pressure against gas flow, one point per hour for 7 days. */
-const scatterRandom = createRandom(91);
-const FLOW_PRESSURE = Array.from({ length: 168 }, (_, index) => {
-  const flow = 150 + scatterRandom() * 55;
-  const night = index % 24 < 6 || index % 24 >= 22;
-  return { x: round(flow, 0), y: round(37.6 + flow * 0.058 + (scatterRandom() - 0.5) * 2.2 - (night ? 0.6 : 0)), night, name: `${formatDate(NOW - (167 - index) * HOUR)}, ${String(index % 24).padStart(2, '0')}:00` };
+const distScatterRandom = createRandom(91);
+
+const DIST_FLOW_PRESSURE: ScatterPoint[] = Array.from({ length: 168 }, (_, index) => {
+  const flow = 150 + distScatterRandom() * 55;
+  const night = distIsNight(index);
+  return { x: distRound(flow, 0), y: distRound(37.6 + flow * 0.058 + (distScatterRandom() - 0.5) * 2.2 - (night ? 0.9 : 0)), group: night ? 'night' : 'day' };
 });
 
-/** Equipment by running hours since overhaul and health score; bubble area is open maintenance hours. */
-const EQUIPMENT_BUBBLES = EQUIPMENT.map((asset, index) => ({
-  x: round(4 + ((index * 7) % 11) * 2.6 + (100 - asset.healthScore) * 0.25, 1),
+const DIST_FLOW_AXIS = { min: 140, max: 220, ticks: linearTicks(140, 220, 4), title: 'Gas flow, kSm³/h' };
+
+const DIST_PRESSURE_AXIS = { min: 44, max: 52, ticks: linearTicks(44, 52, 4), title: 'Discharge pressure, barg' };
+
+const DIST_ENVELOPE: { x: [number, number]; y: [number, number]; label: string } = { x: [160, 205], y: [46.5, 50.5], label: 'Normal envelope' };
+
+const DIST_INSIDE = distShare(
+  DIST_FLOW_PRESSURE.map((_, index) => index),
+  (index) => {
+    const point = DIST_FLOW_PRESSURE[index];
+    return point.x >= 160 && point.x <= 205 && point.y >= 46.5 && point.y <= 50.5;
+  }
+);
+
+const DIST_FLOW_CORRELATION = correlation(
+  DIST_FLOW_PRESSURE.map((point) => point.x),
+  DIST_FLOW_PRESSURE.map((point) => point.y)
+);
+
+/** Equipment by years since overhaul and health score; the bubble grows with open maintenance hours. */
+const DIST_YEARS_SINCE_OVERHAUL: Record<string, number> = {
+  '20-va-1001': 1.2,
+  '20-va-1002': 2.6,
+  '20-xv-1105': 0.8,
+  '23-ka-9101': 7.0,
+  '23-ka-9102': 3.1,
+  '23-ka-9103': 5.4,
+  '23-ha-9114': 4.3,
+  '23-gt-9001': 3.8,
+  '27-pa-2001a': 1.9,
+  '27-pa-2001b': 2.2,
+  '40-pa-4001': 1.4,
+};
+
+const DIST_BUBBLES: ScatterPoint[] = DIST_EQUIPMENT.map((asset) => ({
+  x: DIST_YEARS_SINCE_OVERHAUL[asset.id] ?? 2,
   y: asset.healthScore,
-  size: 4 + (100 - asset.healthScore) * 1.4,
-  name: asset.name,
-  criticality: asset.criticality,
+  size: 12 + (100 - asset.healthScore) * 0.7,
+  group: asset.criticality,
+  label: asset.healthScore < 70 ? asset.name : undefined,
 }));
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
+const DIST_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const DIST_HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, '0'));
 
 /** Alarms per hour of the week, summed over the last 12 weeks. Handovers at 06, 14 and 22 stand out. */
-const heatRandom = createRandom(73);
-const ALARMS_BY_HOUR: number[][] = WEEKDAYS.map((_, day) =>
-  HOURS.map((_hour, hour) => {
-    const handover = [6, 14, 22].includes(hour) ? 9 : [7, 15, 23].includes(hour) ? 4 : 0;
-    const weekend = day >= 5 ? -2 : 0;
-    const dayTime = hour >= 8 && hour <= 17 ? 3 : 0;
-    return Math.max(0, Math.round(2 + handover + dayTime + weekend + heatRandom() * 4));
-  })
-);
-const ALARM_PEAK = Math.max(...ALARMS_BY_HOUR.flat());
+const distHeatRandom = createRandom(73);
 
-const DAYS_14 = Array.from({ length: 14 }, (_, index) => formatDate(NOW - (13 - index) * DAY));
-const assetRandom = createRandom(37);
-/** Alarms per day for each piece of equipment over 14 days. */
-const ALARMS_BY_ASSET: number[][] = EQUIPMENT.slice(2, 10).map((asset) =>
-  DAYS_14.map((_, day) => {
+const DIST_ALARMS_BY_HOUR: HeatGridRow[] = DIST_WEEKDAYS.map((day, dayIndex) => ({
+  id: day,
+  label: day,
+  values: DIST_HOURS.map((_, hour) => {
+    const handover = [6, 14, 22].includes(hour) ? 9 : [7, 15, 23].includes(hour) ? 4 : 0;
+    const weekend = dayIndex >= 5 ? -2 : 0;
+    const dayTime = hour >= 8 && hour <= 17 ? 3 : 0;
+    return Math.max(0, Math.round(2 + handover + dayTime + weekend + distHeatRandom() * 4));
+  }),
+}));
+
+const DIST_ALARM_PEAK = Math.max(...DIST_ALARMS_BY_HOUR.flatMap((row) => row.values.map((value) => value ?? 0)));
+
+const DIST_ALARM_TOTAL = DIST_ALARMS_BY_HOUR.reduce((sum, row) => sum + row.values.reduce<number>((inner, value) => inner + (value ?? 0), 0), 0);
+
+const DIST_DAYS_14 = Array.from({ length: 14 }, (_, index) => formatDate(REFERENCE_NOW - (13 - index) * DAY).replace(' Mar', '').replace(' Feb', ''));
+
+const distAssetRandom = createRandom(37);
+
+/** Alarms per day for each piece of equipment over 14 days; the cooling water pump lost its historian link for three days. */
+const DIST_ALARMS_BY_ASSET: HeatGridRow[] = DIST_EQUIPMENT.slice(2, 10).map((asset) => ({
+  id: asset.id,
+  label: asset.name,
+  values: DIST_DAYS_14.map((_, day) => {
+    if (asset.id === '40-pa-4001' && day >= 4 && day <= 6) return null;
     const base = (100 - asset.healthScore) / 9;
     const trip = asset.id === '23-ka-9103' && day >= 9 ? 9 : 0;
-    return Math.max(0, Math.round(base + trip + (assetRandom() - 0.4) * 3));
-  })
-);
+    return Math.max(0, Math.round(base + trip + (distAssetRandom() - 0.4) * 3));
+  }),
+}));
 
 /** Flaring per day for 12 weeks, kSm³. Columns are weeks, rows weekdays. */
-const FLARING = makeValues({ seed: 43, points: 84, base: 13, noise: 3.4, stepMs: DAY, min: 5, decimals: 0 });
-const WEEK_STARTS = Array.from({ length: 12 }, (_, week) => formatDate(NOW - 3 * DAY - (11 - week) * 7 * DAY));
-const FLARING_CALENDAR: (number | null)[][] = WEEKDAYS.map((_, day) =>
-  WEEK_STARTS.map((_week, week) => {
-    const index = week * 7 + day;
-    return week === 11 && day > 3 ? null : FLARING[index] + (week === 7 && day === 2 ? 14 : 0);
-  })
-);
+const DIST_FLARING = makeValues({ seed: 43, points: 84, base: 13, noise: 3.4, stepMs: DAY, min: 5, decimals: 0 });
 
-const SHIFT_ALARMS = [
-  [14, 12, 15, 11, 13, 6, 5],
-  [9, 11, 8, 12, 10, 7, 4],
-  [21, 18, 24, 19, 22, 12, 9],
+const DIST_WEEK_STARTS = Array.from({ length: 12 }, (_, week) => formatDate(REFERENCE_NOW - 3 * DAY - (11 - week) * 7 * DAY));
+
+const DIST_FLARING_CALENDAR: HeatGridRow[] = DIST_WEEKDAYS.map((day, dayIndex) => ({
+  id: day,
+  label: day,
+  values: DIST_WEEK_STARTS.map((_, week) => (week === 11 && dayIndex > 3 ? null : DIST_FLARING[week * 7 + dayIndex] + (week === 7 && dayIndex === 2 ? 14 : 0))),
+}));
+
+const DIST_SHIFT_ALARMS: HeatGridRow[] = [
+  { id: 'night', label: 'Night', values: [14, 12, 15, 11, 13, 6, 5] },
+  { id: 'day', label: 'Day', values: [21, 18, 24, 19, 22, 12, 9] },
+  { id: 'evening', label: 'Evening', values: [9, 11, 8, 12, 10, 7, 4] },
 ];
 
 /** Correlation between six readings of the 1st stage compressor over 30 days. */
-const LOAD = makeValues({ seed: 61, points: 720, base: 0, amplitude: 1, noise: 0.6, cycles: 12, decimals: 3 });
-const mixed = (seed: number, weight: number): number[] => {
-  const noise = makeValues({ seed, points: 720, base: 0, noise: 0.8, decimals: 3 });
-  return LOAD.map((value, index) => value * weight + noise[index] * (1 - Math.abs(weight)));
-};
-const CORRELATED = [
-  { name: 'Flow', values: mixed(101, 0.95) },
-  { name: 'Speed', values: mixed(102, 0.9) },
-  { name: 'Disch. P', values: mixed(103, 0.8) },
-  { name: 'Disch. T', values: mixed(104, 0.6) },
-  { name: 'Suction P', values: mixed(105, -0.55) },
-  { name: 'Vibration', values: mixed(106, 0.2) },
-];
-const CORRELATION_VALUES = CORRELATED.map((row) => CORRELATED.map((column) => round(correlation(row.values, column.values), 2)));
+const DIST_LOAD = makeValues({ seed: 61, points: 720, base: 0, amplitude: 1, noise: 0.6, cycles: 12, decimals: 3 });
 
-/** Pressure by hour of day over 30 days: median with the middle half and the 5th to 95th percentile. */
-const DAY_START = NOW - 14 * HOUR;
-const HOURLY_QUANTILES = HOURS.map((_, hour) => {
-  const sample = PRESSURE_30D.filter((_value, index) => index % 24 === hour).map((value) => value + Math.sin((hour / 24) * Math.PI * 2) * 0.9);
-  return {
-    t: DAY_START + hour * HOUR,
-    p5: quantile(sample, 0.05) ?? 0,
-    p25: quantile(sample, 0.25) ?? 0,
-    p50: quantile(sample, 0.5) ?? 0,
-    p75: quantile(sample, 0.75) ?? 0,
-    p95: quantile(sample, 0.95) ?? 0,
-  };
+const distMixed = (seed: number, weight: number): number[] => {
+  const noise = makeValues({ seed, points: 720, base: 0, noise: 0.8, decimals: 3 });
+  return DIST_LOAD.map((value, index) => value * weight + noise[index] * (1 - Math.abs(weight)));
+};
+
+const DIST_CORRELATED = [
+  { name: 'Flow', values: distMixed(101, 0.95) },
+  { name: 'Speed', values: distMixed(102, 0.9) },
+  { name: 'Discharge P', values: distMixed(103, 0.8) },
+  { name: 'Discharge T', values: distMixed(104, 0.6) },
+  { name: 'Suction P', values: distMixed(105, -0.55) },
+  { name: 'Vibration', values: distMixed(106, 0.2) },
+];
+
+const DIST_CORRELATION: HeatGridRow[] = DIST_CORRELATED.map((row) => ({
+  id: row.name,
+  label: row.name,
+  values: DIST_CORRELATED.map((column) => distRound(correlation(row.values, column.values), 2)),
+}));
+
+/** Pressure by hour of day over 30 days: the median with the 5th and 95th percentile around it. */
+const DIST_HOURLY = DIST_HOURS.map((_, hour) => {
+  const sample = DIST_PRESSURE.filter((_value, index) => index % 24 === hour).map((value) => value + Math.sin((hour / 24) * Math.PI * 2) * 0.9);
+  return { p5: distRound(quantile(sample, 0.05), 2), p50: distRound(quantile(sample, 0.5), 2), p95: distRound(quantile(sample, 0.95), 2) };
 });
 
-const RISK_ITEMS: RiskItem[] = EQUIPMENT.map((asset) => ({
-  id: asset.id,
-  label: asset.name,
-  likelihood: asset.healthScore >= 93 ? 1 : asset.healthScore >= 85 ? 2 : asset.healthScore >= 60 ? 3 : asset.healthScore >= 50 ? 4 : 5,
-  consequence: asset.criticality === 'A' ? (asset.type === 'compressor' || asset.type === 'turbine' ? 5 : 4) : asset.criticality === 'B' ? 3 : 2,
-}));
-const RISK_COUNTS = countByRiskLevel(RISK_ITEMS);
+const distLikelihood = (asset: Asset): number => (asset.healthScore >= 93 ? 1 : asset.healthScore >= 85 ? 2 : asset.healthScore >= 60 ? 3 : asset.healthScore >= 50 ? 4 : 5);
 
-function DistributionHistogram() {
+const distConsequence = (asset: Asset): number =>
+  asset.criticality === 'A' ? (asset.type === 'compressor' || asset.type === 'turbine' ? 5 : 4) : asset.criticality === 'B' ? 3 : 2;
+
+const DIST_RISKS: RiskItem[] = DIST_EQUIPMENT.map((asset) => ({ id: asset.id, label: asset.tag, likelihood: distLikelihood(asset), consequence: distConsequence(asset) }));
+
+const DIST_RISK_COUNTS = countByRiskLevel(DIST_RISKS);
+
+const DIST_RANKED = [...DIST_EQUIPMENT].sort((a, b) => distLikelihood(b) * distConsequence(b) - distLikelihood(a) * distConsequence(a));
+
+const DIST_RISK_COLUMNS: DataTableColumn<Asset>[] = [
+  { id: 'unit', header: 'Unit', cell: (asset) => asset.name },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (asset) => <TagId>{asset.tag}</TagId> },
+  { id: 'score', header: 'Score', numeric: true, cell: (asset) => distLikelihood(asset) * distConsequence(asset) },
+  {
+    id: 'level',
+    header: 'Level',
+    nowrap: true,
+    cell: (asset) => {
+      const level = riskLevel(distLikelihood(asset), distConsequence(asset));
+      return <StatusPill tone={RISK_TONE[level]}>{RISK_LABEL[level]}</StatusPill>;
+    },
+  },
+];
+
+function DistSheet({ look, children }: { look: LookId; children: ReactNode }) {
+  return (
+    <LookScope look={look} className="flex h-full flex-col">
+      <Canvas className="flex-1">{children}</Canvas>
+    </LookScope>
+  );
+}
+
+function DistPressureHistogram({ height = 300 }: { height?: number }) {
   return (
     <Histogram
       label="Distribution of hourly discharge pressure over 30 days; most hours fall between 47 and 49.5 barg"
-      bins={PRESSURE_BINS}
-      unit="barg"
+      counts={DIST_PRESSURE_BINS}
+      min={44}
+      max={52}
       decimals={1}
-      countLabel="hours"
-      summary="720 hourly averages in 0.5 barg bins. The middle half of the hours sit between 47.2 and 49.2 barg."
+      xTitle="Discharge pressure, barg"
+      yTitle="Hours"
+      height={height}
+      limits={[{ value: quantile(DIST_PRESSURE, 0.5), label: 'Median', tone: 'neutral' }]}
     />
   );
 }
 
-function DistributionHistogramLimits() {
+function DistTemperatureHistogram({ height = 300 }: { height?: number }) {
   return (
     <Histogram
-      label={`Distribution of hourly discharge temperature over 30 days against the 145 degree high limit; ${HOURS_ABOVE_145} hours were above it`}
-      bins={TEMPERATURE_BINS}
-      unit="°C"
-      countLabel="hours"
-      limits={[{ value: 145, label: 'High 145', tone: 'warning' }]}
-      outside={{ high: 145 }}
-      summary={`${HOURS_ABOVE_145} of 720 hours above the 145 °C high limit; bins past the limit are marked.`}
+      label={`Distribution of hourly discharge temperature over 30 days; ${DIST_HOURS_ABOVE} hours were above the 145 °C high limit`}
+      counts={DIST_TEMPERATURE_BINS}
+      min={130}
+      max={150}
+      xTitle="Discharge temperature, °C"
+      yTitle="Hours"
+      height={height}
+      limits={[{ value: 145, label: 'High limit', tone: 'critical', side: 'above' }]}
     />
   );
 }
 
-function DistributionCumulative() {
-  return (
-    <CategoryChart
-      label="Cumulative distribution of discharge pressure over 30 days; 95 percent of hours are below 50.5 barg"
-      rows={PRESSURE_CDF}
-      series={[{ key: 'cumulative', label: 'Share of hours at or below', type: 'area' }]}
-      references={[{ value: 95, label: '95 %', align: 'left' }]}
-      domain={[0, 100]}
-      ticks={[0, 25, 50, 75, 100]}
-      labelEvery={2}
-      unit="% of hours at or below"
-      decimals={1}
-      summary="Read across from a share to the pressure it corresponds to: half the hours are below 48.2 barg."
-    />
-  );
-}
-
-function DistributionByCategory() {
-  return (
-    <CategoryChart
-      layout="rows"
-      valueLabels
-      hideValueAxis
-      label="Hours in each run state for the recompressor over 30 days; it ran 618 of 720 hours"
-      rows={RUN_STATE_SHARE}
-      series={[{ key: 'hours', label: 'Hours' }]}
-      unit="h"
-      axisWidth={96}
-      barSize={14}
-      heightClassName="h-48"
-      summary="Running 86 % of the time; 14 hours tripped across three events."
-    />
-  );
-}
-
-function DistributionBoxRows() {
-  return (
-    <BoxPlotRows
-      label="Spread of drive-end vibration per machine over 30 days against the 7.1 millimetre per second high limit; the recompressor has the widest spread and crosses the limit"
-      rows={VIBRATION_ROWS}
-      domain={[0, 12]}
-      unit="mm/s"
-      limit={{ value: 7.1, label: 'High 7.1', tone: 'warning' }}
-      labelClassName="w-40"
-      summary="Line: minimum to maximum. Box: middle half of the hours. Tick: median."
-    />
-  );
-}
-
-function DistributionQuantileBands() {
-  return (
-    <TrendChart
-      legend
-      label="Discharge pressure by hour of day over 30 days: the median with the middle half and the 5th to 95th percentile; the afternoon runs about 1.5 barg higher than the night"
-      series={[{ key: 'median', label: 'Median', points: HOURLY_QUANTILES.map((row) => ({ t: row.t, v: round(row.p50) })) }]}
-      envelopes={[
-        { key: 'outer', label: '5th to 95th percentile', points: HOURLY_QUANTILES.map((row) => ({ t: row.t, low: round(row.p5), high: round(row.p95) })), color: 'var(--color-chart-1-100)' },
-        { key: 'inner', label: '25th to 75th percentile', points: HOURLY_QUANTILES.map((row) => ({ t: row.t, low: round(row.p25), high: round(row.p75) })), color: 'var(--color-chart-1-200)' },
-      ]}
-      yDomain={[44, 52]}
-      yTicks={[44, 46, 48, 50, 52]}
-      unit="barg"
-      formatTick={(timestamp) => `${String(new Date(timestamp).getUTCHours()).padStart(2, '0')}:00`}
-    />
-  );
-}
-
-function DistributionCompare() {
-  return (
-    <div className="flex w-full flex-col gap-4">
-      {[
-        { name: 'Day and evening shifts', bins: PRESSURE_DAY_BINS },
-        { name: 'Night shift', bins: PRESSURE_NIGHT_BINS },
-      ].map((group) => (
-        <div key={group.name} className="flex flex-col gap-2">
-          <span className="text-xs text-muted-foreground">{group.name}</span>
-          <Histogram label={`Distribution of hourly discharge pressure, ${group.name.toLowerCase()}, over 30 days`} bins={group.bins} unit="barg" decimals={1} countLabel="hours" heightClassName="h-20" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DistributionTimeInZone() {
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <ul className="flex flex-col gap-3">
-        {TIME_IN_ZONE.map((row) => (
-          <li key={row.name} className="grid grid-cols-[9rem_minmax(0,1fr)_3rem] items-center gap-3">
-            <span className="truncate text-xs text-muted-foreground">{row.name}</span>
-            <span
-              role="img"
-              aria-label={`${row.name}: ${row.normal} % of the time inside limits, ${row.warning} % outside operating limits, ${row.critical} % beyond the trip limit`}
-              className="flex h-3 w-full gap-px overflow-hidden rounded-xs"
-            >
-              <span className={TONE_ZONE_BG.neutral} style={{ width: `${row.normal}%` }} />
-              <span className={TONE_ZONE_BG.warning} style={{ width: `${row.warning}%` }} />
-              <span className={TONE_ZONE_BG.critical} style={{ width: `${row.critical}%` }} />
-            </span>
-            <span className="text-right text-xs font-medium text-base-foreground tabular-nums">{row.normal} %</span>
-          </li>
-        ))}
-      </ul>
-      <ul aria-hidden="true" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-medium-foreground">
-        {(['neutral', 'warning', 'critical'] as const).map((tone) => (
-          <li key={tone} className="flex items-center gap-1.5">
-            <span className={`size-2 rounded-xs ${TONE_ZONE_BG[tone]}`} />
-            {tone === 'neutral' ? 'Inside limits' : tone === 'warning' ? 'Outside operating limits' : 'Beyond trip limit'}
-          </li>
-        ))}
-      </ul>
-      <p className="text-xs text-muted-foreground">Share of the last 30 days. The figure on the right is the time inside limits.</p>
-    </div>
-  );
-}
-
-function DistributionScatter() {
+function DistFlowScatter({ height = 320, grouped = false }: { height?: number; grouped?: boolean }) {
   return (
     <ScatterPlot
-      legend
-      label="Discharge pressure against gas flow, one point per hour for 7 days, with the operating envelope shaded; pressure rises with flow and all but a few hours are inside the envelope"
-      groups={[
-        { key: 'history', label: 'Hourly averages, last 7 days', points: FLOW_PRESSURE },
-        { key: 'now', label: 'Now', points: [{ x: 182, y: 48.6, name: 'Now' }], emphasis: true, color: 'var(--color-chart-neutral-450)' },
-      ]}
-      envelope={{ x1: 150, x2: 205, y1: 45.5, y2: 50.5, label: 'Operating envelope' }}
-      xLabel="Gas flow (kSm³/h)"
-      yLabel="Discharge pressure (barg)"
-      xDomain={[140, 210]}
-      xTicks={[140, 160, 180, 200]}
-      yDomain={[44, 52]}
-      yTicks={[44, 46, 48, 50, 52]}
-    />
-  );
-}
-
-function DistributionScatterGroups() {
-  return (
-    <ScatterPlot
-      legend
-      label="Discharge pressure against gas flow by shift for 7 days; night-shift hours sit about 0.6 barg lower at the same flow"
-      groups={[
-        { key: 'day', label: 'Day and evening', points: FLOW_PRESSURE.filter((point) => !point.night) },
-        { key: 'night', label: 'Night', points: FLOW_PRESSURE.filter((point) => point.night) },
-      ]}
-      references={[{ axis: 'y', value: 52, label: 'High 52', tone: 'warning' }]}
-      xLabel="Gas flow (kSm³/h)"
-      yLabel="Discharge pressure (barg)"
-      xDomain={[140, 210]}
-      xTicks={[140, 160, 180, 200]}
-      yDomain={[44, 54]}
-      yTicks={[44, 46, 48, 50, 52, 54]}
-    />
-  );
-}
-
-function DistributionBubble() {
-  return (
-    <ScatterPlot
-      legend
-      label="Equipment by running hours since overhaul and health score, sized by open maintenance hours; the recompressor is lowest in health with the most open work"
-      groups={[
-        { key: 'a', label: 'Criticality A', points: EQUIPMENT_BUBBLES.filter((point) => point.criticality === 'A') },
-        { key: 'bc', label: 'Criticality B and C', points: EQUIPMENT_BUBBLES.filter((point) => point.criticality !== 'A') },
-      ]}
-      sizeLabel="Open maintenance (h)"
-      sizeRange={[60, 900]}
-      xLabel="Running hours since overhaul (thousand h)"
-      yLabel="Health score"
-      xDomain={[0, 50]}
-      xTicks={[0, 10, 20, 30, 40, 50]}
-      yDomain={[30, 100]}
-      yTicks={[40, 60, 80, 100]}
-      decimals={0}
-      summary="Bubble area is open maintenance work. Low and large is where to look first."
-    />
-  );
-}
-
-function DistributionCorrelation() {
-  return (
-    <HeatMapGrid
-      showValues
-      label="Correlation between six readings of the 1st stage compressor over 30 days; flow, speed and discharge pressure move together, suction pressure moves against them"
-      rows={CORRELATED.map((row) => row.name)}
-      columns={CORRELATED.map((row) => row.name)}
-      values={CORRELATION_VALUES}
-      domain={[0, 1]}
-      intensityOf={Math.abs}
-      decimals={2}
-      cellClassName="h-9"
-      rowLabelClassName="w-20"
-      legend={{ title: 'Strength of correlation', low: '0', high: '1' }}
-      summary="Colour shows strength, the sign shows direction. Vibration is nearly independent of load."
-    />
-  );
-}
-
-function DistributionHourWeekday() {
-  return (
-    <HeatMapGrid
-      label={`Alarms by weekday and hour over the last 12 weeks; shift handovers at 06:00, 14:00 and 22:00 stand out with up to ${ALARM_PEAK} alarms`}
-      rows={WEEKDAYS}
-      columns={HOURS}
-      values={ALARMS_BY_HOUR}
-      domain={[0, ALARM_PEAK]}
-      unit="alarms"
-      columnLabelEvery={2}
-      cellClassName="h-7"
-      legend={{ title: 'Alarms per hour of the week', low: '0', high: String(ALARM_PEAK) }}
-      summary="Three vertical bands at 06:00, 14:00 and 22:00: alarms cluster around shift handover on weekdays."
-    />
-  );
-}
-
-function DistributionLegendScale() {
-  return (
-    <div className="flex flex-col items-start gap-5">
-      <HeatScaleLegend lowLabel="Fewer" highLabel="More" />
-      <HeatScaleLegend lowLabel="0" highLabel="18" title="Alarms per hour" />
-      <HeatScaleLegend lowLabel="5" highLabel="27 kSm³" title="Flaring per day" emptyLabel="No data" />
-    </div>
-  );
-}
-
-function DistributionAssetDay() {
-  return (
-    <HeatMapGrid
-      label="Alarms per day by equipment for the last 14 days; the recompressor turns dark from 8 March"
-      rows={EQUIPMENT.slice(2, 10).map((asset) => asset.name)}
-      columns={DAYS_14}
-      values={ALARMS_BY_ASSET}
-      domain={[0, 12]}
-      unit="alarms"
-      columnLabelEvery={3}
-      rowLabelClassName="w-40"
-      legend={{ title: 'Alarms per day', low: '0', high: '12 or more' }}
-    />
-  );
-}
-
-function DistributionCalendar() {
-  return (
-    <HeatMapGrid
-      label="Flaring per day for the last 12 weeks as a calendar; one Wednesday in late February stands out at about twice the usual volume"
-      rows={WEEKDAYS}
-      columns={WEEK_STARTS}
-      values={FLARING_CALENDAR}
-      domain={[5, 27]}
-      unit="kSm³"
-      columnLabelEvery={3}
-      cellClassName="h-5"
-      legend={{ title: 'Flaring per day', low: '5', high: '27 kSm³', empty: 'Not yet reported' }}
-      summary="Each column is a week starting on the date shown."
-    />
-  );
-}
-
-function DistributionHeatValues() {
-  return (
-    <HeatMapGrid
-      showValues
-      label="Alarms per shift and weekday last week; the night shift has the most alarms every day, peaking at 24 on Wednesday"
-      rows={['Day', 'Evening', 'Night']}
-      columns={WEEKDAYS}
-      values={SHIFT_ALARMS}
-      domain={[0, 24]}
-      unit="alarms"
-      cellClassName="h-10"
-      rowLabelClassName="w-16"
-    />
-  );
-}
-
-function DistributionHourStrip() {
-  return (
-    <HeatMapGrid
-      label="Alarms by hour of day, summed over the last 12 weeks; the three handover hours carry about a third of all alarms"
-      rows={['Alarms']}
-      columns={HOURS}
-      values={[HOURS.map((_, hour) => ALARMS_BY_HOUR.reduce((total, day) => total + day[hour], 0))]}
-      unit="alarms"
-      columnLabelEvery={3}
-      cellClassName="h-8"
-      rowLabelClassName="w-14"
-      legend={{ low: 'Fewer', high: 'More' }}
-      summary="A single row is enough when only the time of day matters."
-    />
-  );
-}
-
-function DistributionRiskMatrix() {
-  return (
-    <RiskMatrix
-      label={`Equipment risk matrix by likelihood and consequence of failure; ${RISK_COUNTS.high} of ${RISK_ITEMS.length} items are high risk, led by the recompressor`}
-      items={RISK_ITEMS}
-      summary={`${RISK_ITEMS.length} pieces of equipment: ${RISK_COUNTS.high} high, ${RISK_COUNTS.medium} medium, ${RISK_COUNTS.low} low. The recompressor sits at almost certain × severe after its trip.`}
-    />
-  );
-}
-
-function DistributionRiskLabels() {
-  return (
-    <RiskMatrix
-      showLabels
-      label="Risk matrix naming the compressors, turbine and cooler in their cells"
-      items={RISK_ITEMS.filter((item) => ['23-ka-9101', '23-ka-9102', '23-ka-9103', '23-ha-9114', '23-gt-9001'].includes(item.id))}
-    />
-  );
-}
-
-function DistributionLoading() {
-  return <ChartPlaceholder state="loading" title="Loading alarm distribution" heightClassName="h-48" />;
-}
-
-function DistributionEmpty() {
-  return (
-    <ChartPlaceholder
-      state="empty"
-      heightClassName="h-48"
-      title="Not enough data"
-      description="A distribution needs at least 24 hours of samples."
-      action={
-        <Button variant="secondary" size="sm">
-          Show last 30 days
-        </Button>
+      label="Discharge pressure against gas flow, one point per hour for seven days, with the normal operating envelope"
+      points={grouped ? DIST_FLOW_PRESSURE : DIST_FLOW_PRESSURE.map((point) => ({ x: point.x, y: point.y }))}
+      groups={
+        grouped
+          ? [
+              { id: 'day', label: 'Day, 06–22', tone: 'accent' },
+              { id: 'night', label: 'Night, 22–06', tone: 'amber' },
+            ]
+          : undefined
       }
+      x={DIST_FLOW_AXIS}
+      y={DIST_PRESSURE_AXIS}
+      envelope={DIST_ENVELOPE}
+      highlight={grouped ? undefined : { x: 182, y: 48.6, label: 'Now 48.6 barg' }}
+      height={height}
     />
   );
 }
 
-function DistributionSparse() {
+function DistVibrationBoxes() {
   return (
-    <HeatMapGrid
-      label="Alarms per shift for four days with two shifts not yet reported"
-      rows={['Day', 'Evening', 'Night']}
-      columns={['9 Mar', '10 Mar', '11 Mar', '12 Mar']}
-      values={[
-        [14, 12, 15, 11],
-        [9, 11, 8, null],
-        [21, 18, 24, null],
-      ]}
-      domain={[0, 24]}
-      unit="alarms"
-      showValues
-      cellClassName="h-10"
-      rowLabelClassName="w-16"
-      legend={{ low: '0', high: '24', empty: 'Not yet reported' }}
+    <BoxRows
+      label="Drive-end vibration per machine over 30 days as box plots against the 7.1 mm/s high limit"
+      rows={DIST_VIBRATION}
+      min={0}
+      max={12}
+      unit="mm/s"
+      steps={6}
+      limit={{ value: 7.1, label: 'High limit', tone: 'warning' }}
     />
+  );
+}
+
+function DistributionsHistogram() {
+  return (
+    <DistSheet look="studio">
+      <Grid>
+        <Panel
+          className="col-span-8"
+          title="Discharge pressure"
+          subtitle="Hourly averages, last 30 days · 23-PT-92531"
+          icon={
+            <IconChip tone="blue">
+              <IconChartHistogram />
+            </IconChip>
+          }
+        >
+          <DistPressureHistogram />
+        </Panel>
+        <Grid stack className="col-span-4">
+          <Stat label="Median" value={quantile(DIST_PRESSURE, 0.5)} decimals={1} unit="barg" icon={<IconGauge />} tone="blue" target="Setpoint 48.0" />
+          <Stat label="95th percentile" value={quantile(DIST_PRESSURE, 0.95)} decimals={1} unit="barg" icon={<IconAlertTriangle />} tone="amber" target="High limit 52.0" />
+          <Stat
+            label="Middle 90 % spread"
+            value={quantile(DIST_PRESSURE, 0.95) - quantile(DIST_PRESSURE, 0.05)}
+            decimals={1}
+            unit="bar"
+            icon={<IconArrowsHorizontal />}
+            tone="teal"
+            delta={{ value: -0.3, good: 'down', caption: 'vs previous 30 days' }}
+          />
+        </Grid>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsHistogramLimits() {
+  return (
+    <DistSheet look="console">
+      <Grid>
+        <Panel className="col-span-8" title="Discharge temperature" subtitle="23-TT-92532 · 30 d · 1 °C bins">
+          <DistTemperatureHistogram />
+        </Panel>
+        <Grid stack className="col-span-4">
+          <Stat label="Hours above high limit" value={DIST_HOURS_ABOVE} unit="h" tone="critical" state="Out of range" stateIcon={<IconAlertOctagon />} target="Allowed 24 h per 30 d" />
+          <Stat label="Share above limit" value={distShare(DIST_TEMPERATURE, (value) => value > 145)} decimals={1} unit="%" tone="warning" />
+          <Stat label="Highest hourly average" value={Math.max(...DIST_TEMPERATURE)} decimals={1} unit="°C" target="Trip 155.0" />
+        </Grid>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsCompare() {
+  return (
+    <DistSheet look="poster">
+      <Panel title="Day against night" subtitle="Discharge pressure, hours per 0.5 bar bin">
+        <Histogram
+          label="Discharge pressure by day and by night on the same scale; nights run about 0.7 bar lower"
+          counts={DIST_DAY_BINS}
+          min={44}
+          max={52}
+          decimals={1}
+          seriesLabel="Day, 06–22"
+          compare={{ label: 'Night, 22–06', counts: DIST_NIGHT_BINS, tone: 'pink' }}
+          xTitle="Discharge pressure, barg"
+          yTitle="Hours"
+          tone="blue"
+          height={300}
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsCumulative() {
+  return (
+    <DistSheet look="blueprint">
+      <Panel title="Cumulative distribution" subtitle="Share of hours at or below a pressure">
+        <TrendLine
+          label="Cumulative share of hours at or below each discharge pressure; half of all hours are below 48.2 barg and nine in ten below 49.6"
+          labels={DIST_CDF_LABELS}
+          series={[{ id: 'cdf', label: 'Share of hours', values: DIST_PRESSURE_CDF, tone: 'accent' }]}
+          unit="%"
+          decimals={0}
+          height={300}
+          yDomain={[0, 100]}
+          highlightLast={false}
+          limits={[
+            { value: 50, label: 'Median', tone: 'neutral' },
+            { value: 90, label: 'P90', tone: 'warning' },
+          ]}
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsByCategory() {
+  return (
+    <DistSheet look="soft">
+      <Grid>
+        <Panel className="col-span-5" tone="green" title="Run state share" subtitle="1st stage compressor, last 30 days">
+          <div className="flex items-center gap-8">
+            <RingGauge label="Share of hours running" value={85.8} decimals={1} tone="success" size={176} hideLabel />
+            <Legend direction="column" className="flex-1" items={DIST_RUN_STATES.map((state) => ({ label: state.label, tone: state.tone, value: `${state.value} h` }))} />
+          </div>
+        </Panel>
+        <Panel className="col-span-7" tone="purple" title="Trips by cause" subtitle="Gas compression, last 12 months">
+          <Bars
+            label="Number of trips per cause over the last 12 months; high vibration leads with nine"
+            orientation="horizontal"
+            categories={DIST_TRIP_CAUSES.map((row) => row.cause)}
+            series={[{ id: 'trips', label: 'Trips', values: DIST_TRIP_CAUSES.map((row) => row.trips), tone: 'purple' }]}
+            showValues
+            height={250}
+          />
+        </Panel>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsBoxRows() {
+  return (
+    <DistSheet look="studio">
+      <Panel
+        title="Drive-end vibration by machine"
+        subtitle="Minimum, middle half, median and maximum over 30 days"
+        icon={
+          <IconChip tone="purple">
+            <IconWaveSine />
+          </IconChip>
+        }
+        actions={
+          <StatusPill tone="critical" icon={<IconAlertOctagon />}>
+            1 above trip level
+          </StatusPill>
+        }
+      >
+        <DistVibrationBoxes />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsBoxEditorial() {
+  return (
+    <DistSheet look="editorial">
+      <Grid>
+        <SectionHeader className="col-span-12" eyebrow="Rotating equipment review · March 2026" title="The recompressor is the only machine whose normal running touches the limit" size="lg" />
+        <div className="col-span-8">
+          <DistVibrationBoxes />
+        </div>
+        <div className="col-span-4 flex flex-col gap-6">
+          <Stat variant="plain" size="lg" label="Recompressor, upper quartile" value={DIST_VIBRATION[2].stats.q3} decimals={1} unit="mm/s" target="High limit 7.1" />
+          <p className="text-sm leading-6 text-[var(--kit-text-2)]">
+            A quarter of its running hours sit above {formatNumber(DIST_VIBRATION[2].stats.q3, 1)} mm/s and the whisker reaches the trip level. The two stage compressors keep their whole
+            middle half below the limit; the export pumps are an order quieter.
+          </p>
+          <p className="text-sm leading-6 text-[var(--kit-text-2)]">Read the box, not the whisker: a single excursion stretches the line, but a box across the limit means the machine lives there.</p>
+        </div>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsQuantileBands() {
+  return (
+    <DistSheet look="glass">
+      <Panel title="Pressure by hour of day" subtitle="Median with the 5th and 95th percentile, 30 days">
+        <TrendLine
+          label="Discharge pressure by hour of day: the median with the 5th and 95th percentile; the spread widens in the afternoon"
+          labels={DIST_HOURS.map((hour) => `${hour}:00`)}
+          series={[
+            { id: 'p50', label: 'Median', values: DIST_HOURLY.map((row) => row.p50), tone: 'accent' },
+            { id: 'p95', label: '95th percentile', values: DIST_HOURLY.map((row) => row.p95), tone: 'pink', dashed: true },
+            { id: 'p5', label: '5th percentile', values: DIST_HOURLY.map((row) => row.p5), tone: 'teal', dashed: true },
+          ]}
+          unit="barg"
+          decimals={1}
+          height={300}
+          fill
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsTimeInZone() {
+  return (
+    <DistSheet look="console">
+      <Panel title="Time in zone" subtitle="Share of the last 30 days per reading">
+        <Bars
+          label="Share of time each reading spent in its normal, warning and trip zone; drive-end vibration spent 19 % outside normal"
+          orientation="horizontal"
+          stacked
+          categories={DIST_TIME_IN_ZONE.map((row) => row.name)}
+          series={[
+            { id: 'normal', label: 'Normal', values: DIST_TIME_IN_ZONE.map((row) => row.normal), tone: 'success' },
+            { id: 'warning', label: 'Warning', values: DIST_TIME_IN_ZONE.map((row) => row.warning), tone: 'warning' },
+            { id: 'critical', label: 'Trip zone', values: DIST_TIME_IN_ZONE.map((row) => row.critical), tone: 'critical' },
+          ]}
+          unit="%"
+          height={300}
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsScatter() {
+  return (
+    <DistSheet look="studio">
+      <Grid>
+        <Panel className="col-span-8" title="Pressure against flow" subtitle="One point per hour, last 7 days · 1st stage compressor">
+          <DistFlowScatter />
+        </Panel>
+        <Grid stack className="col-span-4">
+          <Stat label="Hours inside the envelope" value={DIST_INSIDE} decimals={0} unit="%" icon={<IconCircleCheck />} tone="success" target="Target 90 %" />
+          <Stat label="Correlation with flow" value={DIST_FLOW_CORRELATION} decimals={2} icon={<IconWaveSine />} tone="blue" target="Design 0.90" />
+          <Stat label="Operating point now" value={48.6} decimals={1} unit="barg" icon={<IconGauge />} tone="teal" target="At 182 kSm³/h" />
+        </Grid>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsScatterGroups() {
+  return (
+    <DistSheet look="console">
+      <Panel title="Pressure against flow by shift" subtitle="168 h · 23-PT-92531 vs 23-FT-92510">
+        <DistFlowScatter grouped height={340} />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsBubble() {
+  return (
+    <DistSheet look="soft">
+      <Panel tone="blue" title="Health against time since overhaul" subtitle="Bubble size is open maintenance hours">
+        <ScatterPlot
+          label="Equipment by years since overhaul and health score; bubble size is open maintenance hours and colour is criticality"
+          points={DIST_BUBBLES}
+          groups={[
+            { id: 'A', label: 'Criticality A', tone: 'pink' },
+            { id: 'B', label: 'Criticality B', tone: 'blue' },
+            { id: 'C', label: 'Criticality C', tone: 'teal' },
+          ]}
+          x={{ min: 0, max: 8, ticks: linearTicks(0, 8, 4), title: 'Years since overhaul' }}
+          y={{ min: 30, max: 100, ticks: [30, 40, 50, 60, 70, 80, 90, 100], title: 'Health score' }}
+          height={340}
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsCorrelation() {
+  return (
+    <DistSheet look="blueprint">
+      <Grid>
+        <Panel className="col-span-8" title="Correlation matrix" subtitle="1st stage compressor · 30 d hourly">
+          <HeatGrid
+            label="Correlation between six readings of the 1st stage compressor; flow, speed and discharge pressure move together, suction pressure moves against them"
+            rows={DIST_CORRELATION}
+            columns={DIST_CORRELATED.map((row) => row.name)}
+            max={1}
+            tone="blue"
+            negativeTone="amber"
+            showValues
+            decimals={2}
+            cellHeight={44}
+            scale={{ label: 'Strength of correlation, blue with and amber against', low: '0', high: '±1' }}
+          />
+        </Panel>
+        <Panel className="col-span-4" title="Strongest pairs" subtitle="Excluding the diagonal">
+          <ul>
+            <ListRow title="Flow and speed" meta="Move together: load follows speed" trailing="+0.93" />
+            <ListRow title="Flow and discharge pressure" meta="Compressor curve" trailing="+0.86" />
+            <ListRow tone="warning" title="Suction pressure and flow" meta="Opposite: suction drops as load rises" trailing="−0.61" />
+            <ListRow title="Vibration and flow" meta="Weak: vibration is not load driven" trailing="+0.21" />
+          </ul>
+        </Panel>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsHourWeekday() {
+  const [cell, setCell] = useState({ row: 'Wed', column: 14 });
+  const row = DIST_ALARMS_BY_HOUR.find((entry) => entry.id === cell.row);
+  const value = row?.values[cell.column] ?? 0;
+  const hourMean = DIST_ALARMS_BY_HOUR.reduce((sum, entry) => sum + (entry.values[cell.column] ?? 0), 0) / DIST_ALARMS_BY_HOUR.length;
+
+  return (
+    <DistSheet look="studio">
+      <Grid>
+        <Panel
+          className="col-span-9"
+          title="Alarms by hour and weekday"
+          subtitle="Summed over the last 12 weeks · select a cell"
+          icon={
+            <IconChip tone="amber">
+              <IconBell />
+            </IconChip>
+          }
+        >
+          <HeatGrid
+            label="Alarms per hour of the week over the last 12 weeks; shift handovers at 06, 14 and 22 stand out"
+            rows={DIST_ALARMS_BY_HOUR}
+            columns={DIST_HOURS}
+            columnEvery={2}
+            max={DIST_ALARM_PEAK}
+            tone="amber"
+            cellHeight={34}
+            selected={cell}
+            onSelect={setCell}
+            scale={{ label: 'Alarms in that hour', low: '0', high: String(DIST_ALARM_PEAK) }}
+          />
+        </Panel>
+        <Grid stack className="col-span-3">
+          <Stat
+            label={`${cell.row} ${DIST_HOURS[cell.column]}:00–${DIST_HOURS[cell.column]}:59`}
+            value={value}
+            unit="alarms"
+            icon={<IconClock />}
+            tone="amber"
+            size="lg"
+            delta={{ value: value - hourMean, decimals: 1, good: 'down', caption: 'vs that hour on other days' }}
+          />
+          <Stat label="Share of the weekly load" value={(value / DIST_ALARM_TOTAL) * 100} decimals={1} unit="%" target="Even spread 0.6 %" />
+        </Grid>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsAssetDay() {
+  return (
+    <DistSheet look="console">
+      <Panel title="Alarms per unit per day" subtitle="Last 14 days · hatched cells have no data">
+        <HeatGrid
+          label="Alarms per day for eight units over 14 days; the recompressor floods from day ten and the cooling water pump has three days without data"
+          rows={DIST_ALARMS_BY_ASSET}
+          columns={DIST_DAYS_14}
+          tone="critical"
+          showValues
+          cellHeight={32}
+          scale={{ label: 'Alarms per day', low: '0', high: '12' }}
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsCalendar() {
+  return (
+    <DistSheet look="soft">
+      <Panel tone="amber" title="Flaring calendar" subtitle="kSm³ per day, last 12 weeks">
+        <HeatGrid
+          label="Flaring per day for the last 12 weeks as a calendar; one Wednesday in late February stands out at 27 kSm³"
+          rows={DIST_FLARING_CALENDAR}
+          columns={DIST_WEEK_STARTS}
+          columnEvery={3}
+          tone="amber"
+          cellHeight={30}
+          scale={{ label: 'Flared volume', low: '5', high: '27 kSm³' }}
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsShiftPoster() {
+  return (
+    <DistSheet look="poster">
+      <Panel title="Alarms by shift" subtitle="Average per shift, last 12 weeks">
+        <HeatGrid
+          label="Average alarms per shift and weekday; the day shift carries about twice the load of the evening shift"
+          rows={DIST_SHIFT_ALARMS}
+          columns={DIST_WEEKDAYS}
+          tone="pink"
+          showValues
+          cellHeight={64}
+          scale={{ label: 'Alarms per shift', low: '4', high: '24' }}
+        />
+      </Panel>
+    </DistSheet>
+  );
+}
+
+function DistributionsHourStrip() {
+  return (
+    <DistSheet look="signal">
+      <Grid>
+        <Stat className="col-span-3" label="Alarm load today" value={71} unit="alarms" tone="warning" state="Busy" stateIcon={<IconAlertTriangle />} target="Manageable below 144 per day" />
+        <Panel className="col-span-9" title="Alarms per hour by area" subtitle="Last 24 hours">
+          <HeatStrip
+            label="Alarms per hour by area over the last 24 hours; gas compression carries almost all of the load"
+            size="lg"
+            rows={[
+              { label: 'Inlet and separation', values: makeValues({ seed: 81, points: 24, base: 1.2, noise: 1.1, min: 0, decimals: 0 }), tone: 'neutral' },
+              { label: 'Gas compression', values: makeValues({ seed: 82, points: 24, base: 4, noise: 2.4, drift: 5, min: 0, decimals: 0 }), tone: 'warning' },
+              { label: 'Gas export', values: makeValues({ seed: 83, points: 24, base: 0.8, noise: 0.9, min: 0, decimals: 0 }), tone: 'neutral' },
+              { label: 'Cooling water', values: makeValues({ seed: 84, points: 24, base: 1, noise: 1, min: 0, decimals: 0 }), tone: 'neutral' },
+            ]}
+            ticks={['14:00', '20:00', '02:00', '08:00', 'Now']}
+            scale={{ label: 'Alarms per hour', low: '0', high: '9' }}
+          />
+        </Panel>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistRiskList({ cell }: { cell: RiskCell }) {
+  const inside = DIST_EQUIPMENT.filter((asset) => distLikelihood(asset) === cell.likelihood && distConsequence(asset) === cell.consequence);
+  const level = riskLevel(cell.likelihood, cell.consequence);
+  return (
+    <Panel
+      className="col-span-5"
+      title={`${RISK_LABEL[level]} risk`}
+      subtitle={`Likelihood ${cell.likelihood} × consequence ${cell.consequence} = ${cell.likelihood * cell.consequence}`}
+      actions={<StatusPill tone={RISK_TONE[level]}>{inside.length === 1 ? '1 unit' : `${inside.length} units`}</StatusPill>}
+      footer="Select a cell to list its units"
+    >
+      {inside.length === 0 ? (
+        <p className="text-sm leading-6 text-[var(--kit-text-2)]">No units sit in this cell. Filled cells print how many do.</p>
+      ) : (
+        <ul>
+          {inside.map((asset) => (
+            <ListRow
+              key={asset.id}
+              tone={RISK_TONE[level]}
+              title={asset.name}
+              meta={
+                <>
+                  <TagId>{asset.tag}</TagId> · criticality {asset.criticality}
+                </>
+              }
+              trailing={`Health ${asset.healthScore}`}
+            />
+          ))}
+        </ul>
+      )}
+      <div className="mt-auto flex flex-col gap-3 pt-6">
+        <p className="text-sm font-semibold">Units per level</p>
+        {RISK_LEVELS.map((entry) => (
+          <Meter key={entry} label={RISK_LABEL[entry]} value={DIST_RISK_COUNTS[entry]} max={DIST_RISKS.length} unit="units" tone={RISK_TONE[entry]} hideScale />
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function DistributionsRiskMatrix() {
+  const [cell, setCell] = useState<RiskCell>({ likelihood: 3, consequence: 5 });
+  return (
+    <DistSheet look="studio">
+      <Grid>
+        <Panel
+          className="col-span-7"
+          title="Equipment risk"
+          subtitle="Likelihood from health score, consequence from criticality"
+          icon={
+            <IconChip tone="pink">
+              <IconShieldExclamation />
+            </IconChip>
+          }
+        >
+          <RiskMatrix label="Equipment risk matrix, likelihood against consequence" items={DIST_RISKS} selected={cell} onSelect={setCell} />
+        </Panel>
+        <DistRiskList cell={cell} />
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsRiskNames() {
+  return (
+    <DistSheet look="blueprint">
+      <Grid>
+        <Panel className="col-span-8" title="Risk register" subtitle="Units by tag · rev C">
+          <RiskMatrix label="Equipment risk matrix with every unit written in its cell by tag" items={DIST_RISKS} mode="names" cellHeight={68} />
+        </Panel>
+        <Panel className="col-span-4" title="Levels" subtitle="Score = L × C" footer="Reviewed 12 Mar 2026 · next review in June">
+          <ul>
+            <ListRow leading={<StatusPill tone="critical">Extreme</StatusPill>} title="15 to 25" meta="Stop and mitigate before restart" trailing={DIST_RISK_COUNTS.extreme} />
+            <ListRow leading={<StatusPill tone="warning">High</StatusPill>} title="8 to 14" meta="Action plan within 30 days" trailing={DIST_RISK_COUNTS.high} />
+            <ListRow leading={<StatusPill tone="amber">Medium</StatusPill>} title="4 to 7" meta="Monitor, review each quarter" trailing={DIST_RISK_COUNTS.medium} />
+            <ListRow leading={<StatusPill tone="success">Low</StatusPill>} title="1 to 3" meta="Accept" trailing={DIST_RISK_COUNTS.low} />
+          </ul>
+        </Panel>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsRiskSignal() {
+  return (
+    <DistSheet look="signal">
+      <Grid>
+        <div className="col-span-5">
+          <StatGroup columns={2} label="Units per risk level" className="h-full">
+            {[...RISK_LEVELS].reverse().map((level) => (
+              <Stat key={level} size="lg" label={`${RISK_LABEL[level]} risk`} value={DIST_RISK_COUNTS[level]} unit="units" tone={RISK_TONE[level]} />
+            ))}
+          </StatGroup>
+        </div>
+        <Panel className="col-span-7" title="Where the risk sits" subtitle="Likelihood against consequence">
+          <RiskMatrix label="Equipment risk matrix with counts, for a wall screen" items={DIST_RISKS} cellHeight={60} />
+        </Panel>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsOperatingWindow() {
+  const [reading, setReading] = useState('pressure');
+  const pressure = reading === 'pressure';
+  const values = pressure ? DIST_PRESSURE : DIST_TEMPERATURE;
+  const unit = pressure ? 'barg' : '°C';
+
+  return (
+    <DistSheet look="studio">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          eyebrow="1st stage compressor · 23-KA-9101"
+          title="Operating window review"
+          description="Where the machine actually ran over the last 30 days, against where it should."
+          actions={
+            <SegmentedControl value={reading} onValueChange={setReading}>
+              <SegmentedControlList aria-label="Reading">
+                <SegmentedControlButton value="pressure">Pressure</SegmentedControlButton>
+                <SegmentedControlButton value="temperature">Temperature</SegmentedControlButton>
+              </SegmentedControlList>
+            </SegmentedControl>
+          }
+        />
+        <div className="col-span-12">
+          <StatGroup columns={4} label="Summary of the selected reading">
+            <Stat label="Median" value={quantile(values, 0.5)} decimals={1} unit={unit} icon={pressure ? <IconGauge /> : <IconTemperature />} tone="blue" target={pressure ? 'Setpoint 48.0' : 'Design 138.0'} />
+            <Stat label="5th percentile" value={quantile(values, 0.05)} decimals={1} unit={unit} icon={<IconArrowsHorizontal />} tone="teal" target={pressure ? 'Low limit 40.0' : 'Low limit 90.0'} />
+            <Stat label="95th percentile" value={quantile(values, 0.95)} decimals={1} unit={unit} icon={<IconArrowsHorizontal />} tone="purple" target={pressure ? 'High limit 52.0' : 'High limit 145.0'} />
+            <Stat
+              label="Hours above high limit"
+              value={pressure ? 0 : DIST_HOURS_ABOVE}
+              unit="h"
+              icon={<IconAlertTriangle />}
+              tone={pressure ? 'success' : 'critical'}
+              state={pressure ? 'In range' : 'Out of range'}
+              target="Allowed 24 h per 30 d"
+            />
+          </StatGroup>
+        </div>
+        <Panel className="col-span-7" title={pressure ? 'Discharge pressure' : 'Discharge temperature'} subtitle="Hours per bin, last 30 days">
+          {pressure ? <DistPressureHistogram height={320} /> : <DistTemperatureHistogram height={320} />}
+        </Panel>
+        <Panel className="col-span-5" title="Pressure against flow" subtitle="Hourly, last 7 days">
+          <DistFlowScatter height={320} />
+        </Panel>
+        <Panel className="col-span-12" title="Vibration across the train" subtitle="Drive-end, 30 days">
+          <DistVibrationBoxes />
+        </Panel>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsAlarmPatterns() {
+  return (
+    <DistSheet look="console">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="sm"
+          title="Alarm load patterns"
+          description="Nordkapp · last 12 weeks"
+          actions={
+            <StatusPill tone="warning" icon={<IconAlertTriangle />}>
+              Handover peaks
+            </StatusPill>
+          }
+        />
+        <Panel className="col-span-8" title="Hour by weekday" subtitle={`${formatNumber(DIST_ALARM_TOTAL)} alarms`}>
+          <HeatGrid
+            label="Alarms per hour of the week over the last 12 weeks"
+            rows={DIST_ALARMS_BY_HOUR}
+            columns={DIST_HOURS}
+            columnEvery={2}
+            max={DIST_ALARM_PEAK}
+            tone="warning"
+            cellHeight={30}
+            scale={{ label: 'Alarms in that hour', low: '0', high: String(DIST_ALARM_PEAK) }}
+          />
+        </Panel>
+        <Panel className="col-span-4" title="By shift" subtitle="Average per shift">
+          <Bars
+            label="Average alarms per shift: day 18, night 11, evening 9"
+            categories={['Night', 'Day', 'Evening']}
+            series={[{ id: 'alarms', label: 'Alarms', values: [10.9, 17.9, 8.7] }]}
+            tones={['neutral', 'warning', 'neutral']}
+            decimals={1}
+            showValues
+            height={250}
+            limit={{ value: 12, label: 'Manageable', tone: 'critical' }}
+          />
+        </Panel>
+        <Panel className="col-span-8" title="Unit by day" subtitle="Last 14 days">
+          <HeatGrid label="Alarms per unit per day over the last 14 days" rows={DIST_ALARMS_BY_ASSET} columns={DIST_DAYS_14} tone="critical" showValues cellHeight={30} />
+        </Panel>
+        <Panel className="col-span-4" title="Run state" subtitle="Recompressor, 30 days">
+          <Donut label="Recompressor hours per run state over the last 30 days" segments={DIST_RUN_STATES} centerValue="720" centerCaption="hours" unit=" h" legend="bottom" size={150} />
+        </Panel>
+      </Grid>
+    </DistSheet>
+  );
+}
+
+function DistributionsRiskReport() {
+  return (
+    <DistSheet look="editorial">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          size="lg"
+          eyebrow="Nordkapp · quarterly risk review"
+          title="Two compressors carry the plant's extreme risk"
+          description="Likelihood is derived from the health score, consequence from criticality and equipment class."
+        />
+        <div className="col-span-12">
+          <StatGroup columns={4} label="Units per risk level">
+            {RISK_LEVELS.map((level) => (
+              <Stat key={level} variant="plain" label={`${RISK_LABEL[level]} risk`} value={DIST_RISK_COUNTS[level]} unit="units" tone={RISK_TONE[level]} />
+            ))}
+          </StatGroup>
+        </div>
+        <Panel className="col-span-6" title="Risk matrix">
+          <RiskMatrix label="Equipment risk matrix with counts" items={DIST_RISKS} cellHeight={56} />
+        </Panel>
+        <Panel className="col-span-6" title="Highest scores">
+          <DataTable label="Units with the highest risk score" columns={DIST_RISK_COLUMNS} rows={DIST_RANKED.slice(0, 6)} rowKey={(asset) => asset.id} />
+        </Panel>
+      </Grid>
+    </DistSheet>
   );
 }
 
@@ -552,19 +1013,18 @@ export default definePage({
   id: 'distributions',
   title: 'Distributions and heat maps',
   summary:
-    'How values spread rather than how they move: histograms and box rows for one measurement, scatter and correlation for two, heat maps for patterns across hours, days and assets, and the risk matrix.',
+    'How values spread and where they pile up: histograms, box plots, scatter plots, heat maps and risk matrices, each shown as a finished sheet in the look it suits.',
   guidance: {
     use: [
-      'Use a histogram to show where a value spends its time, with the limits drawn on the value axis.',
-      'Use a heat map when both axes are categories or time buckets and the pattern matters more than exact values.',
-      'Give every heat map a colour key with the low and high value, and a key for cells without data.',
-      'Keep heat maps on the heat-map tokens; only the risk matrix is status-coloured, because there the colour is the risk level.',
+      'A histogram when the question is how often, a box plot when it is which unit is worst, a scatter when it is whether two readings move together.',
+      'Draw limits at their true position and colour what lies beyond them.',
+      'Give every heat map a scale with both ends named, and hatch cells without data.',
+      'Put the reading of the chart next to it: a median, a share outside limits, a count.',
     ],
     avoid: [
-      'Red-to-green heat maps for plain counts; density is not a verdict.',
-      'A scatter plot without axis titles and units, or without saying what one point is.',
-      'Comparing box rows or histograms that do not share a scale.',
-      'Printing values in cells too small to read; let the colour key and the cell tooltip carry them.',
+      'A trend line for a question about spread — time hides the shape.',
+      'Heat maps without a legend, or with a rainbow scale.',
+      'Risk matrices where empty and occupied cells weigh the same.',
     ],
   },
   source,
@@ -572,268 +1032,282 @@ export default definePage({
     {
       id: 'histograms',
       title: 'Histograms and shares',
-      description: 'Where one measurement spends its time.',
+      description: 'How often each value occurs, with the limits in place and the numbers that summarise the shape beside it.',
       specimens: [
         {
-          id: 'DistributionHistogram',
-          title: 'Histogram',
-          note: 'Pick it to see the usual operating range of a measurement and how tightly it is held.',
+          id: 'DistributionsHistogram',
+          title: 'Histogram with summary',
+          note: 'Pick it to show where a reading normally sits, with the median marked and the percentiles as figures.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/Histogram.tsx', 'industrial/charts/stats.ts'],
-          Component: DistributionHistogram,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/Histogram.tsx', 'kit/distributions/PlotFrame.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: DistributionsHistogram,
         },
         {
-          id: 'DistributionHistogramLimits',
-          title: 'Histogram with limit',
-          note: 'Pick it to show how much of the time a value was beyond a limit; the bins past it are marked.',
+          id: 'DistributionsHistogramLimits',
+          title: 'Histogram against a limit',
+          note: 'Pick it when the tail matters: bins beyond the limit change colour and the hours out of range lead the side column.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/Histogram.tsx', 'industrial/charts/stats.ts'],
-          Component: DistributionHistogramLimits,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/Histogram.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsHistogramLimits,
         },
         {
-          id: 'DistributionCumulative',
+          id: 'DistributionsCompare',
+          title: 'Two distributions, one scale',
+          note: 'Pick it to compare two conditions of the same reading, such as day against night or before against after.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/distributions/Histogram.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsCompare,
+        },
+        {
+          id: 'DistributionsCumulative',
           title: 'Cumulative distribution',
-          note: 'Pick it to read percentiles: what value the measurement stays under 95 % of the time.',
+          note: 'Pick it to read percentiles straight off the curve: what share of hours stayed below a value.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx', 'industrial/charts/stats.ts'],
-          Component: DistributionCumulative,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/distributions/stats.ts', 'looks/LookScope.tsx'],
+          Component: DistributionsCumulative,
         },
         {
-          id: 'DistributionByCategory',
-          title: 'Distribution by category',
-          note: 'Pick sorted bars when the buckets are states or classes instead of value ranges.',
+          id: 'DistributionsByCategory',
+          title: 'Shares by category',
+          note: 'Pick a ring with a legend for one dominant share and ranked bars for counts per cause.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/CategoryChart.tsx'],
-          Component: DistributionByCategory,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/RingGauge.tsx', 'kit/Legend.tsx', 'kit/Bars.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsByCategory,
         },
       ],
     },
     {
       id: 'spread',
       title: 'Spread and comparison',
-      description: 'The same distribution compared across assets, shifts or hours of the day.',
+      description: 'Several units or hours on one scale, so the outlier shows itself.',
       specimens: [
         {
-          id: 'DistributionBoxRows',
-          title: 'Range bars per asset',
-          note: 'Pick it to compare spread between machines on one scale; a row that crosses its limit is marked.',
+          id: 'DistributionsBoxRows',
+          title: 'Box plots per machine',
+          note: 'Pick it to compare the spread of one reading across machines against a shared limit.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/BoxPlotRows.tsx', 'industrial/charts/stats.ts'],
-          Component: DistributionBoxRows,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/BoxRows.tsx', 'kit/distributions/stats.ts', 'kit/Panel.tsx'],
+          Component: DistributionsBoxRows,
         },
         {
-          id: 'DistributionQuantileBands',
-          title: 'Quantile bands',
-          note: 'Pick it to show what is normal for each hour of the day, as a baseline for today’s trend.',
+          id: 'DistributionsBoxEditorial',
+          title: 'Box plots in a report',
+          note: 'Pick it for a written review: the finding is the headline and the reading advice sits beside the chart.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/stats.ts'],
-          Component: DistributionQuantileBands,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/BoxRows.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsBoxEditorial,
         },
         {
-          id: 'DistributionCompare',
-          title: 'Two histograms, one scale',
-          note: 'Pick small multiples to compare the shape of two groups; overlaid histograms hide each other.',
+          id: 'DistributionsQuantileBands',
+          title: 'Percentiles by hour',
+          note: 'Pick it to show a daily pattern and how wide the spread is at each hour.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/Histogram.tsx'],
-          Component: DistributionCompare,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsQuantileBands,
         },
         {
-          id: 'DistributionTimeInZone',
+          id: 'DistributionsTimeInZone',
           title: 'Time in zone',
-          note: 'Pick it to reduce a distribution to the one figure that matters: the share of time inside limits.',
+          note: 'Pick it to rank readings by how long they spent outside normal, without drawing each distribution.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/status.ts'],
-          Component: DistributionTimeInZone,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsTimeInZone,
         },
       ],
     },
     {
       id: 'relationships',
       title: 'Relationships',
-      description: 'One measurement against another.',
+      description: 'One reading against another: envelopes, groups, bubbles and correlation.',
       specimens: [
         {
-          id: 'DistributionScatter',
+          id: 'DistributionsScatter',
           title: 'Scatter with operating envelope',
-          note: 'Pick it to check that two coupled readings stay inside their envelope, and where the process is now.',
+          note: 'Pick it to check that a machine runs inside its window, with the current point called out.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/ScatterPlot.tsx'],
-          Component: DistributionScatter,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/ScatterPlot.tsx', 'kit/distributions/PlotFrame.tsx', 'kit/Stat.tsx'],
+          Component: DistributionsScatter,
         },
         {
-          id: 'DistributionScatterGroups',
+          id: 'DistributionsScatterGroups',
           title: 'Scatter by group',
-          note: 'Pick it when the relationship differs between two or three groups, such as shifts or machines.',
+          note: 'Pick it when a second condition, such as shift or product, may explain the shape of the cloud.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/ScatterPlot.tsx'],
-          Component: DistributionScatterGroups,
+          bleed: true,
+          uses: ['kit/distributions/ScatterPlot.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsScatterGroups,
         },
         {
-          id: 'DistributionBubble',
+          id: 'DistributionsBubble',
           title: 'Bubble chart',
-          note: 'Pick it to rank a small fleet on three measures at once; keep it to about a dozen bubbles.',
+          note: 'Pick it for a third quantity as size, and label only the points that need attention.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/ScatterPlot.tsx'],
-          Component: DistributionBubble,
+          bleed: true,
+          uses: ['kit/distributions/ScatterPlot.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsBubble,
         },
         {
-          id: 'DistributionCorrelation',
+          id: 'DistributionsCorrelation',
           title: 'Correlation matrix',
-          note: 'Pick it to find which readings move together before building a model or a root-cause story.',
+          note: 'Pick it to see which readings move together before building a model or an alarm rule.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx', 'industrial/charts/stats.ts'],
-          Component: DistributionCorrelation,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/HeatGrid.tsx', 'kit/ListRow.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsCorrelation,
         },
       ],
     },
     {
       id: 'heat-maps',
       title: 'Heat maps',
-      description: 'Density across two axes on the four heat-map steps.',
+      description: 'When and where something piles up. One tone, a named scale, hatching for missing data.',
       specimens: [
         {
-          id: 'DistributionHourWeekday',
+          id: 'DistributionsHourWeekday',
           title: 'Hour by weekday',
-          note: 'Pick it to find when in the week something happens: handovers, weekends, night shifts.',
+          note: 'Pick it to find weekly rhythm, such as alarm peaks at shift handover; select a cell to read it.',
           origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx'],
-          Component: DistributionHourWeekday,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/HeatGrid.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: DistributionsHourWeekday,
         },
         {
-          id: 'DistributionLegendScale',
-          title: 'Legend scale',
-          note: 'Pick the plain key for relative density, and add numbers and a no-data swatch when values matter.',
+          id: 'DistributionsAssetDay',
+          title: 'Unit by day with values',
+          note: 'Pick it for a dense operator view where the number matters as much as the colour.',
           origin: 'custom',
-          size: 'sm',
-          uses: ['industrial/charts/HeatScaleLegend.tsx'],
-          Component: DistributionLegendScale,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/HeatGrid.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsAssetDay,
         },
         {
-          id: 'DistributionAssetDay',
-          title: 'Asset by day',
-          note: 'Pick it to see which equipment is noisy and since when, across a fleet.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx'],
-          Component: DistributionAssetDay,
-        },
-        {
-          id: 'DistributionCalendar',
+          id: 'DistributionsCalendar',
           title: 'Calendar heat map',
-          note: 'Pick it for one value per day over months, to spot single days and weekday rhythm.',
+          note: 'Pick it for one value per day over months, where single bad days should stand out.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx'],
-          Component: DistributionCalendar,
+          bleed: true,
+          uses: ['kit/distributions/HeatGrid.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsCalendar,
         },
         {
-          id: 'DistributionHeatValues',
-          title: 'With printed values',
-          note: 'Pick it for a small grid where people want the numbers and the colour only guides the eye.',
+          id: 'DistributionsShiftPoster',
+          title: 'Large cells with values',
+          note: 'Pick it for a small matrix on a team screen, where each cell is a number to read from a distance.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx'],
-          Component: DistributionHeatValues,
+          bleed: true,
+          uses: ['kit/distributions/HeatGrid.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsShiftPoster,
         },
         {
-          id: 'DistributionHourStrip',
-          title: 'Single-row strip',
-          note: 'Pick it when one axis is enough, for example the hour of day under a chart.',
+          id: 'DistributionsHourStrip',
+          title: 'Strips per area',
+          note: 'Pick it on a wall screen for the last 24 hours per area, next to the one state that sums it up.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx'],
-          Component: DistributionHourStrip,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/HeatStrip.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsHourStrip,
         },
       ],
     },
     {
       id: 'risk',
       title: 'Risk matrix',
-      description: 'The one matrix that is status-coloured: the cell colour is the risk level.',
+      description: 'Likelihood against consequence. Occupied cells are filled, empty ones only tinted.',
       specimens: [
         {
-          id: 'DistributionRiskMatrix',
-          title: 'Risk matrix with counts',
-          note: 'Pick it for a fleet: each cell says how many items carry that likelihood and consequence.',
+          id: 'DistributionsRiskMatrix',
+          title: 'Risk matrix with detail',
+          note: 'Pick it as the entry to a risk register: select a cell to list the units in it.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/RiskMatrix.tsx', 'industrial/charts/risk.ts'],
-          Component: DistributionRiskMatrix,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/RiskMatrix.tsx', 'kit/distributions/risk.ts', 'kit/ListRow.tsx'],
+          Component: DistributionsRiskMatrix,
         },
         {
-          id: 'DistributionRiskLabels',
-          title: 'Risk matrix with names',
-          note: 'Pick it for a handful of items, where people need to see which one sits where.',
+          id: 'DistributionsRiskNames',
+          title: 'Risk matrix with tags',
+          note: 'Pick it for an engineering document where every unit must be readable in its cell.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/RiskMatrix.tsx'],
-          Component: DistributionRiskLabels,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/RiskMatrix.tsx', 'kit/ListRow.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsRiskNames,
+        },
+        {
+          id: 'DistributionsRiskSignal',
+          title: 'Risk levels on a wall screen',
+          note: 'Pick it when the count per level is the message and the matrix is supporting evidence.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/RiskMatrix.tsx', 'kit/StatGroup.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsRiskSignal,
         },
       ],
     },
     {
-      id: 'states',
-      title: 'States',
-      description: 'Loading, too little data and cells that have not been reported.',
+      id: 'in-use',
+      title: 'In use',
+      description: 'Whole blocks ready to drop into a product.',
       specimens: [
         {
-          id: 'DistributionLoading',
-          title: 'Loading',
-          note: 'Pick it while the aggregation runs; distributions over long periods take a moment.',
+          id: 'DistributionsOperatingWindow',
+          title: 'Operating window review',
+          note: 'Pick it as the analysis tab of an equipment page; the switch changes the reading under review.',
           origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/ChartPlaceholder.tsx'],
-          Component: DistributionLoading,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/Histogram.tsx', 'kit/distributions/ScatterPlot.tsx', 'kit/distributions/BoxRows.tsx', 'kit/StatGroup.tsx'],
+          Component: DistributionsOperatingWindow,
         },
         {
-          id: 'DistributionEmpty',
-          title: 'Not enough data',
-          note: 'Pick it when there are too few samples for the shape to mean anything, and say how many are needed.',
+          id: 'DistributionsAlarmPatterns',
+          title: 'Alarm load patterns',
+          note: 'Pick it for an alarm management review in the control room: when, on which shift and from which unit.',
           origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/ChartPlaceholder.tsx'],
-          Component: DistributionEmpty,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/HeatGrid.tsx', 'kit/Bars.tsx', 'kit/Donut.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsAlarmPatterns,
         },
         {
-          id: 'DistributionSparse',
-          title: 'Cells without data',
-          note: 'Pick the neutral cell for missing values; never draw them as the lowest step, which would read as zero.',
+          id: 'DistributionsRiskReport',
+          title: 'Risk review report',
+          note: 'Pick it for a quarterly review that is read top to bottom and printed.',
           origin: 'custom',
-          align: 'stretch',
-          uses: ['industrial/charts/HeatMapGrid.tsx'],
-          Component: DistributionSparse,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/distributions/RiskMatrix.tsx', 'kit/DataTable.tsx', 'kit/StatGroup.tsx', 'looks/LookScope.tsx'],
+          Component: DistributionsRiskReport,
         },
       ],
     },

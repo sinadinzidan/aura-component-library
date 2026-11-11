@@ -1,7 +1,7 @@
 import { Button } from '@cognite/aura/components/button';
 import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import { IconActivity, IconAlertOctagon, IconAlertTriangle, IconAnchor, IconArrowUpRight, IconPlayerPlay, IconTool, IconWorld, IconX } from '@cognite/aura/icons';
-import { useReducer } from 'react';
+import { useReducer, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Canvas } from '../../../library/kit/Canvas';
@@ -12,6 +12,7 @@ import { Meter } from '../../../library/kit/Meter';
 import { Panel } from '../../../library/kit/Panel';
 import { RingGauge } from '../../../library/kit/RingGauge';
 import { SceneStage } from '../../../library/kit/scene/SceneStage';
+import { ToggleChip } from '../../../library/kit/scene/ToggleChip';
 import { StatusPill } from '../../../library/kit/StatusPill';
 import { formatNumber, type StatusTone } from '../../../library/kit/tones';
 import { TrendArea } from '../../../library/kit/TrendArea';
@@ -177,7 +178,7 @@ function fleetGlobeView(state: FleetGlobeUi): GlobeView {
   );
 }
 
-function fleetGlobeMarkers(filter: FleetGlobeFilter): GlobeSite[] {
+function fleetGlobeMarkers(filter: FleetGlobeFilter, motion = false): GlobeSite[] {
   return FLEETGLOBE_SITES.map((site) => {
     const status = FLEETGLOBE_STATES[site.state];
     const abnormal = site.state === 'shut-in' || site.state === 'reduced';
@@ -191,16 +192,16 @@ function fleetGlobeMarkers(filter: FleetGlobeFilter): GlobeSite[] {
       status: status.label,
       dot: status.dot,
       shape: site.kind === 'Platform' ? 'dot' : 'diamond',
-      pulse: abnormal,
+      pulse: abnormal && motion,
       dimmed: !fleetGlobeInFilter(site, filter),
     };
   });
 }
 
-function fleetGlobeRoutes(filter: FleetGlobeFilter): GlobeRoute[] {
+function fleetGlobeRoutes(filter: FleetGlobeFilter, motion = false): GlobeRoute[] {
   const exports = FLEETGLOBE_SITES.flatMap((site) => {
     const terminal = fleetGlobeSite(site.exportTo);
-    return terminal ? [{ id: `export-${site.id}`, from: site, to: terminal, flow: site.production > 0, dimmed: !fleetGlobeInFilter(site, filter) || site.production === 0 }] : [];
+    return terminal ? [{ id: `export-${site.id}`, from: site, to: terminal, flow: motion && site.production > 0, dimmed: !fleetGlobeInFilter(site, filter) || site.production === 0 }] : [];
   });
   const cargo = FLEETGLOBE_CARGO.flatMap((route) => {
     const terminal = fleetGlobeSite(route.from);
@@ -229,10 +230,12 @@ type FleetGlobeSceneProps = {
   state: FleetGlobeUi;
   dispatch: (action: FleetGlobeAction) => void;
   insets?: { top?: number; right?: number; bottom?: number; left?: number };
+  /** Continuous motion: the idle spin, pulsing markers and moving flows. Off, the scene only renders when something changes. */
+  motion?: boolean;
   still?: boolean;
 };
 
-function FleetGlobeScene({ state, dispatch, insets, still = false }: FleetGlobeSceneProps) {
+function FleetGlobeScene({ state, dispatch, insets, motion = false, still = false }: FleetGlobeSceneProps) {
   const selected = fleetGlobeSite(state.selectedId);
 
   return (
@@ -243,13 +246,13 @@ function FleetGlobeScene({ state, dispatch, insets, still = false }: FleetGlobeS
     >
       <StillScene still={still}>
         <FleetGlobe
-          sites={fleetGlobeMarkers(state.filter)}
-          routes={fleetGlobeRoutes(state.filter)}
+          sites={fleetGlobeMarkers(state.filter, motion && !still)}
+          routes={fleetGlobeRoutes(state.filter, motion && !still)}
           outlines={WORLD_OUTLINES}
           radius={FLEETGLOBE_RADIUS}
           view={fleetGlobeView(state)}
           viewKey={state.resets}
-          spinning={state.spinning && !still}
+          spinning={motion && state.spinning && !still}
           selectedId={state.selectedId}
           onSelect={(id) => dispatch({ type: 'select', id })}
           onInteract={() => dispatch({ type: 'interact' })}
@@ -520,6 +523,8 @@ function FleetGlobeDock({ filter, selectedId, onSelect }: { filter: FleetGlobeFi
 
 function FleetGlobeBoard({ initial = FLEETGLOBE_INITIAL, still = false }: { initial?: FleetGlobeUi; still?: boolean }) {
   const [state, dispatch] = useReducer(fleetGlobeReducer, initial);
+  // Motion is opt-in: the screen holds still until someone asks for the slow spin, pulses and moving flows.
+  const [motion, setMotion] = useState(false);
   const selected = fleetGlobeSite(state.selectedId);
   const select = (id: string) => dispatch({ type: 'select', id });
 
@@ -527,7 +532,7 @@ function FleetGlobeBoard({ initial = FLEETGLOBE_INITIAL, still = false }: { init
     <LookScope look="glass">
       <Canvas padding="none" className="h-[54rem]">
         <SceneStage
-          className="h-full [&_*]:![backdrop-filter:none]"
+          className="h-full"
           onEscape={() => dispatch({ type: 'clear' })}
           overlay={
             <div className="flex h-full flex-col justify-between gap-4 p-6">
@@ -535,6 +540,11 @@ function FleetGlobeBoard({ initial = FLEETGLOBE_INITIAL, still = false }: { init
                 <FleetGlobeHeadline filter={state.filter} />
                 <div className="flex max-h-full min-h-0 w-[22rem] shrink-0 flex-col items-end gap-3">
                   <div className="pointer-events-auto flex items-center gap-2">
+                    {still ? null : (
+                      <ToggleChip icon={<IconPlayerPlay />} pressed={motion} onPressedChange={setMotion}>
+                        Live motion
+                      </ToggleChip>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'overview' })}>
                       <IconWorld /> Whole fleet
                     </Button>
@@ -557,7 +567,7 @@ function FleetGlobeBoard({ initial = FLEETGLOBE_INITIAL, still = false }: { init
             </div>
           }
         >
-          <FleetGlobeScene state={state} dispatch={dispatch} insets={{ right: 340, bottom: 150, left: 160 }} still={still} />
+          <FleetGlobeScene state={state} dispatch={dispatch} insets={{ right: 340, bottom: 150, left: 160 }} motion={motion} still={still} />
         </SceneStage>
       </Canvas>
     </LookScope>
@@ -749,12 +759,12 @@ export default definePage({
       'When the story is geographic: sites spread over a shelf or a continent and routes between them.',
       'With one headline figure for the fleet and the states in words, so the answer is there before anyone touches the globe.',
       'With a card for one picked site; the globe labels only that site, so labels never pile up.',
-      'On a wall or in a review, where a slowly turning globe is an asset rather than a distraction.',
+      'On a wall or in a review, with Live motion switched on: there a slowly turning globe is an asset rather than a distraction.',
     ],
     avoid: [
       'Comparing sites number by number: use the register, where the globe only locates the row.',
       'A single plant or a handful of sites in one field: a map or the 3D plant explorer shows more.',
-      'Leaving the spin on once the user has touched anything.',
+      'Motion by default at a desk. The spin, pulses and flows are opt-in, and the spin stops as soon as the globe is touched.',
       'State by marker colour alone: the dock, the card and the pills all say the state in words.',
     ],
   },
@@ -763,7 +773,7 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'The globe turns slowly until you touch it. Drag to rotate, pick a marker, a chip in the dock or a row under Needs attention to open a site, and switch region to light only that part of the shelf. Escape closes the card.',
+      description: 'Drag to rotate, pick a marker, a chip in the dock or a row under Needs attention to open a site, and switch region to light only that part of the shelf. Escape closes the card. Live motion adds a slow spin, pulsing markers and moving flows; it is off until asked for.',
       specimens: [
         {
           id: 'FleetGlobeSignature',

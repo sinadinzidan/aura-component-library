@@ -49,3 +49,25 @@ export function shares(values: readonly number[]): number[] {
   const total = values.reduce((sum, value) => sum + value, 0);
   return values.map((value) => (total === 0 ? 0 : value / total));
 }
+
+export type StackSegment = { top: number; height: number };
+
+/**
+ * Stacks values in a column of `height` px with `gap` px between them. A value too small to hold a
+ * label still gets `min` px; the others share what is left in proportion.
+ */
+export function stackLayout(values: readonly number[], height: number, gap = 6, min = 24): StackSegment[] {
+  const room = height - gap * Math.max(0, values.length - 1);
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const raw = values.map((value) => (total === 0 ? room / Math.max(1, values.length) : (value / total) * room));
+  const small = raw.map((size) => size < min);
+  const reserved = small.filter(Boolean).length * min;
+  const largeTotal = raw.reduce((sum, size, index) => (small[index] ? sum : sum + size), 0);
+  const sizes = raw.map((size, index) => (small[index] ? min : largeTotal === 0 ? size : (size / largeTotal) * (room - reserved)));
+  let top = 0;
+  return sizes.map((size) => {
+    const segment = { top, height: size };
+    top += size + gap;
+    return segment;
+  });
+}

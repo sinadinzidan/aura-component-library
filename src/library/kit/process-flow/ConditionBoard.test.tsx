@@ -15,7 +15,7 @@ describe(ConditionBoard.name, () => {
     const summary = container.querySelector('[data-slot="condition-summary"]');
     expect(summary).toHaveTextContent('1 of 3');
     expect(summary).toHaveTextContent('1 bypassed');
-    expect(summary).toHaveTextContent('1 blocks');
+    expect(summary).toHaveTextContent('1 blocking');
     expect(summary).toHaveAttribute('data-tone', 'critical');
   });
 

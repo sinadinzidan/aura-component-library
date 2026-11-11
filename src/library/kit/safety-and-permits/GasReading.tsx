@@ -48,18 +48,18 @@ export function GasReading({ gas, symbol, value, unit, decimals = 1, limits, sca
         boxShadow: filled ? undefined : 'inset 0 0 0 1px var(--kit-rule)',
       }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold">
-          {gas} <span className="font-medium opacity-70">{symbol}</span>
-        </span>
-        <span className="text-sm font-semibold" style={{ color: filled ? undefined : 'var(--t-ink)' }}>
+      <p className="text-sm font-semibold">
+        {gas} <span className="font-medium opacity-70">{symbol}</span>
+      </p>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="tabular-nums" style={{ fontSize: '1.75rem', lineHeight: 1, fontWeight: 'var(--kit-figure-weight)', letterSpacing: 'var(--kit-figure-tracking)' }}>
+          {formatNumber(value, decimals)}
+          <span className="ml-1 text-sm font-medium tracking-normal opacity-70">{unit}</span>
+        </p>
+        <span className="text-sm font-semibold whitespace-nowrap" style={{ color: filled ? undefined : 'var(--t-ink)' }}>
           {word}
         </span>
       </div>
-      <p className="tabular-nums" style={{ fontSize: '1.75rem', lineHeight: 1, fontWeight: 'var(--kit-figure-weight)', letterSpacing: 'var(--kit-figure-tracking)' }}>
-        {formatNumber(value, decimals)}
-        <span className="ml-1 text-sm font-medium tracking-normal opacity-70">{unit}</span>
-      </p>
       <div role="meter" aria-label={`${gas} reading`} aria-valuemin={0} aria-valuemax={scaleMax} aria-valuenow={value} aria-valuetext={`${formatNumber(value, decimals)} ${unit}, ${word.toLowerCase()}`} className="relative h-2" style={{ background: filled ? 'color-mix(in oklab, currentColor 25%, transparent)' : 'var(--kit-track)', borderRadius: 'var(--kit-track-radius)' }}>
         <span className="absolute inset-y-0" style={{ left: `${from}%`, width: `${to - from}%`, background: filled ? 'color-mix(in oklab, currentColor 55%, transparent)' : 'color-mix(in oklab, var(--kit-line-success) 55%, transparent)', borderRadius: 'var(--kit-track-radius)' }} />
         <span className="absolute -inset-y-1 w-1" style={{ left: `calc(${share(value)}% - 2px)`, background: filled ? 'currentColor' : 'var(--kit-text)', borderRadius: 2 }} />

@@ -1,933 +1,629 @@
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, chartSeriesColor } from '@cognite/aura/chart';
-import type { ChartConfig } from '@cognite/aura/chart';
 import { Button } from '@cognite/aura/components/button';
-import { Card } from '@cognite/aura/components/card';
+import { IconActivity, IconAlertTriangle, IconBolt, IconCircleCheck, IconClock, IconGauge, IconPlayerStop, IconTarget, IconTool } from '@cognite/aura/icons';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, ReferenceLine, XAxis, YAxis } from 'recharts';
 
-import { LossStack } from '../../../library/industrial/domains/LossStack';
-import { attainment, oee, oeeLosses } from '../../../library/industrial/domains/oee';
-import { OeeBreakdown } from '../../../library/industrial/domains/OeeBreakdown';
-import { ShareBarList } from '../../../library/industrial/domains/ShareBarList';
-import { KpiTile } from '../../../library/industrial/KpiTile';
-import { LinearGauge } from '../../../library/industrial/LinearGauge';
-import { formatDelta, formatValue } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { PLANT_KPIS } from '../../data/plant';
-import { DAY, REFERENCE_NOW, formatDate, makeValues } from '../../data/series';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { LossWaterfall } from '../../../library/kit/production-and-oee/LossWaterfall';
+import { oeeOf, stateDuration, type OeeFactor } from '../../../library/kit/production-and-oee/oee';
+import { OeeEquation } from '../../../library/kit/production-and-oee/OeeEquation';
+import { StateStrip, type StateStripRow } from '../../../library/kit/production-and-oee/StateStrip';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
+import { makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './production-and-oee.tsx?raw';
 
-const KPI = PLANT_KPIS;
-const CHART_FRAME = 'aspect-auto h-full w-full';
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
-const CODE = 'rounded-md border border-default px-1.5 py-0.5 font-mono text-xs text-medium-foreground';
+/** Week 11 at Nordkapp. Every OEE figure on this page is derived from these three factors. */
+const OEE_FACTORS: OeeFactor[] = [
+  { label: 'Availability', value: 93.6, target: 95, tone: 'teal', detail: '10.8 h stopped of 168 h planned' },
+  { label: 'Performance', value: 91.2, target: 92, tone: 'blue', detail: '4.34 of 4.76 MSm³/d design rate' },
+  { label: 'Quality', value: 96.9, target: 98, tone: 'purple', detail: '0.9 MSm³ off-spec gas recycled' },
+];
 
-/** The three OEE factors for the last 24 hours; their product is the plant OEE of 82.7 %. */
-const FACTORS = { availability: KPI.availability.value, performance: 87.4, quality: 98.2 };
-const FACTOR_TARGETS = { availability: KPI.availability.target, performance: 89, quality: 98 };
-const LOSSES = oeeLosses(FACTORS);
+const OEE_VALUE = oeeOf(OEE_FACTORS);
 
-const OEE_TREND = [...makeValues({ seed: 32, points: 29, base: 80.6, drift: KPI.oee.value - 80.6, noise: 0.5, stepMs: DAY }), KPI.oee.value];
+const OEE_TARGET = 85;
 
-/** The six big losses in OEE points, grouped by the factor they reduce. */
-const SIX_BIG_LOSSES = [
+/** Losses in OEE points, in the order they occur. They sum to 100 − OEE. */
+const OEE_LOSSES = [
+  { label: 'Availability loss', value: 6.4, tone: 'teal' as const },
+  { label: 'Performance loss', value: 8.2, tone: 'blue' as const },
+  { label: 'Quality loss', value: 2.7, tone: 'purple' as const },
+];
+
+const OEE_SIX_LOSSES = [
+  { label: 'Reduced rate', value: 5.1 },
+  { label: 'Breakdowns', value: 4.3 },
+  { label: 'Minor stops', value: 3.1 },
+  { label: 'Start-up and adjustment', value: 2.1 },
+  { label: 'Off-spec in operation', value: 1.8 },
+  { label: 'Off-spec at start-up', value: 0.9 },
+];
+
+const OEE_WEEK_TREND = makeValues({ seed: 211, points: 12, base: 82.4, amplitude: 1.6, noise: 0.7, drift: 1.2, decimals: 1 });
+
+const OEE_SHIFTS = ['Night 00–08', 'Day 08–16', 'Evening 16–24'];
+
+const OEE_DAYS = ['Fri 6', 'Sat 7', 'Sun 8', 'Mon 9', 'Tue 10', 'Wed 11', 'Thu 12'];
+
+const OEE_DAILY_EXPORT = [4.52, 4.49, 4.55, 4.47, 4.41, 4.21, 4.38];
+
+const OEE_PLAN = 4.5;
+
+function oeeCumulative(values: readonly number[]): number[] {
+  let total = 0;
+  return values.map((value) => {
+    total += value;
+    return Math.round(total * 100) / 100;
+  });
+}
+
+const OEE_RUNNING: Tone = 'success';
+
+/** Running state on Thursday 12 March until 14:00, in hours of the day. */
+const OEE_STATE_ROWS: StateStripRow[] = [
   {
-    factor: 'Availability',
-    points: LOSSES.availabilityLoss,
-    items: [
-      { id: 'failure', label: 'Equipment failure', value: 2.4 },
-      { id: 'setup', label: 'Start-up and changeover', value: 1.2 },
+    label: '1st stage compressor',
+    detail: '14.0 h running',
+    segments: [{ from: 0, to: 14, state: 'Running', tone: OEE_RUNNING }],
+  },
+  {
+    label: '2nd stage compressor',
+    detail: '12.5 h running',
+    segments: [
+      { from: 0, to: 5, state: 'Running', tone: OEE_RUNNING },
+      { from: 5, to: 6.5, state: 'Planned stop', tone: 'neutral' },
+      { from: 6.5, to: 14, state: 'Running', tone: OEE_RUNNING },
     ],
   },
   {
-    factor: 'Performance',
-    points: LOSSES.performanceLoss,
-    items: [
-      { id: 'speed', label: 'Reduced rate', value: 8.9 },
-      { id: 'stops', label: 'Idling and minor stops', value: 3.3 },
+    label: 'Recompressor',
+    detail: '13.1 h running',
+    segments: [
+      { from: 0, to: 9.2, state: 'Running', tone: OEE_RUNNING },
+      { from: 9.2, to: 9.9, state: 'Unplanned stop', tone: 'critical' },
+      { from: 9.9, to: 13.77, state: 'Running', tone: OEE_RUNNING },
+      { from: 13.77, to: 14, state: 'Unplanned stop', tone: 'critical' },
     ],
   },
   {
-    factor: 'Quality',
-    points: LOSSES.qualityLoss,
-    items: [
-      { id: 'defects', label: 'Off-spec gas', value: 1.1 },
-      { id: 'yield', label: 'Start-up losses', value: 0.4 },
+    label: 'Export pump A',
+    detail: '13.4 h running',
+    segments: [
+      { from: 0, to: 11, state: 'Running', tone: OEE_RUNNING },
+      { from: 11, to: 11.6, state: 'Reduced rate', tone: 'warning' },
+      { from: 11.6, to: 14, state: 'Running', tone: OEE_RUNNING },
     ],
   },
 ];
 
-const DAILY_PLAN = KPI.gasExport.target;
+const OEE_STATE_TICKS = [0, 4, 8, 12, 16, 20, 24].map((hour) => ({ at: hour, label: `${String(hour).padStart(2, '0')}:00` }));
 
-/** Gas export per day in MSm³ for 1–12 March; the last seven days match the plant's chart data. */
-const MONTH_ACTUALS = [4.46, 4.51, 4.39, 4.48, 4.44, 4.31, 4.42, 4.18, 4.47, 4.52, 4.21, KPI.gasExport.value];
-const MONTH_TO_DATE = MONTH_ACTUALS.reduce((sum, value) => sum + value, 0);
-const PLAN_TO_DATE = DAILY_PLAN * MONTH_ACTUALS.length;
-
-const SHIFT_SPLIT = [
-  { day: 2.18, night: 2.13 },
-  { day: 2.22, night: 2.2 },
-  { day: 2.05, night: 2.13 },
-  { day: 2.25, night: 2.22 },
-  { day: 2.27, night: 2.25 },
-  { day: 2.09, night: 2.12 },
-  { day: 2.21, night: 2.17 },
-].map((row, index) => ({ ...row, date: formatDate(REFERENCE_NOW - (6 - index) * DAY) }));
-
-const SHIFT_CONFIG = {
-  day: { label: 'Day shift', color: chartSeriesColor(1) },
-  night: { label: 'Night shift', color: 'var(--color-chart-1-300)' },
-} satisfies ChartConfig;
-
-const CUMULATIVE = Array.from({ length: 31 }, (_, index) => ({
-  day: index + 1,
-  plan: Math.round(DAILY_PLAN * (index + 1) * 100) / 100,
-  actual: index < MONTH_ACTUALS.length ? Math.round(MONTH_ACTUALS.slice(0, index + 1).reduce((sum, value) => sum + value, 0) * 100) / 100 : null,
-}));
-
-const CUMULATIVE_CONFIG = {
-  plan: { label: 'Plan', color: 'var(--color-chart-neutral-400)' },
-  actual: { label: 'Actual', color: chartSeriesColor(1) },
-} satisfies ChartConfig;
-
-/** Lost production against plan, month to date, in kSm³. Adds up to plan minus actual. */
-const DEFERMENT = [
-  { id: 'trips', label: 'Compressor trips', value: 520 },
-  { id: 'planned', label: 'Planned maintenance', value: 310 },
-  { id: 'fouling', label: 'Reduced rate, cooler fouling', value: 240 },
-  { id: 'export', label: 'Export constraint', value: 110 },
-  { id: 'other', label: 'Other', value: 50 },
+const OEE_STATE_LEGEND = [
+  { label: 'Running', tone: 'success' as const },
+  { label: 'Reduced rate', tone: 'warning' as const },
+  { label: 'Planned stop', tone: 'neutral' as const },
+  { label: 'Unplanned stop', tone: 'critical' as const },
 ];
 
-type DowntimeEvent = {
-  id: string;
-  code: string;
-  cause: string;
-  equipment: string;
-  tag: string;
-  when: string;
-  duration: string;
-  planned: boolean;
-  deferred: number;
-};
+type OeeStop = { id: string; start: string; unit: string; tag: string; minutes: number; kind: 'Planned' | 'Unplanned'; cause: string | null; lost: number };
 
-const DOWNTIME_LOG: readonly DowntimeEvent[] = [
-  { id: 'dt-0318', code: 'M-VIB', cause: 'Mechanical · high vibration', equipment: 'Recompressor', tag: '23-KA-9103', when: '12 Mar, 13:46', duration: 'Ongoing, 14 min', planned: false, deferred: 9 },
-  { id: 'dt-0317', code: 'P-PM', cause: 'Planned · preventive maintenance', equipment: 'Cooling water pump', tag: '40-PA-4001', when: '11 Mar, 08:10', duration: '6 h 20 min', planned: true, deferred: 0 },
-  { id: 'dt-0316', code: 'O-FOUL', cause: 'Process · fouling', equipment: 'Interstage cooler', tag: '23-HA-9114', when: '10 Mar, 21:05', duration: '1 h 35 min', planned: false, deferred: 62 },
-  { id: 'dt-0315', code: 'I-TRX', cause: 'Instrument · transmitter fault', equipment: 'Test separator', tag: '20-VA-1002', when: '9 Mar, 15:22', duration: '48 min', planned: false, deferred: 0 },
-  { id: 'dt-0314', code: 'E-PWR', cause: 'Electrical · power dip', equipment: '1st stage compressor', tag: '23-KA-9101', when: '8 Mar, 03:12', duration: '1 h 50 min', planned: false, deferred: 214 },
-  { id: 'dt-0313', code: 'O-CHG', cause: 'Operations · pump changeover', equipment: 'Export pump A', tag: '27-PA-2001A', when: '7 Mar, 10:30', duration: '25 min', planned: true, deferred: 0 },
+const OEE_STOPS: OeeStop[] = [
+  { id: 'DT-2291', start: '12 Mar 13:46', unit: 'Recompressor', tag: '23-KA-9103', minutes: 14, kind: 'Unplanned', cause: null, lost: 0.03 },
+  { id: 'DT-2290', start: '12 Mar 09:12', unit: 'Recompressor', tag: '23-KA-9103', minutes: 42, kind: 'Unplanned', cause: 'Vibration trip', lost: 0.09 },
+  { id: 'DT-2289', start: '12 Mar 05:00', unit: '2nd stage compressor', tag: '23-KA-9102', minutes: 90, kind: 'Planned', cause: 'Seal gas filter change', lost: 0.11 },
+  { id: 'DT-2287', start: '11 Mar 16:20', unit: 'Interstage cooler', tag: '23-HA-9114', minutes: 185, kind: 'Unplanned', cause: 'Cooler fouling', lost: 0.24 },
+  { id: 'DT-2284', start: '10 Mar 02:05', unit: 'Export pump A', tag: '27-PA-2001A', minutes: 38, kind: 'Unplanned', cause: 'Power dip', lost: 0.05 },
+  { id: 'DT-2281', start: '9 Mar 11:30', unit: 'Compressor gas turbine', tag: '23-GT-9001', minutes: 240, kind: 'Planned', cause: 'Borescope inspection', lost: 0.31 },
 ];
 
-/** Downtime hours by cause group over the last 30 days, worst first, with the running share. */
-const PARETO = [
-  { cause: 'Mechanical', hours: 41 },
-  { cause: 'Planned', hours: 26 },
-  { cause: 'Process', hours: 14 },
-  { cause: 'Instrument', hours: 9 },
-  { cause: 'Electrical', hours: 6 },
-  { cause: 'Operations', hours: 4 },
-].map((row, index, rows) => ({
-  ...row,
-  cumulative: Math.round((rows.slice(0, index + 1).reduce((sum, entry) => sum + entry.hours, 0) / rows.reduce((sum, entry) => sum + entry.hours, 0)) * 100),
-}));
+const OEE_CAUSE_CODES = ['Vibration trip', 'Instrument fault', 'Power dip', 'Operator stop'];
 
-const PARETO_CONFIG = {
-  hours: { label: 'Downtime', color: chartSeriesColor(1) },
-  cumulative: { label: 'Cumulative share', color: 'var(--color-chart-neutral-450)' },
-} satisfies ChartConfig;
+function oeeDuration(minutes: number): string {
+  return minutes >= 60 ? `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min` : `${minutes} min`;
+}
 
-type ShiftScore = {
-  id: string;
-  name: string;
-  window: string;
-  supervisor: string;
-  state: { tone: Tone; label: string };
-  produced: number;
-  plan: number;
-  oee: number;
-  downtime: string;
-  alarms: number;
-};
-
-const SHIFTS: readonly ShiftScore[] = [
-  { id: 'd11', name: 'Day shift', window: '11 Mar, 07:00–19:00', supervisor: 'Liv Wold', state: { tone: 'neutral', label: 'Closed' }, produced: 2.09, plan: 2.25, oee: 79.8, downtime: '6 h 20 min', alarms: 9 },
-  { id: 'n11', name: 'Night shift', window: '11 Mar, 19:00–07:00', supervisor: 'Magnus Solberg', state: { tone: 'neutral', label: 'Closed' }, produced: 2.24, plan: 2.25, oee: 85.6, downtime: '0 min', alarms: 3 },
-  { id: 'd12', name: 'Day shift', window: '12 Mar, 07:00–19:00', supervisor: 'Liv Wold', state: { tone: 'success', label: 'In progress' }, produced: 1.26, plan: 1.31, oee: 82.7, downtime: '14 min', alarms: 4 },
+const OEE_STOP_COLUMNS: DataTableColumn<OeeStop>[] = [
+  { id: 'start', header: 'Started', nowrap: true, cell: (row) => row.start },
+  {
+    id: 'unit',
+    header: 'Unit',
+    cell: (row) => (
+      <span className="flex flex-col">
+        <span className="font-medium">{row.unit}</span>
+        <TagId>{row.tag}</TagId>
+      </span>
+    ),
+  },
+  { id: 'duration', header: 'Duration', numeric: true, nowrap: true, cell: (row) => oeeDuration(row.minutes) },
+  { id: 'kind', header: 'Type', nowrap: true, cell: (row) => <StatusPill tone={row.kind === 'Planned' ? 'neutral' : 'critical'}>{row.kind}</StatusPill> },
+  { id: 'cause', header: 'Cause code', cell: (row) => row.cause ?? <span className="font-medium text-(--kit-text)">Not coded</span> },
+  { id: 'lost', header: 'Deferred, MSm³', numeric: true, cell: (row) => row.lost.toFixed(2) },
 ];
 
-type SiteRow = { site: string; oee: number; availability: number; performance: number; quality: number; output: number; plan: number; downtime: number };
+type OeeUnitRow = { unit: string; tag: string; availability: number; performance: number; quality: number; trend: number[] };
 
-const SITE_COMPARISON: readonly SiteRow[] = [
-  { site: 'Hammerfest LNG', oee: 88.1, availability: 97.9, performance: 91.2, quality: 98.7, output: 6.12, plan: 6.2, downtime: 3.1 },
-  { site: 'Stord terminal', oee: 85.4, availability: 98.2, performance: 88.3, quality: 98.5, output: 1.94, plan: 2.0, downtime: 2.4 },
-  { site: 'Nordkapp', oee: KPI.oee.value, availability: FACTORS.availability, performance: FACTORS.performance, quality: FACTORS.quality, output: KPI.gasExport.value, plan: DAILY_PLAN, downtime: 8.6 },
-  { site: 'Valhall Sør', oee: 76.9, availability: 92.1, performance: 85.6, quality: 97.5, output: 2.71, plan: 3.1, downtime: 19.0 },
+const OEE_UNITS: OeeUnitRow[] = [
+  { unit: '1st stage compressor', tag: '23-KA-9101', availability: 99.1, performance: 93.4, quality: 97.2, trend: makeValues({ seed: 301, points: 14, base: 89.5, amplitude: 1, noise: 0.5, decimals: 1 }) },
+  { unit: '2nd stage compressor', tag: '23-KA-9102', availability: 97.8, performance: 92.6, quality: 97.2, trend: makeValues({ seed: 302, points: 14, base: 87.6, amplitude: 1.2, noise: 0.5, decimals: 1 }) },
+  { unit: 'Recompressor', tag: '23-KA-9103', availability: 88.4, performance: 86.9, quality: 96.1, trend: makeValues({ seed: 303, points: 14, base: 78, amplitude: 2, noise: 0.9, drift: -6, decimals: 1 }) },
+  { unit: 'Export pump A', tag: '27-PA-2001A', availability: 98.9, performance: 95.8, quality: 99.4, trend: makeValues({ seed: 304, points: 14, base: 93.6, amplitude: 0.8, noise: 0.4, decimals: 1 }) },
 ];
 
-/** Attainment per day of March: actuals so far, then plan, with a turnaround on 24–26 March. */
-const CALENDAR = Array.from({ length: 31 }, (_, index) => {
-  const day = index + 1;
-  const weekday = 'SMTWTFS'[index % 7];
-  if (day >= 24 && day <= 26) return { day, weekday, kind: 'shutdown' as const, value: null };
-  if (index >= MONTH_ACTUALS.length) return { day, weekday, kind: 'planned' as const, value: null };
-  const value = attainment(MONTH_ACTUALS[index], DAILY_PLAN);
-  const kind = index === MONTH_ACTUALS.length - 1 ? ('today' as const) : value >= 98 ? ('on-plan' as const) : value >= 95 ? ('below' as const) : ('well-below' as const);
-  return { day, weekday, kind, value };
-});
+function oeeUnitTone(value: number): Tone {
+  return value >= OEE_TARGET ? 'success' : value >= OEE_TARGET - 5 ? 'warning' : 'critical';
+}
 
-const CALENDAR_CELL = {
-  'on-plan': 'bg-chart-neutral-100 text-base-foreground',
-  below: 'bg-warning-background text-warning-foreground',
-  'well-below': 'bg-critical-background text-critical-foreground',
-  today: 'bg-chart-neutral-100 text-base-foreground outline-2 -outline-offset-2 outline-base-foreground',
-  planned: 'border border-dashed border-default text-muted-foreground',
-  shutdown: 'bg-neutral-background text-neutral-foreground',
-};
+const OEE_UNIT_WORD: Partial<Record<Tone, string>> = { success: 'On target', warning: 'Below target', critical: 'Well below' };
 
-function Panel({ title, meta, children }: { title: string; meta?: ReactNode; children: ReactNode }) {
-  return (
-    <Card className="w-full min-w-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-medium text-base-foreground">{title}</h3>
-        {meta ? <span className="text-xs text-muted-foreground tabular-nums">{meta}</span> : null}
-      </div>
-      {children}
-    </Card>
+const OEE_UNIT_COLUMNS: DataTableColumn<OeeUnitRow>[] = [
+  {
+    id: 'unit',
+    header: 'Unit',
+    cell: (row) => (
+      <span className="flex flex-col">
+        <span className="font-medium">{row.unit}</span>
+        <TagId>{row.tag}</TagId>
+      </span>
+    ),
+  },
+  { id: 'a', header: 'Availability', numeric: true, cell: (row) => `${row.availability.toFixed(1)} %` },
+  { id: 'p', header: 'Performance', numeric: true, cell: (row) => `${row.performance.toFixed(1)} %` },
+  { id: 'q', header: 'Quality', numeric: true, cell: (row) => `${row.quality.toFixed(1)} %` },
+  { id: 'oee', header: 'OEE', numeric: true, cell: (row) => <span className="text-base font-semibold">{oeeOf([{ value: row.availability }, { value: row.performance }, { value: row.quality }]).toFixed(1)} %</span> },
+  { id: 'trend', header: 'Last 14 days', width: '9rem', cell: (row) => <SparkLine values={row.trend} label={`OEE of ${row.unit}, last 14 days`} tone={oeeUnitTone(row.trend[row.trend.length - 1])} className="h-8 w-full" /> },
+  {
+    id: 'state',
+    header: 'Against 85 %',
+    nowrap: true,
+    cell: (row) => {
+      const tone = oeeUnitTone(oeeOf([{ value: row.availability }, { value: row.performance }, { value: row.quality }]));
+      return <StatusPill tone={tone}>{OEE_UNIT_WORD[tone]}</StatusPill>;
+    },
+  },
+];
+
+/** One sheet of the page: a look scope with its canvas. Without a look it follows the app's look. */
+function OeeSheet({ look, children }: { look?: LookId; children: ReactNode }) {
+  const canvas = <Canvas className="h-full">{children}</Canvas>;
+  return look ? (
+    <LookScope look={look} className="h-full w-full">
+      {canvas}
+    </LookScope>
+  ) : (
+    <div className="h-full w-full">{canvas}</div>
   );
 }
 
-function ProdOeeTile() {
+function ProductionOeeEquation() {
   return (
-    <div className="w-full max-w-72 self-center">
-      <KpiTile
-        label="OEE"
-        value={KPI.oee.value}
-        unit="%"
-        decimals={1}
-        status={{ tone: 'warning', label: 'Below target', shape: 'square' }}
-        delta={{ reference: KPI.oee.previous, goodDirection: 'up', caption: 'vs last week' }}
-        target={{ value: KPI.oee.target }}
-        trend={{ values: OEE_TREND, label: 'OEE, last 30 days' }}
-      />
-    </div>
+    <OeeSheet>
+      <Panel
+        title="Overall equipment effectiveness"
+        subtitle="Week 11, 6–12 March · gas compression and export"
+        icon={
+          <IconChip tone="accent">
+            <IconGauge />
+          </IconChip>
+        }
+        actions={<StatusPill tone="warning">{(OEE_TARGET - OEE_VALUE).toFixed(1)} pts under target</StatusPill>}
+        footer="Availability × performance × quality. The product is computed from the three factors, never entered."
+      >
+        <OeeEquation factors={OEE_FACTORS} resultTarget={OEE_TARGET} />
+      </Panel>
+    </OeeSheet>
   );
 }
 
-function ProdOeeEquationTile() {
+function ProductionOeeFactorRings() {
   return (
-    <Panel title="OEE" meta="Last 24 hours · Nordkapp">
-      <OeeBreakdown {...FACTORS} target={KPI.oee.target} />
-      <p className="text-sm text-muted-foreground">
-        Performance is the largest loss: the plant ran at 87.4 % of its sustainable rate while the recompressor was down.
-      </p>
-    </Panel>
-  );
-}
-
-function ProdOeeFactorRings() {
-  return (
-    <Panel title="OEE factors" meta="Last 24 hours">
-      <OeeBreakdown layout="rings" {...FACTORS} />
-    </Panel>
-  );
-}
-
-function ProdOeeFactorBars() {
-  const rows = [
-    { key: 'availability', label: 'Availability' },
-    { key: 'performance', label: 'Performance' },
-    { key: 'quality', label: 'Quality' },
-  ] as const;
-  return (
-    <Panel title="Factors against target" meta="Tick marks the target">
-      <div className="flex flex-col gap-4">
-        {rows.map((row) => (
-          <div key={row.key} className="flex flex-col gap-1.5">
-            <LinearGauge label={row.label} value={FACTORS[row.key]} min={70} max={100} target={FACTOR_TARGETS[row.key]} unit="%" decimals={1} />
-            <TrendDelta size="sm" value={FACTORS[row.key]} reference={FACTOR_TARGETS[row.key]} goodDirection="up" decimals={1} unit="pts" caption="to target" />
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function ProdOeeLossWaterfall() {
-  return (
-    <Panel title="Loss waterfall" meta="OEE points, last 24 hours">
-      <LossStack
-        label="OEE losses, last 24 hours"
-        start={{ label: 'Planned time', value: 100 }}
-        losses={[
-          { label: 'Availability loss', value: LOSSES.availabilityLoss },
-          { label: 'Performance loss', value: LOSSES.performanceLoss },
-          { label: 'Quality loss', value: LOSSES.qualityLoss },
-        ]}
-        resultLabel="OEE"
-        unit="%"
-      />
-    </Panel>
-  );
-}
-
-function ProdOeeLossStack() {
-  return (
-    <Panel title="Where the time went" meta="Share of planned time">
-      <LossStack
-        variant="stack"
-        label="OEE and losses as a share of planned time"
-        start={{ label: 'Planned time', value: 100 }}
-        losses={[
-          { label: 'Availability loss', value: LOSSES.availabilityLoss },
-          { label: 'Performance loss', value: LOSSES.performanceLoss },
-          { label: 'Quality loss', value: LOSSES.qualityLoss },
-        ]}
-        resultLabel="OEE"
-        unit="%"
-      />
-    </Panel>
-  );
-}
-
-function ProdOeeSixBigLosses() {
-  return (
-    <Panel title="Six big losses" meta="OEE points lost">
-      <div className="flex flex-col gap-5">
-        {SIX_BIG_LOSSES.map((group) => (
-          <section key={group.factor} aria-label={`${group.factor} losses`} className="flex flex-col gap-2.5">
-            <div className="flex items-baseline justify-between gap-3 text-xs">
-              <h4 className="font-medium text-medium-foreground">{group.factor}</h4>
-              <span className="tabular-nums text-muted-foreground">{formatValue(group.points, 1)} pts</span>
+    <OeeSheet>
+      <Panel title="Factors as rings" subtitle="Share of the ideal reached per factor" className="h-full">
+        <div className="grid grid-cols-3 gap-4">
+          {OEE_FACTORS.map((factor) => (
+            <div key={factor.label} className="flex flex-col items-center gap-2 text-center">
+              <RingGauge label={factor.label} value={factor.value} decimals={1} tone={factor.tone} size={124} />
+              <span className="text-xs text-(--kit-text-2)">{factor.detail}</span>
             </div>
-            <ShareBarList label={`${group.factor} losses in OEE points`} items={group.items} unit="pts" decimals={1} max={9} />
-          </section>
-        ))}
-      </div>
-    </Panel>
-  );
-}
-
-function ProdOeeDefermentByCause() {
-  const total = DEFERMENT.reduce((sum, item) => sum + item.value, 0);
-  return (
-    <Panel title="Deferment by cause" meta="1–12 March">
-      <div className="flex items-baseline gap-3">
-        <ValueReadout size="md" value={total} unit="kSm³" />
-        <span className="text-xs text-muted-foreground tabular-nums">{formatValue((total / (PLAN_TO_DATE * 1000)) * 100, 1)} % of planned export</span>
-      </div>
-      <ShareBarList label="Deferred production by cause, 1 to 12 March" items={DEFERMENT} unit="kSm³" showShare />
-    </Panel>
-  );
-}
-
-function ProdOeeTargetAttainment() {
-  const share = attainment(KPI.gasExport.value, DAILY_PLAN);
-  return (
-    <Card className="w-full max-w-72 self-center gap-3">
-      <span className="text-xs text-muted-foreground">Plan attainment, today</span>
-      <ValueReadout size="md" value={share} unit="%" decimals={1} />
-      <LinearGauge showHeader={false} size="sm" label="Gas export against plan" value={share} min={80} max={110} target={100} unit="%" decimals={1} />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <TrendDelta value={KPI.gasExport.value} reference={DAILY_PLAN} goodDirection="up" decimals={2} caption="vs plan" />
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {formatValue(KPI.gasExport.value, 2)} of {formatValue(DAILY_PLAN, 2)} MSm³/d
-        </span>
-      </div>
-    </Card>
-  );
-}
-
-function ProdOeeTaktRate() {
-  return (
-    <Card className="w-full max-w-72 self-center gap-3">
-      <span className="text-xs text-muted-foreground">Production rate</span>
-      <ValueReadout size="md" value={182.4} unit="kSm³/h" decimals={1} />
-      <LinearGauge showHeader={false} size="sm" label="Production rate against plan rate" value={182.4} min={150} max={210} target={187.5} unit="kSm³/h" decimals={1} />
-      <dl className="flex flex-col gap-1.5 text-xs">
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Plan rate</dt>
-          <dd className="whitespace-nowrap tabular-nums text-base-foreground">187.5 kSm³/h</dd>
-        </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Catch-up rate to 06:00</dt>
-          <dd className="whitespace-nowrap tabular-nums text-base-foreground">191.3 kSm³/h</dd>
-        </div>
-      </dl>
-    </Card>
-  );
-}
-
-function ProdOeeShiftProgress() {
-  const shift = SHIFTS[2];
-  return (
-    <Card className="w-full max-w-72 self-center gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground">Day shift, 07:00–19:00</span>
-        <StatusIndicator size="sm" tone="success" label="In progress" />
-      </div>
-      <ValueReadout size="md" value={shift.produced} unit="MSm³" decimals={2} />
-      <LinearGauge showHeader={false} size="sm" label="Shift production against shift plan" value={shift.produced} max={2.25} target={shift.plan} unit="MSm³" decimals={2} />
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <TrendDelta value={shift.produced} reference={shift.plan} goodDirection="up" decimals={2} caption="vs plan so far" />
-        <span className="text-xs text-muted-foreground tabular-nums">7 of 12 h · shift plan 2.25</span>
-      </div>
-    </Card>
-  );
-}
-
-function ProdOeeVsPlanDaily() {
-  return (
-    <Panel title="Gas export against plan" meta="MSm³ per day · dashed line is the plan, 4.50">
-      <div className="h-56 w-full">
-        <ChartContainer
-          config={SHIFT_CONFIG}
-          className={CHART_FRAME}
-          aria-label="Gas export per day for 7 days, split by day and night shift, against a plan of 4.5 million cubic metres; 5 of 7 days are below plan"
-        >
-          <BarChart data={SHIFT_SPLIT} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="date" tickLine={false} axisLine={false} />
-            <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} tickLine={false} axisLine={false} width={24} />
-            <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => `${value} MSm³`} />} />
-            <ChartLegend itemSorter={null} content={<ChartLegendContent />} />
-            <Bar dataKey="day" stackId="shift" fill="var(--color-day)" isAnimationActive={false} />
-            <Bar dataKey="night" stackId="shift" fill="var(--color-night)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <ReferenceLine y={DAILY_PLAN} stroke="var(--color-chart-neutral-450)" strokeDasharray="4 4" />
-          </BarChart>
-        </ChartContainer>
-      </div>
-    </Panel>
-  );
-}
-
-function ProdOeeCumulativeVsPlan() {
-  return (
-    <Panel title="Cumulative export against plan" meta="March, MSm³">
-      <div className="h-48 w-full">
-        <ChartContainer
-          config={CUMULATIVE_CONFIG}
-          className={CHART_FRAME}
-          aria-label="Cumulative gas export for March against plan; after 12 days actual is 52.77 against 54.00 million cubic metres planned"
-        >
-          <LineChart data={CUMULATIVE} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="day" tickLine={false} axisLine={false} ticks={[1, 5, 10, 15, 20, 25, 31]} />
-            <YAxis domain={[0, 150]} ticks={[0, 50, 100, 150]} tickLine={false} axisLine={false} width={32} />
-            <ChartTooltip content={<ChartTooltipContent valueFormatter={(value) => `${value} MSm³`} labelFormatter={(value) => `${String(value)} March`} />} />
-            <ChartLegend itemSorter={null} content={<ChartLegendContent />} />
-            <Line dataKey="plan" type="linear" stroke="var(--color-plan)" strokeWidth={2} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
-            <Line dataKey="actual" type="linear" stroke="var(--color-actual)" strokeWidth={2} dot={false} connectNulls={false} isAnimationActive={false} />
-          </LineChart>
-        </ChartContainer>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <TrendDelta value={MONTH_TO_DATE} reference={PLAN_TO_DATE} goodDirection="up" decimals={2} unit="MSm³" caption="vs plan to date" />
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {formatValue(MONTH_TO_DATE, 2)} of {formatValue(PLAN_TO_DATE, 2)} MSm³
-        </span>
-      </div>
-    </Panel>
-  );
-}
-
-function ProdOeeCalendarStrip() {
-  return (
-    <Panel title="Production calendar" meta="March 2026 · attainment of daily plan, %">
-      <div className="overflow-x-auto">
-        <ol aria-label="Plan attainment per day, March 2026" className="grid min-w-176 grid-cols-[repeat(31,minmax(0,1fr))] gap-1">
-          {CALENDAR.map((cell) => (
-            <li
-              key={cell.day}
-              aria-label={`${cell.day} March: ${cell.kind === 'shutdown' ? 'planned shutdown' : cell.value === null ? 'planned' : `${formatValue(cell.value, 0)} % of plan`}`}
-              className="flex flex-col items-center gap-1"
-            >
-              <span aria-hidden="true" className="text-xs leading-none text-muted-foreground">
-                {cell.weekday}
-              </span>
-              <span className={`flex h-9 w-full items-center justify-center rounded-md text-xs tabular-nums ${CALENDAR_CELL[cell.kind]}`}>
-                {cell.kind === 'shutdown' ? 'SD' : cell.value === null ? '' : formatValue(cell.value, 0)}
-              </span>
-              <span aria-hidden="true" className="text-xs leading-none tabular-nums text-medium-foreground">
-                {cell.day}
-              </span>
-            </li>
           ))}
-        </ol>
-      </div>
-      <ul aria-label="Legend" className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-medium-foreground">
-        <li className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="size-3 rounded-xs bg-chart-neutral-100" />
-          On plan, 98 or above
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="size-3 rounded-xs bg-warning-background" />
-          Below plan, 95 to 97
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="size-3 rounded-xs bg-critical-background" />
-          Well below plan, under 95
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="size-3 rounded-xs outline-2 -outline-offset-2 outline-base-foreground" />
-          Today, so far
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span aria-hidden="true" className="size-3 rounded-xs bg-neutral-background" />
-          SD · planned shutdown
-        </li>
-      </ul>
-    </Panel>
-  );
-}
-
-function DowntimeSummary({ event }: { event: DowntimeEvent }) {
-  return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-sm font-medium text-base-foreground">{event.equipment}</span>
-        <span className="font-mono text-xs text-muted-foreground">{event.tag}</span>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-        <span className={CODE}>{event.code}</span>
-        <span>{event.cause}</span>
-      </div>
-    </div>
-  );
-}
-
-function ProdOeeDowntimeRow() {
-  const event = DOWNTIME_LOG[2];
-  return (
-    <Card className="w-full min-w-0 flex-row items-center gap-4">
-      <DowntimeSummary event={event} />
-      <dl className="flex shrink-0 gap-6 text-right">
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-muted-foreground">Duration</dt>
-          <dd className="text-sm tabular-nums text-base-foreground">{event.duration}</dd>
         </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-xs text-muted-foreground">Deferred</dt>
-          <dd className="text-sm tabular-nums text-base-foreground">{event.deferred} kSm³</dd>
+        <div className="mt-5 flex items-center justify-between gap-4 border-t border-(--kit-rule) pt-4">
+          <Stat variant="plain" size="lg" label="OEE this week" value={OEE_VALUE} decimals={1} unit="%" delta={{ value: 0.8, unit: ' pts', caption: 'vs week 10' }} />
+          <SparkLine values={OEE_WEEK_TREND} label="OEE, last 12 weeks" tone="accent" className="h-12 w-40" />
         </div>
-      </dl>
-    </Card>
+      </Panel>
+    </OeeSheet>
   );
 }
 
-function ProdOeeDowntimeOpen() {
-  const event = DOWNTIME_LOG[0];
+function ProductionOeeFactorTargets() {
   return (
-    <Card className="w-full min-w-0 gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <StatusIndicator tone="critical" shape="diamond" label="Stopped" detail="since 13:46" pulse />
-        <ValueReadout size="sm" value={14} unit="min" tone="critical" />
-      </div>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-sm font-medium text-base-foreground">{event.equipment}</span>
-        <span className="font-mono text-xs text-muted-foreground">{event.tag}</span>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-xs text-muted-foreground">No cause code yet. Suggested from the trip alarm: {event.code}.</span>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm">
-            Pick another cause
-          </Button>
-          <Button variant="secondary" size="sm">
-            Confirm {event.code}
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function ProdOeeDowntimeLog() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="Downtime log, last 7 days" className="w-full min-w-176 border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Start
-            </th>
-            <th scope="col" className={TH}>
-              Equipment
-            </th>
-            <th scope="col" className={TH}>
-              Cause
-            </th>
-            <th scope="col" className={TH}>
-              Type
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Duration
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Deferred
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {DOWNTIME_LOG.map((event, index) => (
-            <tr key={event.id} className="border-t border-default">
-              <td className={`${TD} whitespace-nowrap tabular-nums text-medium-foreground`}>{event.when}</td>
-              <td className={TD}>
-                <span className="text-base-foreground">{event.equipment}</span>
-                <span className="pl-2 font-mono text-xs text-muted-foreground">{event.tag}</span>
-              </td>
-              <td className={TD}>
-                <span className="flex items-center gap-2 text-medium-foreground">
-                  <span className={CODE}>{event.code}</span>
-                  {event.cause}
-                </span>
-              </td>
-              <td className={`${TD} text-medium-foreground`}>{event.planned ? 'Planned' : 'Unplanned'}</td>
-              <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>
-                {index === 0 ? <StatusIndicator size="sm" tone="critical" shape="diamond" label={event.duration} /> : <span className="text-base-foreground">{event.duration}</span>}
-              </td>
-              <td className={`${TD} whitespace-nowrap text-right tabular-nums text-base-foreground`}>
-                {event.deferred === 0 ? <span className="text-muted-foreground">None</span> : `${event.deferred} kSm³`}
-              </td>
-            </tr>
+    <OeeSheet>
+      <Panel title="Factors against target" subtitle="The marker is the weekly target" className="h-full">
+        <div className="flex flex-col gap-5">
+          {OEE_FACTORS.map((factor) => (
+            <Meter key={factor.label} label={factor.label} value={factor.value} min={70} max={100} unit="%" decimals={1} tone={factor.tone} target={{ value: factor.target ?? 100, label: 'Target' }} />
           ))}
-        </tbody>
-      </table>
-    </div>
+          <Meter label="OEE" size="lg" value={OEE_VALUE} min={70} max={100} unit="%" decimals={1} tone="accent" target={{ value: OEE_TARGET, label: 'Target' }} />
+        </div>
+      </Panel>
+    </OeeSheet>
   );
 }
 
-function ProdOeeDowntimePareto() {
+function ProductionOeeWaterfall() {
   return (
-    <Panel title="Top downtime causes" meta="Hours, last 30 days · 100 h in total">
-      <div className="h-60 w-full">
-        <ChartContainer
-          config={PARETO_CONFIG}
-          className={CHART_FRAME}
-          aria-label="Pareto of downtime by cause group over 30 days; mechanical, planned and process causes account for 81 percent of 100 hours"
-        >
-          <ComposedChart data={PARETO} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="cause" tickLine={false} axisLine={false} />
-            <YAxis yAxisId="hours" domain={[0, 50]} ticks={[0, 10, 20, 30, 40, 50]} tickLine={false} axisLine={false} width={24} />
-            <YAxis yAxisId="share" orientation="right" domain={[0, 100]} ticks={[0, 20, 40, 60, 80, 100]} tickLine={false} axisLine={false} width={44} unit="%" />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <ChartLegend itemSorter={null} content={<ChartLegendContent />} />
-            <ReferenceLine yAxisId="share" y={80} stroke="var(--color-chart-neutral-300)" strokeDasharray="4 4" />
-            <Bar yAxisId="hours" dataKey="hours" fill="var(--color-hours)" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            <Line
-              yAxisId="share"
-              dataKey="cumulative"
-              type="linear"
-              stroke="var(--color-cumulative)"
-              strokeWidth={2}
-              dot={{ r: 3, fill: 'var(--color-cumulative)' }}
-              isAnimationActive={false}
-            />
-          </ComposedChart>
-        </ChartContainer>
-      </div>
-    </Panel>
+    <OeeSheet>
+      <Panel title="Where the 17.3 points went" subtitle="From the ideal week down to OEE, in OEE points" className="h-full">
+        <LossWaterfall
+          label="OEE loss waterfall, week 11: 100 % minus availability, performance and quality losses leaves 82.7 %"
+          total={{ label: 'Ideal week', value: 100 }}
+          losses={OEE_LOSSES}
+          resultLabel="OEE"
+          unit="%"
+          decimals={1}
+          baseline={60}
+          height={300}
+          notes="Performance is the largest loss: the train ran below design rate for most of Wednesday while the interstage cooler was fouled."
+        />
+      </Panel>
+    </OeeSheet>
   );
 }
 
-function ProdOeeDowntimeSplit() {
+function ProductionOeeSixLosses() {
   return (
-    <Panel title="Planned and unplanned" meta="Last 30 days">
-      <ValueReadout size="md" value={100} unit="h down" />
-      <ShareBarList
-        label="Downtime hours, planned against unplanned"
-        items={[
-          { id: 'unplanned', label: 'Unplanned', value: 74 },
-          { id: 'planned', label: 'Planned', value: 26 },
-        ]}
-        unit="h"
-        showShare
-        max={100}
-      />
-      <p className="text-xs text-muted-foreground">Target is under 60 % unplanned.</p>
-    </Panel>
+    <OeeSheet>
+      <Panel title="Six big losses" subtitle="OEE points lost per loss type, largest first" className="h-full">
+        <Bars
+          label="Six big losses in OEE points, week 11"
+          orientation="horizontal"
+          categories={OEE_SIX_LOSSES.map((loss) => loss.label)}
+          series={[{ id: 'loss', label: 'OEE points lost', values: OEE_SIX_LOSSES.map((loss) => loss.value) }]}
+          tones={['blue', 'teal', 'blue', 'teal', 'purple', 'purple']}
+          unit="pts"
+          decimals={1}
+          showValues
+          showLegend={false}
+          height={300}
+          notes="Blue belongs to performance, teal to availability, purple to quality — the same colours as the factors."
+        />
+      </Panel>
+    </OeeSheet>
   );
 }
 
-function ProdOeeShiftScoreboard() {
+function ProductionOeeShiftSoFar() {
+  const recompressor = OEE_STATE_ROWS[2].segments;
   return (
-    <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-3">
-      {SHIFTS.map((shift) => (
-        <Card key={shift.id} role="group" aria-label={`${shift.name}, ${shift.window}`} className="min-w-0 gap-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-0.5">
-              <h3 className="text-sm font-medium text-base-foreground">{shift.name}</h3>
-              <span className="text-xs text-muted-foreground tabular-nums">{shift.window}</span>
-            </div>
-            <StatusIndicator size="sm" tone={shift.state.tone} label={shift.state.label} shape={shift.state.tone === 'neutral' ? 'square' : 'dot'} />
-          </div>
-          <div className="flex items-end justify-between gap-3">
-            <ValueReadout size="lg" value={shift.produced} unit="MSm³" decimals={2} />
-            <TrendDelta value={shift.produced} reference={shift.plan} goodDirection="up" decimals={2} caption="vs plan" />
-          </div>
-          <LinearGauge showHeader={false} size="sm" label={`${shift.name} production against plan`} value={shift.produced} max={2.4} target={shift.plan} unit="MSm³" decimals={2} />
-          <dl className="grid grid-cols-3 gap-3">
-            <div className="flex flex-col gap-1">
-              <dt className="text-xs text-muted-foreground">OEE</dt>
-              <dd>
-                <ValueReadout size="xs" value={shift.oee} unit="%" decimals={1} />
-              </dd>
-            </div>
-            <div className="flex flex-col gap-1">
-              <dt className="text-xs text-muted-foreground">Downtime</dt>
-              <dd className="text-sm font-medium tabular-nums text-base-foreground">{shift.downtime}</dd>
-            </div>
-            <div className="flex flex-col gap-1">
-              <dt className="text-xs text-muted-foreground">Alarms</dt>
-              <dd className="text-sm font-medium tabular-nums text-base-foreground">{shift.alarms}</dd>
-            </div>
-          </dl>
-          <span className="text-xs text-muted-foreground">Supervisor {shift.supervisor}</span>
-        </Card>
-      ))}
-    </div>
+    <OeeSheet>
+      <Panel
+        title="Day in progress"
+        subtitle="Thursday 12 March, running state per unit until 14:00"
+        actions={<StatusPill tone="critical" icon={<IconPlayerStop />}>Recompressor stopped 14 min</StatusPill>}
+      >
+        <StateStrip label="Running state per unit on 12 March until 14:00" rows={OEE_STATE_ROWS} start={0} end={24} ticks={OEE_STATE_TICKS} now={{ at: 14, label: 'Now 14:00' }} legend={OEE_STATE_LEGEND} size="lg" />
+        <StatGroup joined columns={4} label="Day so far" className="mt-5">
+          <Stat variant="plain" label="Exported so far" value={2.51} decimals={2} unit="MSm³" target="Plan to now 2.63" />
+          <Stat variant="plain" label="Unplanned stops" value={`${Math.round(stateDuration(recompressor, 'Unplanned stop') * 60)}`} unit="min" target="2 events, recompressor" />
+          <Stat variant="plain" label="Planned stops" value={90} unit="min" target="Seal gas filter change" />
+          <Stat variant="plain" label="Needed to meet plan" value={4.72} decimals={2} unit="MSm³/d" target="Rate for the rest of the day" />
+        </StatGroup>
+      </Panel>
+    </OeeSheet>
   );
 }
 
-function ProdOeeLineComparison() {
+function ProductionOeePlanByShift() {
   return (
-    <div className="w-full overflow-x-auto">
-      <table aria-label="OEE by site, last 24 hours" className="w-full min-w-176 border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Site
-            </th>
-            <th scope="col" className={`${TH} w-1/4`}>
-              OEE
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Availability
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Performance
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Quality
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Output vs plan
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Downtime, 30 d
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {SITE_COMPARISON.map((row) => (
-            <tr key={row.site} className="border-t border-default">
-              <th scope="row" className={`${TD} text-left font-medium text-base-foreground`}>
-                {row.site}
-              </th>
-              <td className={TD}>
-                <div className="flex items-center gap-3">
-                  <LinearGauge className="flex-1" showHeader={false} size="sm" label={`${row.site} OEE`} value={row.oee} min={60} max={100} target={KPI.oee.target} unit="%" decimals={1} />
-                  <ValueReadout size="xs" value={row.oee} unit="%" decimals={1} />
-                </div>
-              </td>
-              <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(row.availability, 1)} %</td>
-              <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(row.performance, 1)} %</td>
-              <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(row.quality, 1)} %</td>
-              <td className={`${TD} text-right`}>
-                <TrendDelta size="sm" value={row.output} reference={row.plan} format="percent" goodDirection="up" decimals={1} />
-              </td>
-              <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(row.downtime, 1)} h</td>
-            </tr>
+    <OeeSheet>
+      <Panel title="Output against plan by shift" subtitle="Wednesday 11 March, MSm³ per shift" className="h-full">
+        <Bars
+          label="Gas export per shift against plan on 11 March"
+          categories={OEE_SHIFTS}
+          series={[
+            { id: 'plan', label: 'Plan', values: [1.5, 1.5, 1.5], tone: 'neutral' },
+            { id: 'actual', label: 'Actual', values: [1.51, 1.48, 1.22], tone: 'accent' },
+          ]}
+          decimals={2}
+          showValues
+          height={260}
+          notes="The evening shift lost 0.28 MSm³ to the cooler fouling stop that started at 16:20."
+        />
+      </Panel>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeCumulative() {
+  const actual = oeeCumulative(OEE_DAILY_EXPORT);
+  const gap = actual.map((total, index) => Math.round((total - OEE_PLAN * (index + 1)) * 100) / 100);
+  return (
+    <OeeSheet>
+      <Panel title="Running gap to plan" subtitle="Week 11, cumulative export minus cumulative plan" className="h-full">
+        <TrendLine
+          label="Cumulative gas export minus cumulative plan, week 11"
+          labels={OEE_DAYS}
+          unit="MSm³"
+          decimals={2}
+          height={260}
+          fill
+          series={[{ id: 'gap', label: 'Ahead of or behind plan', values: gap, tone: 'accent' }]}
+          limits={[{ value: 0, label: 'On plan', tone: 'neutral' }]}
+          yDomain={[-0.6, 0.2]}
+          notes={`The week closed ${Math.abs(gap[6]).toFixed(2)} MSm³ behind a plan of ${(OEE_PLAN * 7).toFixed(1)} MSm³; the gap opened on Wednesday and did not close.`}
+        />
+      </Panel>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeDowntimeLog() {
+  return (
+    <OeeSheet>
+      <Panel title="Downtime log" subtitle="Week 11 · 6 events, 10.2 h, 0.83 MSm³ deferred" padding="none" className="h-full" footer="An event without a cause code stays at the top until someone codes it.">
+        <DataTable label="Downtime events, week 11" columns={OEE_STOP_COLUMNS} rows={OEE_STOPS} rowKey={(row) => row.id} rowTone={(row) => (row.cause === null ? 'critical' : row.kind === 'Unplanned' ? 'warning' : undefined)} flush />
+      </Panel>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeUncodedStop() {
+  const [cause, setCause] = useState<string | null>(null);
+  return (
+    <OeeSheet>
+      <Panel
+        title="Ongoing stop"
+        subtitle="Recompressor · 23-KA-9103"
+        tone={cause ? 'neutral' : 'critical'}
+        icon={
+          <IconChip tone={cause ? 'neutral' : 'critical'}>
+            <IconAlertTriangle />
+          </IconChip>
+        }
+        className="h-full"
+        footer={cause ? 'Coded by Ingrid Haugen at 14:00. Change it until the shift is handed over.' : 'Uncoded stops count as "Unknown" in the Pareto.'}
+      >
+        <Stat variant="plain" size="lg" label="Stopped since 13:46" value={14} unit="min" target="0.03 MSm³ deferred so far" />
+        <p className="mt-4 text-sm font-medium text-(--kit-text)">{cause ? `Cause: ${cause}` : 'Pick a cause code'}</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {OEE_CAUSE_CODES.map((code) => (
+            <Button key={code} size="sm" variant={cause === code ? 'default' : 'secondary'} aria-pressed={cause === code} onClick={() => setCause(cause === code ? null : code)}>
+              {code}
+            </Button>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </div>
+      </Panel>
+    </OeeSheet>
   );
 }
 
-function ProdOeeDailyReport() {
-  const products = [
-    { name: 'Gas export', unit: 'MSm³', actual: 4.21, plan: 4.5, monthToDate: 48.39, decimals: 2 },
-    { name: 'Condensate', unit: 'Sm³', actual: 1184, plan: 1250, monthToDate: 13420, decimals: 0 },
-    { name: 'NGL', unit: 't', actual: 312, plan: 320, monthToDate: 3498, decimals: 0 },
-  ];
+function ProductionOeeConsole() {
   return (
-    <Card className="w-full min-w-0 gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-base font-semibold text-base-foreground">Daily production report</h3>
-          <span className="text-xs text-muted-foreground tabular-nums">Nordkapp · production day 11 March 2026, 06:00–06:00</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <StatusIndicator variant="badge" tone="info" label="Awaiting approval" />
-          <Button variant="secondary" size="sm">
-            Approve report
-          </Button>
-        </div>
-      </div>
-
-      <dl className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <div className="flex flex-col gap-1.5">
-          <dt className="text-xs text-muted-foreground">Gas export</dt>
-          <dd>
-            <ValueReadout size="md" value={4.21} unit="MSm³" decimals={2} />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <dt className="text-xs text-muted-foreground">Plan attainment</dt>
-          <dd>
-            <ValueReadout size="md" value={attainment(4.21, DAILY_PLAN)} unit="%" decimals={1} tone="warning" />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <dt className="text-xs text-muted-foreground">OEE</dt>
-          <dd>
-            <ValueReadout size="md" value={79.8} unit="%" decimals={1} />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <dt className="text-xs text-muted-foreground">Deferment</dt>
-          <dd>
-            <ValueReadout size="md" value={290} unit="kSm³" />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <dt className="text-xs text-muted-foreground">Flaring</dt>
-          <dd>
-            <ValueReadout size="md" value={14.1} unit="kSm³" decimals={1} />
-          </dd>
-        </div>
-      </dl>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="overflow-x-auto lg:col-span-3">
-          <table aria-label="Production by product" className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th scope="col" className={TH}>
-                  Product
-                </th>
-                <th scope="col" className={`${TH} text-right`}>
-                  Actual
-                </th>
-                <th scope="col" className={`${TH} text-right`}>
-                  Plan
-                </th>
-                <th scope="col" className={`${TH} text-right`}>
-                  Variance
-                </th>
-                <th scope="col" className={`${TH} text-right`}>
-                  Month to date
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <tr key={product.name} className="border-t border-default">
-                  <th scope="row" className={`${TD} text-left font-medium text-base-foreground`}>
-                    {product.name}
-                    <span className="pl-2 text-xs font-normal text-muted-foreground">{product.unit}</span>
-                  </th>
-                  <td className={`${TD} text-right tabular-nums text-base-foreground`}>{formatValue(product.actual, product.decimals)}</td>
-                  <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(product.plan, product.decimals)}</td>
-                  <td className={`${TD} text-right tabular-nums text-critical-foreground-strong`}>{formatDelta(product.actual - product.plan, product.decimals)}</td>
-                  <td className={`${TD} text-right tabular-nums text-medium-foreground`}>{formatValue(product.monthToDate, product.decimals)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex flex-col gap-2 lg:col-span-2">
-          <h4 className="text-xs font-medium text-muted-foreground">Main events</h4>
-          <ul className="flex flex-col gap-2 text-sm text-medium-foreground">
-            <li>
-              <span className="pr-2 tabular-nums text-muted-foreground">08:10</span>Cooling water pump <span className="font-mono text-xs">40-PA-4001</span> out for planned maintenance, 6 h 20 min.
-            </li>
-            <li>
-              <span className="pr-2 tabular-nums text-muted-foreground">09:05</span>Export rate reduced to 172 kSm³/h while one cooling water pump was unavailable.
-            </li>
-            <li>
-              <span className="pr-2 tabular-nums text-muted-foreground">14:30</span>Pump back in service, full rate restored at 15:10.
-            </li>
+    <OeeSheet look="console">
+      <Grid>
+        <Panel title="OEE week 11" subtitle="A × P × Q" className="col-span-7">
+          <OeeEquation factors={OEE_FACTORS} resultTarget={OEE_TARGET} size="sm" />
+        </Panel>
+        <Panel title="Unplanned stops" subtitle="Week 11 · 1 uncoded" tone="critical" className="col-span-5">
+          <ul>
+            {OEE_STOPS.filter((stop) => stop.kind === 'Unplanned').map((stop) => (
+              <ListRow
+                key={stop.id}
+                tone={stop.cause ? 'warning' : 'critical'}
+                title={`${stop.unit} · ${oeeDuration(stop.minutes)}`}
+                meta={
+                  <>
+                    <TagId>{stop.tag}</TagId> · {stop.start} · {stop.cause ?? 'Not coded'}
+                  </>
+                }
+                trailing={<StatusPill tone={stop.cause ? 'warning' : 'critical'}>{stop.cause ? 'Coded' : 'Code now'}</StatusPill>}
+              />
+            ))}
           </ul>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap justify-between gap-3 border-t border-default pt-4 text-xs text-muted-foreground">
-        <span>Prepared by Liv Wold, shift supervisor · 12 Mar, 06:40</span>
-        <span>Approver Magnus Solberg · not yet approved</span>
-      </div>
-    </Card>
+        </Panel>
+        <Panel title="Running state" subtitle="12 March until 14:00" className="col-span-12">
+          <StateStrip label="Running state per unit on 12 March, console" rows={OEE_STATE_ROWS} start={0} end={24} ticks={OEE_STATE_TICKS} now={{ at: 14, label: '14:00' }} legend={OEE_STATE_LEGEND} />
+        </Panel>
+      </Grid>
+    </OeeSheet>
   );
 }
 
-function ProdOeeOverviewPanel() {
+function ProductionOeePoster() {
   return (
-    <Card className="w-full min-w-0 gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-base font-semibold text-base-foreground">Production overview</h3>
-          <span className="text-xs text-muted-foreground">Nordkapp · last 24 hours</span>
-        </div>
-        <StatusIndicator variant="badge" tone="warning" label="OEE below target" />
-      </div>
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <section aria-label="OEE" className="flex flex-col gap-4">
-          <div className="flex items-end justify-between gap-3">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">OEE</span>
-              <ValueReadout size="xl" value={oee(FACTORS)} unit="%" decimals={1} />
-            </div>
-            <TrendDelta value={KPI.oee.value} reference={KPI.oee.target} goodDirection="up" decimals={1} unit="pts" caption="to target" />
-          </div>
-          <dl className="grid grid-cols-3 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <dt className="text-xs text-muted-foreground">Availability</dt>
-              <dd>
-                <ValueReadout size="sm" value={FACTORS.availability} unit="%" decimals={1} />
-              </dd>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <dt className="text-xs text-muted-foreground">Performance</dt>
-              <dd>
-                <ValueReadout size="sm" value={FACTORS.performance} unit="%" decimals={1} />
-              </dd>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <dt className="text-xs text-muted-foreground">Quality</dt>
-              <dd>
-                <ValueReadout size="sm" value={FACTORS.quality} unit="%" decimals={1} />
-              </dd>
-            </div>
-          </dl>
-        </section>
-        <section aria-label="Losses" className="flex flex-col gap-3">
-          <h4 className="text-xs font-medium text-muted-foreground">Losses, OEE points</h4>
-          <LossStack
-            label="OEE losses, last 24 hours"
-            start={{ label: 'Planned time', value: 100 }}
-            losses={[
-              { label: 'Availability', value: LOSSES.availabilityLoss },
-              { label: 'Performance', value: LOSSES.performanceLoss },
-              { label: 'Quality', value: LOSSES.qualityLoss },
-            ]}
-            resultLabel="OEE"
+    <OeeSheet look="poster">
+      <SectionHeader size="lg" title="We ran at 82.7 % of what this plant can do." description="Week 11. The target is 85 %. Rate, not stops, cost us the most." />
+      <OeeEquation className="mt-6" factors={OEE_FACTORS} resultTarget={OEE_TARGET} />
+      <Grid className="mt-6">
+        <Panel title="Lost points by loss type" className="col-span-7">
+          <Bars
+            label="Six big losses in OEE points, poster"
+            orientation="horizontal"
+            categories={OEE_SIX_LOSSES.map((loss) => loss.label)}
+            series={[{ id: 'loss', label: 'OEE points lost', values: OEE_SIX_LOSSES.map((loss) => loss.value) }]}
+            tones={['blue', 'teal', 'blue', 'teal', 'purple', 'purple']}
+            unit="pts"
+            decimals={1}
+            showValues
+            showLegend={false}
+            height={250}
           />
-        </section>
-        <section aria-label="Top deferment causes" className="flex flex-col gap-3">
-          <h4 className="text-xs font-medium text-muted-foreground">Deferment, month to date</h4>
-          <ShareBarList label="Deferred production by cause" items={DEFERMENT.slice(0, 4)} unit="kSm³" />
-        </section>
-      </div>
-    </Card>
+        </Panel>
+        <Stat className="col-span-5" size="hero" tone="amber" emphasis="strong" label="Deferred this week" value={0.83} decimals={2} unit="MSm³" icon={<IconClock />} target="10.2 h of stops in 6 events" delta={{ value: 0.21, decimals: 2, good: 'down', caption: 'on week 10' }} />
+      </Grid>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeBlueprint() {
+  return (
+    <OeeSheet look="blueprint">
+      <Grid>
+        <Panel title="OEE build-up" subtitle="Sheet 1 of 2 · week 11" className="col-span-12">
+          <OeeEquation factors={OEE_FACTORS} resultTarget={OEE_TARGET} size="sm" />
+        </Panel>
+        <Panel title="Loss waterfall" subtitle="OEE points" className="col-span-7">
+          <LossWaterfall label="OEE loss waterfall on a blueprint sheet" total={{ label: 'Ideal week', value: 100 }} losses={OEE_LOSSES} resultLabel="OEE" unit="%" decimals={1} baseline={60} height={250} />
+        </Panel>
+        <Panel title="Factor scales" subtitle="70–100 %, target marked" className="col-span-5">
+          <div className="flex flex-col gap-5">
+            {OEE_FACTORS.map((factor) => (
+              <Meter key={factor.label} label={factor.label} value={factor.value} min={70} max={100} unit="%" decimals={1} tone={factor.tone} target={{ value: factor.target ?? 100, label: 'Target' }} />
+            ))}
+          </div>
+        </Panel>
+      </Grid>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeSignal() {
+  return (
+    <OeeSheet look="signal">
+      <Grid>
+        <Stat className="col-span-6" size="hero" tone="warning" label="OEE this week" value={OEE_VALUE} decimals={1} unit="%" state="Below target" stateIcon={<IconAlertTriangle />} target={`Target ${OEE_TARGET} %`} />
+        <Stat className="col-span-6" size="hero" tone="critical" label="Recompressor" value={14} unit="min stopped" state="Stopped" stateIcon={<IconPlayerStop />} target="Not coded · since 13:46" />
+        <Stat className="col-span-4" size="lg" tone="warning" label="Availability" value={93.6} decimals={1} unit="%" state="Watch" stateIcon={<IconAlertTriangle />} target="Target 95.0 %" />
+        <Stat className="col-span-4" size="lg" tone="success" label="Performance" value={91.2} decimals={1} unit="%" state="Near target" stateIcon={<IconCircleCheck />} target="Target 92.0 %" />
+        <Stat className="col-span-4" size="lg" tone="warning" label="Quality" value={96.9} decimals={1} unit="%" state="Watch" stateIcon={<IconAlertTriangle />} target="Target 98.0 %" />
+      </Grid>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeEditorial() {
+  return (
+    <OeeSheet look="editorial">
+      <SectionHeader size="lg" eyebrow="Week 11 production review" title="Rate, not stops, held OEE at 82.7 %" description="Availability recovered after Monday. The fouled interstage cooler then capped the rate for most of Wednesday." />
+      <Grid className="mt-8">
+        <OeeEquation className="col-span-12" factors={OEE_FACTORS} resultTarget={OEE_TARGET} />
+        <div className="col-span-7">
+          <LossWaterfall label="OEE loss waterfall, editorial" total={{ label: 'Ideal week', value: 100 }} losses={OEE_LOSSES} resultLabel="OEE" unit="%" decimals={1} baseline={60} height={240} />
+        </div>
+        <div className="col-span-5 flex flex-col gap-6">
+          <Stat variant="plain" size="hero" label="Deferred production" value={0.83} decimals={2} unit="MSm³" target="2.6 % of the weekly plan of 31.5 MSm³" />
+          <p className="text-base leading-7 text-(--kit-text)">
+            Six stops took 10.2 hours. Two were planned and four were not; the longest unplanned one, 3 h 05 min on the interstage cooler, also explains most of the performance loss that followed it.
+          </p>
+          <p className="text-base leading-7 text-(--kit-text-2)">One stop on the recompressor is still open and has no cause code. Until it is coded it counts as unknown in the Pareto.</p>
+        </div>
+      </Grid>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeOverview() {
+  return (
+    <OeeSheet>
+      <SectionHeader
+        title="Production performance"
+        description="Gas compression and export · week 11, 6–12 March"
+        actions={
+          <Button size="sm" variant="secondary">
+            Export report
+          </Button>
+        }
+      />
+      <Grid className="mt-4">
+        <Stat className="col-span-3" emphasis="strong" tone="accent" icon={<IconGauge />} label="OEE" value={OEE_VALUE} decimals={1} unit="%" delta={{ value: 0.8, unit: ' pts', caption: 'vs week 10' }} target={`Target ${OEE_TARGET}.0 %`} sparkline={OEE_WEEK_TREND} />
+        <Stat className="col-span-3" tone="teal" icon={<IconActivity />} label="Availability" value={93.6} decimals={1} unit="%" delta={{ value: 1.9, unit: ' pts', caption: 'vs week 10' }} target="Target 95.0 %" />
+        <Stat className="col-span-3" tone="blue" icon={<IconBolt />} label="Performance" value={91.2} decimals={1} unit="%" delta={{ value: -1.3, unit: ' pts', caption: 'vs week 10' }} target="Target 92.0 %" />
+        <Stat className="col-span-3" tone="purple" icon={<IconTarget />} label="Quality" value={96.9} decimals={1} unit="%" delta={{ value: 0.2, unit: ' pts', caption: 'vs week 10' }} target="Target 98.0 %" />
+        <Panel title="Daily export against plan" subtitle="MSm³ per day, plan 4.50" className="col-span-8">
+          <Bars
+            label="Daily gas export against the 4.50 plan, week 11"
+            categories={OEE_DAYS}
+            series={[{ id: 'export', label: 'Export', values: OEE_DAILY_EXPORT, tone: 'accent' }]}
+            unit="MSm³/d"
+            decimals={2}
+            limit={{ value: OEE_PLAN, label: 'Plan', tone: 'warning' }}
+            showValues
+            showLegend={false}
+            height={250}
+            notes="Three of seven days met plan. Wednesday's dip is the cooler fouling stop."
+          />
+        </Panel>
+        <Panel title="Losses" subtitle="OEE points, largest first" className="col-span-4" footer="17.3 points lost in total">
+          <div className="flex flex-col gap-4">
+            {OEE_LOSSES.slice()
+              .sort((a, b) => b.value - a.value)
+              .map((loss) => (
+                <Meter key={loss.label} label={loss.label} value={loss.value} max={10} unit="pts" decimals={1} tone={loss.tone} hideScale />
+              ))}
+          </div>
+        </Panel>
+      </Grid>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeUnitComparison() {
+  return (
+    <OeeSheet>
+      <Panel
+        title="OEE by unit"
+        subtitle="Week 11 · sorted as the gas flows"
+        icon={
+          <IconChip tone="blue">
+            <IconTool />
+          </IconChip>
+        }
+        padding="none"
+        footer="The recompressor holds the train back: its availability and its rate are both the lowest."
+      >
+        <DataTable label="OEE and factors per unit, week 11" columns={OEE_UNIT_COLUMNS} rows={OEE_UNITS} rowKey={(row) => row.tag} rowTone={(row) => (row.tag === '23-KA-9103' ? 'critical' : undefined)} density="comfortable" flush />
+      </Panel>
+    </OeeSheet>
+  );
+}
+
+function ProductionOeeWallBoard() {
+  return (
+    <OeeSheet look="glass">
+      <Grid>
+        <Panel title="OEE now" subtitle="Rolling 24 hours" className="col-span-4">
+          <div className="flex flex-col items-center gap-3">
+            <RingGauge label="OEE, rolling 24 hours" value={81.4} decimals={1} tone="accent" size={176} />
+            <StatusPill tone="warning">3.6 pts under target</StatusPill>
+          </div>
+        </Panel>
+        <Panel title="Factors" subtitle="Rolling 24 hours against target" className="col-span-4">
+          <div className="flex flex-col gap-5">
+            <Meter label="Availability" value={91.9} min={70} max={100} unit="%" decimals={1} tone="teal" target={{ value: 95, label: 'Target' }} />
+            <Meter label="Performance" value={91.6} min={70} max={100} unit="%" decimals={1} tone="blue" target={{ value: 92, label: 'Target' }} />
+            <Meter label="Quality" value={96.7} min={70} max={100} unit="%" decimals={1} tone="purple" target={{ value: 98, label: 'Target' }} />
+          </div>
+        </Panel>
+        <Panel title="Today" subtitle="Until 14:00" className="col-span-4">
+          <div className="flex flex-col gap-5">
+            <Stat variant="plain" size="lg" label="Exported" value={2.51} decimals={2} unit="MSm³" target="Plan to now 2.63" />
+            <Stat variant="plain" size="lg" label="Stopped" value={146} unit="min" target="56 unplanned · 90 planned" />
+          </div>
+        </Panel>
+        <Panel title="Running state" subtitle="Thursday 12 March" className="col-span-12">
+          <StateStrip label="Running state per unit on 12 March, wall board" rows={OEE_STATE_ROWS} start={0} end={24} ticks={OEE_STATE_TICKS} now={{ at: 14, label: 'Now 14:00' }} legend={OEE_STATE_LEGEND} />
+        </Panel>
+      </Grid>
+    </OeeSheet>
   );
 }
 
@@ -935,7 +631,7 @@ export default definePage({
   id: 'production-and-oee',
   title: 'Production and OEE',
   summary:
-    'The kit for a production performance app: OEE and its three factors, where the losses went, output against plan by day and shift, and downtime with cause codes. Every figure is derived from the same factors, so the tile, the equation and the waterfall always agree.',
+    'The kit for a production performance app: OEE as the multiplication it is, where the lost points went, output against plan by day and shift, and downtime with cause codes. Every figure on the page is derived from the same three factors, so the equation, the waterfall and the tiles always agree.',
   guidance: {
     use: [
       'Show OEE with its factors: a bare percentage hides whether stops, rate or quality is the problem.',
@@ -945,7 +641,7 @@ export default definePage({
     ],
     avoid: [
       'Colouring OEE green above an arbitrary number; judge it against its target only.',
-      'A Pareto with more than seven bars; group the tail as "Other".',
+      'A loss chart with more than seven bars; group the tail as "Other".',
       'Mixing planned and unplanned downtime in one total without the split.',
       'Rounding factors separately from the OEE they multiply to.',
     ],
@@ -955,260 +651,222 @@ export default definePage({
     {
       id: 'oee',
       title: 'OEE and factors',
-      description: 'The headline number, then the availability × performance × quality that produces it.',
+      description: 'The figure, the three factors behind it and each of them against its target.',
       specimens: [
         {
-          id: 'ProdOeeTile',
-          title: 'OEE tile',
-          note: 'Pick it for the headline on a dashboard, with target, change and a 30-day trend.',
+          id: 'ProductionOeeEquation',
+          title: 'A × P × Q equation',
+          note: 'Pick it as the opening block of a performance page: the product and what it is made of in one row.',
           origin: 'custom',
-          uses: ['industrial/KpiTile.tsx'],
-          Component: ProdOeeTile,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/production-and-oee/OeeEquation.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx'],
+          Component: ProductionOeeEquation,
         },
         {
-          id: 'ProdOeeEquationTile',
-          title: 'A × P × Q breakdown',
-          note: 'Pick it when people ask why OEE moved: the equation shows which factor carries the loss.',
-          origin: 'custom',
-          uses: ['industrial/domains/OeeBreakdown.tsx', 'industrial/domains/oee.ts'],
-          size: 'lg',
-          align: 'stretch',
-          Component: ProdOeeEquationTile,
-        },
-        {
-          id: 'ProdOeeFactorRings',
+          id: 'ProductionOeeFactorRings',
           title: 'Factor rings',
-          note: 'Pick it for a wall display, where the three shares must read from a distance.',
+          note: 'Pick it when the factors are read as shares of an ideal and the trend matters as much as the figure.',
           origin: 'custom',
-          uses: ['industrial/domains/OeeBreakdown.tsx', 'industrial/ProgressRing.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: ProdOeeFactorRings,
+          bleed: true,
+          uses: ['kit/RingGauge.tsx', 'kit/Stat.tsx', 'kit/SparkLine.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeFactorRings,
         },
         {
-          id: 'ProdOeeFactorBars',
+          id: 'ProductionOeeFactorTargets',
           title: 'Factors against target',
-          note: 'Pick it when each factor has its own target and the gap to it is what gets discussed.',
+          note: 'Pick it when the question is which factor is furthest from its target.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/TrendDelta.tsx'],
           size: 'md',
-          align: 'stretch',
-          Component: ProdOeeFactorBars,
+          bleed: true,
+          uses: ['kit/Meter.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeFactorTargets,
         },
       ],
     },
     {
       id: 'losses',
       title: 'Losses',
-      description: 'Where the distance between planned time and OEE went, from three factors down to six big losses and lost volume.',
+      description: 'Where the points between the ideal and the result went.',
       specimens: [
         {
-          id: 'ProdOeeLossWaterfall',
+          id: 'ProductionOeeWaterfall',
           title: 'Loss waterfall',
-          note: 'Pick it to walk from planned time down to OEE, one loss at a time.',
+          note: 'Pick it to show the sequence: each loss starts where the previous one left the total.',
           origin: 'custom',
-          uses: ['industrial/domains/LossStack.tsx', 'industrial/domains/oee.ts'],
           size: 'md',
-          align: 'stretch',
-          Component: ProdOeeLossWaterfall,
+          bleed: true,
+          uses: ['kit/production-and-oee/LossWaterfall.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeWaterfall,
         },
         {
-          id: 'ProdOeeLossStack',
-          title: 'Loss stack',
-          note: 'Pick it when space is tight: one bar for the split, a legend for the numbers.',
-          origin: 'custom',
-          uses: ['industrial/domains/LossStack.tsx', 'industrial/domains/oee.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProdOeeLossStack,
-        },
-        {
-          id: 'ProdOeeSixBigLosses',
+          id: 'ProductionOeeSixLosses',
           title: 'Six big losses',
-          note: 'Pick it for improvement work: two loss types per factor, on one scale so they compare.',
+          note: 'Pick it to rank the loss types against each other, coloured by the factor they belong to.',
           origin: 'custom',
-          uses: ['industrial/domains/ShareBarList.tsx', 'industrial/domains/oee.ts'],
           size: 'md',
-          align: 'stretch',
-          Component: ProdOeeSixBigLosses,
-        },
-        {
-          id: 'ProdOeeDefermentByCause',
-          title: 'Deferment by cause',
-          note: 'Pick it when the loss should be read in volume rather than OEE points.',
-          origin: 'custom',
-          uses: ['industrial/domains/ShareBarList.tsx', 'industrial/ValueReadout.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProdOeeDefermentByCause,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeSixLosses,
         },
       ],
     },
     {
       id: 'plan',
       title: 'Production against plan',
-      description: 'Attainment now, by day and shift, cumulatively for the month and across the calendar.',
+      description: 'The day in progress, the shifts of a finished day and the week as a running total.',
       specimens: [
         {
-          id: 'ProdOeeTargetAttainment',
-          title: 'Target attainment bar',
-          note: 'Pick it for one output figure against its plan; the tick is 100 % of plan.',
+          id: 'ProductionOeeShiftSoFar',
+          title: 'Day in progress',
+          note: 'Pick it for the current day: state bands per unit up to now and the rate needed to still meet plan.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/TrendDelta.tsx', 'industrial/domains/oee.ts'],
-          Component: ProdOeeTargetAttainment,
-        },
-        {
-          id: 'ProdOeeTaktRate',
-          title: 'Rate indicator',
-          note: 'Pick it in the control room: current rate, plan rate and the rate needed to catch up.',
-          origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/ValueReadout.tsx'],
-          Component: ProdOeeTaktRate,
-        },
-        {
-          id: 'ProdOeeShiftProgress',
-          title: 'Shift so far',
-          note: 'Pick it for a running shift: produced so far against where the plan says it should be by now.',
-          origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/StatusIndicator.tsx', 'industrial/TrendDelta.tsx'],
-          Component: ProdOeeShiftProgress,
-        },
-        {
-          id: 'ProdOeeVsPlanDaily',
-          title: 'Production against plan by shift',
-          note: 'Pick it for the weekly review: each day split by shift with the plan as a line.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: ProdOeeVsPlanDaily,
-        },
-        {
-          id: 'ProdOeeCumulativeVsPlan',
-          title: 'Cumulative against plan',
-          note: 'Pick it to see whether the month is recoverable: the gap between the lines is the volume to catch up.',
-          origin: 'custom',
-          uses: ['industrial/TrendDelta.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProdOeeCumulativeVsPlan,
-        },
-        {
-          id: 'ProdOeeCalendarStrip',
-          title: 'Production calendar strip',
-          note: 'Pick it to spot bad days and upcoming shutdowns in a month at a glance.',
-          origin: 'custom',
-          uses: ['industrial/domains/oee.ts'],
           size: 'full',
-          align: 'stretch',
-          Component: ProdOeeCalendarStrip,
+          bleed: true,
+          uses: ['kit/production-and-oee/StateStrip.tsx', 'kit/StatGroup.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeShiftSoFar,
+        },
+        {
+          id: 'ProductionOeePlanByShift',
+          title: 'Output by shift',
+          note: 'Pick it to compare the shifts of one finished day with the same plan.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeePlanByShift,
+        },
+        {
+          id: 'ProductionOeeCumulative',
+          title: 'Running gap to plan',
+          note: 'Pick it when the question is whether the period will close on plan, not how one day went.',
+          origin: 'custom',
+          size: 'md',
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeCumulative,
         },
       ],
     },
     {
       id: 'downtime',
       title: 'Downtime',
-      description: 'Stops with their cause codes, as single rows, a log and a ranking.',
+      description: 'Every stop with its type and cause code, and the one that still needs coding.',
       specimens: [
         {
-          id: 'ProdOeeDowntimeRow',
-          title: 'Downtime row',
-          note: 'Pick it for one coded stop: what stopped, why, for how long and what it cost.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: ProdOeeDowntimeRow,
-        },
-        {
-          id: 'ProdOeeDowntimeOpen',
-          title: 'Ongoing stop without a cause',
-          note: 'Pick it while equipment is still down: the clock runs and the cause code is one click away.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProdOeeDowntimeOpen,
-        },
-        {
-          id: 'ProdOeeDowntimeLog',
+          id: 'ProductionOeeDowntimeLog',
           title: 'Downtime log',
-          note: 'Pick it for the shift handover: every stop of the week with cause code, type and deferred volume.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx'],
-          size: 'full',
-          align: 'stretch',
-          Component: ProdOeeDowntimeLog,
-        },
-        {
-          id: 'ProdOeeDowntimePareto',
-          title: 'Top downtime causes',
-          note: 'Pick it to decide where to spend improvement effort: bars rank the causes, the line shows how few of them make up 80 %.',
+          note: 'Pick it as the record behind the availability figure: planned and unplanned told apart in words.',
           origin: 'custom',
           size: 'lg',
-          align: 'stretch',
-          Component: ProdOeeDowntimePareto,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeDowntimeLog,
         },
         {
-          id: 'ProdOeeDowntimeSplit',
-          title: 'Planned against unplanned',
-          note: 'Pick it next to a downtime total, so planned work is not read as failure.',
+          id: 'ProductionOeeUncodedStop',
+          title: 'Ongoing stop to code',
+          note: 'Pick it where the operator codes a stop while it happens; the panel calms down once a cause is set.',
           origin: 'custom',
-          uses: ['industrial/domains/ShareBarList.tsx'],
-          align: 'stretch',
-          Component: ProdOeeDowntimeSplit,
+          size: 'sm',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Stat.tsx', 'kit/IconChip.tsx'],
+          Component: ProductionOeeUncodedStop,
         },
       ],
     },
     {
-      id: 'shifts-and-sites',
-      title: 'Shifts and units',
-      description: 'The same figures side by side for shifts, lines, units or sites.',
+      id: 'looks',
+      title: 'In other looks',
+      description: 'The same figures as different anatomy: blocks, drawings, state tiles and a typeset review.',
       specimens: [
         {
-          id: 'ProdOeeShiftScoreboard',
-          title: 'Shift scoreboard',
-          note: 'Pick it for the morning meeting: the last shifts with output, OEE, downtime and alarms.',
+          id: 'ProductionOeeConsole',
+          title: 'Console',
+          note: 'Pick it for the control room: solid factor blocks, square state bands and stops as edge-marked rows.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/StatusIndicator.tsx', 'industrial/TrendDelta.tsx', 'industrial/ValueReadout.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: ProdOeeShiftScoreboard,
+          bleed: true,
+          uses: ['kit/production-and-oee/OeeEquation.tsx', 'kit/production-and-oee/StateStrip.tsx', 'kit/ListRow.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionOeeConsole,
         },
         {
-          id: 'ProdOeeLineComparison',
-          title: 'Unit comparison table',
-          note: 'Pick it to compare lines, units or sites on OEE and its factors against one target.',
+          id: 'ProductionOeePoster',
+          title: 'Poster',
+          note: 'Pick it for the weekly review screen: the finding as a headline and the equation as colour blocks.',
           origin: 'custom',
-          uses: ['industrial/LinearGauge.tsx', 'industrial/TrendDelta.tsx', 'industrial/ValueReadout.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: ProdOeeLineComparison,
+          bleed: true,
+          uses: ['kit/production-and-oee/OeeEquation.tsx', 'kit/Bars.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionOeePoster,
+        },
+        {
+          id: 'ProductionOeeBlueprint',
+          title: 'Blueprint',
+          note: 'Pick it for an engineering pack: ruled factor columns, an outlined waterfall and dimensioned scales.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/production-and-oee/OeeEquation.tsx', 'kit/production-and-oee/LossWaterfall.tsx', 'kit/Meter.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionOeeBlueprint,
+        },
+        {
+          id: 'ProductionOeeSignal',
+          title: 'Signal',
+          note: 'Pick it for a wall screen: every tile is filled with its state and says it in a word.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionOeeSignal,
+        },
+        {
+          id: 'ProductionOeeEditorial',
+          title: 'Editorial',
+          note: 'Pick it for the written weekly review: no cards, the finding as the headline and figures beside the text.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/production-and-oee/OeeEquation.tsx', 'kit/production-and-oee/LossWaterfall.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionOeeEditorial,
         },
       ],
     },
     {
-      id: 'blocks',
-      title: 'Full blocks',
-      description: 'Complete sections for a production dashboard and the daily report.',
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions that can be dropped into a product.',
       specimens: [
         {
-          id: 'ProdOeeOverviewPanel',
+          id: 'ProductionOeeOverview',
           title: 'Production overview',
-          note: 'Pick it as the top block of a production dashboard: OEE, its losses and the lost volume in one card.',
+          note: 'Pick it as the landing board of a performance app: four factor tiles, the week against plan and the losses.',
           origin: 'custom',
-          uses: ['industrial/domains/LossStack.tsx', 'industrial/domains/ShareBarList.tsx', 'industrial/domains/oee.ts', 'industrial/ValueReadout.tsx'],
           size: 'full',
-          align: 'stretch',
-          Component: ProdOeeOverviewPanel,
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/Bars.tsx', 'kit/Meter.tsx', 'kit/Panel.tsx', 'kit/SectionHeader.tsx'],
+          Component: ProductionOeeOverview,
         },
         {
-          id: 'ProdOeeDailyReport',
-          title: 'Daily production report',
-          note: 'Pick it for the report a shift supervisor signs: figures, product table, main events and approval.',
+          id: 'ProductionOeeUnitComparison',
+          title: 'Unit comparison',
+          note: 'Pick it to find the unit that holds the train back: factors, OEE, trend and verdict per unit.',
           origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx', 'industrial/domains/oee.ts'],
           size: 'full',
-          align: 'stretch',
-          Component: ProdOeeDailyReport,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/SparkLine.tsx', 'kit/StatusPill.tsx', 'kit/Panel.tsx'],
+          Component: ProductionOeeUnitComparison,
+        },
+        {
+          id: 'ProductionOeeWallBoard',
+          title: 'Wall board',
+          note: 'Pick it for the screen in the control room corridor: OEE as a ring, factors, today and the state bands.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/RingGauge.tsx', 'kit/Meter.tsx', 'kit/production-and-oee/StateStrip.tsx', 'looks/LookScope.tsx'],
+          Component: ProductionOeeWallBoard,
         },
       ],
     },

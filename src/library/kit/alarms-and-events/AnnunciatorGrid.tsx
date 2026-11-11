@@ -54,12 +54,12 @@ export function AnnunciatorGrid({ label, windows, columns = 4, selected, onSelec
                 'flex min-h-21 w-full min-w-0 flex-col justify-between gap-2 p-3 text-left outline-none transition-colors focus-visible:[box-shadow:inset_0_0_0_2px_var(--kit-accent)]',
                 joined ? '' : 'rounded-[var(--kit-radius-sm)]',
                 window.state === 'new' ? (look === 'poster' ? 'bg-[var(--t-pop)] text-[var(--t-on-pop)]' : 'bg-[var(--t-solid)] text-[var(--t-on-solid)]') : '',
-                window.state === 'held' ? 'bg-[var(--kit-surface)] text-[var(--kit-text)] [box-shadow:inset_0_4px_0_var(--t-line)]' : '',
+                window.state === 'held' ? cx(joined ? 'bg-[var(--kit-surface)]' : 'bg-[var(--t-soft)]', 'text-[var(--kit-text)] [box-shadow:inset_0_4px_0_var(--t-line)]') : '',
                 window.state === 'normal' ? (joined ? 'bg-[var(--kit-surface)] text-[var(--kit-text-2)]' : 'bg-[var(--kit-track)] text-[var(--kit-text-2)]') : '',
                 active ? '[box-shadow:inset_0_0_0_3px_var(--kit-text)]' : ''
               )}
             >
-              <span className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="flex flex-wrap items-baseline justify-between gap-x-2 text-xs">
                 <span className="font-medium whitespace-nowrap tabular-nums">{window.tag}</span>
                 {window.firstOut ? <span className="font-semibold whitespace-nowrap underline underline-offset-2">First out</span> : null}
               </span>

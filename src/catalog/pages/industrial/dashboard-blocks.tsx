@@ -145,6 +145,7 @@ const DB_KPI_FLARING: DbStatProps = {
   unit: 'kSm³/d',
   tone: 'amber',
   target: 'Limit 15.0',
+  sparkline: makeValues({ seed: 47, points: 24, base: 14, amplitude: 1.5, noise: 0.6, drift: -2 }),
 };
 
 const DB_KPI_ORDERS: DbStatProps = {
@@ -152,6 +153,7 @@ const DB_KPI_ORDERS: DbStatProps = {
   value: PLANT_KPIS.openWorkOrders.value,
   tone: 'sky',
   delta: { value: -4, decimals: 0, good: 'down', caption: 'vs last week' },
+  sparkline: [27, 27, 26, 28, 26, 25, 25, 24, 24, 23],
 };
 
 const DB_RANGES = [
@@ -330,8 +332,8 @@ function DashBlockKpiHero() {
     <DbSheet look="soft">
       <Grid>
         <Stat className="col-span-6" size="hero" {...DB_KPI_EXPORT} target="Plan 4.50 MSm³/d" />
-        <Stat className="col-span-3" size="lg" {...DB_KPI_AVAILABILITY} target="Target 97.5 %" />
-        <Stat className="col-span-3" size="lg" {...DB_KPI_ENERGY} target="Target 30.0" />
+        <Stat className="col-span-3" size="md" {...DB_KPI_AVAILABILITY} />
+        <Stat className="col-span-3" size="md" {...DB_KPI_ENERGY} />
       </Grid>
     </DbSheet>
   );
@@ -360,7 +362,7 @@ function DashBlockKpiBlocks() {
       <StatGroup columns={3} label="Plant KPIs">
         <Stat size="lg" {...DB_KPI_EXPORT} sparkline={undefined} target="Plan 4.50" />
         <Stat size="lg" {...DB_KPI_AVAILABILITY} sparkline={undefined} tone="green" target="Target 97.5" />
-        <Stat size="lg" {...DB_KPI_FLARING} delta={{ value: -6.5, good: 'down', caption: 'vs last week' }} />
+        <Stat size="lg" {...DB_KPI_FLARING} sparkline={undefined} delta={{ value: -6.5, good: 'down', caption: 'vs last week' }} />
       </StatGroup>
     </DbSheet>
   );
@@ -425,12 +427,13 @@ function DashBlockChartAndTiles() {
               { value: 155, label: 'Trip', tone: 'critical' },
             ]}
             yDomain={[125, 160]}
+            highlightLast={false}
           />
         </Panel>
         <Grid stack className="col-span-3">
-          <Stat label="Now" value={141.2} decimals={1} unit="°C" target="High 145.0" />
-          <Stat label="24 h maximum" value={Math.max(...DB_TEMPERATURE)} decimals={1} unit="°C" target="at 12:00" />
-          <Stat label="Margin to trip" value={155 - 141.2} decimals={1} unit="°C" target="Trip 155.0" />
+          <Stat label="Now" value={DB_TEMPERATURE[DB_TEMPERATURE.length - 1]} decimals={1} unit="°C" target="High 145.0" />
+          <Stat label="24 h minimum" value={Math.min(...DB_TEMPERATURE)} decimals={1} unit="°C" target={`at ${DB_HOURS[DB_TEMPERATURE.indexOf(Math.min(...DB_TEMPERATURE))]}`} />
+          <Stat label="Margin to trip" value={155 - DB_TEMPERATURE[DB_TEMPERATURE.length - 1]} decimals={1} unit="°C" target="Trip 155.0" />
         </Grid>
       </Grid>
     </DbSheet>
@@ -443,6 +446,7 @@ function DashBlockMosaic() {
       <Grid>
         <Panel className="col-span-4" tone="purple" title="Order mix" subtitle="Open, by type">
           <Donut
+            className="my-auto"
             label="Open work orders by type"
             centerCaption="open"
             segments={[
@@ -461,7 +465,7 @@ function DashBlockMosaic() {
           </div>
         </Panel>
         <Panel className="col-span-4" tone="amber" title="Compression train" subtitle="Against the high limit">
-          <div className="flex flex-col gap-5">
+          <div className="flex h-full flex-col justify-between gap-5">
             {SENSORS.filter((sensor) => ['pt-92531', 'tt-92532', 'vt-92540'].includes(sensor.id)).map((sensor) => (
               <Meter
                 key={sensor.id}
@@ -608,7 +612,7 @@ function DashBlockAreaRanking() {
           />
         </Panel>
         <Grid stack className="col-span-5">
-          <Stat size="lg" label="Weakest area" value="Gas compression" tone="warning" target="Score 78 · 4 open alarms" />
+          <Stat size="sm" label="Weakest area" value="Gas compression" tone="warning" target="Score 78 · 4 open alarms" />
           <Stat size="lg" label="Units below 70 %" value={3} tone="critical" target="of 11 units" />
         </Grid>
       </Grid>
@@ -801,17 +805,17 @@ function DashBlockAssembled() {
           <Stat className="col-span-3" {...DB_KPI_AVAILABILITY} />
           <Stat className="col-span-3" {...DB_KPI_ENERGY} />
           <Stat className="col-span-3" {...DB_KPI_ALARMS} />
-          <Panel className="col-span-8" title="Gas export" subtitle="Against the daily plan">
-            <DbExportChart range={range} height={260} />
+          <Panel className="col-span-7" title="Gas export" subtitle="Against the daily plan">
+            <DbExportChart range={range} height={250} />
           </Panel>
-          <Panel className="col-span-4" title="Open alarms" subtitle="Most severe first">
-            <DbAlarmRows alarms={DB_OPEN_ALARMS.slice(0, 4)} />
+          <Panel className="col-span-5" title="Open alarms" subtitle="Most severe first">
+            <DbAlarmRows alarms={DB_OPEN_ALARMS.slice(0, 3)} />
           </Panel>
           <Panel className="col-span-12" title="Unit states" subtitle="In process order">
-            <StatusStrip label="Unit states in process order" items={DB_STRIP} />
+            <StatusStrip label="Unit states in process order" items={DB_STRIP.slice(2, 8)} />
           </Panel>
           <Panel className="col-span-7" title="Equipment" subtitle={`${DB_UNITS.length} units`} padding="none">
-            <DataTable label="Equipment" flush columns={DB_UNIT_COLUMNS.filter((column) => column.id !== 'area')} rows={DB_UNITS.slice(0, 6)} rowKey={(unit) => unit.id} rowTone={(unit) => (unit.state === 'running' ? undefined : DB_STATE_TONE[unit.state])} />
+            <DataTable label="Equipment" flush columns={DB_UNIT_COLUMNS.filter((column) => column.id !== 'area' && column.id !== 'crit')} rows={DB_UNITS.slice(2, 9)} rowKey={(unit) => unit.id} rowTone={(unit) => (unit.state === 'running' ? undefined : DB_STATE_TONE[unit.state])} />
           </Panel>
           <Panel className="col-span-5" title="Work orders" subtitle="Open and planned">
             <DbOrderRows limit={4} />
@@ -834,10 +838,10 @@ function DashBlockAssembledWall() {
   return (
     <DbSheet look="signal">
       <Grid>
-        <Stat className="col-span-5" size="hero" label="Plant state" value="Reduced" tone="warning" state="Recompressor tripped 13:46" stateIcon={<IconAlertTriangle />} target="Export at 97 % of plan" />
-        <Stat className="col-span-2" size="lg" label="Critical alarms" value={1} tone="critical" state="Act now" stateIcon={<IconAlertOctagon />} />
-        <Stat className="col-span-2" size="lg" label="Flaring" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" tone="success" state="Normal" stateIcon={<IconCircleCheck />} />
-        <Stat className="col-span-3" size="lg" label="Days since incident" value={PLANT_KPIS.daysSinceIncident.value} tone="success" state="On track" stateIcon={<IconCircleCheck />} />
+        <Stat className="col-span-6" size="hero" label="Plant state" value={97} unit="% of plan" tone="warning" state="Reduced" stateIcon={<IconAlertTriangle />} target="Recompressor tripped 13:46" />
+        <Stat className="col-span-2" label="Critical alarms" value={1} tone="critical" state="Urgent" target="1 unacknowledged" />
+        <Stat className="col-span-2" label="Flaring" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" tone="success" state="Normal" target="Limit 15.0" />
+        <Stat className="col-span-2" label="Days since incident" value={PLANT_KPIS.daysSinceIncident.value} tone="success" state="On track" target="Record 365" />
         <StatusStrip className="col-span-12" label="Unit states in process order" items={DB_STRIP} />
         <Panel className="col-span-8" title="Gas export">
           <DbExportChart height={220} />
@@ -863,7 +867,7 @@ function DashBlockAssembledReport() {
             <Stat variant="plain" size="lg" {...DB_KPI_EXPORT} icon={undefined} sparkline={undefined} />
             <Stat variant="plain" size="lg" {...DB_KPI_AVAILABILITY} icon={undefined} sparkline={undefined} />
             <Stat variant="plain" size="lg" {...DB_KPI_ENERGY} icon={undefined} sparkline={undefined} />
-            <Stat variant="plain" size="lg" {...DB_KPI_FLARING} />
+            <Stat variant="plain" size="lg" {...DB_KPI_FLARING} sparkline={undefined} />
           </StatGroup>
           <Panel className="col-span-7" title="Export per day" subtitle="MSm³/d against the 4.50 plan">
             <DbDailyBars height={250} />

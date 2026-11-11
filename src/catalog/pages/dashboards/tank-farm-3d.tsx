@@ -541,7 +541,7 @@ function TankFarm3dTerminal({ initial = TANKFARM3D_INITIAL, layout = 'desk', sti
             selectedId={state.selectedId}
             onSelect={(id) => dispatch({ type: 'select', id })}
             view={state.plan ? 'top' : 'perspective'}
-            insets={{ top: 44, bottom: 8, left: 36 }}
+            insets={{ top: 72, bottom: 8, left: 36 }}
           >
             <TankFarm3dScenery berthed={berth !== undefined} />
           </TankFarm>

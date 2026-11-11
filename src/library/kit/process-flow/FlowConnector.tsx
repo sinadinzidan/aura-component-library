@@ -32,7 +32,7 @@ export function FlowConnector({ label, state = 'flowing', tone = 'neutral', orie
       data-state={state}
       role="img"
       aria-label={label ? `${stopped ? 'No flow' : 'Flow'}, ${label}` : stopped ? 'No flow' : 'Flow'}
-      className={cx('flex min-w-0 shrink-0 items-center justify-center', vertical ? 'h-12 flex-row gap-2' : 'w-full flex-col gap-1', className)}
+      className={cx('flex min-w-0 shrink-0 items-center justify-center', vertical ? 'h-9 flex-row gap-2' : 'w-full flex-col gap-1', className)}
       style={{ color: stopped ? 'var(--kit-text-3)' : 'var(--t-line)' }}
     >
       {label && !vertical ? <span className="max-w-full text-center text-xs font-medium whitespace-nowrap text-(--kit-text-2) tabular-nums">{label}</span> : null}

@@ -295,14 +295,14 @@ function AeCounts({ size = 'md', plain = false }: { size?: 'md' | 'lg' | 'hero';
   );
 }
 
-function AeRateBars({ height = 220 }: { height?: number }) {
+function AeRateBars({ height = 220, slots = 10 }: { height?: number; slots?: number }) {
   return (
     <Bars
-      label="Alarms raised per ten minutes over the last 100 minutes against the flood limit"
-      categories={AE_RATE_SLOTS}
-      series={[{ id: 'rate', label: 'Alarms per 10 min', values: AE_RATE }]}
-      tones={AE_RATE_TONES}
-      limit={{ value: 10, label: 'Flood limit 10', tone: 'critical' }}
+      label="Alarms raised per ten minutes against the flood limit"
+      categories={AE_RATE_SLOTS.slice(-slots)}
+      series={[{ id: 'rate', label: 'Alarms per 10 min', values: AE_RATE.slice(-slots) }]}
+      tones={AE_RATE_TONES.slice(-slots)}
+      limit={{ value: 10, label: 'Flood limit', tone: 'critical' }}
       showValues
       height={height}
     />
@@ -319,8 +319,8 @@ function AeVibrationTrend({ height = 240 }: { height?: number }) {
       yDomain={[4, 14]}
       series={[{ id: 'vibration', label: '23-VT-92740', values: AE_VIBRATION_VALUES, tone: 'critical' }]}
       limits={[
-        { value: 7.1, label: 'High 7.1', tone: 'warning' },
-        { value: 11, label: 'Trip 11.0', tone: 'critical' },
+        { value: 7.1, label: 'High', tone: 'warning' },
+        { value: 11, label: 'Trip', tone: 'critical' },
       ]}
     />
   );
@@ -443,7 +443,7 @@ function AlarmsAndEventsMarkers() {
         <Panel className="col-span-4" title="Chattering" subtitle="Came back 9 times in 24 hours" icon={<IconChip tone="warning"><IconRepeat /></IconChip>}>
           <div className="flex flex-1 flex-col justify-between gap-4">
             <div className="flex items-end justify-between gap-4">
-              <Stat variant="plain" size="lg" label="Discharge temperature high" value={9} unit="activations" tone="warning" />
+              <Stat variant="plain" size="lg" label="Activations in 24 h" value={9} tone="warning" target="Discharge temperature high" />
               <SparkLine className="h-12 w-28" variant="bars" tone="warning" label="Activations per hour, last 12 hours" values={[0, 1, 0, 2, 1, 0, 0, 1, 2, 1, 0, 1]} />
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -562,7 +562,7 @@ function AlarmsAndEventsAnnunciator() {
           </span>
         }
       >
-        <AnnunciatorGrid label="Compression train annunciator" windows={AE_WINDOWS} columns={4} selected={selected} onSelect={setSelected} />
+        <AnnunciatorGrid label="Compression train annunciator" windows={AE_WINDOWS} columns={4} selected={selected} onSelect={setSelected} className="flex-1" />
       </Panel>
     </Canvas>
   );
@@ -828,22 +828,35 @@ function AlarmsAndEventsTimeline() {
 function AlarmsAndEventsHeat() {
   return (
     <Canvas>
-      <Panel title="Alarm load by hour" subtitle="Where and when alarms pile up, last 24 hours">
-        <div className="flex flex-1 flex-col justify-between gap-5">
-          <div className="grid grid-cols-3 gap-4">
-            <Stat variant="plain" size="md" label="Raised" value={71} />
-            <Stat variant="plain" size="md" label="Busiest hour" value="9" unit="at 13:00" tone="warning" />
-            <Stat variant="plain" size="md" label="From compression" value={62} unit="%" />
+      <Grid>
+        <Panel className="col-span-7" title="Alarm load by hour" subtitle="Where and when alarms pile up, last 24 hours">
+          <div className="flex flex-1 flex-col justify-between gap-5">
+            <div className="grid grid-cols-3 gap-4">
+              <Stat variant="plain" size="md" label="Raised" value={71} />
+              <Stat variant="plain" size="md" label="Busiest hour" value="9" unit="at 13:00" tone="warning" />
+              <Stat variant="plain" size="md" label="From compression" value={62} unit="%" />
+            </div>
+            <HeatStrip
+              size="lg"
+              label="Alarms per hour by area over the last 24 hours"
+              rows={AE_HEAT}
+              ticks={['24 h ago', '18 h', '12 h', '6 h', 'Now']}
+              scale={{ label: 'Alarms per hour', low: '0', high: '9' }}
+            />
           </div>
-          <HeatStrip
-            size="lg"
-            label="Alarms per hour by area over the last 24 hours"
-            rows={AE_HEAT}
-            ticks={['14:00', '20:00', '02:00', '08:00', '14:00']}
-            scale={{ label: 'Alarms per hour', low: '0', high: '9' }}
+        </Panel>
+        <Panel className="col-span-5" title="Most frequent alarms" subtitle="Activations in 24 hours · ten alarms make 64 % of the load">
+          <Bars
+            label="Activations per alarm over the last 24 hours, most frequent first"
+            orientation="horizontal"
+            categories={['Discharge temp high', 'Cooler outlet temp high', 'Vibration approaching', 'Motor current high', 'Separator level dev.']}
+            series={[{ id: 'count', label: 'Activations', values: [9, 7, 6, 4, 3] }]}
+            tones={['warning', 'info', 'warning', 'info', 'neutral']}
+            showValues
+            height={250}
           />
-        </div>
-      </Panel>
+        </Panel>
+      </Grid>
     </Canvas>
   );
 }
@@ -896,18 +909,15 @@ function AlarmsAndEventsConsole() {
           <StatGroup columns={4} label="Open alarms by priority" className="col-span-12">
             <AeCounts size="lg" plain />
           </StatGroup>
-          <Panel className="col-span-7" title="Alarm summary" subtitle="5 open · sorted by priority, then age" padding="none" tone="critical">
+          <Panel className="col-span-12" title="Alarm summary" subtitle="5 open of 8 · sorted by priority, then age" padding="none" tone="critical">
             <ul>
               {ALARMS.map((alarm) => (
                 <AeRow key={alarm.id} alarm={alarm} density="compact" />
               ))}
             </ul>
           </Panel>
-          <Panel className="col-span-5" title="23 Gas compression" subtitle="Annunciator" padding="none">
-            <AnnunciatorGrid label="Gas compression annunciator" windows={AE_WINDOWS} columns={3} selected={selected} onSelect={setSelected} />
-          </Panel>
-          <Panel className="col-span-7" title="Alarm rate" subtitle="Per 10 min · flood limit 10">
-            <AeRateBars height={200} />
+          <Panel className="col-span-7" title="23 Gas compression" subtitle="Annunciator · 12 points · 3 unacknowledged" padding="none">
+            <AnnunciatorGrid label="Gas compression annunciator" windows={AE_WINDOWS} columns={4} selected={selected} onSelect={setSelected} className="flex-1" />
           </Panel>
           <Panel className="col-span-5" title="Sequence of events" subtitle="23-KA-9103 · 13:31 to 13:52">
             <EventTimeline label="Sequence of events for the recompressor trip" events={AE_EVENTS} />
@@ -933,11 +943,11 @@ function AlarmsAndEventsSignal() {
               <p className="text-xl font-medium">High vibration on 23-VT-92740: 11.6 mm/s against a trip limit of 11.0. Not acknowledged.</p>
             </div>
           </Panel>
-          <div className="col-span-5 grid grid-cols-2 gap-2">
+          <div className="col-span-5 grid min-w-0 grid-cols-2 gap-2">
             {AE_SEVERITIES.map((severity) => (
               <Stat
                 key={severity}
-                size="lg"
+                size="md"
                 tone={AE_COUNT[severity] === 0 ? 'success' : AE_TONE[severity]}
                 label={AE_WORD[severity]}
                 value={AE_COUNT[severity]}
@@ -981,7 +991,7 @@ function AlarmsAndEventsPoster() {
             </ul>
           </Panel>
           <Panel className="col-span-5" title="Alarm rate" subtitle="Per ten minutes, flood limit 10">
-            <AeRateBars height={280} />
+            <AeRateBars height={280} slots={6} />
           </Panel>
         </Grid>
       </Canvas>
@@ -1082,17 +1092,24 @@ function AlarmsAndEventsWorkbench() {
             }
           >
             <div className="flex flex-1 flex-col justify-between gap-5">
-              <div className="grid grid-cols-3 gap-4">
-                <Stat variant="plain" size="md" label="Value" value={alarm.value} tone={AE_TONE[alarm.severity]} />
-                <Stat variant="plain" size="md" label="Limit" value={alarm.limit} />
-                <Stat variant="plain" size="md" label="Raised" value={formatTime(alarm.raisedAt)} unit="UTC" />
+              <div className="flex items-end justify-between gap-4">
+                <Stat variant="plain" size="lg" label="Value now" value={alarm.value} tone={AE_TONE[alarm.severity]} target={`Limit ${alarm.limit}`} />
+                <StatusPill tone={AE_TONE[alarm.severity]} size="lg" icon={<AeIcon severity={alarm.severity} />}>
+                  {AE_WORD[alarm.severity]}
+                </StatusPill>
               </div>
+              <SparkLine
+                className="h-24"
+                tone={AE_TONE[alarm.severity]}
+                label={`${alarm.message}, last two hours`}
+                values={makeValues({ seed: 90 + AE_OPEN.indexOf(alarm), points: 30, base: 60, amplitude: 4, noise: 2.5, drift: 22 })}
+              />
               <AeFacts
                 items={[
-                  ['Priority', <StatusPill key="p" tone={AE_TONE[alarm.severity]}>{AE_WORD[alarm.severity]}</StatusPill>],
                   ['State', AE_STATE[alarm.state]],
                   ['Tag', <TagId key="t">{alarm.sensorTag}</TagId>],
-                  ['Age', formatAgo(alarm.raisedAt)],
+                  ['Raised', `${formatTime(alarm.raisedAt)} UTC · ${formatAgo(alarm.raisedAt)}`],
+                  ['Response', alarm.severity === 'critical' ? 'Within 10 minutes' : 'Within 30 minutes'],
                 ]}
               />
             </div>
@@ -1120,17 +1137,17 @@ function AlarmsAndEventsGlass() {
         <Grid>
           <Panel className="col-span-4" title="Operator load" subtitle="This shift against targets">
             <div className="grid flex-1 grid-cols-2 place-items-center gap-5">
-              <RingGauge label="Acknowledged in 10 min" value={86} tone="success" size={116} />
-              <RingGauge label="Time out of flood" value={94} tone="warning" size={116} />
-              <RingGauge label="Alarms with a response" value={78} tone="accent" size={116} />
-              <RingGauge label="Shelving slots used" value={20} tone="info" size={116} />
+              <RingGauge label="Acked in 10 min" value={86} tone="success" size={116} />
+              <RingGauge label="Out of flood" value={94} tone="warning" size={116} />
+              <RingGauge label="With a response" value={78} tone="accent" size={116} />
+              <RingGauge label="Shelving used" value={20} tone="info" size={116} />
             </div>
           </Panel>
           <Panel className="col-span-8" title="Vibration, recompressor drive end" subtitle="23-VT-92740 · the two hours before the trip">
             <AeVibrationTrend height={280} />
           </Panel>
-          <Panel className="col-span-5" title="What happened" subtitle="13:31 to 13:52">
-            <EventTimeline label="Sequence of events for the recompressor trip" events={AE_EVENTS.slice(0, 5)} />
+          <Panel className="col-span-5" title="What happened" subtitle="13:31 to 13:52" footer="21 minutes from first warning to work order">
+            <EventTimeline label="Sequence of events for the recompressor trip" events={AE_EVENTS} />
           </Panel>
           <Panel className="col-span-7" title="Open alarms" subtitle="5 open, most severe first">
             <AeRows />
@@ -1239,7 +1256,7 @@ export default definePage({
           title: 'Annunciator',
           note: 'Pick it for a fixed set of alarm points on one system, where position is how people find them.',
           origin: 'custom',
-          size: 'md',
+          size: 'lg',
           bleed: true,
           uses: ['kit/alarms-and-events/AnnunciatorGrid.tsx', 'kit/Panel.tsx'],
           Component: AlarmsAndEventsAnnunciator,
@@ -1249,7 +1266,7 @@ export default definePage({
           title: 'Alarms by unit',
           note: 'Pick it on overview pages to show where the alarms are before which they are.',
           origin: 'custom',
-          size: 'md',
+          size: 'sm',
           bleed: true,
           uses: ['kit/ListRow.tsx', 'kit/IconChip.tsx', 'kit/StatusPill.tsx'],
           Component: AlarmsAndEventsByUnit,
@@ -1258,8 +1275,8 @@ export default definePage({
     },
     {
       id: 'acting',
-      title: 'Lists and actions',
-      description: 'Filtering, selecting, acknowledging and shelving, with the empty state.',
+      title: 'Lists, actions and incidents',
+      description: 'Filtering, selecting, acknowledging and shelving, the empty state, and one incident told in order.',
       specimens: [
         {
           id: 'AlarmsAndEventsFiltered',
@@ -1311,13 +1328,6 @@ export default definePage({
           uses: ['kit/EmptyPanel.tsx', 'kit/Panel.tsx'],
           Component: AlarmsAndEventsEmpty,
         },
-      ],
-    },
-    {
-      id: 'time',
-      title: 'Over time',
-      description: 'When alarms stood, where they piled up, and the log behind them.',
-      specimens: [
         {
           id: 'AlarmsAndEventsTimeline',
           title: 'Event timeline',
@@ -1328,6 +1338,13 @@ export default definePage({
           uses: ['kit/alarms-and-events/EventTimeline.tsx', 'kit/Panel.tsx'],
           Component: AlarmsAndEventsTimeline,
         },
+      ],
+    },
+    {
+      id: 'time',
+      title: 'Over time',
+      description: 'When alarms stood, where they piled up, and the log behind them.',
+      specimens: [
         {
           id: 'AlarmsAndEventsLanes',
           title: 'Standing-time lanes',
@@ -1340,12 +1357,12 @@ export default definePage({
         },
         {
           id: 'AlarmsAndEventsHeat',
-          title: 'Alarm load by hour',
-          note: 'Pick it to show which area and which hours produce the load.',
+          title: 'Alarm load and top contributors',
+          note: 'Pick it to show which area, which hours and which few alarms produce the load.',
           origin: 'custom',
-          size: 'md',
+          size: 'full',
           bleed: true,
-          uses: ['kit/HeatStrip.tsx', 'kit/Stat.tsx'],
+          uses: ['kit/HeatStrip.tsx', 'kit/Bars.tsx', 'kit/Stat.tsx'],
           Component: AlarmsAndEventsHeat,
         },
         {

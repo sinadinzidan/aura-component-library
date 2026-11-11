@@ -1,7 +1,7 @@
 import { useLook } from '../../looks/useLook';
 import { cx, formatNumber, type Tone } from '../tones';
 
-import { rangeShare } from './limits';
+import { rangeShare, roundTickCount } from './limits';
 
 type BandScaleProps = {
   label: string;
@@ -17,7 +17,7 @@ type BandScaleProps = {
   trip?: number;
   /** Colour of the pointer: the state of the value. */
   tone?: Tone;
-  /** Number of labelled ticks under the scale. */
+  /** Number of labelled ticks under the scale. Leave out for round steps. */
   ticks?: number;
   /** Only the scale, without the label and value line above it: for table cells. */
   compact?: boolean;
@@ -29,10 +29,11 @@ type BandScaleProps = {
  * editorial the band is drawn as a dimension line with its bounds written out; elsewhere it is a
  * highlighted stretch of the track.
  */
-export function BandScale({ label, value, min = 0, max, unit, decimals = 0, low, high, trip, tone = 'success', ticks = 5, compact = false, className }: BandScaleProps) {
+export function BandScale({ label, value, min = 0, max, unit, decimals = 0, low, high, trip, tone = 'success', ticks: tickCount, compact = false, className }: BandScaleProps) {
   const look = useLook();
   const dimension = look === 'blueprint' || look === 'editorial';
   const at = (point: number) => `${rangeShare(point, min, max) * 100}%`;
+  const ticks = tickCount ?? roundTickCount(max - min);
   const tickValues = Array.from({ length: ticks }, (_, index) => min + ((max - min) * index) / (ticks - 1));
   const text = `${formatNumber(value, decimals)}${unit ? ` ${unit}` : ''}`;
 

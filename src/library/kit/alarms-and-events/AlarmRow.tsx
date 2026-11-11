@@ -156,7 +156,7 @@ export function AlarmRow({
       )}
     >
       {badge}
-      <div className={cx('min-w-0 flex-1', compact ? 'flex items-baseline gap-3' : 'flex flex-col gap-0.5 py-1')}>
+      <div className={cx('min-w-0 flex-1', compact ? 'flex flex-wrap items-baseline gap-x-3' : 'flex flex-col gap-0.5 py-1')}>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <span className={cx('leading-5', quiet ? 'font-medium' : 'font-semibold', quiet && !filled ? 'text-[var(--kit-text-2)]' : '')}>{message}</span>
           {markers}
@@ -166,7 +166,7 @@ export function AlarmRow({
           {compact ? null : anatomy === 'card' ? <span className="whitespace-nowrap">{severity}</span> : null}
         </div>
       </div>
-      <div className={cx('shrink-0 text-right leading-5 tabular-nums', compact ? 'flex items-baseline gap-2' : 'flex flex-col')}>
+      <div className={cx('shrink-0 text-right leading-5 tabular-nums', compact ? 'flex w-48 items-baseline justify-end gap-2' : 'flex flex-col')}>
         <span className="font-semibold whitespace-nowrap">{value}</span>
         <span className={cx('text-[0.8125rem] whitespace-nowrap', filled ? 'opacity-90' : 'text-[var(--kit-text-2)]')}>limit {limit}</span>
       </div>

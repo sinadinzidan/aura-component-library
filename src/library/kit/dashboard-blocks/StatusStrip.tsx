@@ -68,7 +68,7 @@ export function StatusStrip({ label, items, selectedId, onSelect, className }: S
               {item.state}
             </span>
             <span className="text-sm leading-5 font-medium">{item.label}</span>
-            {item.detail ? <span className={cx('text-xs leading-4 tabular-nums', fill === 'vivid' ? '' : 'text-(--kit-text-2)')}>{item.detail}</span> : null}
+            {item.detail ? <span className={cx('text-xs leading-4 whitespace-nowrap tabular-nums', fill === 'vivid' ? '' : 'text-(--kit-text-2)')}>{item.detail}</span> : null}
           </>
         );
         return onSelect ? (

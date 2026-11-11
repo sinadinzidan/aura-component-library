@@ -167,7 +167,7 @@ const PO_AREA_ALARMS: Record<string, number> = Object.fromEntries(
   PO_AREAS.map((area) => [area.id, PO_OPEN_ALARMS.filter((alarm) => findAsset(alarm.assetId)?.parentId === area.id).length])
 );
 
-const PO_SIX_HOURS = ['24 h ago', '18 h', '12 h', '6 h', 'Now'];
+const PO_SIX_HOURS = ['−24 h', '−18 h', '−12 h', '−6 h', 'Now'];
 
 const PO_NAV: AppFrameNavItem[] = [
   { id: 'overview', label: 'Overview', icon: <IconLayoutDashboard /> },
@@ -877,7 +877,7 @@ function PlantOverviewGlass() {
           />
 
           <Panel className="col-span-7" title="Open alarms" subtitle="Most severe first">
-            <PoAlarmRows limit={4} />
+            <PoAlarmRows limit={5} />
           </Panel>
           <Panel className="col-span-5" title="Compression train" subtitle="1st stage compressor, live">
             <PoTrainMeters />

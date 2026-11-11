@@ -749,7 +749,7 @@ function KpiTilesWallRow() {
         <Stat className="col-span-3" tone="success" state="Normal" stateIcon={<IconCircleCheck />} label="Flaring" value={12.4} decimals={1} unit="kSm³/d" />
         <Stat className="col-span-3" tone="warning" state="Watch" stateIcon={<IconAlertTriangle />} label="Availability" value={96.4} decimals={1} unit="%" />
         <Stat className="col-span-3" tone="info" state="In progress" stateIcon={<IconTool />} label="Work orders today" value="3 of 7" />
-        <Stat className="col-span-3" tone="neutral" state="Next handover" stateIcon={<IconClock />} label="Shift" value="19:00" />
+        <Stat className="col-span-3" tone="neutral" state="Handover" stateIcon={<IconClock />} label="Shift" value="19:00" />
       </Grid>
     </KpiTilesSheet>
   );

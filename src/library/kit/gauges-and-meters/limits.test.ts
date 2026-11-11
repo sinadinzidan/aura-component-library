@@ -1,4 +1,4 @@
-import { limitState, limitTone, limitWord, rangeShare } from './limits';
+import { limitState, limitTone, limitWord, rangeShare, roundTickCount } from './limits';
 
 describe('limits', () => {
   const limits = { low: 40, high: 52, trip: 55 };
@@ -30,5 +30,11 @@ describe('limits', () => {
     expect(rangeShare(90, 0, 60)).toBe(1);
     expect(rangeShare(-5, 0, 60)).toBe(0);
     expect(rangeShare(5, 5, 5)).toBe(0);
+  });
+
+  it('picks a tick count that gives whole steps', () => {
+    expect(roundTickCount(60)).toBe(5);
+    expect(roundTickCount(15)).toBe(6);
+    expect(roundTickCount(7)).toBe(5);
   });
 });

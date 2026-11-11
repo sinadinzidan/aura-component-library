@@ -68,11 +68,10 @@ export function BoxRows({ label, rows, min, max, unit, decimals = 1, limit, step
                 data-box=""
                 className="absolute inset-y-0"
                 style={{
-                  ...markStyle(look, color),
+                  ...(look === 'blueprint' ? { border: `1.5px solid ${color}`, background: 'var(--kit-halo)' } : markStyle(look, color)),
                   left: percent(row.stats.q1, min, max),
                   right: `calc(100% - ${percent(row.stats.q3, min, max)})`,
                   borderRadius: markRadius(look, 8),
-                  backgroundColor: look === 'blueprint' ? 'var(--kit-halo)' : undefined,
                 }}
               />
               <span

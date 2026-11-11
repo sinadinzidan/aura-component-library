@@ -74,7 +74,7 @@ export function ConditionBoard({ label, items, words = DEFAULT_WORDS, layout = '
           <span>{words.met.toLowerCase()}</span>
           {summary.bypassed > 0 ? <span>· {summary.bypassed} bypassed</span> : null}
           <span className="font-semibold" style={{ color: 'var(--t-ink)' }}>
-            · {summary.clear ? 'Nothing blocks' : `${summary.unmet} ${summary.unmet === 1 ? 'blocks' : 'block'}`}
+            · {summary.clear ? 'Nothing blocking' : `${summary.unmet} blocking`}
           </span>
         </p>
       )}

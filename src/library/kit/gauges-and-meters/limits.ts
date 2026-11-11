@@ -38,3 +38,8 @@ export function limitTone(value: number, limits: Limits): StatusTone {
 export function rangeShare(value: number, min: number, max: number): number {
   return Math.min(1, Math.max(0, (value - min) / (max - min || 1)));
 }
+
+/** The tick count, from 6 down to 3, whose step is a whole number; 5 when none is. */
+export function roundTickCount(span: number): number {
+  return [5, 6, 4, 3].find((count) => Number.isInteger(span / (count - 1))) ?? 5;
+}

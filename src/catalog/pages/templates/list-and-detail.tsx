@@ -183,7 +183,7 @@ function ldSensorTrend(sensor: Sensor): number[] {
 }
 
 function LdUser({ compact = false }: { compact?: boolean }) {
-  return <PersonChip name="Magnus Solberg" initials="MS" role="Planner" tone="purple" compact={compact} />;
+  return <PersonChip name="M. Solberg" initials="MS" role="Planner" tone="purple" compact={compact} />;
 }
 
 function LdSensorTrend({ sensor, height = 220, fill = false }: { sensor: Sensor; height?: number; fill?: boolean }) {
@@ -869,9 +869,9 @@ function ListDetailAssetStatus() {
 }
 
 const LD_ORDER_STEPS = [
-  { id: 'isolate', label: 'Isolate', description: 'Done 14:05' },
-  { id: 'open', label: 'Open bearing', description: 'Done 14:20' },
-  { id: 'inspect', label: 'Inspect', description: 'In progress' },
+  { id: 'isolate', label: 'Isolate' },
+  { id: 'open', label: 'Open bearing' },
+  { id: 'inspect', label: 'Inspect' },
   { id: 'measure', label: 'Measure' },
   { id: 'close', label: 'Close out' },
 ];
@@ -904,7 +904,7 @@ function ListDetailWorkOrder() {
         actions={<Button size="sm">Log progress</Button>}
       >
         <Grid>
-          <Panel className="col-span-12" tone="teal" title="Where it stands" subtitle="Step 3 of 5">
+          <Panel className="col-span-12" tone="teal" title="Where it stands" subtitle="Step 3 of 5 · isolated 14:05, bearing opened 14:20, inspection in progress">
             <Steps label="Work order steps" items={LD_ORDER_STEPS} current={2} />
           </Panel>
           <Panel className="col-span-7" title="Inspection checklist" subtitle={`${done.length} of ${LD_ORDER_CHECKS.length} done`}>

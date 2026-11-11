@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
-import { BarrierStack, barrierState, type Barrier } from './BarrierStack';
+import { BarrierStack } from './BarrierStack';
+import { barrierState, type Barrier } from './permits';
 
 const BARRIERS: Barrier[] = [
   { id: 'esd', name: 'Emergency shutdown', role: 'Control', passed: 10, degraded: 0, failed: 0 },

@@ -161,13 +161,6 @@ const SHELLS_ORDER_COLUMNS: DataTableColumn<WorkOrder>[] = [
   { id: 'due', header: 'Due', numeric: true, cell: (order) => formatDate(order.dueAt) },
 ];
 
-const SHELLS_UNIT_COLUMNS: DataTableColumn<Asset>[] = [
-  { id: 'unit', header: 'Unit', nowrap: true, cell: (unit) => unit.name },
-  { id: 'tag', header: 'Tag', nowrap: true, cell: (unit) => <TagId>{unit.tag}</TagId> },
-  { id: 'state', header: 'State', nowrap: true, cell: (unit) => <StatusPill tone={SHELLS_STATE_TONE[unit.state]}>{SHELLS_STATE_LABEL[unit.state]}</StatusPill> },
-  { id: 'health', header: 'Health', numeric: true, cell: (unit) => `${unit.healthScore} %` },
-];
-
 function ShellsSeverityIcon({ severity }: { severity: Alarm['severity'] }) {
   if (severity === 'critical') return <IconAlertOctagon />;
   if (severity === 'high') return <IconAlertTriangle />;
@@ -409,24 +402,31 @@ function AppShellsConsoleStatusBar() {
                   Shelve
                 </Button>
               </div>
-              <StatGroup columns={4} label="Alarm reading" className="col-span-12">
+              <StatGroup columns={3} label="Alarm reading" className="col-span-12">
                 <Stat variant="plain" size="lg" label="Value" value={shellsFigure(alarm.value)} unit={shellsUnit(alarm.value)} tone={SHELLS_SEVERITY_TONE[alarm.severity]} />
                 <Stat variant="plain" size="lg" label="Limit" value={shellsFigure(alarm.limit)} unit={shellsUnit(alarm.limit)} />
                 <Stat variant="plain" size="lg" label="Asset health" value={asset?.healthScore ?? 0} unit="%" tone={asset ? SHELLS_HEALTH_TONE[asset.health] : 'neutral'} />
-                <Stat variant="plain" size="lg" label="Gas export" value={PLANT_KPIS.gasExport.value} decimals={2} unit="MSm³/d" target="Plan 4.50" />
               </StatGroup>
-              <Panel className="col-span-7" title="Gas export" subtitle="MSm³/d · last 24 h · plan 4.50">
+              <Panel className="col-span-6" title="Gas export" subtitle="MSm³/d · last 24 h · plan 4.50">
                 <ShellsExportTrend height={230} fill={false} />
               </Panel>
-              <Panel className="col-span-5" title="Equipment" subtitle="Gas compression" padding="none">
-                <DataTable
-                  label="Gas compression equipment"
-                  flush
-                  columns={SHELLS_UNIT_COLUMNS.filter((column) => column.id !== 'tag')}
-                  rows={childrenOf('nk-23')}
-                  rowKey={(unit) => unit.id}
-                  rowTone={(unit) => (unit.state === 'running' ? undefined : SHELLS_STATE_TONE[unit.state])}
-                />
+              <Panel className="col-span-6" title="Equipment" subtitle="Gas compression" padding="none">
+                <ul>
+                  {childrenOf('nk-23').map((unit) => (
+                    <ListRow
+                      key={unit.id}
+                      tone={unit.state === 'running' ? 'neutral' : SHELLS_STATE_TONE[unit.state]}
+                      title={unit.name}
+                      meta={
+                        <>
+                          <TagId>{unit.tag}</TagId>
+                          <span>health {unit.healthScore} %</span>
+                        </>
+                      }
+                      trailing={<StatusPill tone={SHELLS_STATE_TONE[unit.state]}>{SHELLS_STATE_LABEL[unit.state]}</StatusPill>}
+                    />
+                  ))}
+                </ul>
               </Panel>
             </Grid>
           </Pane>

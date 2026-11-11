@@ -1,596 +1,738 @@
-import { chartSeriesColor } from '@cognite/aura/chart';
-import { Slider } from '@cognite/aura/components/slider';
-import { IconBell, IconFlag, IconTool } from '@cognite/aura/icons';
+import { IconAlertOctagon, IconAlertTriangle, IconBell, IconCircleCheck, IconFlag, IconInbox, IconTool } from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { ToggleGroup } from '../../../library/actions/ToggleGroup';
-import { AnnotationKey } from '../../../library/industrial/charts/AnnotationKey';
-import { SeriesLegend } from '../../../library/industrial/charts/SeriesLegend';
-import { summarize } from '../../../library/industrial/charts/stats';
-import { formatDayTime, formatSpan } from '../../../library/industrial/charts/timeAxis';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import type { TrendEvent, TrendSeries } from '../../../library/industrial/charts/TrendChart';
-import { sliceByTime, valueAt } from '../../../library/industrial/charts/trendData';
-import type { TrendPoint } from '../../../library/industrial/charts/trendData';
-import { formatReading } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { HOUR, MINUTE, REFERENCE_NOW, formatTime, makeSeries } from '../../data/series';
+import { Canvas } from '../../../library/kit/Canvas';
+import { AnnotatedTrend, type EventMark, type RegionMark } from '../../../library/kit/chart-annotations/AnnotatedTrend';
+import { findCrossings, findExtremes, summarizeRange } from '../../../library/kit/chart-annotations/annotations';
+import { EventBadge } from '../../../library/kit/chart-annotations/EventBadge';
+import { FilterPills } from '../../../library/kit/dashboard-blocks/FilterPills';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { EmptyPanel } from '../../../library/kit/EmptyPanel';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Legend } from '../../../library/kit/Legend';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Panel } from '../../../library/kit/Panel';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber } from '../../../library/kit/tones';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
+import { MINUTE, formatTime, makeSeries, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './chart-annotations.tsx?raw';
 
-const NOW = REFERENCE_NOW;
-const STEP = 10 * MINUTE;
+const CA_POINTS = 49;
 
-const trend = (options: { seed: number; base: number; amplitude?: number; noise?: number; drift?: number; cycles?: number; points?: number; end?: number }): TrendPoint[] =>
-  makeSeries({ points: 145, stepMs: STEP, ...options }).map((point) => ({ t: point.t, v: point.v }));
+const CA_LAST = CA_POINTS - 1;
 
-const numbers = (points: readonly TrendPoint[]): number[] => points.flatMap((point) => (point.v === null ? [] : [point.v]));
+const CA_LABELS = makeSeries({ seed: 1, points: CA_POINTS, base: 0, stepMs: 30 * MINUTE }).map((point) => formatTime(point.t));
 
-/** Discharge pressure and temperature of the 1st stage compressor, last 24 hours. */
-const PRESSURE = trend({ seed: 11, base: 48.2, amplitude: 1.4, noise: 0.4, cycles: 2 });
-const TEMPERATURE = [...trend({ seed: 13, base: 137, amplitude: 3, noise: 0.9, drift: 5, cycles: 2 }).slice(0, -4), ...[143.6, 144.8, 145.7, 146.3].map((v, index) => ({ t: NOW - (3 - index) * STEP, v }))];
-const SUCTION = trend({ seed: 12, base: 12.4, amplitude: 0.5, noise: 0.15, cycles: 2 });
-const INTERSTAGE = trend({ seed: 18, base: 42.6, amplitude: 0.6, noise: 0.2, cycles: 2 });
-const PRESSURE_SERIES: TrendSeries = { key: 'pressure', label: 'Discharge pressure', points: PRESSURE };
-const TEMPERATURE_SERIES: TrendSeries = { key: 'temperature', label: 'Discharge temperature', points: TEMPERATURE };
+const CA_PRESSURE = makeValues({ seed: 11, points: CA_POINTS, base: 48.2, amplitude: 1.4, noise: 0.4, cycles: 2 });
 
-/** Cooler outlet temperature with the cooler out of service for cleaning between 02:00 and 06:00. */
-const WINDOW_FROM = NOW - 12 * HOUR;
-const WINDOW_TO = NOW - 8 * HOUR;
-const COOLER = trend({ seed: 19, base: 37.5, amplitude: 1.2, noise: 0.35, cycles: 2 }).map((point) => ({
-  t: point.t,
-  v: point.t > WINDOW_FROM && point.t < WINDOW_TO ? Math.round(((point.v ?? 0) - 9) * 10) / 10 : point.t >= WINDOW_TO ? Math.round(((point.v ?? 0) - 1.8) * 10) / 10 : point.v,
-}));
+const CA_INTERSTAGE = makeValues({ seed: 18, points: CA_POINTS, base: 44.6, amplitude: 0.9, noise: 0.3, cycles: 2 });
 
-/** Gas flow through the recompressor: a planned stop overnight and a trip in the early afternoon. */
-const STOP_FROM = NOW - 17 * HOUR;
-const STOP_TO = NOW - 13 * HOUR;
-const TRIP_FROM = NOW - 3 * HOUR;
-const TRIP_TO = NOW - 1.5 * HOUR;
-const stopped = (t: number): boolean => (t >= STOP_FROM && t < STOP_TO) || (t >= TRIP_FROM && t < TRIP_TO);
-const FLOW = makeSeries({ seed: 16, points: 145, base: 182, amplitude: 10, noise: 3, cycles: 2, stepMs: STEP, decimals: 0 }).map((point) => ({ t: point.t, v: stopped(point.t) ? 0 : point.v }));
+const CA_TEMPERATURE = [...makeValues({ seed: 13, points: CA_POINTS - 4, base: 137, amplitude: 2.5, noise: 0.8, drift: 4, cycles: 2 }), 143.6, 144.8, 145.7, 146.3];
 
-/** Drive-end vibration with a two-hour excursion that the anomaly model flagged. */
-const ANOMALY_FROM = NOW - 9 * HOUR;
-const ANOMALY_TO = NOW - 7 * HOUR;
-const VIBRATION = trend({ seed: 14, base: 5.4, amplitude: 0.3, noise: 0.12, cycles: 3 }).map((point) => {
-  const inside = point.t >= ANOMALY_FROM && point.t <= ANOMALY_TO;
-  const bump = inside ? Math.sin(((point.t - ANOMALY_FROM) / (ANOMALY_TO - ANOMALY_FROM)) * Math.PI) * 2.4 : 0;
-  return { t: point.t, v: Math.round(((point.v ?? 0) + bump) * 10) / 10 };
-});
-const VIBRATION_PEAK = VIBRATION.reduce((peak, point) => ((point.v ?? 0) > (peak.v ?? 0) ? point : peak), VIBRATION[0]);
+const CA_CROSSING = findCrossings(CA_TEMPERATURE, 145)[0]?.index ?? CA_LAST;
 
-/** Export flow: 16 hours of history and an 8-hour forecast with its uncertainty band. */
-const FORECAST_HISTORY = makeSeries({ seed: 20, points: 97, base: 412, amplitude: 16, noise: 5, cycles: 1.5, stepMs: STEP, decimals: 0 }).map((point) => ({ t: point.t, v: point.v }));
-const FORECAST = Array.from({ length: 49 }, (_, index) => {
-  const value = 412 - Math.sin((index / 48) * Math.PI) * 22 + index * 0.3;
-  return { t: NOW + index * STEP, v: Math.round(value), low: Math.round(value - 4 - index * 0.55), high: Math.round(value + 4 + index * 0.55) };
-});
+const CA_VIBRATION = makeValues({ seed: 14, points: CA_POINTS, base: 5.4, amplitude: 0.3, noise: 0.12, cycles: 3 }).map((value, index) =>
+  index >= 30 && index <= 34 ? Math.round((value + [0.9, 1.7, 2.3, 1.6, 0.7][index - 30]) * 10) / 10 : value
+);
 
-/** Weekly OEE for 12 weeks against the 85 % target. */
-const OEE = [80.1, 80.9, 81.4, 80.7, 82.2, 82.9, 83.4, 82.6, 83.8, 84.1, 81.9, 82.7].map((v, index) => ({ t: NOW - (11 - index) * 7 * 24 * HOUR, v }));
+const CA_VIBRATION_PEAK = findExtremes(CA_VIBRATION);
 
-type AnnotationEvent = { id: string; t: number; kind: 'Alarm' | 'Work order' | 'Operator'; title: string; detail: string; tone: Tone };
-
-/** What happened around the 1st stage compressor in the last 24 hours. */
-const EVENTS: readonly AnnotationEvent[] = [
-  { id: 'evt-1', t: NOW - 19 * HOUR, kind: 'Operator', title: 'Load raised to 185 kSm³/h', detail: 'Ingrid Haugen', tone: 'neutral' },
-  { id: 'WO-104466', t: NOW - 11 * HOUR, kind: 'Work order', title: 'Vibration survey started', detail: 'WO-104466', tone: 'info' },
-  { id: 'alm-4806', t: NOW - 5 * HOUR, kind: 'Alarm', title: 'Cooler outlet temperature high', detail: 'alm-4806 · 40.8 °C', tone: 'warning' },
-  { id: 'alm-4811', t: NOW - 38 * MINUTE, kind: 'Alarm', title: 'Discharge temperature high', detail: 'alm-4811 · 146.3 °C', tone: 'warning' },
+const CA_STOPS: RegionMark[] = [
+  { id: 'planned', from: 12, to: 20, label: 'Planned stop', tone: 'info' },
+  { id: 'trip', from: 41, to: 44, label: 'Trip', tone: 'critical' },
 ];
 
-const EVENT_ICON = { Alarm: IconBell, 'Work order': IconTool, Operator: IconFlag };
+const CA_FLOW = makeValues({ seed: 16, points: CA_POINTS, base: 182, amplitude: 10, noise: 3, cycles: 2, decimals: 0 }).map((value, index) =>
+  CA_STOPS.some((stop) => index > stop.from && index < stop.to) ? 0 : value
+);
 
-const numbered = (events: readonly AnnotationEvent[], selectedId?: string): TrendEvent[] =>
-  events.map((event, index) => ({ t: event.t, label: String(index + 1), tone: event.tone, solid: event.id === selectedId }));
+const CA_NOW = 32;
 
-/** 14 low-priority alarms spread over the day, too many to label one by one. */
-const CROWDED: TrendEvent[] = [1.2, 2.1, 2.4, 4.8, 5.1, 5.3, 8.7, 9.2, 12.6, 13.1, 13.4, 16.9, 20.2, 21.5].map((hours) => ({ t: NOW - 24 * HOUR + hours * HOUR, tone: 'warning' as const }));
+const CA_EXPORT_FLOW = makeValues({ seed: 20, points: CA_POINTS, base: 412, amplitude: 16, noise: 5, cycles: 1.5, decimals: 0 }).map((value, index) =>
+  index > CA_NOW ? Math.round(412 + (index - CA_NOW) * 1.8) : value
+);
 
-function ChartAnnotationLimitLabel() {
+const CA_COOLER = makeValues({ seed: 19, points: CA_POINTS, base: 37.5, amplitude: 1.2, noise: 0.35, cycles: 2 });
+
+const CA_WEEKS = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W9', 'W10', 'W11', 'W12'];
+
+const CA_OEE = [80.1, 80.9, 81.4, 80.7, 82.2, 82.9, 83.4, 82.6, 83.8, 84.1, 81.9, 82.7];
+
+type CaEvent = EventMark & { kind: 'Alarm' | 'Work order' | 'Operator'; detail: string };
+
+const CA_EVENTS: CaEvent[] = [
+  { id: 'e1', at: 14, mark: '1', kind: 'Alarm', title: 'Cooler outlet temperature high', detail: '23-TT-91141 reached 40.8 °C', tone: 'info' },
+  { id: 'e2', at: 26, mark: '2', kind: 'Operator', title: 'Anti-surge valve opened 5 %', detail: 'Ingrid Haugen, control room', tone: 'purple' },
+  { id: 'e3', at: 38, mark: '3', kind: 'Work order', title: 'Vibration survey started', detail: 'WO-104466, 1st stage compressor', tone: 'teal' },
+  { id: 'e4', at: CA_CROSSING, mark: '4', kind: 'Alarm', title: 'Discharge temperature high', detail: '146.3 °C against a limit of 145.0 °C', tone: 'warning' },
+];
+
+const CA_MANY: EventMark[] = [2, 4, 5, 9, 10, 11, 17, 18, 25, 26, 27, 33, 34, 35, 36, 40, 43, 44, 46].map((at) => ({ id: `m${at}`, at, mark: '', title: 'Alarm', tone: 'warning' }));
+
+const CA_LAYERS = [
+  { id: 'limits', label: 'Limits' },
+  { id: 'events', label: 'Events' },
+  { id: 'periods', label: 'Periods' },
+  { id: 'notes', label: 'Notes' },
+];
+
+const CA_TEMPERATURE_SERIES = [{ id: 'temperature', label: 'Discharge temperature', values: CA_TEMPERATURE }];
+
+const CA_PRESSURE_PAIR = [
+  { id: 'discharge', label: 'Discharge pressure', values: CA_PRESSURE },
+  { id: 'interstage', label: 'Interstage pressure', values: CA_INTERSTAGE, tone: 'teal' as const },
+];
+
+const CA_TEMPERATURE_LIMITS = [
+  { value: 145, label: 'High', tone: 'warning' as const },
+  { value: 155, label: 'Trip', tone: 'critical' as const },
+];
+
+const CA_KIND_ICON: Record<CaEvent['kind'], ReactNode> = { Alarm: <IconBell />, 'Work order': <IconTool />, Operator: <IconFlag /> };
+
+function CaSheet({ look, children }: { look: LookId; children: ReactNode }) {
   return (
-    <TrendChart
-      label="Discharge pressure over the last 24 hours with its high limit of 52 barg drawn as a labelled dashed line; the limit is not reached"
-      series={[PRESSURE_SERIES]}
-      limits={[{ value: 52, label: 'High limit 52 barg', tone: 'warning' }]}
-      yDomain={[44, 54]}
-      yTicks={[44, 46, 48, 50, 52, 54]}
-      unit="barg"
-    />
+    <LookScope look={look}>
+      <Canvas>{children}</Canvas>
+    </LookScope>
   );
 }
 
-function ChartAnnotationTargetLine() {
+function CaEventRows({ events, selectedId, onSelect }: { events: readonly CaEvent[]; selectedId?: string; onSelect?: (id: string) => void }) {
   return (
-    <TrendChart
-      label="Weekly OEE for the last 12 weeks against the 85 percent target; it has stayed 1 to 5 points under the target"
-      series={[{ key: 'oee', label: 'OEE', points: OEE, color: chartSeriesColor(3) }]}
-      limits={[{ value: 85, label: 'Target 85 %', tone: 'neutral', align: 'left' }]}
-      yDomain={[78, 88]}
-      yTicks={[78, 80, 82, 84, 86, 88]}
-      unit="%"
-      summary="A target is a neutral line: missing it is a result, not an alarm."
-    />
-  );
-}
-
-function ChartAnnotationNowMarker() {
-  return (
-    <TrendChart
-      label="Export flow for the last 16 hours with a marker at the current time and the planned rate for the next 8 hours"
-      series={[
-        { key: 'flow', label: 'Export flow', points: FORECAST_HISTORY, color: chartSeriesColor(2) },
-        { key: 'plan', label: 'Planned rate', points: [{ t: NOW, v: 412 }, { t: NOW + 3 * HOUR, v: 412 }, { t: NOW + 3 * HOUR + STEP, v: 380 }, { t: NOW + 8 * HOUR, v: 380 }], variant: 'step', dashed: true, color: 'var(--color-chart-neutral-450)' },
-      ]}
-      events={[{ t: NOW, label: 'Now', solid: true }]}
-      xDomain={[NOW - 16 * HOUR, NOW + 8 * HOUR]}
-      yDomain={[340, 460]}
-      yTicks={[340, 380, 420, 460]}
-      unit="m³/h"
-      decimals={0}
-      legend
-    />
-  );
-}
-
-function ChartAnnotationForecastBoundary() {
-  return (
-    <TrendChart
-      legend
-      label="Export flow for the last 16 hours and its forecast for the next 8 hours; the forecast dips to about 390 cubic metres per hour around 18:00 and its uncertainty widens with time"
-      series={[
-        { key: 'flow', label: 'Measured', points: FORECAST_HISTORY, color: chartSeriesColor(2) },
-        { key: 'forecast', label: 'Forecast', points: FORECAST.map((point) => ({ t: point.t, v: point.v })), dashed: true, color: chartSeriesColor(2) },
-      ]}
-      envelopes={[{ key: 'band', label: 'Forecast range', points: FORECAST.map((point) => ({ t: point.t, low: point.low, high: point.high })), color: 'var(--color-chart-2-100)' }]}
-      regions={[{ from: NOW, to: NOW + 8 * HOUR, label: 'Forecast', tone: 'neutral' }]}
-      events={[{ t: NOW, solid: true }]}
-      xDomain={[NOW - 16 * HOUR, NOW + 8 * HOUR]}
-      yDomain={[340, 460]}
-      yTicks={[340, 380, 420, 460]}
-      unit="m³/h"
-      decimals={0}
-    />
-  );
-}
-
-function ChartAnnotationEventMarkers() {
-  return (
-    <TrendChart
-      label="Discharge temperature over the last 24 hours with two events marked: a vibration survey started at 03:00 and a high temperature alarm was raised at 13:22"
-      series={[TEMPERATURE_SERIES]}
-      events={[
-        { t: NOW - 11 * HOUR, label: 'Work order started', tone: 'info' },
-        { t: NOW - 38 * MINUTE, label: 'Alarm raised', tone: 'warning' },
-      ]}
-      yDomain={[125, 150]}
-      yTicks={[125, 130, 135, 140, 145, 150]}
-      unit="°C"
-    />
-  );
-}
-
-function ChartAnnotationRegion() {
-  return (
-    <TrendChart
-      label="Cooler outlet temperature over the last 24 hours with the maintenance window from 02:00 to 06:00 shaded; the temperature is 1.8 degrees lower after the cleaning"
-      series={[{ key: 'cooler', label: 'Cooler outlet temperature', points: COOLER }]}
-      regions={[{ from: WINDOW_FROM, to: WINDOW_TO, label: 'Maintenance', tone: 'neutral' }]}
-      yDomain={[24, 42]}
-      yTicks={[24, 30, 36, 42]}
-      unit="°C"
-      summary="WO-104471: tube bundle cleaned 02:00 to 06:00. Outlet temperature dropped from 37.5 to 35.7 °C."
-    />
-  );
-}
-
-function ChartAnnotationShutdown() {
-  return (
-    <TrendChart
-      label="Recompressor gas flow over the last 24 hours with a planned stop from 21:00 to 01:00 and a trip from 11:00 to 12:30 shaded"
-      series={[{ key: 'flow', label: 'Gas flow', points: FLOW, variant: 'area', color: chartSeriesColor(2) }]}
-      regions={[
-        { from: STOP_FROM, to: STOP_TO, label: 'Planned stop', tone: 'neutral' },
-        { from: TRIP_FROM, to: TRIP_TO, label: 'Trip', tone: 'critical' },
-      ]}
-      yDomain={[0, 240]}
-      yTicks={[0, 60, 120, 180, 240]}
-      unit="kSm³/h"
-      decimals={0}
-    />
-  );
-}
-
-function ChartAnnotationNumbered() {
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <TrendChart
-        label="Discharge temperature over the last 24 hours with four numbered events, listed under the chart"
-        series={[TEMPERATURE_SERIES]}
-        events={numbered(EVENTS)}
-        yDomain={[125, 150]}
-        yTicks={[125, 130, 135, 140, 145, 150]}
-        unit="°C"
-      />
-      <ol aria-label="Events" className="grid grid-cols-1 gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-        {EVENTS.map((event, index) => (
-          <li key={event.id} className="flex items-baseline gap-2">
-            <span className="w-3 shrink-0 font-medium text-base-foreground tabular-nums">{index + 1}</span>
-            <span className="shrink-0 text-muted-foreground tabular-nums">{formatTime(event.t)}</span>
-            <span className="truncate text-medium-foreground">{event.title}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
-function ChartAnnotationThresholdCrossing() {
-  return (
-    <TrendChart
-      label="Discharge temperature over the last 24 hours; the part above the 145 degree high limit, since 13:40, is drawn in warning colour"
-      series={[TEMPERATURE_SERIES]}
-      highlight={{ seriesKey: 'temperature', above: 145, tone: 'warning' }}
-      limits={[{ value: 145, label: 'High 145', tone: 'warning', align: 'left' }]}
-      markers={[{ t: NOW, v: 146.3, tone: 'warning' }]}
-      yDomain={[125, 150]}
-      yTicks={[125, 130, 135, 140, 145, 150]}
-      unit="°C"
-      summary="Crossed the high limit at 13:40 and still rising: 146.3 °C now."
-    />
-  );
-}
-
-function ChartAnnotationPointNote() {
-  const point = PRESSURE.slice(84, 108).reduce((best, candidate) => ((candidate.v ?? 0) > (best.v ?? 0) ? candidate : best), PRESSURE[84]);
-  return (
-    <TrendChart
-      label={`Discharge pressure over the last 24 hours with a note on the reading at ${formatTime(point.t)}: anti-surge valve opened`}
-      series={[PRESSURE_SERIES]}
-      markers={[{ t: point.t, v: point.v ?? 48, label: 'Anti-surge valve opened', tone: 'info' }]}
-      yDomain={[44, 54]}
-      yTicks={[44, 46, 48, 50, 52, 54]}
-      unit="barg"
-      summary={`Note by Liv Wold at ${formatTime(point.t)}: valve opened to 40 % to move the machine away from surge.`}
-    />
-  );
-}
-
-function ChartAnnotationAnomaly() {
-  return (
-    <TrendChart
-      label={`Drive-end vibration over the last 24 hours with an anomaly flagged between 05:00 and 07:00, peaking at ${VIBRATION_PEAK.v} millimetres per second, still under the 7.1 high limit`}
-      series={[{ key: 'vibration', label: 'Drive-end vibration', points: VIBRATION }]}
-      regions={[{ from: ANOMALY_FROM, to: ANOMALY_TO, label: 'Anomaly', tone: 'info' }]}
-      markers={[{ t: VIBRATION_PEAK.t, v: VIBRATION_PEAK.v ?? 0, label: `Peak ${VIBRATION_PEAK.v}`, tone: 'info' }]}
-      limits={[{ value: 7.1, label: 'High 7.1', tone: 'warning' }]}
-      yDomain={[4, 9]}
-      yTicks={[4, 5, 6, 7, 8, 9]}
-      unit="mm/s"
-      summary="Flagged by the anomaly model: an unusual shape for this machine, although no limit was crossed."
-    />
-  );
-}
-
-function ChartAnnotationMinMax() {
-  const low = PRESSURE.reduce((best, point) => ((point.v ?? Infinity) < (best.v ?? Infinity) ? point : best), PRESSURE[0]);
-  const high = PRESSURE.reduce((best, point) => ((point.v ?? -Infinity) > (best.v ?? -Infinity) ? point : best), PRESSURE[0]);
-  return (
-    <TrendChart
-      label={`Discharge pressure over the last 24 hours with its minimum of ${low.v} and maximum of ${high.v} barg marked`}
-      series={[PRESSURE_SERIES]}
-      markers={[
-        { t: high.t, v: high.v ?? 0, label: `Max ${high.v}` },
-        { t: low.t, v: low.v ?? 0, label: `Min ${low.v}`, labelPosition: 'bottom' },
-      ]}
-      yDomain={[44, 54]}
-      yTicks={[44, 46, 48, 50, 52, 54]}
-      unit="barg"
-    />
-  );
-}
-
-function ChartAnnotationCursorReadout() {
-  const [cursor, setCursor] = useState(NOW - 9 * HOUR);
-  const series = [
-    { key: 'discharge', label: 'Discharge', points: PRESSURE, color: chartSeriesColor(1), unit: 'barg' },
-    { key: 'interstage', label: 'Interstage', points: INTERSTAGE, color: chartSeriesColor(2), unit: 'barg' },
-  ];
-  return (
-    <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_14rem]">
-      <div className="flex min-w-0 flex-col gap-3">
-        <TrendChart
-          label={`Discharge and interstage pressure over the last 24 hours with a cursor at ${formatDayTime(cursor)}`}
-          series={series}
-          cursor={cursor}
-          yDomain={[38, 54]}
-          yTicks={[38, 42, 46, 50, 54]}
-          unit="barg"
-        />
-        <div className="pl-11 pr-3">
-          <Slider aria-label="Cursor time" min={NOW - 24 * HOUR} max={NOW} step={STEP} value={[cursor]} onValueChange={(next) => setCursor(next[0] ?? cursor)} />
-        </div>
-      </div>
-      <div className="flex flex-col gap-3 rounded-xl bg-muted-background p-4">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Cursor</span>
-          <span className="text-sm font-medium text-base-foreground tabular-nums">{formatDayTime(cursor)}</span>
-        </div>
-        <SeriesLegend
-          orientation="column"
-          label="Values at the cursor"
-          items={series.map((entry) => ({ key: entry.key, label: entry.label, color: entry.color, value: valueAt(entry.points, cursor), unit: entry.unit, decimals: 1 }))}
-        />
-        <span className="text-xs text-muted-foreground tabular-nums">{formatSpan(NOW - cursor)} before now</span>
-      </div>
-    </div>
-  );
-}
-
-function ChartAnnotationLegendValues() {
-  return (
-    <div className="flex w-full max-w-xs flex-col gap-3">
-      <span className="text-xs text-muted-foreground">1st stage compressor · now</span>
-      <SeriesLegend
-        orientation="column"
-        label="Current values"
-        items={[
-          { key: 'discharge', label: 'Discharge pressure', color: chartSeriesColor(1), value: 48.6, unit: 'barg', decimals: 1 },
-          { key: 'suction', label: 'Suction pressure', color: chartSeriesColor(2), value: 12.4, unit: 'barg', decimals: 1 },
-          { key: 'temperature', label: 'Discharge temperature', color: chartSeriesColor(3), value: 146.3, unit: '°C', decimals: 1 },
-          { key: 'bearing', label: 'Bearing temperature', color: chartSeriesColor(4), value: null, unit: '°C' },
-        ]}
-      />
-    </div>
-  );
-}
-
-function ChartAnnotationBrush() {
-  const [selection, setSelection] = useState([NOW - 15 * HOUR, NOW - 9 * HOUR]);
-  const stats = summarize(numbers(sliceByTime(PRESSURE, selection[0], selection[1])));
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <TrendChart
-        label={`Discharge pressure over the last 24 hours with the period from ${formatTime(selection[0])} to ${formatTime(selection[1])} selected`}
-        series={[PRESSURE_SERIES]}
-        regions={[{ from: selection[0], to: selection[1], tone: 'selection' }]}
-        yDomain={[44, 54]}
-        yTicks={[44, 46, 48, 50, 52, 54]}
-        unit="barg"
-      />
-      <div className="pl-11 pr-3">
-        <Slider
-          aria-label="Selected period"
-          min={NOW - 24 * HOUR}
-          max={NOW}
-          step={STEP}
-          minStepsBetweenValues={3}
-          value={selection}
-          onValueChange={(next) => (next.length === 2 ? setSelection(next) : undefined)}
-        />
-      </div>
-      <p className="text-xs text-muted-foreground tabular-nums">
-        Selected {formatTime(selection[0])} to {formatTime(selection[1])} ({formatSpan(selection[1] - selection[0])})
-        {stats ? `: ${formatReading(stats.min, 'barg', 1)} to ${formatReading(stats.max, 'barg', 1)}, average ${formatReading(stats.mean, 'barg', 1)}.` : '.'}
-      </p>
-    </div>
-  );
-}
-
-function ChartAnnotationCompareCursors() {
-  const first = NOW - 20 * HOUR;
-  const second = NOW - 4 * HOUR;
-  const a = valueAt(TEMPERATURE, first) ?? 0;
-  const b = valueAt(TEMPERATURE, second) ?? 0;
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <TrendChart
-        label="Discharge temperature over the last 24 hours with two cursors, A at 18:00 and B at 10:00, to measure the change between them"
-        series={[TEMPERATURE_SERIES]}
-        events={[
-          { t: first, label: 'A', solid: true },
-          { t: second, label: 'B', solid: true },
-        ]}
-        markers={[
-          { t: first, v: a },
-          { t: second, v: b },
-        ]}
-        yDomain={[125, 150]}
-        yTicks={[125, 130, 135, 140, 145, 150]}
-        unit="°C"
-      />
-      <dl className="grid grid-cols-3 gap-4 text-xs">
-        <div className="flex flex-col gap-1">
-          <dt className="text-muted-foreground">A · {formatTime(first)}</dt>
-          <dd>
-            <ValueReadout size="sm" value={a} unit="°C" decimals={1} />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-muted-foreground">B · {formatTime(second)}</dt>
-          <dd>
-            <ValueReadout size="sm" value={b} unit="°C" decimals={1} />
-          </dd>
-        </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-muted-foreground">B − A · {formatSpan(second - first)}</dt>
-          <dd>
-            <ValueReadout size="sm" value={b - a} unit="°C" decimals={1} />
-          </dd>
-        </div>
-      </dl>
-    </div>
-  );
-}
-
-function ChartAnnotationEventList() {
-  const [selected, setSelected] = useState('alm-4811');
-  return (
-    <div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <TrendChart
-        heightClassName="h-72"
-        label="Discharge temperature of the 1st stage compressor over the last 24 hours with four numbered events; the selected event is drawn as a solid line"
-        series={[TEMPERATURE_SERIES]}
-        events={numbered(EVENTS, selected)}
-        limits={[{ value: 145, label: 'High 145', tone: 'warning', align: 'left' }]}
-        yDomain={[125, 150]}
-        yTicks={[125, 130, 135, 140, 145, 150]}
-        unit="°C"
-        maxTicks={8}
-      />
-      <ol aria-label="Events in this period" className="flex flex-col gap-1">
-        {EVENTS.map((event, index) => {
-          const Icon = EVENT_ICON[event.kind];
-          const active = event.id === selected;
-          return (
-            <li key={event.id}>
-              <button
-                type="button"
-                aria-pressed={active}
-                onClick={() => setSelected(event.id)}
-                className={`flex w-full items-start gap-3 rounded-lg px-3 py-2 text-left outline-none focus-visible:shadow-focus-ring ${active ? 'bg-muted-background' : 'hover:bg-muted-background'}`}
-              >
-                <span className="w-3 shrink-0 pt-0.5 text-xs font-medium text-base-foreground tabular-nums">{index + 1}</span>
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="truncate text-sm text-base-foreground">{event.title}</span>
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
-                    <Icon aria-hidden className="size-3.5 shrink-0" />
-                    {event.kind} · {formatTime(event.t)} · {event.detail}
-                  </span>
-                </span>
-                <StatusDot tone={event.tone} size="sm" className="mt-1.5" />
+    <ul>
+      {events.map((event) => (
+        <ListRow
+          key={event.id}
+          tone={event.id === selectedId ? event.tone : 'neutral'}
+          leading={
+            onSelect ? (
+              <button type="button" aria-label={`Show event ${event.mark} on the chart`} aria-pressed={event.id === selectedId} onClick={() => onSelect(event.id)} className="cursor-pointer">
+                <EventBadge tone={event.tone} selected={event.id === selectedId}>
+                  {event.mark}
+                </EventBadge>
               </button>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
+            ) : (
+              <EventBadge tone={event.tone}>{event.mark}</EventBadge>
+            )
+          }
+          title={event.title}
+          meta={
+            <>
+              <StatusPill tone={event.tone} icon={CA_KIND_ICON[event.kind]}>
+                {event.kind}
+              </StatusPill>
+              <span>{event.detail}</span>
+            </>
+          }
+          trailing={CA_LABELS[event.at]}
+        />
+      ))}
+    </ul>
   );
 }
 
-function ChartAnnotationCombined() {
+function ChartAnnotationLimits() {
   return (
-    <div className="flex w-full flex-col gap-3">
-      <TrendChart
-        heightClassName="h-64"
-        label="Cooler outlet temperature over the last 24 hours with a high limit, a maintenance window, an alarm marker and a note, explained in the key under the chart"
-        series={[{ key: 'cooler', label: 'Cooler outlet temperature', points: COOLER }]}
-        limits={[{ value: 40, label: 'High 40', tone: 'warning' }]}
-        regions={[{ from: WINDOW_FROM, to: WINDOW_TO, label: 'Maintenance', tone: 'neutral' }]}
-        events={[{ t: NOW - 16 * HOUR, label: 'Alarm', tone: 'warning' }]}
-        markers={[{ t: WINDOW_TO + 2 * STEP, v: valueAt(COOLER, WINDOW_TO + 2 * STEP) ?? 0, label: 'Back in service', tone: 'info' }]}
-        cursor={NOW - 3 * HOUR}
-        yDomain={[24, 42]}
-        yTicks={[24, 30, 36, 42]}
-        unit="°C"
-        maxTicks={8}
-      />
-      <AnnotationKey
-        items={[
-          { kind: 'limit', label: 'High limit', tone: 'warning' },
-          { kind: 'region', label: 'Maintenance window' },
-          { kind: 'event', label: 'Alarm raised', tone: 'warning' },
-          { kind: 'marker', label: 'Note', tone: 'info' },
-          { kind: 'cursor', label: 'Cursor' },
-        ]}
-      />
-    </div>
+    <CaSheet look="studio">
+      <Panel title="Discharge temperature" subtitle="23-TT-92532 · last 24 hours against the high and trip limits" icon={<IconChip tone="warning"><IconAlertTriangle /></IconChip>}>
+        <AnnotatedTrend
+          label="Discharge temperature over the last 24 hours with the high limit at 145 and the trip limit at 155 degrees"
+          series={CA_TEMPERATURE_SERIES}
+          labels={CA_LABELS}
+          tickEvery={8}
+          unit="°C"
+          fill
+          yDomain={[130, 158]}
+          limits={CA_TEMPERATURE_LIMITS}
+          keyItems={[
+            { label: 'High limit', tone: 'warning', mark: 'dashed' },
+            { label: 'Trip limit', tone: 'critical', mark: 'dashed' },
+          ]}
+          headline={<Stat variant="plain" label="Now" value={146.3} decimals={1} unit="°C" tone="warning" target="1.3 °C above the high limit" />}
+        />
+      </Panel>
+    </CaSheet>
   );
 }
 
-function ChartAnnotationKeyOnly() {
+function ChartAnnotationTarget() {
   return (
-    <AnnotationKey
-      className="flex-col items-start gap-y-2"
-      items={[
-        { kind: 'limit', label: 'Trip limit', tone: 'critical' },
-        { kind: 'limit', label: 'High limit', tone: 'warning' },
-        { kind: 'limit', label: 'Target' },
-        { kind: 'region', label: 'Planned stop' },
-        { kind: 'region', label: 'Trip', tone: 'critical' },
-        { kind: 'event', label: 'Work order started', tone: 'info' },
-        { kind: 'marker', label: 'Operator note', tone: 'info' },
-      ]}
-    />
+    <CaSheet look="soft">
+      <Grid>
+        <Stat className="col-span-4" size="lg" label="OEE this week" value={82.7} decimals={1} unit="%" tone="teal" delta={{ value: 0.8, caption: 'vs last week' }} target="Target 85.0 %" />
+        <Panel className="col-span-8" title="OEE by week" subtitle="Twelve weeks against the 85 % target">
+          <AnnotatedTrend
+            label="Overall equipment effectiveness per week for twelve weeks against the 85 percent target"
+            series={[{ id: 'oee', label: 'OEE', values: CA_OEE, tone: 'teal' }]}
+            labels={CA_WEEKS}
+            tickEvery={1}
+            unit="%"
+            fill
+            height={220}
+            yDomain={[78, 87]}
+            limits={[{ value: 85, label: 'Target', tone: 'success', solid: true }]}
+            points={[{ id: 'best', at: 9, text: 'Best week 84.1', tone: 'teal' }]}
+          />
+        </Panel>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationForecast() {
+  return (
+    <CaSheet look="glass">
+      <Panel title="Export flow" subtitle="27-FT-20011 · measured to now, forecast for the next eight hours">
+        <AnnotatedTrend
+          label="Export flow measured until now and forecast for the next eight hours"
+          series={[{ id: 'flow', label: 'Export flow', values: CA_EXPORT_FLOW, dashedFrom: CA_NOW }]}
+          labels={CA_LABELS}
+          tickEvery={8}
+          unit="m³/h"
+          decimals={0}
+          fill
+          nowAt={CA_NOW}
+          yDomain={[380, 460]}
+          regions={[{ id: 'forecast', from: CA_NOW, to: CA_LAST, label: 'Forecast', tone: 'purple' }]}
+          limits={[{ value: 450, label: 'Pump capacity', tone: 'warning' }]}
+          keyItems={[
+            { label: 'Measured', tone: 'accent', mark: 'line' },
+            { label: 'Forecast', tone: 'accent', mark: 'dashed' },
+          ]}
+        />
+      </Panel>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationEvents() {
+  const [selectedId, setSelectedId] = useState('e4');
+  return (
+    <CaSheet look="studio">
+      <Grid>
+        <Panel className="col-span-7" title="Discharge temperature" subtitle="Select a marker or a row to link the two">
+          <AnnotatedTrend
+            label="Discharge temperature over the last 24 hours with four numbered events"
+            series={CA_TEMPERATURE_SERIES}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="°C"
+            fill
+            height={300}
+            yDomain={[130, 150]}
+            limits={[CA_TEMPERATURE_LIMITS[0]]}
+            events={CA_EVENTS}
+            selectedEventId={selectedId}
+            onSelectEvent={setSelectedId}
+          />
+        </Panel>
+        <Panel className="col-span-5" title="Events" subtitle={`${CA_EVENTS.length} in the last 24 hours`}>
+          <CaEventRows events={CA_EVENTS} selectedId={selectedId} onSelect={setSelectedId} />
+        </Panel>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationWindow() {
+  return (
+    <CaSheet look="blueprint">
+      <Panel title="Cooler outlet temperature" subtitle="23-TT-91141 · °C · maintenance window hatched">
+        <AnnotatedTrend
+          label="Cooler outlet temperature over the last 24 hours with the tube bundle cleaning window from 06:00 to 10:00"
+          series={[{ id: 'cooler', label: 'Cooler outlet temperature', values: CA_COOLER }]}
+          labels={CA_LABELS}
+          tickEvery={4}
+          unit="°C"
+          height={280}
+          yDomain={[34, 42]}
+          limits={[{ value: 40, label: 'High', tone: 'warning' }]}
+          regions={[{ id: 'wo', from: 32, to: 40, label: 'WO-104471 · tube bundle cleaning', tone: 'amber', hatched: true }]}
+          points={[{ id: 'after', at: 44, text: 'After cleaning 36.9', placement: 'below' }]}
+        />
+      </Panel>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationStops() {
+  return (
+    <CaSheet look="console">
+      <Panel title="Gas flow · 23-FT-92510" subtitle="kSm³/h · 24 h" actions={<Legend items={[{ label: 'Planned stop', tone: 'info' }, { label: 'Trip', tone: 'critical' }]} />}>
+        <AnnotatedTrend
+          label="Gas flow over the last 24 hours with a planned stop and a trip shaded"
+          series={[{ id: 'flow', label: 'Gas flow', values: CA_FLOW }]}
+          labels={CA_LABELS}
+          tickEvery={4}
+          unit="kSm³/h"
+          decimals={0}
+          height={260}
+          yDomain={[0, 220]}
+          regions={CA_STOPS}
+        />
+      </Panel>
+    </CaSheet>
   );
 }
 
 function ChartAnnotationCrowded() {
   return (
-    <TrendChart
-      label="Discharge pressure over the last 24 hours with 14 low-priority alarms as unlabelled markers; they cluster around 20:00 and 03:00"
-      series={[PRESSURE_SERIES]}
-      events={CROWDED}
-      yDomain={[44, 54]}
-      yTicks={[44, 46, 48, 50, 52, 54]}
-      unit="barg"
-      summary="14 alarms in this period. Markers are not labelled at this density; open the alarm list for details."
-    />
+    <CaSheet look="editorial">
+      <Grid>
+        <SectionHeader className="col-span-12" size="sm" eyebrow="Alarm review" title="Nineteen alarms in a day cluster around the two load changes" />
+        <div className="col-span-12 flex flex-col gap-4">
+          <AnnotatedTrend
+            label="Discharge pressure over the last 24 hours with nineteen alarm ticks along the top"
+            series={[{ id: 'pressure', label: 'Discharge pressure', values: CA_PRESSURE }]}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="barg"
+            height={220}
+            events={CA_MANY}
+            eventStyle="tick"
+          />
+          <HeatStrip
+            label="Alarms per two hours over the last 24 hours"
+            rows={[{ label: 'Alarms per 2 h', values: Array.from({ length: 12 }, (_, slot) => CA_MANY.filter((event) => Math.floor(event.at / 4) === slot).length), tone: 'warning' }]}
+            axis={['24 h ago', 'Now']}
+          />
+        </div>
+      </Grid>
+    </CaSheet>
   );
 }
 
-const LAYERS = [
-  { value: 'limits', label: 'Limits' },
-  { value: 'events', label: 'Events' },
-  { value: 'maintenance', label: 'Maintenance' },
+function ChartAnnotationCrossing() {
+  return (
+    <CaSheet look="signal">
+      <Grid>
+        <Stat className="col-span-4" size="lg" label="Discharge temperature" value={146.3} decimals={1} unit="°C" tone="warning" state="Above high" stateIcon={<IconAlertTriangle />} target={`Crossed 145.0 at ${CA_LABELS[CA_CROSSING]}`} />
+        <Panel className="col-span-8" title="Last 24 hours">
+          <AnnotatedTrend
+            label="Discharge temperature over the last 24 hours with the point where it crossed the high limit"
+            series={[{ id: 'temperature', label: 'Discharge temperature', values: CA_TEMPERATURE, tone: 'warning' }]}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="°C"
+            fill
+            height={230}
+            yDomain={[130, 150]}
+            limits={[CA_TEMPERATURE_LIMITS[0]]}
+            points={[{ id: 'cross', at: CA_CROSSING, text: `Crossed at ${CA_LABELS[CA_CROSSING]}`, tone: 'critical', placement: 'below' }]}
+          />
+        </Panel>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationAnomaly() {
+  return (
+    <CaSheet look="glass">
+      <Panel
+        title="Drive-end vibration"
+        subtitle="23-VT-92540 · anomaly detected against the learned band"
+        actions={
+          <StatusPill tone="warning" icon={<IconAlertTriangle />}>
+            1 anomaly
+          </StatusPill>
+        }
+      >
+        <AnnotatedTrend
+          label="Drive-end vibration over the last 24 hours with an anomaly between 15:00 and 17:00"
+          series={[{ id: 'vibration', label: 'Vibration', values: CA_VIBRATION }]}
+          labels={CA_LABELS}
+          tickEvery={8}
+          unit="mm/s"
+          fill
+          yDomain={[4, 9]}
+          limits={[{ value: 7.1, label: 'High', tone: 'warning' }]}
+          regions={[{ id: 'anomaly', from: 29, to: 35, label: 'Anomaly · score 0.91', tone: 'pink' }]}
+          points={CA_VIBRATION_PEAK ? [{ id: 'peak', at: CA_VIBRATION_PEAK.maxIndex, text: `Peak ${formatNumber(CA_VIBRATION_PEAK.max, 1)} mm/s`, tone: 'pink' }] : []}
+        />
+      </Panel>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationMinMax() {
+  const extremes = findExtremes(CA_PRESSURE);
+  return (
+    <CaSheet look="poster">
+      <Grid>
+        <Panel className="col-span-8" title="Discharge pressure" subtitle="Highest and lowest of the day">
+          <AnnotatedTrend
+            label="Discharge pressure over the last 24 hours with its minimum and maximum marked"
+            series={[{ id: 'pressure', label: 'Discharge pressure', values: CA_PRESSURE }]}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="barg"
+            height={260}
+            yDomain={[44, 53]}
+            points={
+              extremes
+                ? [
+                    { id: 'max', at: extremes.maxIndex, text: `Max ${formatNumber(extremes.max, 1)}`, tone: 'pink' },
+                    { id: 'min', at: extremes.minIndex, text: `Min ${formatNumber(extremes.min, 1)}`, tone: 'blue', placement: 'below' },
+                  ]
+                : []
+            }
+          />
+        </Panel>
+        <Grid stack className="col-span-4">
+          <Stat label="Maximum" value={extremes?.max ?? 0} decimals={1} unit="barg" tone="pink" target={`at ${CA_LABELS[extremes?.maxIndex ?? 0]}`} />
+          <Stat label="Minimum" value={extremes?.min ?? 0} decimals={1} unit="barg" tone="blue" target={`at ${CA_LABELS[extremes?.minIndex ?? 0]}`} />
+        </Grid>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationPointNote() {
+  return (
+    <CaSheet look="editorial">
+      <Grid>
+        <div className="col-span-8">
+          <AnnotatedTrend
+            label="Discharge pressure over the last 24 hours with an operator note at 03:00"
+            series={[{ id: 'pressure', label: 'Discharge pressure', values: CA_PRESSURE }]}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="barg"
+            height={260}
+            yDomain={[44, 53]}
+            events={[CA_EVENTS[1]]}
+            points={[{ id: 'note', at: 26, text: 'Anti-surge valve opened 5 %' }]}
+          />
+        </div>
+        <div className="col-span-4 flex flex-col gap-3 border-t border-(--kit-rule-strong) pt-4">
+          <div className="flex items-center gap-2">
+            <EventBadge>2</EventBadge>
+            <p className="text-base font-semibold">Operator note, {CA_LABELS[26]}</p>
+          </div>
+          <p className="text-sm leading-6 text-(--kit-text-2)">
+            Suction pressure was drifting towards the surge line after the load change. Opening the anti-surge valve 5 % restored the margin; discharge pressure settled within twenty minutes.
+          </p>
+          <p className="text-sm font-medium">Ingrid Haugen, control room operator</p>
+        </div>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationCursor() {
+  const [cursor, setCursor] = useState<number | null>(null);
+  const at = cursor ?? CA_LAST;
+  return (
+    <CaSheet look="studio">
+      <Grid>
+        <Panel className="col-span-8" title="Compression pressures" subtitle="Move the pointer over the chart">
+          <AnnotatedTrend
+            label="Discharge and interstage pressure over the last 24 hours with a cursor that reads both"
+            series={CA_PRESSURE_PAIR}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="barg"
+            height={280}
+            yDomain={[42, 52]}
+            cursor={cursor}
+            onCursor={setCursor}
+          />
+        </Panel>
+        <Panel className="col-span-4" title={cursor === null ? 'Latest values' : `Values at ${CA_LABELS[at]}`} subtitle={cursor === null ? CA_LABELS[CA_LAST] : 'Under the cursor'}>
+          <div className="flex h-full flex-col justify-between gap-4">
+            <Stat variant="plain" size="lg" label="Discharge pressure" value={CA_PRESSURE[at]} decimals={1} unit="barg" tone="accent" target="23-PT-92531" />
+            <Stat variant="plain" size="lg" label="Interstage pressure" value={CA_INTERSTAGE[at]} decimals={1} unit="barg" tone="teal" target="23-PT-92518" />
+            <Stat variant="plain" label="Difference" value={CA_PRESSURE[at] - CA_INTERSTAGE[at]} decimals={1} unit="bar" />
+          </div>
+        </Panel>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationBrush() {
+  const [range, setRange] = useState({ from: 28, to: 38 });
+  const summary = summarizeRange(CA_VIBRATION, range.from, range.to);
+  return (
+    <CaSheet look="blueprint">
+      <Grid>
+        <Panel className="col-span-12" title="Drive-end vibration" subtitle="Drag across the plot to select a period">
+          <AnnotatedTrend
+            label="Drive-end vibration over the last 24 hours with a selected period"
+            series={[{ id: 'vibration', label: 'Vibration', values: CA_VIBRATION }]}
+            labels={CA_LABELS}
+            tickEvery={4}
+            unit="mm/s"
+            height={240}
+            yDomain={[4, 9]}
+            selection={range}
+            onSelection={setRange}
+          />
+        </Panel>
+        <Stat className="col-span-3" label="Selected" value={`${CA_LABELS[range.from]}–${CA_LABELS[range.to]}`} target={`${(range.to - range.from) / 2} h`} />
+        <Stat className="col-span-3" label="Mean" value={summary?.mean ?? 0} decimals={2} unit="mm/s" />
+        <Stat className="col-span-3" label="Maximum" value={summary?.max ?? 0} decimals={1} unit="mm/s" />
+        <Stat className="col-span-3" label="Change" value={summary?.change ?? 0} decimals={1} unit="mm/s" />
+      </Grid>
+    </CaSheet>
+  );
+}
+
+type CaCompareRow = { id: string; label: string; a: number; b: number; unit: string };
+
+const CA_COMPARE_COLUMNS: DataTableColumn<CaCompareRow>[] = [
+  { id: 'signal', header: 'Signal', cell: (row) => row.label },
+  { id: 'a', header: 'A', numeric: true, cell: (row) => formatNumber(row.a, 1) },
+  { id: 'b', header: 'B', numeric: true, cell: (row) => formatNumber(row.b, 1) },
+  { id: 'diff', header: 'B − A', numeric: true, cell: (row) => `${row.b - row.a >= 0 ? '+' : '−'}${formatNumber(Math.abs(row.b - row.a), 1)} ${row.unit}` },
 ];
 
-function ChartAnnotationToggle() {
-  const [layers, setLayers] = useState(['limits', 'maintenance']);
+function ChartAnnotationCompare() {
+  const [pinB, setPinB] = useState(40);
+  const pinA = 16;
+  const rows: CaCompareRow[] = [
+    { id: 'discharge', label: 'Discharge pressure', a: CA_PRESSURE[pinA], b: CA_PRESSURE[pinB], unit: 'bar' },
+    { id: 'interstage', label: 'Interstage pressure', a: CA_INTERSTAGE[pinA], b: CA_INTERSTAGE[pinB], unit: 'bar' },
+  ];
   return (
-    <div className="flex w-full flex-col gap-3">
-      <ToggleGroup label="Annotation layers" options={LAYERS} value={layers} onValueChange={setLayers} size="sm" variant="outline" />
-      <TrendChart
-        label={`Cooler outlet temperature over the last 24 hours showing ${layers.length === 0 ? 'no annotation layers' : layers.join(', ')}`}
-        series={[{ key: 'cooler', label: 'Cooler outlet temperature', points: COOLER }]}
-        limits={layers.includes('limits') ? [{ value: 40, label: 'High 40', tone: 'warning' }] : []}
-        regions={layers.includes('maintenance') ? [{ from: WINDOW_FROM, to: WINDOW_TO, label: 'Maintenance', tone: 'neutral' }] : []}
-        events={layers.includes('events') ? [{ t: NOW - 16 * HOUR, label: 'Alarm', tone: 'warning' }, { t: NOW - 5 * HOUR, label: 'Alarm', tone: 'warning' }] : []}
-        yDomain={[24, 42]}
-        yTicks={[24, 30, 36, 42]}
-        unit="°C"
-      />
-    </div>
+    <CaSheet look="console">
+      <Grid>
+        <Panel className="col-span-8" title="Compression pressures" subtitle="Cursor B follows the pointer">
+          <AnnotatedTrend
+            label="Discharge and interstage pressure with two cursors, A and B"
+            series={CA_PRESSURE_PAIR}
+            labels={CA_LABELS}
+            tickEvery={4}
+            unit="barg"
+            height={260}
+            yDomain={[42, 52]}
+            pins={[
+              { at: pinA, label: 'A', tone: 'amber' },
+              { at: pinB, label: 'B', tone: 'pink' },
+            ]}
+            onCursor={(index) => (index === null ? undefined : setPinB(index))}
+          />
+        </Panel>
+        <Panel className="col-span-4" title={`A ${CA_LABELS[pinA]} · B ${CA_LABELS[pinB]}`} subtitle={`${Math.abs(pinB - pinA) / 2} h apart`} padding="none">
+          <DataTable label="Values at cursor A and cursor B" flush columns={CA_COMPARE_COLUMNS} rows={rows} rowKey={(row) => row.id} />
+        </Panel>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationLayers() {
+  const [layers, setLayers] = useState<readonly string[]>(['limits', 'events', 'periods']);
+  const on = (id: string) => layers.includes(id);
+  return (
+    <CaSheet look="soft">
+      <Panel
+        title="Discharge temperature"
+        subtitle="Switch annotation layers on and off"
+        actions={<FilterPills label="Annotation layers" items={CA_LAYERS} selected={layers} onToggle={(id) => setLayers((current) => (current.includes(id) ? current.filter((layer) => layer !== id) : [...current, id]))} />}
+      >
+        <AnnotatedTrend
+          label="Discharge temperature over the last 24 hours with switchable annotation layers"
+          series={CA_TEMPERATURE_SERIES}
+          labels={CA_LABELS}
+          tickEvery={8}
+          unit="°C"
+          fill
+          height={280}
+          yDomain={[130, 150]}
+          limits={on('limits') ? [CA_TEMPERATURE_LIMITS[0]] : []}
+          events={on('events') ? CA_EVENTS : []}
+          regions={on('periods') ? [{ id: 'survey', from: 38, to: 42, label: 'Vibration survey', tone: 'teal' }] : []}
+          points={on('notes') ? [{ id: 'note', at: 26, text: 'Anti-surge valve opened', tone: 'purple', placement: 'below' }] : []}
+        />
+      </Panel>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationKey() {
+  return (
+    <CaSheet look="studio">
+      <Grid>
+        <Panel className="col-span-6" title="Lines and fills" subtitle="What each stroke on the plot means">
+          <Legend
+            direction="column"
+            items={[
+              { label: 'Measured value', tone: 'accent', mark: 'line', value: 'solid line' },
+              { label: 'Forecast or plan', tone: 'accent', mark: 'dashed', value: 'dashed line' },
+              { label: 'High limit', tone: 'warning', mark: 'dashed', value: 'labelled on the line' },
+              { label: 'Trip limit', tone: 'critical', mark: 'dashed', value: 'labelled on the line' },
+              { label: 'Planned stop', tone: 'info', mark: 'swatch', value: 'shaded period' },
+              { label: 'Anomaly', tone: 'pink', mark: 'swatch', value: 'shaded period' },
+            ]}
+          />
+        </Panel>
+        <Panel className="col-span-6" title="Event markers" subtitle="A number on the chart, the same number in the list">
+          <ul>
+            <ListRow leading={<EventBadge tone="warning">1</EventBadge>} title="Alarm" meta="Raised by the control system" />
+            <ListRow leading={<EventBadge tone="teal">2</EventBadge>} title="Work order" meta="Started, paused or finished on the asset" />
+            <ListRow leading={<EventBadge tone="purple">3</EventBadge>} title="Operator action" meta="Logged by the control room" />
+            <ListRow leading={<EventBadge tone="accent" selected>4</EventBadge>} title="Selected event" meta="Outlined on the chart and in the list" />
+          </ul>
+        </Panel>
+      </Grid>
+    </CaSheet>
   );
 }
 
 function ChartAnnotationNoEvents() {
   return (
-    <TrendChart
-      label="Suction pressure over the last 24 hours; no alarms, work orders or notes in this period"
-      series={[{ key: 'suction', label: 'Suction pressure', points: SUCTION }]}
-      limits={[{ value: 15, label: 'High 15', tone: 'warning' }]}
-      yDomain={[10, 16]}
-      yTicks={[10, 12, 14, 16]}
-      unit="barg"
-      summary="No alarms, work orders or notes in the last 24 hours."
-    />
+    <CaSheet look="studio">
+      <Grid>
+        <Panel className="col-span-7" title="Interstage pressure" subtitle="23-PT-92518 · last 24 hours">
+          <AnnotatedTrend label="Interstage pressure over the last 24 hours, with no events" series={[{ id: 'interstage', label: 'Interstage pressure', values: CA_INTERSTAGE, tone: 'teal' }]} labels={CA_LABELS} tickEvery={8} unit="barg" fill height={240} />
+        </Panel>
+        <Panel className="col-span-5" title="Events" subtitle="Last 24 hours">
+          <EmptyPanel icon={<IconInbox />} title="No events in this period" description="Alarms, work orders and operator notes on 23-PT-92518 appear here and as numbered markers on the chart." />
+        </Panel>
+      </Grid>
+    </CaSheet>
   );
 }
 
-function ChartAnnotationWithStates() {
+function ChartAnnotationInvestigation() {
+  const [selectedId, setSelectedId] = useState('e4');
+  const selected = CA_EVENTS.find((event) => event.id === selectedId);
   return (
-    <TrendChart
-      label="Recompressor gas flow over the last 24 hours with the trip at 11:00 marked and the run state as a strip underneath"
-      series={[{ key: 'flow', label: 'Gas flow', points: FLOW, variant: 'area', color: chartSeriesColor(2) }]}
-      events={[{ t: TRIP_FROM, label: 'Trip', tone: 'critical' }]}
-      states={[
-        { from: NOW - 24 * HOUR, to: STOP_FROM, label: 'Running', tone: 'neutral' },
-        { from: STOP_FROM, to: STOP_TO, label: 'Planned stop', tone: 'info' },
-        { from: STOP_TO, to: TRIP_FROM, label: 'Running', tone: 'neutral' },
-        { from: TRIP_FROM, to: TRIP_TO, label: 'Tripped', tone: 'critical' },
-        { from: TRIP_TO, to: NOW, label: 'Running', tone: 'neutral' },
-      ]}
-      statesLabel="Recompressor run state"
-      yDomain={[0, 240]}
-      yTicks={[0, 60, 120, 180, 240]}
-      unit="kSm³/h"
-      decimals={0}
-    />
+    <CaSheet look="studio">
+      <Grid>
+        <SectionHeader
+          className="col-span-12"
+          eyebrow="1st stage compressor · 23-KA-9101"
+          title="Discharge temperature investigation"
+          description="Thursday 12 March · last 24 hours"
+          actions={
+            <StatusPill tone="warning" size="lg" icon={<IconAlertTriangle />}>
+              Above high limit
+            </StatusPill>
+          }
+        />
+        <Stat className="col-span-3" label="Now" value={146.3} decimals={1} unit="°C" tone="warning" icon={<IconAlertTriangle />} target="High 145.0" />
+        <Stat className="col-span-3" label="Margin to trip" value={8.7} decimals={1} unit="°C" tone="critical" icon={<IconAlertOctagon />} target="Trip 155.0" />
+        <Stat className="col-span-3" label="Rise in 2 hours" value={4.9} decimals={1} unit="°C" tone="amber" icon={<IconFlag />} target="2.5 °C per hour" />
+        <Stat className="col-span-3" label="Cooler after cleaning" value={36.9} decimals={1} unit="°C" tone="success" icon={<IconCircleCheck />} target="High 40.0" />
+        <Panel className="col-span-8" title="Discharge temperature" subtitle={selected ? `Event ${selected.mark}: ${selected.title}` : 'Select an event'}>
+          <AnnotatedTrend
+            label="Discharge temperature over the last 24 hours with limits, events, a maintenance window and the limit crossing"
+            series={CA_TEMPERATURE_SERIES}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="°C"
+            fill
+            height={320}
+            yDomain={[130, 158]}
+            limits={CA_TEMPERATURE_LIMITS}
+            regions={[{ id: 'wo', from: 32, to: 37, label: 'Cooler cleaning', tone: 'teal' }]}
+            events={CA_EVENTS}
+            selectedEventId={selectedId}
+            onSelectEvent={setSelectedId}
+            keyItems={[
+              { label: 'High', tone: 'warning', mark: 'dashed' },
+              { label: 'Trip', tone: 'critical', mark: 'dashed' },
+              { label: 'Maintenance', tone: 'teal' },
+            ]}
+          />
+        </Panel>
+        <Panel className="col-span-4" title="Timeline" subtitle="Alarms, actions and work">
+          <CaEventRows events={CA_EVENTS} selectedId={selectedId} onSelect={setSelectedId} />
+        </Panel>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationOperatorTrend() {
+  const [cursor, setCursor] = useState<number | null>(null);
+  const at = cursor ?? CA_LAST;
+  return (
+    <CaSheet look="console">
+      <Grid>
+        <Panel className="col-span-12" title="Trend 4 · Gas flow and stops" subtitle={`Cursor ${CA_LABELS[at]}`} padding="none">
+          <StatGroup columns={4} joined label="Values at the cursor">
+            <Stat variant="plain" size="sm" label="Gas flow" value={CA_FLOW[at]} unit="kSm³/h" tone={CA_FLOW[at] === 0 ? 'critical' : 'accent'} />
+            <Stat variant="plain" size="sm" label="Discharge pressure" value={CA_PRESSURE[at]} decimals={1} unit="barg" />
+            <Stat variant="plain" size="sm" label="Discharge temperature" value={CA_TEMPERATURE[at]} decimals={1} unit="°C" tone={CA_TEMPERATURE[at] > 145 ? 'warning' : 'neutral'} />
+            <Stat variant="plain" size="sm" label="Vibration" value={CA_VIBRATION[at]} decimals={1} unit="mm/s" />
+          </StatGroup>
+        </Panel>
+        <Panel className="col-span-12" title="23-FT-92510" subtitle="kSm³/h · planned stop and trip shaded">
+          <AnnotatedTrend
+            label="Gas flow with a planned stop and a trip, read with a cursor"
+            series={[{ id: 'flow', label: 'Gas flow', values: CA_FLOW }]}
+            labels={CA_LABELS}
+            tickEvery={4}
+            unit="kSm³/h"
+            decimals={0}
+            height={240}
+            yDomain={[0, 220]}
+            regions={CA_STOPS}
+            events={[{ id: 'restart', at: 44, mark: 'R', title: 'Restart', tone: 'success' }]}
+            cursor={cursor}
+            onCursor={setCursor}
+          />
+        </Panel>
+      </Grid>
+    </CaSheet>
+  );
+}
+
+function ChartAnnotationReportFigure() {
+  return (
+    <CaSheet look="editorial">
+      <Grid>
+        <SectionHeader className="col-span-12" eyebrow="Figure 3" title="Vibration rose for two hours before the survey, then returned to its band" />
+        <div className="col-span-8">
+          <AnnotatedTrend
+            label="Drive-end vibration over the last 24 hours with the anomaly, the survey and the high limit"
+            series={[{ id: 'vibration', label: 'Vibration', values: CA_VIBRATION }]}
+            labels={CA_LABELS}
+            tickEvery={8}
+            unit="mm/s"
+            height={300}
+            yDomain={[4, 9]}
+            limits={[{ value: 7.1, label: 'High', tone: 'warning' }]}
+            regions={[{ id: 'anomaly', from: 29, to: 35, label: 'Anomaly', tone: 'warning' }]}
+            events={[
+              { id: 'a', at: 26, mark: '1', title: 'Anti-surge valve opened' },
+              { id: 'b', at: 38, mark: '2', title: 'Vibration survey started' },
+            ]}
+          />
+        </div>
+        <ol className="col-span-4 flex flex-col gap-4 border-t border-(--kit-rule-strong) pt-4 text-sm leading-6">
+          <li className="flex gap-3">
+            <EventBadge>1</EventBadge>
+            <span>
+              <strong>{CA_LABELS[26]}.</strong> The anti-surge valve was opened 5 % after a load change.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <EventBadge>2</EventBadge>
+            <span>
+              <strong>{CA_LABELS[38]}.</strong> The survey under <TagId>WO-104466</TagId> found a loose guard on the drive end.
+            </span>
+          </li>
+          <li className="text-(--kit-text-2)">The peak of {formatNumber(CA_VIBRATION_PEAK?.max ?? 0, 1)} mm/s stayed below the trip limit of 11.0 mm/s.</li>
+        </ol>
+      </Grid>
+    </CaSheet>
   );
 }
 
@@ -598,19 +740,19 @@ export default definePage({
   id: 'chart-annotations',
   title: 'Chart annotations',
   summary:
-    'Everything drawn on a trend that is not the data: limits and targets, events, shaded periods, notes, cursors and selections. Annotations turn "what happened" into "why", so each kind has one look and a key.',
+    'What turns a trend into an explanation: labelled limits, shaded periods, numbered events, notes on single points, a now line, cursors and selections — in eight looks and three finished compositions.',
   guidance: {
     use: [
-      'Use a dashed horizontal line for a limit or target, a dotted vertical line for an event and a shaded band for a period.',
-      'Label annotations on the chart when there are up to four; number them and list them beside the chart beyond that.',
-      'Give status colour only to annotations that are a status: alarms, trips and limit excursions.',
-      'Add a key as soon as a chart carries more than one kind of annotation.',
+      'Label a limit on the line itself with its name and value, and keep the same colour for it everywhere.',
+      'Number events and repeat the number in a list beside the chart; do not write sentences on the plot.',
+      'Shade a period when the state of the asset explains the trend: a stop, a trip, maintenance.',
+      'Give a cursor a readout with units; give a selection its summary.',
     ],
     avoid: [
-      'Labels that sit on top of the series; move the label to the other end of the line.',
-      'Shading every period; a chart that is mostly shaded has no background left to read against.',
-      'Annotations without a time or a source; a marker should lead to the alarm, work order or note behind it.',
-      'A cursor readout that only exists on hover; pin it so it works with keyboard and touch.',
+      'More than five numbered events on one chart: switch to ticks and a density strip.',
+      'Colour as the only difference between a limit and a target.',
+      'Notes that cover the line they explain.',
+      'Annotations without a key when a chart mixes more than two kinds.',
     ],
   },
   source,
@@ -618,271 +760,242 @@ export default definePage({
     {
       id: 'lines',
       title: 'Lines and boundaries',
-      description: 'A value or a moment the series is read against.',
+      description: 'Horizontal and vertical references a value is read against.',
       specimens: [
         {
-          id: 'ChartAnnotationLimitLabel',
-          title: 'Limit line with label',
-          note: 'Pick it for an operating limit: dashed, in warning colour, with its name and value on the line.',
+          id: 'ChartAnnotationLimits',
+          title: 'Limit lines with labels',
+          note: 'Pick it whenever a value has an operating and a trip limit: both lines carry their name and value.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationLimitLabel,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx'],
+          Component: ChartAnnotationLimits,
         },
         {
-          id: 'ChartAnnotationTargetLine',
-          title: 'Target line with label',
-          note: 'Pick the neutral line for targets, plans and capacities, which are goals and not alarm limits.',
+          id: 'ChartAnnotationTarget',
+          title: 'Target line',
+          note: 'Pick it for a goal rather than a limit: a solid line in the success colour, with the best point called out.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationTargetLine,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/Stat.tsx'],
+          Component: ChartAnnotationTarget,
         },
         {
-          id: 'ChartAnnotationNowMarker',
-          title: 'Now marker',
-          note: 'Pick it when the time axis runs into the future, so nobody reads the plan as measured data.',
+          id: 'ChartAnnotationForecast',
+          title: 'Now line and forecast',
+          note: 'Pick it when the chart runs into the future: a now line, a dashed forecast and a shaded forecast period.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationNowMarker,
-        },
-        {
-          id: 'ChartAnnotationForecastBoundary',
-          title: 'Forecast boundary',
-          note: 'Pick it where measured data hands over to a forecast: a solid line, a shaded future and a dashed series.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationForecastBoundary,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/Panel.tsx'],
+          Component: ChartAnnotationForecast,
         },
       ],
     },
     {
-      id: 'events-and-regions',
+      id: 'events',
       title: 'Events and periods',
-      description: 'Moments and stretches of time that explain the shape of the trend.',
+      description: 'Things that happened, and states that lasted.',
       specimens: [
         {
-          id: 'ChartAnnotationEventMarkers',
-          title: 'Event markers',
-          note: 'Pick it for up to four events that can carry their own label: an alarm raised, a work order started.',
+          id: 'ChartAnnotationEvents',
+          title: 'Numbered events with a linked list',
+          note: 'Pick it to explain a trend with what happened: select a marker or a row and the other follows.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationEventMarkers,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/chart-annotations/EventBadge.tsx', 'kit/ListRow.tsx'],
+          Component: ChartAnnotationEvents,
         },
         {
-          id: 'ChartAnnotationNumbered',
-          title: 'Numbered events with list',
-          note: 'Pick it when event names are too long for the plot; the numbers tie the markers to the list.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationNumbered,
-        },
-        {
-          id: 'ChartAnnotationRegion',
+          id: 'ChartAnnotationWindow',
           title: 'Maintenance window',
-          note: 'Pick a neutral shaded band for a planned period, so the dip inside it is not mistaken for a fault.',
+          note: 'Pick it to show work on the asset as a hatched period, with the result noted after it.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationRegion,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/Panel.tsx'],
+          Component: ChartAnnotationWindow,
         },
         {
-          id: 'ChartAnnotationShutdown',
+          id: 'ChartAnnotationStops',
           title: 'Planned stop and trip',
-          note: 'Pick it to tell stops apart: neutral for the planned one, critical for the trip.',
+          note: 'Pick it when zero is not a fault of the sensor: the stops are shaded and named by kind.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationShutdown,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/Legend.tsx'],
+          Component: ChartAnnotationStops,
+        },
+        {
+          id: 'ChartAnnotationCrowded',
+          title: 'Many events as ticks',
+          note: 'Pick it past five events: ticks along the top and a density strip below say where they cluster.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/HeatStrip.tsx'],
+          Component: ChartAnnotationCrowded,
         },
       ],
     },
     {
-      id: 'points-and-highlights',
+      id: 'points',
       title: 'Points and highlights',
-      description: 'Single readings and stretches of the series itself.',
+      description: 'Single moments worth a note.',
       specimens: [
         {
-          id: 'ChartAnnotationThresholdCrossing',
+          id: 'ChartAnnotationCrossing',
           title: 'Threshold crossing',
-          note: 'Pick it to show exactly where a series left its limits; only the part beyond the limit changes colour.',
+          note: 'Pick it for a wall screen: the state tile says it in words and the chart marks when it happened.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/trendData.ts'],
-          Component: ChartAnnotationThresholdCrossing,
-        },
-        {
-          id: 'ChartAnnotationPointNote',
-          title: 'Point with note',
-          note: 'Pick it for an operator note attached to one reading; the full note goes under the chart.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationPointNote,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/chart-annotations/annotations.ts', 'kit/Stat.tsx'],
+          Component: ChartAnnotationCrossing,
         },
         {
           id: 'ChartAnnotationAnomaly',
           title: 'Annotated anomaly',
-          note: 'Pick it for a model finding: the flagged period is shaded in info colour and its peak is marked.',
+          note: 'Pick it for a detected anomaly: the period is shaded with its score and the peak carries its value.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/StatusPill.tsx'],
           Component: ChartAnnotationAnomaly,
         },
         {
           id: 'ChartAnnotationMinMax',
           title: 'Minimum and maximum',
-          note: 'Pick it when the extremes of the period are what people would otherwise hunt for with the cursor.',
+          note: 'Pick it for a daily summary: the two extremes are marked on the line and repeated as figures.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/chart-annotations/annotations.ts', 'kit/Stat.tsx'],
           Component: ChartAnnotationMinMax,
+        },
+        {
+          id: 'ChartAnnotationPointNote',
+          title: 'Point with a note beside',
+          note: 'Pick it in a report: a short label on the point and the full note in the margin.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/chart-annotations/EventBadge.tsx'],
+          Component: ChartAnnotationPointNote,
         },
       ],
     },
     {
-      id: 'cursor-and-selection',
+      id: 'cursor',
       title: 'Cursor and selection',
-      description: 'Reading values at a time, between two times and across a period.',
+      description: 'Reading exact values and stretches of time.',
       specimens: [
         {
-          id: 'ChartAnnotationCursorReadout',
+          id: 'ChartAnnotationCursor',
           title: 'Cursor with readout panel',
-          note: 'Pick it to compare series at one moment; the pinned panel works without hover.',
+          note: 'Pick it when exact values matter: the panel shows every series at the cursor, and the latest when idle.',
           origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/SeriesLegend.tsx', 'industrial/charts/trendData.ts'],
-          Component: ChartAnnotationCursorReadout,
-        },
-        {
-          id: 'ChartAnnotationLegendValues',
-          title: 'Legend with current values',
-          note: 'Pick it beside a multi-series chart, so the legend doubles as the live readout.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['industrial/charts/SeriesLegend.tsx'],
-          Component: ChartAnnotationLegendValues,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/Stat.tsx'],
+          Component: ChartAnnotationCursor,
         },
         {
           id: 'ChartAnnotationBrush',
-          title: 'Range selection',
-          note: 'Pick it to let people mark a period and get its statistics, or zoom into it.',
+          title: 'Range selection with summary',
+          note: 'Pick it to measure a stretch: drag across the plot and read its mean, maximum and change.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/stats.ts'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/chart-annotations/annotations.ts', 'kit/Stat.tsx'],
           Component: ChartAnnotationBrush,
         },
         {
-          id: 'ChartAnnotationCompareCursors',
+          id: 'ChartAnnotationCompare',
           title: 'Two cursors with difference',
-          note: 'Pick it to measure a change: how much, and over how long, between two points in time.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/ValueReadout.tsx'],
-          Component: ChartAnnotationCompareCursors,
-        },
-      ],
-    },
-    {
-      id: 'linked',
-      title: 'Linked and combined',
-      description: 'Annotations tied to a list, and several kinds on one chart.',
-      specimens: [
-        {
-          id: 'ChartAnnotationEventList',
-          title: 'Event list linked to chart',
-          note: 'Pick it for investigation: selecting an event in the list picks out its marker on the trend.',
+          note: 'Pick it to compare two moments: cursor A is fixed, B follows the pointer, the table gives the difference.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/StatusDot.tsx'],
-          Component: ChartAnnotationEventList,
-        },
-        {
-          id: 'ChartAnnotationCombined',
-          title: 'Several kinds with a key',
-          note: 'Pick it when a chart needs a limit, a period, events and notes at once; the key keeps them apart.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/charts/AnnotationKey.tsx'],
-          Component: ChartAnnotationCombined,
-        },
-        {
-          id: 'ChartAnnotationKeyOnly',
-          title: 'Annotation key',
-          note: 'Pick the stacked key in a side panel; every glyph matches how the annotation is drawn.',
-          origin: 'custom',
-          size: 'sm',
-          uses: ['industrial/charts/AnnotationKey.tsx'],
-          Component: ChartAnnotationKeyOnly,
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/DataTable.tsx'],
+          Component: ChartAnnotationCompare,
         },
       ],
     },
     {
-      id: 'density-and-layers',
-      title: 'Density and layers',
-      description: 'Many annotations, none, and letting people choose.',
+      id: 'keys',
+      title: 'Keys and layers',
+      description: 'Explaining the marks and controlling how many are shown.',
       specimens: [
         {
-          id: 'ChartAnnotationCrowded',
-          title: 'Many events',
-          note: 'Pick unlabelled markers and a count once labels would collide; the pattern is the message.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationCrowded,
-        },
-        {
-          id: 'ChartAnnotationToggle',
+          id: 'ChartAnnotationLayers',
           title: 'Layer toggles',
-          note: 'Pick it when different roles need different annotations on the same trend.',
+          note: 'Pick it when a chart carries several kinds of annotation: readers switch each layer on and off.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'actions/ToggleGroup.tsx'],
-          Component: ChartAnnotationToggle,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/dashboard-blocks/FilterPills.tsx'],
+          Component: ChartAnnotationLayers,
         },
         {
-          id: 'ChartAnnotationWithStates',
-          title: 'Event with state strip',
-          note: 'Pick it when the event starts a state: the marker gives the moment, the strip gives the duration.',
+          id: 'ChartAnnotationKey',
+          title: 'Annotation key',
+          note: 'Pick it beside any chart that mixes lines, fills and markers: one entry for each kind.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
-          Component: ChartAnnotationWithStates,
+          size: 'full',
+          bleed: true,
+          uses: ['kit/Legend.tsx', 'kit/chart-annotations/EventBadge.tsx', 'kit/ListRow.tsx'],
+          Component: ChartAnnotationKey,
         },
         {
           id: 'ChartAnnotationNoEvents',
           title: 'No events',
-          note: 'Pick it to say that nothing happened; an empty plot alone could mean the events failed to load.',
+          note: 'Pick it for a quiet period: the list says that nothing happened and what would appear there.',
           origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx'],
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/EmptyPanel.tsx'],
           Component: ChartAnnotationNoEvents,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Annotation kinds combined into finished screens.',
+      specimens: [
+        {
+          id: 'ChartAnnotationInvestigation',
+          title: 'Investigation view',
+          note: 'Pick it as the page for one signal under investigation: figures, an annotated chart and the linked timeline.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/chart-annotations/EventBadge.tsx', 'kit/SectionHeader.tsx', 'kit/Stat.tsx'],
+          Component: ChartAnnotationInvestigation,
+        },
+        {
+          id: 'ChartAnnotationOperatorTrend',
+          title: 'Operator trend display',
+          note: 'Pick it for a control-room trend: a strip of values at the cursor above a chart with stops shaded.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/StatGroup.tsx', 'kit/Panel.tsx'],
+          Component: ChartAnnotationOperatorTrend,
+        },
+        {
+          id: 'ChartAnnotationReportFigure',
+          title: 'Report figure with numbered notes',
+          note: 'Pick it for a printed or shared report: the headline states the finding and the notes carry the numbers.',
+          origin: 'custom',
+          size: 'full',
+          bleed: true,
+          uses: ['kit/chart-annotations/AnnotatedTrend.tsx', 'kit/chart-annotations/EventBadge.tsx', 'kit/SectionHeader.tsx'],
+          Component: ChartAnnotationReportFigure,
         },
       ],
     },

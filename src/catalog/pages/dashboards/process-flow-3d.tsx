@@ -1,7 +1,7 @@
 import { Button } from '@cognite/aura/components/button';
 import { Switch } from '@cognite/aura/components/switch';
-import { IconAlertTriangle, IconArrowBackUp, IconCircleCheck, IconPointer, IconRuler2 } from '@cognite/aura/icons';
-import { useMemo, useReducer, useRef } from 'react';
+import { IconAlertTriangle, IconArrowBackUp, IconCircleCheck, IconPlayerPause, IconPlayerPlay, IconPointer, IconRuler2 } from '@cognite/aura/icons';
+import { useMemo, useReducer, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Bars } from '../../../library/kit/Bars';
@@ -152,7 +152,7 @@ const PROCESSFLOW3D_EQUIPMENT: readonly PlantEquipment[] = [
 
 const PROCESSFLOW3D_LABELLED: readonly string[] = ['20-va-1001', '23-ka-9101', '23-ka-9102', '23-ka-9103', '23-ha-9114', '27-vg-2001', 'flare'];
 
-const PROCESSFLOW3D_TARGET = frameBounds({ min: [-76, 0, -42], max: [76, 10, 30] }, { view: 'perspective', fov: 40, aspect: 1.5, padding: 0.8 });
+const PROCESSFLOW3D_TARGET = frameBounds({ min: [-76, 0, -42], max: [76, 10, 30] }, { view: 'perspective', fov: 40, aspect: 1.5, padding: 0.7 });
 
 function processFlow3dLine(id: string): ProcessFlow3dLine | undefined {
   return PROCESSFLOW3D_LINES.find((line) => line.id === id);
@@ -548,7 +548,7 @@ function ProcessFlow3dTitleBlock({ state }: { state: FlowScenarioState }) {
           <IconRuler2 aria-hidden="true" className="size-7 shrink-0 text-[color:var(--kit-text)]" />
           <div className="min-w-0">
             <h2 className="text-xl font-medium tracking-tight text-[color:var(--kit-text)]">Nordkapp compression: process flow</h2>
-            <p className="text-sm text-[color:var(--kit-text-2)]">Particle speed and density follow the flow in each line</p>
+            <p className="text-sm text-[color:var(--kit-text-2)]">Run the flow and particle speed and density follow each line</p>
           </div>
         </div>
         <div className={cell}>
@@ -578,19 +578,28 @@ function ProcessFlow3dTitleBlock({ state }: { state: FlowScenarioState }) {
   );
 }
 
-function ProcessFlow3dSceneLegend() {
+/** Bottom edge of the scene: the fluid legend, and the control that holds the particles still. */
+function ProcessFlow3dSceneLegend({ running, onRunning }: { running?: boolean; onRunning?: (running: boolean) => void }) {
   return (
     <div className="flex h-full items-end justify-between gap-3 p-3">
       <div className="pointer-events-auto border border-[color:var(--kit-rule-strong)] bg-[color-mix(in_oklab,var(--card-background)_90%,transparent)] px-3 py-2">
         <ProcessFlow3dLegend />
       </div>
-      <p className="border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_90%,transparent)] px-3 py-2 text-xs text-[color:var(--kit-text-2)]">Click a line to trace it · Esc to let go</p>
+      {onRunning ? (
+        <Button variant="outline" size="sm" aria-pressed={running} onClick={() => onRunning(!running)} className="pointer-events-auto">
+          {running ? <IconPlayerPause /> : <IconPlayerPlay />} {running ? 'Pause flow' : 'Run flow'}
+        </Button>
+      ) : (
+        <p className="border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_90%,transparent)] px-3 py-2 text-xs text-[color:var(--kit-text-2)]">Click a line to trace it · Esc to let go</p>
+      )}
     </div>
   );
 }
 
 function ProcessFlow3dDrawing({ initialClosed = PROCESSFLOW3D_NORMAL, initialSelected = 'e-export', still = false }: { initialClosed?: readonly string[]; initialSelected?: string | null; still?: boolean }) {
   const [state, dispatch] = useReducer(flowScenarioReducer, undefined, () => initialFlowScenario(initialClosed, initialSelected));
+  // Particles that never stop are opt-in: the drawing opens still, with chevrons for direction, and Run flow starts them.
+  const [running, setRunning] = useState(false);
   const select = (lineId: string) => dispatch({ type: 'select', lineId });
 
   return (
@@ -600,7 +609,7 @@ function ProcessFlow3dDrawing({ initialClosed = PROCESSFLOW3D_NORMAL, initialSel
         <div className="grid grid-cols-[minmax(0,1fr)_22rem] items-stretch gap-[var(--kit-gap)]">
           <div className="grid min-w-0 grid-rows-[34rem_auto_auto] gap-[var(--kit-gap)]">
             <Panel title="Flow scene" subtitle="Compression area, looking north" padding="none">
-              <ProcessFlow3dScene className="min-h-0 flex-1" state={state} dispatch={dispatch} insets={{ bottom: 50 }} still={still} overlay={<ProcessFlow3dSceneLegend />} />
+              <ProcessFlow3dScene className="min-h-0 flex-1" state={state} dispatch={dispatch} insets={{ bottom: 50 }} still={still || !running} overlay={<ProcessFlow3dSceneLegend running={running} onRunning={still ? undefined : setRunning} />} />
             </Panel>
             <Panel title="Stream table" subtitle={`${PROCESSFLOW3D_LINES.length} streams · select one to trace it`} padding="none">
               <ProcessFlow3dStreamTable state={state} onSelect={select} />
@@ -798,7 +807,7 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Drag to orbit, scroll to zoom. Click a line in the scene, or its row in the stream table, to trace it upstream and downstream and open its sheet. Flip valves on the right, or trip the recompressor, and watch the table and the balance follow. Escape lets go of the stream.',
+      description: 'Drag to orbit, scroll to zoom. Click a line in the scene, or its row in the stream table, to trace it upstream and downstream and open its sheet. Flip valves on the right, or trip the recompressor, and watch the table and the balance follow. Run flow sets the particles moving at a speed and density that follow each line; until then chevrons show direction. Escape lets go of the stream.',
       specimens: [
         {
           id: 'ProcessFlowSignature',

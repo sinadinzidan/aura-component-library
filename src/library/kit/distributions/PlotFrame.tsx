@@ -48,7 +48,7 @@ export function PlotFrame({ label, x, y, height = 280, legend, headline, notes, 
         className="grid h-full text-xs tabular-nums leading-4 text-[var(--kit-text-2)]"
         style={{ gridTemplateColumns: `${gutter}ch minmax(0, 1fr)`, gridTemplateRows: 'auto minmax(0, 1fr) auto' }}
       >
-        <div className="col-span-2 min-h-3 pb-3 font-medium">{y.title}</div>
+        <div className="col-span-2 mb-3 min-h-2 font-medium">{y.title}</div>
         <div className="relative">
           {y.ticks.map((tick, index) => (
             <span key={tick} className="absolute right-2 translate-y-1/2 whitespace-nowrap" style={{ bottom: percent(tick, y.min, y.max) }}>

@@ -44,6 +44,8 @@ type FlowStagesProps = {
   onSelect?: (id: string) => void;
   /** `compact` is one line of name, state and reading, for lanes and narrow columns. */
   size?: 'default' | 'compact';
+  /** `vertical` stacks the stages top to bottom, for a side column. */
+  orientation?: 'horizontal' | 'vertical';
   className?: string;
 };
 
@@ -52,15 +54,17 @@ type FlowStagesProps = {
  * stage is drawn the way the look draws a block: a card with a status pill in studio, a block with
  * a state edge in console, a solid tile in poster and signal, a drawn box in blueprint.
  */
-export function FlowStages({ label, stages, links = [], bottleneckId, selectedId = null, onSelect, size = 'default', className }: FlowStagesProps) {
+export function FlowStages({ label, stages, links = [], bottleneckId, selectedId = null, onSelect, size = 'default', orientation = 'horizontal', className }: FlowStagesProps) {
   const look = useLook();
   const anatomy = BLOCK_ANATOMY[look];
   const compact = size === 'compact';
   const solid = anatomy === 'solid';
+  const vertical = orientation === 'vertical';
+  const row = vertical && compact;
   const template = stages.map(() => 'minmax(0, 1fr)').join(compact ? ' minmax(28px, 0.22fr) ' : ' minmax(36px, 0.3fr) ');
 
   return (
-    <ol data-look={look} aria-label={label} className={cx('grid w-full min-w-0 items-stretch', className)} style={{ gridTemplateColumns: template }}>
+    <ol data-look={look} data-orientation={orientation} aria-label={label} className={cx('w-full min-w-0', vertical ? 'flex flex-col' : 'grid items-stretch', className)} style={vertical ? undefined : { gridTemplateColumns: template }}>
       {stages.map((stage, index) => {
         const selected = stage.id === selectedId;
         const bottleneck = stage.id === bottleneckId;
@@ -78,7 +82,16 @@ export function FlowStages({ label, stages, links = [], bottleneckId, selectedId
         ) : (
           <StatusPill tone={stage.tone}>{stage.state}</StatusPill>
         );
-        const body = (
+        const body = row ? (
+          <>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="text-sm font-semibold text-(--kit-text)">{stage.name}</span>
+              {stage.tag ? <TagId className="text-xs">{stage.tag}</TagId> : null}
+            </div>
+            {reading}
+            {state}
+          </>
+        ) : (
           <>
             <div className="flex min-w-0 items-start justify-between gap-2">
               <div className="flex min-w-0 flex-col">
@@ -118,7 +131,7 @@ export function FlowStages({ label, stages, links = [], bottleneckId, selectedId
             </div>
           </>
         );
-        const box = cx('flex h-full w-full min-w-0 flex-col text-left', compact ? 'gap-2 p-3' : 'gap-3 p-4', anatomy === 'rule' && 'px-0', onSelect && 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring-default');
+        const box = cx('flex h-full w-full min-w-0 text-left', row ? 'flex-row items-center gap-3 px-3 py-2.5' : compact ? 'flex-col gap-2 p-3' : 'flex-col gap-3 p-4', anatomy === 'rule' && 'px-0', onSelect && 'cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring-default');
         const style = {
           ...blockStyle(look),
           outline: selected ? '2px solid var(--kit-accent)' : bottleneck && !solid ? '2px solid var(--t-line)' : undefined,
@@ -139,8 +152,8 @@ export function FlowStages({ label, stages, links = [], bottleneckId, selectedId
               )}
             </li>
             {index < stages.length - 1 ? (
-              <li aria-hidden={link?.label ? undefined : true} className="flex min-w-0 items-center px-1">
-                <FlowConnector label={link?.label} state={link?.state} tone={link?.state === 'stopped' ? 'neutral' : 'accent'} />
+              <li aria-hidden={link?.label ? undefined : true} className={cx('flex min-w-0 items-center', vertical ? 'justify-center py-1' : 'px-1')}>
+                <FlowConnector label={link?.label} state={link?.state} tone={link?.state === 'stopped' ? 'neutral' : 'accent'} orientation={orientation} />
               </li>
             ) : null}
           </Fragment>

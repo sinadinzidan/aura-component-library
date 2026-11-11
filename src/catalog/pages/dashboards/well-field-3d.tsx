@@ -676,7 +676,7 @@ function WellField3dPartPicker() {
 function WellField3dPartTitleBlock() {
   return (
     <WellField3dPartFrame className="h-full justify-center">
-      <div className="h-28">
+      <div className="h-40">
         <WellField3dTitleBlock title="Well field, model and section" sheet="3 of 9" />
       </div>
     </WellField3dPartFrame>
@@ -688,7 +688,7 @@ function WellField3dPartPlane() {
   const model = WELLFIELD3D_MODELS[4];
   return (
     <WellField3dPartFrame className="h-[25rem] justify-center">
-      <Panel title="Cutting plane" subtitle="One depth for the model and the section">
+      <Panel title="Cutting plane">
         <div className="flex flex-col gap-4">
           <WellField3dPlaneControl depth={depth} onChange={setDepth} />
           <WellField3dFigures model={model} depth={depth} />
@@ -704,7 +704,7 @@ function WellField3dPartWellheads() {
   const target = wellFieldCameraTarget('perspective', { halfExtent: 3.4, depth: 0 }, { padding: 0.8 });
   return (
     <WellField3dPartFrame className="h-[25rem]">
-      <Panel className="min-h-0 flex-1" padding="none" title="Template and wellheads" subtitle="Up produces, down injects">
+      <Panel className="min-h-0 flex-1" padding="none" title="Template and wellheads">
         <div ref={scope} className="relative h-full min-h-0 w-full">
           <SceneCanvas label="Subsea template with a producer wellhead pointing up and an injector wellhead pointing down">
             <StillScene>
@@ -732,7 +732,7 @@ function WellField3dPartHorizon() {
   const target = wellFieldCameraTarget('perspective', { halfExtent: 20, depth: 3 }, { padding: 0.85 });
   return (
     <WellField3dPartFrame className="h-[25rem]">
-      <Panel className="min-h-0 flex-1" padding="none" title={horizon.name} subtitle={`Mean depth ${formatNumber(horizon.depth)} m, relief exaggerated six times`}>
+      <Panel className="min-h-0 flex-1" padding="none" title={`${horizon.name}, ${formatNumber(horizon.depth)} m`}>
         <div ref={scope} className="relative h-full min-h-0 w-full">
           <SceneCanvas label={`${horizon.name} horizon as an undulating low-poly surface around ${horizon.depth} metres`}>
             <StillScene>

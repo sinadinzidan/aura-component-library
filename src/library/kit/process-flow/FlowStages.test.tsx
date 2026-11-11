@@ -47,4 +47,11 @@ describe(FlowStages.name, () => {
     expect(container.querySelector('.kit-pill')).toBeNull();
     expect(screen.getAllByText('Running')).toHaveLength(2);
   });
+
+  it('stacks the stages for a side column', () => {
+    render(<FlowStages label="Gas train" stages={STAGES} size="compact" orientation="vertical" />);
+
+    expect(screen.getByRole('list', { name: 'Gas train' })).toHaveAttribute('data-orientation', 'vertical');
+    expect(screen.getByText('20-VA-1001')).toBeInTheDocument();
+  });
 });

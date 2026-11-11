@@ -38,7 +38,11 @@ export function StateStrip({ label, rows, start, end, ticks, now, legend, size =
 
   return (
     <figure data-look={look} className={cx('min-w-0 text-(--kit-text)', className)}>
-      {legend ? <Legend items={legend} className="mb-3" /> : null}
+      {legend ? (
+        <div className="mb-4">
+          <Legend items={legend} />
+        </div>
+      ) : null}
       <div role="img" aria-label={label} className="grid items-center gap-x-4 gap-y-3" style={{ gridTemplateColumns: labelled ? 'minmax(7rem, max-content) minmax(0, 1fr)' : 'minmax(0, 1fr)' }}>
         {rows.map((row) => (
           <div key={row.label} className="contents">

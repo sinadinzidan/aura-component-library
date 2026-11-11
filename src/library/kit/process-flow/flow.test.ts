@@ -1,4 +1,4 @@
-import { bottleneckOf, massBalance, shares, stepProgress, summariseConditions } from './flow';
+import { bottleneckOf, massBalance, shares, stackLayout, stepProgress, summariseConditions } from './flow';
 
 describe('flow', () => {
   it('closes a balance inside the tolerance', () => {
@@ -32,5 +32,13 @@ describe('flow', () => {
   it('turns values into shares', () => {
     expect(shares([1, 3])).toEqual([0.25, 0.75]);
     expect(shares([0, 0])).toEqual([0, 0]);
+  });
+
+  it('stacks segments and keeps room for a label on a small one', () => {
+    const layout = stackLayout([99, 1], 206, 6, 24);
+
+    expect(layout[1].height).toBe(24);
+    expect(layout[0].height).toBeCloseTo(176);
+    expect(layout[1].top).toBeCloseTo(182);
   });
 });

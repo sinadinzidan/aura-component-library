@@ -2,31 +2,13 @@ import { useLook } from '../../looks/useLook';
 import { StatusPill } from '../StatusPill';
 import { cx, type Tone } from '../tones';
 
-export type Barrier = {
-  id: string;
-  name: string;
-  /** What the barrier does, e.g. `Prevent`, `Detect`, `Control`, `Mitigate`. */
-  role: string;
-  /** Safety-critical elements behind the barrier, by test result. */
-  passed: number;
-  degraded: number;
-  failed: number;
-};
+import { barrierState, type Barrier } from './permits';
 
 type BarrierStackProps = {
   label: string;
   barriers: readonly Barrier[];
   className?: string;
 };
-
-type BarrierState = { tone: Tone; word: string };
-
-/** A barrier is only as good as its worst element. */
-export function barrierState(barrier: Barrier): BarrierState {
-  if (barrier.failed > 0) return { tone: 'critical', word: 'Impaired' };
-  if (barrier.degraded > 0) return { tone: 'warning', word: 'Degraded' };
-  return { tone: 'success', word: 'Healthy' };
-}
 
 /**
  * Barriers between a hazard and its consequence, one row each: the role, the name, one block per

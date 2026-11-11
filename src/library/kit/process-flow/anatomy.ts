@@ -68,3 +68,28 @@ export const FIGURE_STYLE: CSSProperties = { fontWeight: 'var(--kit-figure-weigh
 
 /** Stroke width of drawn connectors and outlines in a look, in px. */
 export const LINE_WEIGHT: Record<LookId, number> = { studio: 2, glass: 2, soft: 3, console: 2, poster: 3.5, signal: 3, blueprint: 1.5, editorial: 1.5 };
+
+/** Paint of a block drawn in SVG, where a CSS box is not available. */
+export type SvgBlockPaint = { fill: string; stroke: string; strokeWidth: number; radius: number; text: string; subtext: string; edge: boolean };
+
+/** The same block anatomy as `blockStyle`, as SVG paint. Use on a group that carries `data-tone`. */
+export function svgBlockPaint(look: LookId): SvgBlockPaint {
+  switch (look) {
+    case 'studio':
+      return { fill: 'var(--card-background)', stroke: 'var(--kit-rule-strong)', strokeWidth: 1, radius: 10, text: 'var(--kit-text)', subtext: 'var(--kit-text-3)', edge: false };
+    case 'glass':
+      return { fill: 'color-mix(in oklab, var(--mountain-white) 9%, transparent)', stroke: 'var(--kit-rule-strong)', strokeWidth: 1, radius: 12, text: 'var(--kit-text)', subtext: 'var(--kit-text-3)', edge: false };
+    case 'soft':
+      return { fill: 'var(--t-soft)', stroke: 'transparent', strokeWidth: 0, radius: 16, text: 'var(--kit-text)', subtext: 'var(--kit-text-2)', edge: false };
+    case 'console':
+      return { fill: 'var(--kit-surface)', stroke: 'var(--kit-rule)', strokeWidth: 1, radius: 0, text: 'var(--kit-text)', subtext: 'var(--kit-text-3)', edge: true };
+    case 'poster':
+      return { fill: 'var(--t-pop)', stroke: 'var(--base-foreground)', strokeWidth: 2.5, radius: 0, text: 'var(--t-on-pop)', subtext: 'var(--t-on-pop)', edge: false };
+    case 'signal':
+      return { fill: 'var(--t-vivid)', stroke: 'transparent', strokeWidth: 0, radius: 4, text: 'var(--t-on-vivid)', subtext: 'var(--t-on-vivid)', edge: false };
+    case 'blueprint':
+      return { fill: 'var(--kit-halo)', stroke: 'var(--kit-rule-strong)', strokeWidth: 1.5, radius: 0, text: 'var(--kit-text)', subtext: 'var(--kit-text-3)', edge: false };
+    case 'editorial':
+      return { fill: 'var(--kit-halo)', stroke: 'var(--kit-rule-strong)', strokeWidth: 1, radius: 0, text: 'var(--kit-text)', subtext: 'var(--kit-text-3)', edge: false };
+  }
+}

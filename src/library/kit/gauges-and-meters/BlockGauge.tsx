@@ -16,7 +16,7 @@ type BlockGaugeProps = {
   trip?: number;
   /** Colour of the blocks inside the limits. */
   tone?: Tone;
-  /** Number of blocks the range is cut into. */
+  /** Number of blocks the range is cut into: 24 lying, 16 standing unless set. */
   segments?: number;
   /** `vertical` stands the gauge up as a ladder, for a row of many tags. */
   orientation?: 'horizontal' | 'vertical';
@@ -28,8 +28,9 @@ type BlockGaugeProps = {
  * A value as lit blocks on a segmented scale, the way a panel bargraph shows it. Each block
  * carries the colour of its zone, so the lit end changes colour as the value passes a limit.
  */
-export function BlockGauge({ label, value, min = 0, max, unit, decimals = 0, high, trip, tone = 'accent', segments = 24, orientation = 'horizontal', size = 'md', className }: BlockGaugeProps) {
+export function BlockGauge({ label, value, min = 0, max, unit, decimals = 0, high, trip, tone = 'accent', segments: segmentCount, orientation = 'horizontal', size = 'md', className }: BlockGaugeProps) {
   const look = useLook();
+  const segments = segmentCount ?? (orientation === 'vertical' ? 16 : 24);
   const lit = Math.round(rangeShare(value, min, max) * segments);
   const step = (max - min) / segments;
   const zoneOf = (index: number): Tone => {
@@ -73,10 +74,10 @@ export function BlockGauge({ label, value, min = 0, max, unit, decimals = 0, hig
     return (
       <div data-look={look} data-tone={current} data-orientation="vertical" className={cx('flex min-w-0 flex-col items-center gap-2', className)}>
         {figure}
-        <div {...meter} className="flex w-9 flex-col-reverse gap-[3px]" style={{ height: size === 'lg' ? 200 : 140 }}>
+        <div {...meter} className="flex w-10 flex-col-reverse gap-[3px]" style={{ height: size === 'lg' ? 200 : 140 }}>
           {blocks}
         </div>
-        <span className="text-center text-xs font-medium text-(--kit-text-2)">{label}</span>
+        <span className="flex min-h-8 items-start text-center text-xs font-medium text-(--kit-text-2)">{label}</span>
       </div>
     );
   }

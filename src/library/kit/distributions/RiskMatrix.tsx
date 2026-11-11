@@ -86,7 +86,7 @@ export function RiskMatrix({
               mode === 'names' ? (
                 <span className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 text-xs font-semibold tabular-nums leading-4">
                   {inside.map((item) => (
-                    <span key={item.id}>{item.label}</span>
+                    <span key={item.id} className="whitespace-nowrap">{item.label}</span>
                   ))}
                 </span>
               ) : filled ? (

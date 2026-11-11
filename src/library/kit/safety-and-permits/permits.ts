@@ -46,3 +46,23 @@ export function gasReadingTone(value: number, limits: GasLimits): Tone {
   if (limits.low === undefined && limits.high !== undefined && value > limits.high * 0.8) return 'warning';
   return 'success';
 }
+
+export type Barrier = {
+  id: string;
+  name: string;
+  /** What the barrier does, e.g. `Prevent`, `Detect`, `Control`, `Mitigate`. */
+  role: string;
+  /** Safety-critical elements behind the barrier, by test result. */
+  passed: number;
+  degraded: number;
+  failed: number;
+};
+
+type BarrierState = { tone: Tone; word: string };
+
+/** A barrier is only as good as its worst element. */
+export function barrierState(barrier: Barrier): BarrierState {
+  if (barrier.failed > 0) return { tone: 'critical', word: 'Impaired' };
+  if (barrier.degraded > 0) return { tone: 'warning', word: 'Degraded' };
+  return { tone: 'success', word: 'Healthy' };
+}

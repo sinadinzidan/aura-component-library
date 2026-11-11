@@ -11,6 +11,7 @@ import { IconChip } from '../../../library/kit/IconChip';
 import { Legend } from '../../../library/kit/Legend';
 import { Panel } from '../../../library/kit/Panel';
 import { SceneStage } from '../../../library/kit/scene/SceneStage';
+import { ToggleChip } from '../../../library/kit/scene/ToggleChip';
 import { StatusPill } from '../../../library/kit/StatusPill';
 import { TagId } from '../../../library/kit/TagId';
 import { formatNumber, type StatusTone } from '../../../library/kit/tones';
@@ -184,6 +185,9 @@ function lngTrain3dReadings(state: TourState): { temperature: number | null; sub
 }
 
 
+/** The site without its always-moving parts: the flare flame flickers for as long as it is drawn. */
+const LNGTRAIN3D_QUIET_UNITS: readonly LngUnit[] = LNGTRAIN3D_UNITS.filter((unit) => unit.kind !== 'flare');
+
 const LNGTRAIN3D_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring-default)]';
 
 const LNGTRAIN3D_NAV: AppFrameNavItem[] = [
@@ -260,6 +264,8 @@ type LngTrain3dSceneProps = {
   colourBy: LngTrain3dColourBy;
   insets?: { top?: number; right?: number; bottom?: number; left?: number };
   still?: boolean;
+  /** Continuous motion: flow along the trunk lines and the lit flare. Off, the scene only renders when something changes. */
+  live?: boolean;
   /** Multiplier on the camera distance of every stop, for narrow frames. */
   zoom?: number;
   /** Corner content over the scene. */
@@ -268,7 +274,7 @@ type LngTrain3dSceneProps = {
 };
 
 /** The site in 3D inside a stage; grabbing it leaves the tour. */
-function LngTrain3dScene({ state, dispatch, colourBy, insets, still = false, zoom, overlay, className }: LngTrain3dSceneProps) {
+function LngTrain3dScene({ state, dispatch, colourBy, insets, still = false, live = false, zoom, overlay, className }: LngTrain3dSceneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const ramp = useTokenColors(TEMPERATURE_RAMP_TOKENS, rootRef);
   const rampColors = ramp ? { step0: ramp.step0.color, step1: ramp.step1.color, step2: ramp.step2.color, step3: ramp.step3.color, step4: ramp.step4.color } : null;
@@ -301,9 +307,9 @@ function LngTrain3dScene({ state, dispatch, colourBy, insets, still = false, zoo
         >
           <StillScene still={still}>
             <LngSite
-              units={LNGTRAIN3D_UNITS}
+              units={live ? LNGTRAIN3D_UNITS : LNGTRAIN3D_QUIET_UNITS}
               racks={LNGTRAIN3D_RACKS}
-              lines={LNGTRAIN3D_LINES}
+              lines={live ? LNGTRAIN3D_LINES : []}
               land={{ center: [0, 0], size: [290, 170] }}
               sea={{ center: [215, 0], size: [150, 170], level: 0 }}
               target={lngTrain3dTarget(state, zoom)}
@@ -537,7 +543,16 @@ function LngTrain3dStageCard({ state, dispatch, colourBy, className }: LngTrain3
 }
 
 /** The corner furniture of the scene: where the camera is, the legend, and the way back into the tour. */
-function LngTrain3dSceneOverlay({ state, dispatch, colourBy, onColourBy }: { state: TourState; dispatch: (action: TourAction) => void; colourBy: LngTrain3dColourBy; onColourBy?: (value: LngTrain3dColourBy) => void }) {
+type LngTrain3dSceneOverlayProps = {
+  state: TourState;
+  dispatch: (action: TourAction) => void;
+  colourBy: LngTrain3dColourBy;
+  onColourBy?: (value: LngTrain3dColourBy) => void;
+  live?: boolean;
+  onLive?: (live: boolean) => void;
+};
+
+function LngTrain3dSceneOverlay({ state, dispatch, colourBy, onColourBy, live = false, onLive }: LngTrain3dSceneOverlayProps) {
   const stage = LNGTRAIN3D_STAGES[state.stageIndex];
   const chip = 'pointer-events-auto rounded-full border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_88%,transparent)] px-3.5 py-2 shadow-[0_6px_16px_-10px_var(--effect-shadow-xl)] backdrop-blur-md';
 
@@ -563,11 +578,14 @@ function LngTrain3dSceneOverlay({ state, dispatch, colourBy, onColourBy }: { sta
         <div className={chip}>
           <LngTrain3dLegend colourBy={colourBy} />
         </div>
-        {onColourBy ? (
-          <div className="pointer-events-auto">
-            <LngTrain3dColourSwitch value={colourBy} onChange={onColourBy} />
-          </div>
-        ) : null}
+        <div className="pointer-events-auto flex items-center gap-2">
+          {onLive ? (
+            <ToggleChip icon={<IconPlayerPlay />} pressed={live} onPressedChange={onLive} className="bg-[var(--kit-surface)]">
+              Live flow and flare
+            </ToggleChip>
+          ) : null}
+          {onColourBy ? <LngTrain3dColourSwitch value={colourBy} onChange={onColourBy} /> : null}
+        </div>
       </div>
     </div>
   );
@@ -580,6 +598,8 @@ function LngTrain3dSceneFrame({ children, className = '' }: { children: ReactNod
 function LngTrain3dTour({ initial = 2, still = false }: { initial?: number; still?: boolean }) {
   const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, initial));
   const [colourBy, setColourBy] = useState<LngTrain3dColourBy>('status');
+  // Motion that never ends is opt-in; camera flights between stops always animate.
+  const [live, setLive] = useState(false);
 
   return (
     <LookScope look="studio">
@@ -600,7 +620,8 @@ function LngTrain3dTour({ initial = 2, still = false }: { initial?: number; stil
                 colourBy={colourBy}
                 insets={{ top: 50, bottom: 50 }}
                 still={still}
-                overlay={<LngTrain3dSceneOverlay state={state} dispatch={dispatch} colourBy={colourBy} onColourBy={setColourBy} />}
+                live={live}
+                overlay={<LngTrain3dSceneOverlay state={state} dispatch={dispatch} colourBy={colourBy} onColourBy={setColourBy} live={live} onLive={still ? undefined : setLive} />}
               />
             </LngTrain3dSceneFrame>
             <LngTrain3dStageCard key={state.stageIndex} state={state} dispatch={dispatch} colourBy={colourBy} className="min-h-0" />
@@ -838,7 +859,7 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Pick a stop in the strip, or use the arrows, and the camera flies there. Click a unit in the scene or in the card to select it. Drag the scene to look around; Resume tour brings you back. Whole site shows everything at once.',
+      description: 'Pick a stop in the strip, or use the arrows, and the camera flies there. Click a unit in the scene or in the card to select it. Drag the scene to look around; Resume tour brings you back. Whole site shows everything at once, and Live flow and flare adds the motion that never stops.',
       specimens: [
         {
           id: 'LngTrainSignature',

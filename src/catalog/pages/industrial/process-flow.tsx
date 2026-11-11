@@ -1,102 +1,78 @@
 import { Button } from '@cognite/aura/components/button';
-import { Card, CardContent, CardDescription, CardHeader, CardHeaderCenter, CardHeaderEnd, CardTitle } from '@cognite/aura/components/card';
-import { IconArrowNarrowRight, IconChevronRight, IconMinus } from '@cognite/aura/icons';
-import { Fragment } from 'react';
+import {
+  IconAlertTriangle,
+  IconArrowsSplit2,
+  IconCircleCheck,
+  IconDroplet,
+  IconEngine,
+  IconFilter,
+  IconFlame,
+  IconListCheck,
+  IconPlayerPause,
+  IconPlayerPlay,
+  IconRoute,
+  IconShieldLock,
+  IconTransfer,
+} from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { formatValue, healthStatus, runStateStatus } from '../../../library/industrial/status';
-import type { StatusDescriptor } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ConditionList } from '../../../library/industrial/workflows/ConditionList';
-import type { Condition } from '../../../library/industrial/workflows/ConditionList';
-import { StageFlow } from '../../../library/industrial/workflows/StageFlow';
-import type { FlowStage } from '../../../library/industrial/workflows/StageFlow';
-import { StepList } from '../../../library/industrial/workflows/StepList';
-import type { StepListItem } from '../../../library/industrial/workflows/StepList';
-import { allConditionsMet, massBalance, stepProgress } from '../../../library/industrial/workflows/workflow';
-import { ASSETS, SENSORS } from '../../data/plant';
-import type { Asset, RunState, Sensor } from '../../data/plant';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { BalanceFlow, type BalanceStream } from '../../../library/kit/process-flow/BalanceFlow';
+import { BlockFlow, type FlowBlock, type FlowEdge } from '../../../library/kit/process-flow/BlockFlow';
+import { ConditionBoard, type ConditionItem } from '../../../library/kit/process-flow/ConditionBoard';
+import { bottleneckOf, massBalance, stepProgress, summariseConditions } from '../../../library/kit/process-flow/flow';
+import { FlowStages, type FlowStageItem } from '../../../library/kit/process-flow/FlowStages';
+import { StepSequence, type SequenceStep } from '../../../library/kit/process-flow/StepSequence';
+import { TrainLanes, type TrainLane } from '../../../library/kit/process-flow/TrainLanes';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import type { LookId } from '../../../library/looks/looks';
+import { LookScope } from '../../../library/looks/LookScope';
 import { definePage } from '../../types';
 
 import source from './process-flow.tsx?raw';
 
-function findSensor(id: string): Sensor {
-  const sensor = SENSORS.find((candidate) => candidate.id === id);
-  if (!sensor) throw new Error(`Unknown sensor ${id}`);
-  return sensor;
-}
-
-function findAssetById(id: string): Asset {
-  const asset = ASSETS.find((candidate) => candidate.id === id);
-  if (!asset) throw new Error(`Unknown asset ${id}`);
-  return asset;
-}
-
-const GAS_FLOW = findSensor('ft-92510');
-const LEVEL = findSensor('lt-10012');
-const DISCHARGE = findSensor('pt-92531');
-const EXPORT_FLOW = findSensor('ft-20011');
-
 /** The gas train in flow direction, one unit standing for each stage. */
-const STAGES: readonly FlowStage[] = [
-  {
-    id: 'inlet',
-    name: 'Inlet',
-    tag: '20-XV-1105',
-    status: runStateStatus('running'),
-    reading: { label: GAS_FLOW.name, value: GAS_FLOW.value, unit: GAS_FLOW.unit },
-  },
-  {
-    id: 'separation',
-    name: 'Separation',
-    tag: '20-VA-1001',
-    status: runStateStatus('running'),
-    reading: { label: LEVEL.name, value: LEVEL.value, unit: LEVEL.unit, decimals: 1 },
-  },
-  {
-    id: 'compression',
-    name: 'Compression',
-    tag: '23-KA-9101',
-    status: runStateStatus('running'),
-    reading: { label: DISCHARGE.name, value: DISCHARGE.value, unit: DISCHARGE.unit, decimals: 1 },
-    alarms: { count: 2, severity: 'high' },
-  },
-  {
-    id: 'export',
-    name: 'Export',
-    tag: '27-PA-2001A',
-    status: runStateStatus('running'),
-    reading: { label: EXPORT_FLOW.name, value: EXPORT_FLOW.value, unit: EXPORT_FLOW.unit },
-  },
+const PROCESS_FLOW_STAGES: FlowStageItem[] = [
+  { id: 'inlet', name: 'Inlet', tag: '20-XV-1105', state: 'Running', tone: 'success', icon: <IconDroplet />, value: 168, decimals: 1, unit: 't/h', caption: 'Well stream', load: 73 },
+  { id: 'separation', name: 'Separation', tag: '20-VA-1001', state: 'Running', tone: 'success', icon: <IconFilter />, value: 54.3, decimals: 1, unit: '%', caption: 'Separator level', load: 61 },
+  { id: 'compression', name: 'Compression', tag: '23-KA-9101', state: 'Running', tone: 'warning', icon: <IconEngine />, value: 48.6, decimals: 1, unit: 'barg', caption: 'Discharge pressure', load: 93, alarms: 2 },
+  { id: 'export', name: 'Export', tag: '27-PA-2001A', state: 'Running', tone: 'success', icon: <IconTransfer />, value: 412, unit: 'm³/h', caption: 'Export flow', load: 69 },
 ];
 
-const STAGES_WITH_BOTTLENECK: readonly FlowStage[] = STAGES.map((stage) => (stage.id === 'compression' ? { ...stage, bottleneck: true } : stage));
+const PROCESS_FLOW_LINKS = [{ label: '168.0 t/h' }, { label: '131.2 t/h' }, { label: '128.4 t/h' }];
 
-const RECOMPRESSION_STAGE: FlowStage = {
-  id: 'recompression',
-  name: 'Recompression',
-  tag: '23-KA-9103',
-  status: runStateStatus('tripped'),
-  reading: { label: 'Discharge pressure', value: null, unit: 'barg' },
-  alarms: { count: 1, severity: 'critical' },
+const PROCESS_FLOW_STAGE_NOTES: Record<string, string> = {
+  inlet: 'Wells on full choke. The shutdown valve passed its partial stroke test on 10 March.',
+  separation: 'Level steady inside the 30 to 70 % band. Test separator on standby.',
+  compression: 'Running on two stages while the recompressor is down. Discharge temperature is 3.8 °C under its high limit.',
+  export: 'Pump A carries the full duty. Pump B is on standby with its start test overdue.',
 };
 
-type Stream = {
-  id: string;
-  name: string;
-  from: string;
-  to: string;
-  /** Mass flow, t/h. */
-  flow: number;
-  /** barg. */
-  pressure: number;
-  /** °C. */
-  temperature: number;
-  phase: 'Mixed' | 'Gas' | 'Liquid';
-};
+/** The recompression branch while the recompressor is tripped. */
+const PROCESS_FLOW_BRANCH: FlowStageItem[] = [
+  { id: 'test-sep', name: 'Test separator', tag: '20-VA-1002', state: 'Standby', tone: 'info', icon: <IconFilter />, value: 0, decimals: 1, unit: 't/h', caption: 'Flash gas' },
+  { id: 'recomp', name: 'Recompressor', tag: '23-KA-9103', state: 'Tripped', tone: 'critical', icon: <IconEngine />, value: null, unit: 'barg', caption: 'Discharge pressure', alarms: 1 },
+  { id: 'flare', name: 'Flare', tag: '43-FL-0001', state: 'Taking load', tone: 'warning', icon: <IconFlame />, value: 0.3, decimals: 1, unit: 't/h', caption: 'Flared gas' },
+];
 
-const STREAMS: readonly Stream[] = [
+const PROCESS_FLOW_BRANCH_LINKS = [{ state: 'stopped' as const, label: 'No flow' }, { label: '0.3 t/h' }];
+
+type ProcessFlowStream = { id: string; name: string; from: string; to: string; flow: number; pressure: number; temperature: number; phase: 'Mixed' | 'Gas' | 'Liquid' };
+
+const PROCESS_FLOW_STREAMS: ProcessFlowStream[] = [
   { id: 'S-101', name: 'Well stream', from: 'Inlet', to: '20-VA-1001', flow: 168.0, pressure: 13.4, temperature: 62.0, phase: 'Mixed' },
   { id: 'S-201', name: 'Separator gas', from: '20-VA-1001', to: '23-KA-9101', flow: 131.2, pressure: 12.4, temperature: 31.5, phase: 'Gas' },
   { id: 'S-202', name: 'Condensate', from: '20-VA-1001', to: '27-PA-2001A', flow: 29.6, pressure: 13.1, temperature: 58.2, phase: 'Liquid' },
@@ -105,73 +81,80 @@ const STREAMS: readonly Stream[] = [
   { id: 'S-302', name: 'Fuel gas', from: '23-KA-9102', to: '23-GT-9001', flow: 2.6, pressure: 28.0, temperature: 36.4, phase: 'Gas' },
 ];
 
-const FLARE_FLOW = 0.3;
-const BALANCE_IN = STREAMS.filter((stream) => stream.id === 'S-101');
-const BALANCE_OUT = STREAMS.filter((stream) => ['S-202', 'S-203', 'S-301', 'S-302'].includes(stream.id));
-const BALANCE = massBalance(
-  BALANCE_IN.map((stream) => stream.flow),
-  [...BALANCE_OUT.map((stream) => stream.flow), FLARE_FLOW]
+const PROCESS_FLOW_PHASE_TONE: Record<ProcessFlowStream['phase'], Tone> = { Mixed: 'purple', Gas: 'teal', Liquid: 'blue' };
+
+const PROCESS_FLOW_STREAM_COLUMNS: DataTableColumn<ProcessFlowStream>[] = [
+  { id: 'id', header: 'Stream', cell: (stream) => <TagId>{stream.id}</TagId>, nowrap: true },
+  { id: 'name', header: 'Service', cell: (stream) => <span className="font-medium">{stream.name}</span> },
+  { id: 'route', header: 'From → to', cell: (stream) => `${stream.from} → ${stream.to}`, muted: true },
+  { id: 'flow', header: 'Flow, t/h', cell: (stream) => stream.flow.toFixed(1), numeric: true },
+  { id: 'pressure', header: 'Pressure, barg', cell: (stream) => stream.pressure.toFixed(1), numeric: true },
+  { id: 'temperature', header: 'Temp, °C', cell: (stream) => stream.temperature.toFixed(1), numeric: true },
+  { id: 'phase', header: 'Phase', cell: (stream) => <StatusPill tone={PROCESS_FLOW_PHASE_TONE[stream.phase]}>{stream.phase}</StatusPill> },
+];
+
+const PROCESS_FLOW_STREAM_COLUMNS_SHORT = PROCESS_FLOW_STREAM_COLUMNS.filter((column) => ['id', 'name', 'flow', 'pressure'].includes(column.id));
+
+const PROCESS_FLOW_BALANCE_IN: BalanceStream[] = [{ id: 'feed', label: 'Well stream', value: 168.0, tone: 'purple' }];
+
+const PROCESS_FLOW_BALANCE_OUT: BalanceStream[] = [
+  { id: 'gas', label: 'Export gas', value: 128.4, tone: 'teal' },
+  { id: 'condensate', label: 'Condensate', value: 29.6, tone: 'amber' },
+  { id: 'water', label: 'Produced water', value: 6.9, tone: 'blue' },
+  { id: 'fuel', label: 'Fuel gas', value: 2.6, tone: 'pink' },
+  { id: 'flare', label: 'Flare', value: 0.3, tone: 'critical' },
+];
+
+const PROCESS_FLOW_BALANCE = massBalance(
+  PROCESS_FLOW_BALANCE_IN.map((stream) => stream.value),
+  PROCESS_FLOW_BALANCE_OUT.map((stream) => stream.value)
 );
 
-type FlowLine = { id: string; from: string; to: string; flow: number; note?: string };
+type ProcessFlowValve = { tag: string; name: string; position: 'Open' | 'Closed'; required: 'Open' | 'Closed' };
 
-const FLOW_LINES: readonly FlowLine[] = [
-  { id: 'l1', from: 'Inlet separator', to: '1st stage compressor', flow: 131.2 },
-  { id: 'l2', from: '1st stage compressor', to: 'Interstage cooler', flow: 131.2 },
-  { id: 'l3', from: 'Interstage cooler', to: '2nd stage compressor', flow: 131.0 },
-  { id: 'l4', from: '2nd stage compressor', to: '1st stage compressor', flow: 0, note: 'Anti-surge recycle, valve closed' },
-  { id: 'l5', from: 'Test separator', to: 'Recompressor', flow: 0, note: 'Recompressor tripped' },
+const PROCESS_FLOW_LINE_UP: ProcessFlowValve[] = [
+  { tag: '20-XV-1105', name: 'Inlet shutdown valve', position: 'Open', required: 'Open' },
+  { tag: '23-XV-9120', name: '1st stage suction isolation', position: 'Open', required: 'Open' },
+  { tag: '23-FV-9131', name: 'Anti-surge valve', position: 'Closed', required: 'Closed' },
+  { tag: '23-XV-9140', name: 'Recompressor suction isolation', position: 'Closed', required: 'Closed' },
+  { tag: '27-XV-2015', name: 'Export pump B discharge', position: 'Closed', required: 'Open' },
+  { tag: '27-XV-2030', name: 'Export header isolation', position: 'Open', required: 'Open' },
 ];
 
-type LineUpValve = { tag: string; name: string; position: 'open' | 'closed'; required: 'open' | 'closed' };
+type ProcessFlowParcel = { id: string; destination: string; volume: number; stage: number; held?: string; times: readonly string[] };
 
-const LINE_UP: readonly LineUpValve[] = [
-  { tag: '20-XV-1105', name: 'Inlet shutdown valve', position: 'open', required: 'open' },
-  { tag: '23-XV-9120', name: '1st stage suction isolation', position: 'open', required: 'open' },
-  { tag: '23-FV-9131', name: 'Anti-surge valve', position: 'closed', required: 'closed' },
-  { tag: '23-XV-9140', name: 'Recompressor suction isolation', position: 'closed', required: 'closed' },
-  { tag: '27-XV-2015', name: 'Export pump B discharge', position: 'closed', required: 'open' },
-  { tag: '27-XV-2030', name: 'Export header isolation', position: 'open', required: 'open' },
+const PROCESS_FLOW_PARCEL_STAGES = ['Receive', 'Stabilise', 'Meter', 'Load', 'Release'];
+
+const PROCESS_FLOW_PARCELS: ProcessFlowParcel[] = [
+  { id: 'P-0312', destination: 'Stord terminal', volume: 4200, stage: 2, times: ['06:10', '08:45', 'Since 11:20'] },
+  { id: 'P-0313', destination: 'Stord terminal', volume: 3900, stage: 1, times: ['09:30', 'Since 12:05'] },
+  { id: 'P-0314', destination: 'Hammerfest LNG', volume: 5100, stage: 1, held: 'Waiting for lab result', times: ['10:15', 'Held 12:40'] },
+  { id: 'P-0311', destination: 'Stord terminal', volume: 4050, stage: 5, times: ['Mon 22:10', '00:35', '03:20', '05:50', '07:15'] },
 ];
 
-const POSITION_STATUS: Record<LineUpValve['position'], StatusDescriptor> = {
-  open: { tone: 'neutral', label: 'Open', shape: 'ring' },
-  closed: { tone: 'neutral', label: 'Closed', shape: 'square' },
-};
+function processFlowParcelSteps(parcel: ProcessFlowParcel): SequenceStep[] {
+  return PROCESS_FLOW_PARCEL_STAGES.map((label, index) => ({
+    id: label,
+    label,
+    time: parcel.times[index],
+    state: index < parcel.stage ? 'done' : index === parcel.stage ? (parcel.held ? 'held' : 'active') : 'pending',
+  }));
+}
 
-const PARCEL_STAGES = ['Receive', 'Stabilise', 'Meter', 'Load', 'Release'] as const;
-
-const PARCEL_STEPS: readonly StepListItem[] = [
-  { id: 'receive', label: 'Receive', detail: '06:10', state: 'done' },
-  { id: 'stabilise', label: 'Stabilise', detail: '08:45', state: 'done' },
-  { id: 'meter', label: 'Meter', detail: 'Since 11:20', state: 'active' },
-  { id: 'load', label: 'Load', state: 'pending' },
-  { id: 'release', label: 'Release', state: 'pending' },
-];
-
-type Parcel = { id: string; destination: string; volume: number; stage: number; held?: string };
-
-const PARCELS: readonly Parcel[] = [
-  { id: 'P-0312', destination: 'Stord terminal', volume: 4200, stage: 3 },
-  { id: 'P-0313', destination: 'Stord terminal', volume: 3900, stage: 2 },
-  { id: 'P-0314', destination: 'Hammerfest LNG', volume: 5100, stage: 2, held: 'Waiting for lab result' },
-  { id: 'P-0311', destination: 'Stord terminal', volume: 4050, stage: 5 },
-];
-
-const RESTART_STEPS: readonly StepListItem[] = [
-  { id: 'reset', label: 'Reset vibration trip', detail: 'Ingrid Haugen', state: 'done', meta: <StepTime>13:54</StepTime> },
-  { id: 'lube', label: 'Confirm lube oil pressure above 1.8 barg', detail: '23-PT-92770 · 2.4 barg', state: 'done', meta: <StepTime>13:57</StepTime> },
-  { id: 'seal', label: 'Pressurise seal gas', detail: 'Waiting for 23-PDT-92761 above 0.5 bar', state: 'active', meta: <StepTime>13:58</StepTime> },
+const PROCESS_FLOW_RESTART: SequenceStep[] = [
+  { id: 'reset', label: 'Reset vibration trip', detail: 'Confirmed by Ingrid Haugen', time: '13:54', state: 'done' },
+  { id: 'lube', label: 'Confirm lube oil pressure above 1.8 barg', detail: '23-PT-92770 · 2.4 barg', time: '13:57', state: 'done' },
+  { id: 'seal', label: 'Pressurise seal gas', detail: 'Waiting for 23-PDT-92761 above 0.5 bar', time: 'Since 13:58', state: 'active' },
   { id: 'suction', label: 'Open suction isolation 23-XV-9140', state: 'pending' },
   { id: 'crank', label: 'Crank to idle, 3,000 rpm', state: 'pending' },
   { id: 'load', label: 'Load to minimum flow', state: 'pending' },
 ];
 
-const HELD_STEPS: readonly StepListItem[] = RESTART_STEPS.map((step) =>
-  step.id === 'seal' ? { ...step, state: 'held', detail: 'Seal gas differential 0.3 bar, needs 0.5 bar', meta: undefined } : { ...step, meta: undefined }
+const PROCESS_FLOW_RESTART_HELD: SequenceStep[] = PROCESS_FLOW_RESTART.map((step) =>
+  step.id === 'seal' ? { ...step, state: 'held', detail: 'Seal gas differential 0.3 bar, needs 0.5 bar', time: 'Held 14:00' } : step
 );
 
-const PERMISSIVES: readonly Condition[] = [
+const PROCESS_FLOW_PERMISSIVES: ConditionItem[] = [
   { id: 'trip', label: 'Vibration trip reset', detail: '23-VT-92740 · 0.4 mm/s', state: 'met' },
   { id: 'lube', label: 'Lube oil pressure above 1.8 barg', detail: '23-PT-92770 · 2.4 barg', state: 'met' },
   { id: 'seal', label: 'Seal gas differential above 0.5 bar', detail: '23-PDT-92761 · 0.3 bar', state: 'unmet' },
@@ -180,645 +163,535 @@ const PERMISSIVES: readonly Condition[] = [
   { id: 'wo', label: 'No open isolation on the unit', detail: 'WO-104482 isolation removed 13:50', state: 'met' },
 ];
 
-const INTERLOCKS: readonly Condition[] = [
+const PROCESS_FLOW_INTERLOCKS: ConditionItem[] = [
   { id: 'i-2301', label: 'I-2301 High-high vibration', detail: '23-VT-92740 · tripped 13:46 at 11.6 mm/s', state: 'unmet' },
   { id: 'i-2302', label: 'I-2302 Low lube oil pressure', detail: '23-PT-92770 · 2.4 barg', state: 'met' },
   { id: 'i-2303', label: 'I-2303 High discharge temperature', detail: '23-TT-92732 · 34.0 °C', state: 'met' },
   { id: 'i-2304', label: 'I-2304 Low seal gas differential', detail: 'Bypassed by Liv Wold until 18:00', state: 'bypassed' },
   { id: 'i-2305', label: 'I-2305 Surge detection', detail: '23-FT-92710 · no surge counted', state: 'met' },
+  { id: 'i-2306', label: 'I-2306 Low suction pressure', detail: '23-PT-92730 · 4.1 barg', state: 'met' },
 ];
 
-type Lane = { id: string; name: string; share: number; state: RunState; stages: readonly FlowStage[] };
+const PROCESS_FLOW_INTERLOCK_WORDS = { met: 'Healthy', unmet: 'Tripped', bypassed: 'Bypassed' };
 
-const pumpLane = (pump: Asset, flow: number | null, pressure: number | null): readonly FlowStage[] => [
-  { id: `${pump.id}-suction`, name: 'Suction', tag: pump.tag.replace('PA', 'XV').replace(/[AB]$/, (train) => `1${train}`), status: pump.state === 'running' ? { tone: 'neutral', label: 'Open', shape: 'ring' } : { tone: 'neutral', label: 'Closed', shape: 'square' } },
-  { id: pump.id, name: pump.name, tag: pump.tag, status: runStateStatus(pump.state), reading: { label: 'Discharge pressure', value: pressure, unit: 'barg', decimals: 1 } },
-  { id: `${pump.id}-meter`, name: 'Metering', tag: pump.tag.replace('PA', 'FT'), status: flow === null ? { tone: 'neutral', label: 'No flow', shape: 'ring' } : { tone: 'success', label: 'Measuring', shape: 'dot' }, reading: { label: 'Flow', value: flow, unit: 'm³/h' } },
+const PROCESS_FLOW_LANES: TrainLane[] = [
+  {
+    id: 'a',
+    name: 'Train A',
+    state: 'Running',
+    tone: 'success',
+    share: 100,
+    stages: [
+      { id: 'a-suction', name: 'Suction', tag: '27-XV-2011A', state: 'Open', tone: 'success' },
+      { id: 'a-pump', name: 'Export pump A', tag: '27-PA-2001A', state: 'Running', tone: 'success', value: 21.4, decimals: 1, unit: 'barg' },
+      { id: 'a-meter', name: 'Metering', tag: '27-FT-2001A', state: 'Measuring', tone: 'success', value: 412, unit: 'm³/h' },
+    ],
+    links: [{ label: '412 m³/h' }, { label: '412 m³/h' }],
+  },
+  {
+    id: 'b',
+    name: 'Train B',
+    state: 'Standby',
+    tone: 'info',
+    share: 0,
+    stages: [
+      { id: 'b-suction', name: 'Suction', tag: '27-XV-2011B', state: 'Closed', tone: 'neutral' },
+      { id: 'b-pump', name: 'Export pump B', tag: '27-PA-2001B', state: 'Standby', tone: 'info', value: null, unit: 'barg' },
+      { id: 'b-meter', name: 'Metering', tag: '27-FT-2001B', state: 'No flow', tone: 'neutral', value: 0, unit: 'm³/h' },
+    ],
+    links: [{ state: 'stopped' }, { state: 'stopped' }],
+  },
 ];
 
-const LANES: readonly Lane[] = [
-  { id: 'a', name: 'Train A', share: 100, state: 'running', stages: pumpLane(findAssetById('27-pa-2001a'), EXPORT_FLOW.value, 21.4) },
-  { id: 'b', name: 'Train B', share: 0, state: 'standby', stages: pumpLane(findAssetById('27-pa-2001b'), null, null) },
+const PROCESS_FLOW_BLOCKS: FlowBlock[] = [
+  { id: 'wells', label: 'Wells', detail: '168.0 t/h', col: 0, row: 0, kind: 'terminal' },
+  { id: 'separator', label: 'Separator', detail: '20-VA-1001', col: 1, row: 0, tone: 'success' },
+  { id: 'stage-1', label: '1st stage', detail: '23-KA-9101', col: 2, row: 0, tone: 'warning' },
+  { id: 'cooler', label: 'Cooler', detail: '23-HA-9114', col: 3, row: 0, tone: 'warning' },
+  { id: 'stage-2', label: '2nd stage', detail: '23-KA-9102', col: 4, row: 0, tone: 'success' },
+  { id: 'gas-export', label: 'Gas export', detail: '128.4 t/h', col: 5, row: 0, kind: 'terminal' },
+  { id: 'pump-a', label: 'Pump A', detail: '27-PA-2001A', col: 2, row: 1, tone: 'success' },
+  { id: 'terminal', label: 'Stord terminal', detail: '29.6 t/h', col: 3, row: 1, kind: 'terminal' },
+  { id: 'recomp', label: 'Recompressor', detail: '23-KA-9103', col: 1, row: 1, tone: 'critical' },
+  { id: 'turbine', label: 'Gas turbine', detail: '23-GT-9001', col: 4, row: 1, tone: 'success' },
 ];
 
-const STRIP_UNITS: readonly { asset: Asset; reading: Sensor | null }[] = [
-  { asset: findAssetById('20-xv-1105'), reading: null },
-  { asset: findAssetById('20-va-1001'), reading: findSensor('pt-10010') },
-  { asset: findAssetById('23-ka-9101'), reading: DISCHARGE },
-  { asset: findAssetById('23-ha-9114'), reading: findSensor('tt-91141') },
-  { asset: findAssetById('23-ka-9103'), reading: null },
-  { asset: findAssetById('27-pa-2001a'), reading: EXPORT_FLOW },
+const PROCESS_FLOW_EDGES: FlowEdge[] = [
+  { id: 'e1', from: 'wells', to: 'separator', label: 'S-101', tone: 'accent' },
+  { id: 'e2', from: 'separator', to: 'stage-1', label: 'S-201', tone: 'accent' },
+  { id: 'e3', from: 'stage-1', to: 'cooler', tone: 'accent' },
+  { id: 'e4', from: 'cooler', to: 'stage-2', tone: 'accent' },
+  { id: 'e5', from: 'stage-2', to: 'gas-export', label: 'S-301', tone: 'accent' },
+  { id: 'e6', from: 'stage-2', to: 'stage-1', label: 'Anti-surge recycle', kind: 'stopped' },
+  { id: 'e7', from: 'separator', to: 'pump-a', label: 'S-202', tone: 'accent' },
+  { id: 'e8', from: 'pump-a', to: 'terminal', tone: 'accent' },
+  { id: 'e9', from: 'separator', to: 'recomp', kind: 'stopped' },
+  { id: 'e10', from: 'stage-2', to: 'turbine', label: 'S-302', kind: 'utility' },
 ];
 
-type DiagramBlock = { id: string; x: number; y: number; name: string; tag: string; state: RunState };
+const PROCESS_FLOW_BLOCK_NOTES: Record<string, { state: string; tone: Tone; note: string }> = {
+  wells: { state: 'Flowing', tone: 'success', note: 'Four wells on full choke deliver 168.0 t/h of mixed well stream.' },
+  separator: { state: 'Running', tone: 'success', note: 'Level 54.3 %, pressure 13.1 barg. Splits the feed into gas, condensate and water.' },
+  'stage-1': { state: 'Running, watch', tone: 'warning', note: 'Discharge temperature 141.2 °C against a 145 °C limit. Drive-end vibration 6.8 mm/s.' },
+  cooler: { state: 'Running, watch', tone: 'warning', note: 'Outlet 38.9 °C, 1.1 °C under its limit. Tube bundle cleaning is waiting for parts.' },
+  'stage-2': { state: 'Running', tone: 'success', note: 'Delivers 48.6 barg to the export header and 2.6 t/h of fuel gas to the turbine.' },
+  'gas-export': { state: 'Receiving', tone: 'success', note: 'Export at 128.4 t/h, 4 % under the daily plan.' },
+  'pump-a': { state: 'Running', tone: 'success', note: 'Carries the full condensate duty at 21.4 barg. Pump B is on standby.' },
+  terminal: { state: 'Receiving', tone: 'success', note: 'Parcel P-0312 is metering; 4,200 m³ nominated for Stord.' },
+  recomp: { state: 'Tripped', tone: 'critical', note: 'Tripped on high vibration at 13:46. Restart is held on seal gas differential.' },
+  turbine: { state: 'Running', tone: 'success', note: 'Drives both compressor stages on 2.6 t/h of fuel gas.' },
+};
 
-const BLOCK_WIDTH = 108;
-const BLOCK_HEIGHT = 52;
-
-const DIAGRAM_BLOCKS: readonly DiagramBlock[] = [
-  { id: 'inlet', x: 8, y: 92, name: 'Inlet', tag: '20-XV-1105', state: 'running' },
-  { id: 'separator', x: 128, y: 92, name: 'Separator', tag: '20-VA-1001', state: 'running' },
-  { id: 'stage-1', x: 248, y: 92, name: '1st stage', tag: '23-KA-9101', state: 'running' },
-  { id: 'cooler', x: 368, y: 92, name: 'Cooler', tag: '23-HA-9114', state: 'running' },
-  { id: 'stage-2', x: 488, y: 92, name: '2nd stage', tag: '23-KA-9102', state: 'running' },
-  { id: 'gas-export', x: 608, y: 92, name: 'Gas export', tag: 'NK-27', state: 'running' },
-  { id: 'pump-a', x: 128, y: 192, name: 'Pump A', tag: '27-PA-2001A', state: 'running' },
-  { id: 'pump-b', x: 248, y: 192, name: 'Pump B', tag: '27-PA-2001B', state: 'standby' },
-];
-
-const TH = 'px-3 py-2 text-left text-xs font-medium text-muted-foreground';
-const TD = 'px-3 py-2.5 align-middle';
-
-function StepTime({ children }: { children: string }) {
-  return <span className="text-xs text-muted-foreground tabular-nums">{children}</span>;
-}
-
-/** A state marker for the block diagram: the same four shapes as `StatusDot`, drawn in SVG. */
-function DiagramStateMark({ x, y, state }: { x: number; y: number; state: RunState }) {
-  if (state === 'running') return <circle cx={x} cy={y} r={4} className="fill-success-foreground-strong" />;
-  if (state === 'standby') return <circle cx={x} cy={y} r={3} strokeWidth={2} className="fill-none stroke-info-foreground-strong" />;
-  if (state === 'tripped') return <rect x={x - 3.5} y={y - 3.5} width={7} height={7} transform={`rotate(45 ${x} ${y})`} className="fill-critical-foreground-strong" />;
-  return <rect x={x - 3.5} y={y - 3.5} width={7} height={7} rx={1} className={state === 'maintenance' ? 'fill-warning-foreground-strong' : 'fill-neutral-foreground-strong'} />;
-}
-
-/** Five segments, filled up to the stage a parcel has reached. */
-function ParcelStageBar({ parcel }: { parcel: Parcel }) {
-  return (
-    <div role="img" aria-label={`Stage ${parcel.stage} of ${PARCEL_STAGES.length}: ${PARCEL_STAGES[parcel.stage - 1]}`} className="flex w-full gap-1">
-      {PARCEL_STAGES.map((stage, index) => (
-        <span
-          key={stage}
-          className={`h-1.5 flex-1 rounded-full ${index < parcel.stage - 1 || parcel.stage === PARCEL_STAGES.length ? 'bg-chart-1-450' : index === parcel.stage - 1 ? 'bg-chart-1-300' : 'bg-muted-background'}`}
-        />
-      ))}
-    </div>
+function ProcessFlowSheet({ look, children }: { look?: LookId; children: ReactNode }) {
+  const canvas = <Canvas className="h-full">{children}</Canvas>;
+  return look ? (
+    <LookScope look={look} className="h-full w-full">
+      {canvas}
+    </LookScope>
+  ) : (
+    <div className="h-full w-full">{canvas}</div>
   );
 }
 
-function ProcessFlowStageSingle() {
+function ProcessFlowLineUpRows({ valves }: { valves: readonly ProcessFlowValve[] }) {
   return (
-    <div className="w-full max-w-56">
-      <StageFlow label="Separation stage" stages={[STAGES[1]]} />
-    </div>
-  );
-}
-
-function ProcessFlowStageAlarms() {
-  return (
-    <div className="w-full max-w-56">
-      <StageFlow label="Compression stage" stages={[STAGES[2]]} />
-    </div>
-  );
-}
-
-function ProcessFlowStageOffline() {
-  return (
-    <div className="w-full max-w-56">
-      <StageFlow label="Recompression stage" stages={[RECOMPRESSION_STAGE]} />
-    </div>
-  );
-}
-
-function ProcessFlowCompactChain() {
-  const chain = [...STAGES.slice(0, 3), RECOMPRESSION_STAGE, STAGES[3]];
-  return (
-    <ol aria-label="Gas train, stage states" className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
-      {chain.map((stage, index) => (
-        <Fragment key={stage.id}>
-          <li className="inline-flex items-center gap-1.5 text-sm text-base-foreground">
-            <StatusDot size="sm" tone={stage.status.tone} shape={stage.status.shape} label={stage.status.label} />
-            {stage.name}
-          </li>
-          {index < chain.length - 1 ? (
-            <li aria-hidden role="presentation" className="text-muted-foreground">
-              <IconChevronRight className="size-4" />
-            </li>
-          ) : null}
-        </Fragment>
-      ))}
-    </ol>
-  );
-}
-
-function ProcessFlowPipelineProgress() {
-  const progress = stepProgress(PARCEL_STEPS);
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-base-foreground">
-            Condensate parcel <span className="font-mono">P-0312</span>
-          </p>
-          <p className="text-xs text-muted-foreground">4,200 m³ to Stord terminal</p>
-        </div>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          Stage {progress.currentIndex + 1} of {progress.total}
-        </span>
-      </div>
-      <StepList orientation="horizontal" label="Parcel P-0312, stages" steps={PARCEL_STEPS} />
-    </div>
-  );
-}
-
-function ProcessFlowStages() {
-  return <StageFlow label="Gas train, inlet to export" stages={STAGES} />;
-}
-
-function ProcessFlowBottleneck() {
-  return (
-    <div className="flex w-full flex-col gap-3">
-      <StageFlow label="Gas train with bottleneck" stages={STAGES_WITH_BOTTLENECK} bottleneckLabel="Bottleneck · 87 % of capacity" />
-      <p className="text-xs text-muted-foreground">
-        Throughput is held at {formatValue(GAS_FLOW.value)} {GAS_FLOW.unit} by 1st stage discharge temperature, 141.2 °C against a 145 °C limit.
-      </p>
-    </div>
-  );
-}
-
-function ProcessFlowStreamCard() {
-  const stream = STREAMS[4];
-  return (
-    <Card className="w-full max-w-64">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="truncate text-sm font-medium text-base-foreground">{stream.name}</span>
-        <span className="font-mono text-xs text-muted-foreground">{stream.id}</span>
-      </div>
-      <dl className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-muted-foreground">Flow</dt>
-          <dd>
-            <ValueReadout size="sm" value={stream.flow} unit="t/h" decimals={1} />
-          </dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-muted-foreground">Pressure</dt>
-          <dd>
-            <ValueReadout size="sm" value={stream.pressure} unit="barg" decimals={1} />
-          </dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-muted-foreground">Temperature</dt>
-          <dd>
-            <ValueReadout size="sm" value={stream.temperature} unit="°C" decimals={1} />
-          </dd>
-        </div>
-      </dl>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="font-mono">{stream.from}</span>
-        <IconArrowNarrowRight aria-label="to" role="img" className="size-4" />
-        {stream.to}
-      </p>
-    </Card>
-  );
-}
-
-function ProcessFlowStreamTable() {
-  return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-xl border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Stream
-            </th>
-            <th scope="col" className={TH}>
-              From
-            </th>
-            <th scope="col" className={TH}>
-              To
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Flow, t/h
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Pressure, barg
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Temp., °C
-            </th>
-            <th scope="col" className={TH}>
-              Phase
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {STREAMS.map((stream) => (
-            <tr key={stream.id} className="border-t border-default">
-              <td className={`${TD} whitespace-nowrap`}>
-                <span className="font-mono text-xs text-muted-foreground">{stream.id}</span> <span className="text-base-foreground">{stream.name}</span>
-              </td>
-              <td className={`${TD} font-mono text-xs whitespace-nowrap text-muted-foreground`}>{stream.from}</td>
-              <td className={`${TD} font-mono text-xs whitespace-nowrap text-muted-foreground`}>{stream.to}</td>
-              <td className={`${TD} text-right text-base-foreground tabular-nums`}>{formatValue(stream.flow, 1)}</td>
-              <td className={`${TD} text-right text-base-foreground tabular-nums`}>{formatValue(stream.pressure, 1)}</td>
-              <td className={`${TD} text-right text-base-foreground tabular-nums`}>{formatValue(stream.temperature, 1)}</td>
-              <td className={`${TD} text-muted-foreground`}>{stream.phase}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ProcessFlowDirectionRows() {
-  return (
-    <ul aria-label="Flow between units" className="flex w-full max-w-lg flex-col gap-3">
-      {FLOW_LINES.map((line) => {
-        const flowing = line.flow > 0;
+    <ul aria-label="Valve line-up" className="flex flex-col">
+      {valves.map((valve) => {
+        const right = valve.position === valve.required;
         return (
-          <li key={line.id} className="flex items-center gap-3">
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className={`flex items-center gap-1.5 text-sm ${flowing ? 'text-base-foreground' : 'text-muted-foreground'}`}>
-                <span className="truncate">{line.from}</span>
-                {flowing ? (
-                  <IconArrowNarrowRight aria-label="flows to" role="img" className="size-4 shrink-0 text-muted-foreground" />
-                ) : (
-                  <IconMinus aria-label="no flow to" role="img" className="size-4 shrink-0" />
-                )}
-                <span className="truncate">{line.to}</span>
-              </span>
-              {line.note ? <span className="text-xs text-muted-foreground">{line.note}</span> : null}
-            </div>
-            {flowing ? <ValueReadout size="xs" value={line.flow} unit="t/h" decimals={1} /> : <span className="text-xs text-muted-foreground">No flow</span>}
-          </li>
+          <ListRow
+            key={valve.tag}
+            tone={right ? 'neutral' : 'warning'}
+            title={valve.name}
+            meta={right ? valve.tag : `${valve.tag} · must be ${valve.required.toLowerCase()}`}
+            trailing={
+              <StatusPill tone={right ? 'success' : 'warning'} icon={right ? <IconCircleCheck /> : <IconAlertTriangle />}>
+                {valve.position}
+              </StatusPill>
+            }
+          />
         );
       })}
     </ul>
   );
 }
 
-function ProcessFlowLineUp() {
-  const inPosition = LINE_UP.filter((valve) => valve.position === valve.required).length;
+function ProcessFlowStageChain() {
+  const [selectedId, setSelectedId] = useState('compression');
+  const selected = PROCESS_FLOW_STAGES.find((stage) => stage.id === selectedId) ?? PROCESS_FLOW_STAGES[0];
   return (
-    <div className="flex w-full max-w-lg flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Line-up for export on train B</span>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {inPosition} of {LINE_UP.length} in position
-        </span>
-      </div>
-      <ul aria-label="Valve line-up" className="flex flex-col gap-3">
-        {LINE_UP.map((valve) => {
-          const mismatch = valve.position !== valve.required;
-          return (
-            <li key={valve.tag} className="flex items-center gap-3">
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm text-base-foreground">{valve.name}</span>
-                <span className="font-mono text-xs text-muted-foreground">{valve.tag}</span>
-              </div>
-              {mismatch ? <span className="text-xs font-medium text-warning-foreground-strong">Required {valve.required}</span> : null}
-              <span className="w-16 shrink-0">
-                <StatusIndicator size="sm" {...POSITION_STATUS[valve.position]} />
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <ProcessFlowSheet>
+      <Panel
+        title="Gas train"
+        subtitle="Inlet to export, in flow direction"
+        icon={
+          <IconChip tone="blue">
+            <IconRoute />
+          </IconChip>
+        }
+        actions={<StatusPill tone="warning">Reduced capacity</StatusPill>}
+        footer={
+          <span>
+            <strong className="font-semibold text-(--kit-text)">{selected.name}.</strong> {PROCESS_FLOW_STAGE_NOTES[selected.id]}
+          </span>
+        }
+      >
+        <FlowStages label="Gas train, inlet to export" stages={PROCESS_FLOW_STAGES} links={PROCESS_FLOW_LINKS} selectedId={selectedId} onSelect={setSelectedId} />
+      </Panel>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowBottleneck() {
+  const limit = bottleneckOf(PROCESS_FLOW_STAGES);
+  return (
+    <ProcessFlowSheet>
+      <Grid>
+        <Panel className="col-span-12" title="Where the line is limited" subtitle="Load as a share of each stage's capacity">
+          <FlowStages label="Gas train with bottleneck" stages={PROCESS_FLOW_STAGES} links={PROCESS_FLOW_LINKS} bottleneckId={limit?.id} />
+        </Panel>
+        <Panel className="col-span-12" title="Headroom" subtitle="Before compression limits export" tone="warning">
+          <div className="grid grid-cols-3 items-center gap-8">
+            <Stat variant="plain" size="lg" label="Compression load" value={93} unit="%" tone="warning" delta={{ value: 6, decimals: 0, unit: ' pts', good: 'down', caption: 'since the trip' }} />
+            <Meter label="Export against capacity" value={128.4} max={140} unit="t/h" decimals={1} high={134} target={{ value: 134, label: 'Plan' }} tone="warning" />
+            <p className="text-sm text-(--kit-text-2)">Two stages carry the duty of three. Bringing the recompressor back frees about 9 t/h of compression and stops the flaring.</p>
+          </div>
+        </Panel>
+      </Grid>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowBranchStopped() {
+  return (
+    <ProcessFlowSheet>
+      <Panel title="Recompression branch" subtitle="Flash gas route while the recompressor is down" actions={<StatusPill tone="critical">Tripped 13:46</StatusPill>} footer="A broken line carries nothing. Flash gas goes to flare until the restart completes.">
+        <FlowStages label="Recompression branch" stages={PROCESS_FLOW_BRANCH} links={PROCESS_FLOW_BRANCH_LINKS} />
+      </Panel>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowCompactChain() {
+  return (
+    <ProcessFlowSheet>
+      <Panel title="Compact chain" subtitle="One line per stage, top to bottom">
+        <FlowStages label="Gas train, compact" stages={PROCESS_FLOW_STAGES} links={PROCESS_FLOW_LINKS} size="compact" orientation="vertical" />
+      </Panel>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowStreamTable() {
+  return (
+    <ProcessFlowSheet>
+      <Panel title="Streams" subtitle="Six streams across the gas train, live" padding="none" footer="Flows are mass flows from the reconciled model, updated 14:00 UTC.">
+        <DataTable label="Process streams" flush columns={PROCESS_FLOW_STREAM_COLUMNS} rows={PROCESS_FLOW_STREAMS} rowKey={(stream) => stream.id} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
 function ProcessFlowMassBalance() {
   return (
-    <Card className="w-full max-w-64">
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">Mass balance, last hour</span>
-        <div className="flex items-baseline gap-2">
-          <ValueReadout value={BALANCE.percent} unit="%" decimals={2} />
-          <span className="text-xs text-muted-foreground">imbalance</span>
-        </div>
-      </div>
-      <dl className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-muted-foreground">In</dt>
-          <dd>
-            <ValueReadout size="xs" value={BALANCE.totalIn} unit="t/h" decimals={1} />
-          </dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-muted-foreground">Out</dt>
-          <dd>
-            <ValueReadout size="xs" value={BALANCE.totalOut} unit="t/h" decimals={1} />
-          </dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-3 border-t border-default pt-2">
-          <dt className="text-xs text-muted-foreground">Unaccounted</dt>
-          <dd>
-            <ValueReadout size="xs" value={BALANCE.difference} unit="t/h" decimals={1} />
-          </dd>
-        </div>
-      </dl>
-      <StatusIndicator size="sm" tone="success" label="Within ±0.5 % tolerance" />
-    </Card>
+    <ProcessFlowSheet>
+      <Panel title="Mass balance" subtitle="Across the gas train, t/h">
+        <BalanceFlow label="Mass balance across the gas train" inputs={PROCESS_FLOW_BALANCE_IN} outputs={PROCESS_FLOW_BALANCE_OUT} unit="t/h" height={260} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
-function ProcessFlowBatchList() {
+function ProcessFlowLineUp() {
+  const wrong = PROCESS_FLOW_LINE_UP.filter((valve) => valve.position !== valve.required).length;
   return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full min-w-lg border-collapse text-sm">
-        <thead>
-          <tr>
-            <th scope="col" className={TH}>
-              Parcel
-            </th>
-            <th scope="col" className={TH}>
-              Destination
-            </th>
-            <th scope="col" className={`${TH} text-right`}>
-              Volume, m³
-            </th>
-            <th scope="col" className={`${TH} w-2/5`}>
-              Stage
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {PARCELS.map((parcel) => (
-            <tr key={parcel.id} className="border-t border-default">
-              <td className={`${TD} font-mono text-base-foreground`}>{parcel.id}</td>
-              <td className={`${TD} text-muted-foreground`}>{parcel.destination}</td>
-              <td className={`${TD} text-right text-base-foreground tabular-nums`}>{formatValue(parcel.volume)}</td>
-              <td className={TD}>
-                <div className="flex flex-col gap-1.5">
-                  <ParcelStageBar parcel={parcel} />
-                  <span className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>{parcel.stage === PARCEL_STAGES.length ? 'Released' : PARCEL_STAGES[parcel.stage - 1]}</span>
-                    {parcel.held ? <StatusIndicator size="sm" tone="warning" shape="square" label="On hold" detail={parcel.held} /> : null}
-                  </span>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <ProcessFlowSheet>
+      <Panel title="Line-up" subtitle={`${wrong} of ${PROCESS_FLOW_LINE_UP.length} valves out of position`}>
+        <ProcessFlowLineUpRows valves={PROCESS_FLOW_LINE_UP} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
-function ProcessFlowUnitStrip() {
+function ProcessFlowParcels() {
+  const [selectedId, setSelectedId] = useState('P-0312');
+  const selected = PROCESS_FLOW_PARCELS.find((parcel) => parcel.id === selectedId) ?? PROCESS_FLOW_PARCELS[0];
   return (
-    <div className="w-full overflow-x-auto">
-      <ul aria-label="Unit status, gas train" className="grid min-w-3xl grid-cols-6 divide-x divide-default rounded-xl bg-card-background">
-        {STRIP_UNITS.map(({ asset, reading }) => (
-          <li key={asset.id} className="flex min-w-0 flex-col gap-2 p-3">
-            <div className="min-w-0">
-              <p className="font-mono text-xs text-muted-foreground">{asset.tag}</p>
-              <p className="truncate text-sm font-medium text-base-foreground">{asset.name}</p>
+    <ProcessFlowSheet>
+      <Panel title="Condensate parcels" subtitle="Four parcels between receipt and release">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 rounded-(--kit-radius-sm) bg-(--kit-well) p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-base font-semibold text-(--kit-text)">
+                Parcel <TagId>{selected.id}</TagId>
+              </p>
+              <p className="text-sm text-(--kit-text-2) tabular-nums">
+                {selected.volume.toLocaleString('en-GB')} m³ to {selected.destination}
+              </p>
             </div>
-            <StatusIndicator size="sm" {...runStateStatus(asset.state)} />
-            <ValueReadout size="xs" value={reading ? reading.value : null} unit={reading?.unit} decimals={reading?.decimals} />
-          </li>
-        ))}
-      </ul>
-    </div>
+            <StepSequence label={`Parcel ${selected.id}, stages`} steps={processFlowParcelSteps(selected)} orientation="horizontal" />
+          </div>
+          <ul aria-label="Parcels" className="grid grid-cols-2 gap-3">
+            {PROCESS_FLOW_PARCELS.map((parcel) => {
+              const done = parcel.stage >= PROCESS_FLOW_PARCEL_STAGES.length;
+              return (
+                <li key={parcel.id}>
+                  <button
+                    type="button"
+                    aria-pressed={parcel.id === selectedId}
+                    onClick={() => setSelectedId(parcel.id)}
+                    className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-(--kit-radius-sm) border border-(--kit-rule) px-3 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring-default aria-pressed:border-(--kit-accent) aria-pressed:bg-(--kit-well)"
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <TagId className="text-sm font-semibold">{parcel.id}</TagId>
+                      <span className="text-xs text-(--kit-text-3)">{parcel.destination}</span>
+                    </span>
+                    <StatusPill tone={done ? 'success' : parcel.held ? 'warning' : 'info'}>{done ? 'Released' : (parcel.held ?? PROCESS_FLOW_PARCEL_STAGES[parcel.stage])}</StatusPill>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </Panel>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowStreamCard() {
+  const stream = PROCESS_FLOW_STREAMS[4];
+  return (
+    <ProcessFlowSheet>
+      <Panel
+        title={stream.name}
+        subtitle={`${stream.from} → ${stream.to}`}
+        icon={
+          <IconChip tone="teal">
+            <IconArrowsSplit2 />
+          </IconChip>
+        }
+        actions={<StatusPill tone="teal">{stream.phase}</StatusPill>}
+        footer={`Stream ${stream.id} · 76.5 % of the feed by mass`}
+      >
+        <div className="flex flex-col gap-5">
+          <Stat variant="plain" size="lg" label="Mass flow" value={stream.flow} decimals={1} unit="t/h" delta={{ value: -5.2, unit: ' t/h', caption: 'vs plan' }} />
+          <Meter label="Pressure" value={stream.pressure} max={60} unit="barg" decimals={1} high={52} tone="teal" />
+          <Meter label="Temperature" value={stream.temperature} max={60} unit="°C" decimals={1} high={40} tone="warning" />
+        </div>
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
 function ProcessFlowStartSequence() {
-  const progress = stepProgress(RESTART_STEPS);
+  const [held, setHeld] = useState(false);
+  const steps = held ? PROCESS_FLOW_RESTART_HELD : PROCESS_FLOW_RESTART;
+  const progress = stepProgress(steps.map((step) => step.state));
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-base-foreground">Restart sequence</p>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-mono">23-KA-9103</span> Recompressor
-          </p>
-        </div>
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          Step {progress.currentIndex + 1} of {progress.total}
-        </span>
-      </div>
-      <StepList label="Restart sequence, 23-KA-9103" steps={RESTART_STEPS} />
-    </div>
-  );
-}
-
-function ProcessFlowSequenceHeld() {
-  return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-base-foreground">Restart sequence</p>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-mono">23-KA-9103</span> Recompressor
-          </p>
-        </div>
-        <StatusIndicator variant="badge" tone="warning" label="On hold" detail="step 3" />
-      </div>
-      <StepList label="Restart sequence on hold, 23-KA-9103" steps={HELD_STEPS} showState />
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" size="sm">
-          Abort sequence
-        </Button>
-        <Button variant="secondary" size="sm">
-          Resume sequence
-        </Button>
-      </div>
-    </div>
+    <ProcessFlowSheet>
+      <Panel
+        title="Recompressor restart"
+        subtitle={`Step ${(progress.current ?? 0) + 1} of ${progress.total} · ${held ? 'on hold' : 'in progress'}`}
+        icon={
+          <IconChip tone={held ? 'warning' : 'accent'}>
+            <IconListCheck />
+          </IconChip>
+        }
+        actions={
+          <Button variant="outline" size="sm" onClick={() => setHeld((current) => !current)}>
+            {held ? <IconPlayerPlay /> : <IconPlayerPause />}
+            {held ? 'Resume' : 'Hold'}
+          </Button>
+        }
+        tone={held ? 'warning' : 'neutral'}
+        footer="Hold stops the sequence at the step in hand. Nothing that is already done is undone."
+      >
+        <StepSequence label="Recompressor restart sequence" steps={steps} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
 function ProcessFlowPermissives() {
-  const unmet = PERMISSIVES.filter((condition) => condition.state !== 'met').length;
-  const ready = allConditionsMet(PERMISSIVES);
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Start permissives</span>
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {PERMISSIVES.length - unmet} of {PERMISSIVES.length} met
-        </span>
-      </div>
-      <ConditionList label="Start permissives, 23-KA-9103" conditions={PERMISSIVES} />
-      <div className="flex items-center justify-between gap-4 border-t border-default pt-4">
-        <p className="text-xs text-muted-foreground">{ready ? 'All permissives are met.' : 'Seal gas differential must rise above 0.5 bar before start.'}</p>
-        <Button size="sm" disabled={!ready}>
-          Start compressor
-        </Button>
-      </div>
-    </div>
+    <ProcessFlowSheet>
+      <Panel
+        title="Start permissives"
+        subtitle="Recompressor 23-KA-9103"
+        icon={
+          <IconChip tone="critical">
+            <IconShieldLock />
+          </IconChip>
+        }
+        footer="Start stays locked until every permissive is met. Each line shows the tag it is judged on."
+      >
+        <ConditionBoard label="Start permissives, recompressor" items={PROCESS_FLOW_PERMISSIVES} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
 function ProcessFlowInterlocks() {
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Interlocks</span>
-        <span className="text-xs text-muted-foreground">1 tripped · 1 bypassed</span>
-      </div>
-      <ConditionList label="Interlocks, 23-KA-9103" conditions={INTERLOCKS} stateLabels={{ met: 'Healthy', unmet: 'Tripped' }} />
-    </div>
+    <ProcessFlowSheet>
+      <Panel title="Interlocks" subtitle="Recompressor trip matrix, six interlocks" actions={<StatusPill tone="warning">1 bypassed until 18:00</StatusPill>}>
+        <ConditionBoard label="Recompressor interlocks" items={PROCESS_FLOW_INTERLOCKS} words={PROCESS_FLOW_INTERLOCK_WORDS} layout="tiles" columns={3} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
 function ProcessFlowTrainLanes() {
   return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">Condensate export</span>
-        <span className="text-xs text-muted-foreground">Duty and standby, one train carries the load</span>
-      </div>
-      {LANES.map((lane) => (
-        <div key={lane.id} className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-4">
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-base-foreground">{lane.name}</span>
-            <StatusIndicator size="sm" {...runStateStatus(lane.state)} />
-            <ValueReadout size="xs" value={lane.share} unit="% of load" />
-          </div>
-          <StageFlow label={`${lane.name}, suction to metering`} stages={lane.stages} />
-        </div>
-      ))}
-    </div>
+    <ProcessFlowSheet>
+      <Panel title="Export pumps" subtitle="Duty and standby, same stages in the same columns" footer="Train B takes over within 40 s on a low-pressure trip of train A.">
+        <TrainLanes label="Export pump trains" lanes={PROCESS_FLOW_LANES} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
 function ProcessFlowBlockDiagram() {
-  const centre = (block: DiagramBlock) => ({ x: block.x + BLOCK_WIDTH / 2, y: block.y + BLOCK_HEIGHT / 2 });
-  const mainRow = DIAGRAM_BLOCKS.slice(0, 6);
-  const stageOne = centre(DIAGRAM_BLOCKS[2]);
-  const stageTwo = centre(DIAGRAM_BLOCKS[4]);
-  const separator = centre(DIAGRAM_BLOCKS[1]);
+  const [selectedId, setSelectedId] = useState('stage-1');
+  const block = PROCESS_FLOW_BLOCKS.find((candidate) => candidate.id === selectedId) ?? PROCESS_FLOW_BLOCKS[0];
+  const detail = PROCESS_FLOW_BLOCK_NOTES[block.id];
   return (
-    <div className="w-full overflow-x-auto">
-      <svg
-        role="img"
-        aria-label="Block diagram of the gas train: inlet, inlet separator, 1st stage, cooler, 2nd stage and gas export in series, an anti-surge recycle from 2nd stage back to 1st stage, and condensate from the separator to export pumps A and B"
-        viewBox="0 0 724 256"
-        className="h-auto w-full min-w-2xl text-muted-foreground"
-        fill="none"
+    <ProcessFlowSheet>
+      <Panel
+        title="Block flow diagram"
+        subtitle="Gas train with condensate export and fuel gas. Select a block."
+        actions={<StatusPill tone={detail.tone}>{`${block.label} · ${detail.state}`}</StatusPill>}
+        footer={
+          <span>
+            <strong className="font-semibold text-(--kit-text)">{block.label}.</strong> {detail.note} Solid lines are process streams, dashed lines utilities, dotted lines carry nothing.
+          </span>
+        }
       >
-        {mainRow.slice(0, -1).map((block, index) => {
-          const next = mainRow[index + 1];
-          const y = block.y + BLOCK_HEIGHT / 2;
-          return (
-            <g key={block.id}>
-              <line x1={block.x + BLOCK_WIDTH} y1={y} x2={next.x - 5} y2={y} stroke="currentColor" strokeWidth={1.5} />
-              <path d={`M ${next.x - 6} ${y - 4} L ${next.x} ${y} L ${next.x - 6} ${y + 4} Z`} fill="currentColor" />
-            </g>
-          );
-        })}
-        <path
-          d={`M ${stageTwo.x} ${stageTwo.y - BLOCK_HEIGHT / 2} V 48 H ${stageOne.x} V ${stageOne.y - BLOCK_HEIGHT / 2 - 5}`}
-          stroke="currentColor"
-          strokeWidth={1.5}
-          strokeDasharray="5 4"
-        />
-        <path d={`M ${stageOne.x - 4} ${stageOne.y - BLOCK_HEIGHT / 2 - 6} L ${stageOne.x} ${stageOne.y - BLOCK_HEIGHT / 2} L ${stageOne.x + 4} ${stageOne.y - BLOCK_HEIGHT / 2 - 6} Z`} fill="currentColor" />
-        <text x={(stageOne.x + stageTwo.x) / 2} y={38} textAnchor="middle" className="fill-muted-foreground text-xs">
-          Anti-surge recycle
-        </text>
-        <path d={`M ${separator.x} ${separator.y + BLOCK_HEIGHT / 2} V ${192 - 5}`} stroke="currentColor" strokeWidth={1.5} />
-        <path d={`M ${separator.x - 4} ${192 - 6} L ${separator.x} 192 L ${separator.x + 4} ${192 - 6} Z`} fill="currentColor" />
-        <path d={`M ${separator.x} 168 H ${stageOne.x} V ${192 - 5}`} stroke="currentColor" strokeWidth={1.5} />
-        <path d={`M ${stageOne.x - 4} ${192 - 6} L ${stageOne.x} 192 L ${stageOne.x + 4} ${192 - 6} Z`} fill="currentColor" />
-        <text x={separator.x + 8} y={162} className="fill-muted-foreground text-xs">
-          Condensate
-        </text>
-        <path d="M 356 218 H 430" stroke="currentColor" strokeWidth={1.5} />
-        <path d="M 430 214 L 436 218 L 430 222 Z" fill="currentColor" />
-        <text x={444} y={222} className="fill-muted-foreground text-xs">
-          To Stord terminal
-        </text>
-        {DIAGRAM_BLOCKS.map((block) => (
-          <g key={block.id}>
-            <rect x={block.x} y={block.y} width={BLOCK_WIDTH} height={BLOCK_HEIGHT} rx={8} className="fill-card-background stroke-emphasized" strokeWidth={1} />
-            <DiagramStateMark x={block.x + 14} y={block.y + 18} state={block.state} />
-            <text x={block.x + 24} y={block.y + 22} className="fill-base-foreground text-xs font-medium">
-              {block.name}
-            </text>
-            <text x={block.x + 10} y={block.y + 40} className="fill-muted-foreground font-mono text-xs">
-              {block.tag}
-            </text>
-          </g>
-        ))}
-      </svg>
-    </div>
+        <BlockFlow label="Block flow diagram of the gas train" blocks={PROCESS_FLOW_BLOCKS} edges={PROCESS_FLOW_EDGES} selectedId={selectedId} onSelect={setSelectedId} />
+      </Panel>
+    </ProcessFlowSheet>
   );
 }
 
-function ProcessFlowDiagramLegend() {
+function ProcessFlowConsole() {
+  const interlocks = summariseConditions(PROCESS_FLOW_INTERLOCKS.map((item) => item.state));
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <span className="text-xs text-muted-foreground">Lines</span>
-        <div className="flex items-center gap-3 text-xs text-base-foreground">
-          <span aria-hidden className="w-8 border-t-2 border-muted-foreground" />
-          Process line
-        </div>
-        <div className="flex items-center gap-3 text-xs text-base-foreground">
-          <span aria-hidden className="w-8 border-t-2 border-dashed border-muted-foreground" />
-          Recycle, normally no flow
-        </div>
-      </div>
-      <div className="flex flex-col gap-2">
-        <span className="text-xs text-muted-foreground">Unit state</span>
-        <StatusIndicator size="sm" {...runStateStatus('running')} />
-        <StatusIndicator size="sm" {...runStateStatus('standby')} />
-        <StatusIndicator size="sm" {...runStateStatus('tripped')} />
-        <StatusIndicator size="sm" {...runStateStatus('maintenance')} />
-      </div>
-    </div>
+    <ProcessFlowSheet look="console">
+      <Grid>
+        <Panel className="col-span-12" title="Gas train" subtitle="168.0 t/h in · 128.4 t/h exported" tone="warning">
+          <FlowStages label="Gas train, console" stages={PROCESS_FLOW_STAGES} links={PROCESS_FLOW_LINKS} bottleneckId="compression" />
+        </Panel>
+        <Panel className="col-span-7" title="Streams" subtitle="t/h · barg" padding="none">
+          <DataTable label="Process streams" flush columns={PROCESS_FLOW_STREAM_COLUMNS_SHORT} rows={PROCESS_FLOW_STREAMS} rowKey={(stream) => stream.id} />
+        </Panel>
+        <Panel className="col-span-5" title="Interlocks 23-KA-9103" subtitle={`${interlocks.unmet} tripped · ${interlocks.bypassed} bypassed`} tone="critical">
+          <ConditionBoard label="Recompressor interlocks" items={PROCESS_FLOW_INTERLOCKS} words={PROCESS_FLOW_INTERLOCK_WORDS} hideSummary />
+        </Panel>
+      </Grid>
+    </ProcessFlowSheet>
   );
 }
 
-function ProcessFlowOverview() {
-  const area = findAssetById('nk-23');
-  const unmet = PERMISSIVES.filter((condition) => condition.state !== 'met');
+function ProcessFlowPoster() {
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardHeaderCenter>
-          <CardTitle>Gas train</CardTitle>
-          <CardDescription>Nordkapp plant · inlet to export · updated 14:00</CardDescription>
-        </CardHeaderCenter>
-        <CardHeaderEnd>
-          <StatusIndicator variant="badge" {...healthStatus(area.health)} label="Running, limited" />
-        </CardHeaderEnd>
-      </CardHeader>
-      <CardContent>
-        <div className="flex w-full flex-col gap-4 rounded-xl bg-base-background p-3">
-          <StageFlow label="Gas train overview" stages={STAGES_WITH_BOTTLENECK} bottleneckLabel="Bottleneck · 87 % of capacity" />
-        </div>
-        <div className="grid w-full grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-3">
-          <div className="flex flex-col gap-3">
-            <span className="text-xs font-medium text-muted-foreground">Main streams, t/h</span>
-            <ul className="flex flex-col gap-2">
-              {[STREAMS[0], STREAMS[1], STREAMS[4], STREAMS[2]].map((stream) => (
-                <li key={stream.id} className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate text-base-foreground">
-                    <span className="font-mono text-xs text-muted-foreground">{stream.id}</span> {stream.name}
-                  </span>
-                  <ValueReadout size="xs" value={stream.flow} decimals={1} />
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="flex flex-col gap-3">
-            <span className="text-xs font-medium text-muted-foreground">Mass balance, last hour</span>
-            <div className="flex items-baseline gap-2">
-              <ValueReadout size="md" value={BALANCE.percent} unit="%" decimals={2} />
-              <span className="text-xs text-muted-foreground">imbalance</span>
+    <ProcessFlowSheet look="poster">
+      <div className="flex flex-col gap-6">
+        <SectionHeader size="lg" title="Compression is the limit." description="Four stages, inlet to export. One of them runs at 93 % of what it can do." />
+        <FlowStages label="Gas train, poster" stages={PROCESS_FLOW_STAGES.map((stage, index) => ({ ...stage, tone: stage.id === 'compression' ? 'warning' : (['blue', 'teal', 'warning', 'green'] as const)[index] }))} links={PROCESS_FLOW_LINKS} />
+        <Panel title="Where the feed goes" subtitle="168.0 t/h in, by mass">
+          <BalanceFlow label="Mass balance, poster" inputs={PROCESS_FLOW_BALANCE_IN} outputs={PROCESS_FLOW_BALANCE_OUT} unit="t/h" height={250} />
+        </Panel>
+      </div>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowBlueprint() {
+  return (
+    <ProcessFlowSheet look="blueprint">
+      <Grid>
+        <Panel className="col-span-12" title="Block flow diagram" subtitle="NK-PFD-001 · rev C">
+          <BlockFlow label="Block flow diagram, drawing style" blocks={PROCESS_FLOW_BLOCKS} edges={PROCESS_FLOW_EDGES} />
+        </Panel>
+        <Panel className="col-span-4" title="Restart sequence" subtitle="23-KA-9103 · step 3 of 6">
+          <StepSequence label="Recompressor restart, drawing style" steps={PROCESS_FLOW_RESTART} />
+        </Panel>
+        <Panel className="col-span-8" title="Start permissives" subtitle="23-KA-9103 · 5 of 6 met">
+          <ConditionBoard label="Start permissives, drawing style" items={PROCESS_FLOW_PERMISSIVES} layout="tiles" columns={2} hideSummary />
+        </Panel>
+      </Grid>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowSignal() {
+  return (
+    <ProcessFlowSheet look="signal">
+      <div className="flex flex-col gap-2">
+        <FlowStages label="Gas train, wall screen" stages={PROCESS_FLOW_STAGES} links={PROCESS_FLOW_LINKS} />
+        <Grid>
+          <Panel className="col-span-4" title="Recompressor" subtitle="23-KA-9103" tone="critical">
+            <div className="flex flex-col gap-1">
+              <span className="text-4xl font-extrabold tracking-tight">Tripped</span>
+              <span className="text-sm">High vibration at 13:46. Restart held on seal gas.</span>
             </div>
-            <p className="text-xs text-muted-foreground tabular-nums">
-              {formatValue(BALANCE.totalIn, 1)} t/h in · {formatValue(BALANCE.totalOut, 1)} t/h out
-            </p>
-            <StatusIndicator size="sm" tone="success" label="Within ±0.5 % tolerance" />
+          </Panel>
+          <Panel className="col-span-8" title="Interlocks" subtitle="Six on the recompressor">
+            <ConditionBoard label="Recompressor interlocks, wall screen" items={PROCESS_FLOW_INTERLOCKS} words={PROCESS_FLOW_INTERLOCK_WORDS} layout="tiles" columns={3} hideSummary />
+          </Panel>
+        </Grid>
+      </div>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowGlass() {
+  const progress = stepProgress(PROCESS_FLOW_RESTART.map((step) => step.state));
+  return (
+    <ProcessFlowSheet look="glass">
+      <Panel title="Recompressor restart" subtitle="Seal gas is pressurising">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-6">
+          <div className="flex flex-col items-center gap-3">
+            <RingGauge label="Sequence complete" value={progress.percent} size={132} tone="sky" />
+            <StatusPill tone="sky">Step 3 of 6</StatusPill>
           </div>
-          <div className="flex flex-col gap-3">
-            <span className="text-xs font-medium text-muted-foreground">Recompressor restart</span>
-            <StatusIndicator size="sm" {...runStateStatus('tripped')} detail="14 min ago" />
-            <p className="text-sm text-base-foreground">
-              {PERMISSIVES.length - unmet.length} of {PERMISSIVES.length} start permissives met
-            </p>
-            <p className="text-xs text-muted-foreground">Waiting for: {unmet.map((condition) => condition.label.toLowerCase()).join(', ')}</p>
-          </div>
+          <StepSequence label="Recompressor restart, glass" steps={PROCESS_FLOW_RESTART} />
         </div>
-      </CardContent>
-    </Card>
+      </Panel>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowEditorial() {
+  return (
+    <ProcessFlowSheet look="editorial">
+      <div className="flex flex-col gap-8">
+        <SectionHeader eyebrow="Start readiness" size="lg" title="One condition stands between the recompressor and a restart." description="Seal gas differential is 0.3 bar and needs 0.5. Everything else is in place." />
+        <ConditionBoard label="Start permissives, report" items={PROCESS_FLOW_PERMISSIVES} />
+      </div>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowTrainOverview() {
+  const [selectedId, setSelectedId] = useState('compression');
+  const selected = PROCESS_FLOW_STAGES.find((stage) => stage.id === selectedId) ?? PROCESS_FLOW_STAGES[0];
+  return (
+    <ProcessFlowSheet look="studio">
+      <div className="flex flex-col gap-(--kit-gap)">
+        <SectionHeader title="Gas train" description="Thursday 12 March · updated 14:00 UTC" actions={<StatusPill tone="warning">Reduced capacity</StatusPill>} />
+        <StatGroup columns={4}>
+          <Stat label="Feed" value={168} decimals={1} unit="t/h" icon={<IconDroplet />} tone="purple" delta={{ value: -1.2, unit: ' t/h', caption: 'vs yesterday' }} />
+          <Stat label="Gas export" value={128.4} decimals={1} unit="t/h" icon={<IconTransfer />} tone="teal" delta={{ value: -5.2, unit: ' t/h', caption: 'vs plan' }} />
+          <Stat label="Flared" value={0.3} decimals={1} unit="t/h" icon={<IconFlame />} tone="critical" delta={{ value: 0.3, unit: ' t/h', good: 'down', caption: 'since 13:46' }} />
+          <Stat label="Unaccounted" value={Math.abs(PROCESS_FLOW_BALANCE.percent)} decimals={2} unit="%" icon={<IconCircleCheck />} tone="success" target="Tolerance 1.00 %" />
+        </StatGroup>
+        <Grid>
+          <Panel className="col-span-12" title="Stages" subtitle="Select a stage for its note" footer={`${selected.name}. ${PROCESS_FLOW_STAGE_NOTES[selected.id]}`}>
+            <FlowStages label="Gas train overview" stages={PROCESS_FLOW_STAGES} links={PROCESS_FLOW_LINKS} bottleneckId="compression" selectedId={selectedId} onSelect={setSelectedId} />
+          </Panel>
+          <Panel className="col-span-7" title="Mass balance" subtitle="Where the feed goes, t/h">
+            <BalanceFlow label="Mass balance, overview" inputs={PROCESS_FLOW_BALANCE_IN} outputs={PROCESS_FLOW_BALANCE_OUT} unit="t/h" height={250} />
+          </Panel>
+          <Panel className="col-span-5" title="Line-up" subtitle="1 of 6 valves out of position">
+            <ProcessFlowLineUpRows valves={PROCESS_FLOW_LINE_UP} />
+          </Panel>
+        </Grid>
+      </div>
+    </ProcessFlowSheet>
+  );
+}
+
+function ProcessFlowRestartBoard() {
+  const [held, setHeld] = useState(true);
+  const steps = held ? PROCESS_FLOW_RESTART_HELD : PROCESS_FLOW_RESTART;
+  const permissives = summariseConditions(PROCESS_FLOW_PERMISSIVES.map((item) => item.state));
+  return (
+    <ProcessFlowSheet look="soft">
+      <div className="flex flex-col gap-(--kit-gap)">
+        <SectionHeader
+          title="Bring the recompressor back"
+          description="Everything the shift needs to restart 23-KA-9103, in one place."
+          actions={
+            <Button onClick={() => setHeld((current) => !current)}>
+              {held ? <IconPlayerPlay /> : <IconPlayerPause />}
+              {held ? 'Resume sequence' : 'Hold sequence'}
+            </Button>
+          }
+        />
+        <Grid>
+          <Panel className="col-span-5" title="Restart sequence" subtitle={held ? 'On hold at step 3' : 'Step 3 in progress'} tone={held ? 'amber' : 'blue'}>
+            <StepSequence label="Recompressor restart board" steps={steps} />
+          </Panel>
+          <Panel className="col-span-7" title="Start permissives" subtitle={`${permissives.met} of ${permissives.total} met`} tone="pink">
+            <ConditionBoard label="Start permissives, board" items={PROCESS_FLOW_PERMISSIVES} layout="tiles" columns={2} hideSummary />
+          </Panel>
+          <Panel className="col-span-12" title="Where the flash gas goes meanwhile" subtitle="Recompression branch" tone="purple">
+            <FlowStages label="Recompression branch, board" stages={PROCESS_FLOW_BRANCH} links={PROCESS_FLOW_BRANCH_LINKS} />
+          </Panel>
+        </Grid>
+      </div>
+    </ProcessFlowSheet>
   );
 }
 
@@ -835,10 +708,10 @@ export default definePage({
       'Give every permissive and interlock its evidence: the tag and the reading it is judged on.',
     ],
     avoid: [
-      'Drawing a full P&ID where four connected cards answer the question.',
-      'Colouring healthy stages green end to end; state is a small dot and a word.',
+      'Drawing a full P&ID where four connected stages answer the question.',
+      'A line with an arrow head where nothing flows; break the line instead.',
       'A disabled start button without the condition that blocks it.',
-      'Arrows as the only sign of direction for assistive technology; name the flow in the label.',
+      'Counting a bypassed interlock as healthy.',
     ],
   },
   source,
@@ -846,194 +719,152 @@ export default definePage({
     {
       id: 'stages',
       title: 'Stages and connections',
-      description: 'One stage on its own, a compact chain, and the whole train as connected cards.',
+      description: 'Units in flow direction, joined by lines that say what moves between them.',
       specimens: [
         {
-          id: 'ProcessFlowStageSingle',
-          title: 'Stage card',
-          note: 'Pick it as the building block: name, tag, state and one key reading.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StageFlow.tsx', 'industrial/status.ts'],
-          align: 'stretch',
-          Component: ProcessFlowStageSingle,
-        },
-        {
-          id: 'ProcessFlowStageAlarms',
-          title: 'Stage with alarm count',
-          note: 'Pick it when a stage has open alarms: the count takes the worst severity.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StageFlow.tsx', 'industrial/operations/SeverityBadge.tsx'],
-          align: 'stretch',
-          Component: ProcessFlowStageAlarms,
-        },
-        {
-          id: 'ProcessFlowStageOffline',
-          title: 'Stage out of service',
-          note: 'Pick it for a tripped or stopped unit: the state changes and the reading becomes a dash.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StageFlow.tsx', 'industrial/status.ts'],
-          align: 'stretch',
-          Component: ProcessFlowStageOffline,
-        },
-        {
-          id: 'ProcessFlowCompactChain',
-          title: 'Compact chain',
-          note: 'Pick it in a page header or table cell where the train must fit on one line.',
-          origin: 'custom',
-          uses: ['industrial/StatusDot.tsx', 'industrial/status.ts'],
-          size: 'md',
-          Component: ProcessFlowCompactChain,
-        },
-        {
-          id: 'ProcessFlowPipelineProgress',
-          title: 'Batch through stages',
-          note: 'Pick it to follow one parcel or batch: which stages are behind it and where it is now.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StepList.tsx', 'industrial/workflows/workflow.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProcessFlowPipelineProgress,
-        },
-        {
-          id: 'ProcessFlowStages',
+          id: 'ProcessFlowStageChain',
           title: 'Connected stages',
-          note: 'Pick it as the default overview of a train: inlet, separation, compression and export in flow order.',
+          note: 'Pick it as the header of a train page: four stages answer where the line stands, and a click explains one.',
           origin: 'custom',
-          uses: ['industrial/workflows/StageFlow.tsx', 'industrial/status.ts'],
           size: 'full',
           align: 'stretch',
-          Component: ProcessFlowStages,
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx', 'kit/process-flow/FlowConnector.tsx', 'kit/Panel.tsx'],
+          Component: ProcessFlowStageChain,
         },
         {
           id: 'ProcessFlowBottleneck',
-          title: 'Bottleneck highlight',
-          note: 'Pick it when one stage limits throughput: outline it, label it and say what holds it back.',
+          title: 'Bottleneck with headroom',
+          note: 'Pick it when the question is what limits throughput and how much is left.',
           origin: 'custom',
-          uses: ['industrial/workflows/StageFlow.tsx', 'industrial/status.ts'],
           size: 'full',
           align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx', 'kit/process-flow/flow.ts', 'kit/Meter.tsx', 'kit/Stat.tsx'],
           Component: ProcessFlowBottleneck,
+        },
+        {
+          id: 'ProcessFlowBranchStopped',
+          title: 'Stopped branch',
+          note: 'Pick it when part of the route carries nothing: the line breaks and the diverted flow is shown.',
+          origin: 'custom',
+          size: 'lg',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx', 'kit/process-flow/FlowConnector.tsx'],
+          Component: ProcessFlowBranchStopped,
+        },
+        {
+          id: 'ProcessFlowStreamCard',
+          title: 'Stream card',
+          note: 'Pick it for one stream on a unit page, with the two readings that describe its condition.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Stat.tsx', 'kit/Meter.tsx'],
+          Component: ProcessFlowStreamCard,
         },
       ],
     },
     {
       id: 'streams',
       title: 'Streams, batches and balance',
-      description: 'What moves between the units, where the lines are open, and whether in equals out.',
+      description: 'What flows, where it goes and whether it adds up.',
       specimens: [
-        {
-          id: 'ProcessFlowStreamCard',
-          title: 'Stream card',
-          note: 'Pick it for one stream on a dashboard: flow, pressure and temperature with where it runs.',
-          origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx'],
-          align: 'stretch',
-          Component: ProcessFlowStreamCard,
-        },
         {
           id: 'ProcessFlowStreamTable',
           title: 'Stream table',
-          note: 'Pick it to compare streams: one row each, numbers right-aligned in a shared unit.',
+          note: 'Pick it when engineers need every stream with its conditions side by side.',
           origin: 'custom',
-          uses: ['industrial/status.ts'],
-          size: 'lg',
+          size: 'full',
           align: 'stretch',
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/Panel.tsx', 'kit/TagId.tsx'],
           Component: ProcessFlowStreamTable,
-        },
-        {
-          id: 'ProcessFlowDirectionRows',
-          title: 'Flow direction rows',
-          note: 'Pick it for a short list of connections: from, to and how much, with idle lines dimmed and explained.',
-          origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProcessFlowDirectionRows,
-        },
-        {
-          id: 'ProcessFlowLineUp',
-          title: 'Line-up status',
-          note: 'Pick it before a start or a switch-over: each valve with its position, and the ones out of position called out.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProcessFlowLineUp,
         },
         {
           id: 'ProcessFlowMassBalance',
           title: 'Mass balance',
-          note: 'Pick it to show that in equals out: the imbalance leads, the totals explain it.',
+          note: 'Pick it to show where the feed ends up and whether the balance closes.',
           origin: 'custom',
-          uses: ['industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx', 'industrial/workflows/workflow.ts'],
+          size: 'lg',
           align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/BalanceFlow.tsx', 'kit/process-flow/flow.ts'],
           Component: ProcessFlowMassBalance,
         },
         {
-          id: 'ProcessFlowBatchList',
-          title: 'Batches by stage',
-          note: 'Pick it when several parcels move through the same stages and you need to see which are stuck.',
+          id: 'ProcessFlowLineUp',
+          title: 'Line-up status',
+          note: 'Pick it before a start or a changeover, to find the valve that is not where it must be.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          size: 'lg',
+          size: 'sm',
           align: 'stretch',
-          Component: ProcessFlowBatchList,
+          bleed: true,
+          uses: ['kit/ListRow.tsx', 'kit/StatusPill.tsx'],
+          Component: ProcessFlowLineUp,
         },
         {
-          id: 'ProcessFlowUnitStrip',
-          title: 'Unit status strip',
-          note: 'Pick it across the top of a train view: every unit in flow order with state and one reading.',
+          id: 'ProcessFlowParcels',
+          title: 'Batches through stages',
+          note: 'Pick it when discrete parcels move through fixed stages and one of them can be held.',
           origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx', 'industrial/status.ts'],
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
-          Component: ProcessFlowUnitStrip,
+          bleed: true,
+          uses: ['kit/process-flow/StepSequence.tsx', 'kit/StatusPill.tsx'],
+          Component: ProcessFlowParcels,
+        },
+        {
+          id: 'ProcessFlowCompactChain',
+          title: 'Compact chain',
+          note: 'Pick it in a side column where the full stage block does not fit.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx'],
+          Component: ProcessFlowCompactChain,
         },
       ],
     },
     {
       id: 'sequences',
       title: 'Start-up and safeguards',
-      description: 'The steps that bring a unit online and the conditions that must hold first.',
+      description: 'The steps that start a unit and the conditions that guard it.',
       specimens: [
         {
           id: 'ProcessFlowStartSequence',
           title: 'Start-up sequence',
-          note: 'Pick it while a sequence runs: finished steps with their time, the current step with what it waits for.',
+          note: 'Pick it while a sequence runs: the step in hand is the loudest thing, and it can be held.',
           origin: 'custom',
-          uses: ['industrial/workflows/StepList.tsx', 'industrial/workflows/workflow.ts'],
           size: 'md',
           align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/StepSequence.tsx', 'kit/process-flow/flow.ts'],
           Component: ProcessFlowStartSequence,
-        },
-        {
-          id: 'ProcessFlowSequenceHeld',
-          title: 'Sequence on hold',
-          note: 'Pick it when a step cannot complete: the hold reason sits on the step and the way out sits below.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StepList.tsx', 'industrial/StatusIndicator.tsx'],
-          size: 'md',
-          align: 'stretch',
-          Component: ProcessFlowSequenceHeld,
         },
         {
           id: 'ProcessFlowPermissives',
           title: 'Permissive checklist',
-          note: 'Pick it in front of a start action: all conditions must be met, and the blocking one is named beside the button.',
+          note: 'Pick it next to a start button, so a blocked start explains itself.',
           origin: 'custom',
-          uses: ['industrial/workflows/ConditionList.tsx'],
           size: 'md',
           align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/ConditionBoard.tsx', 'kit/process-flow/flow.ts'],
           Component: ProcessFlowPermissives,
         },
         {
           id: 'ProcessFlowInterlocks',
-          title: 'Interlock status',
-          note: 'Pick it to show what trips the unit: healthy, tripped and bypassed, each with its evidence.',
+          title: 'Interlock tiles',
+          note: 'Pick it for a trip matrix read at a glance; a bypass is never drawn as healthy.',
           origin: 'custom',
-          uses: ['industrial/workflows/ConditionList.tsx'],
-          size: 'md',
+          size: 'full',
           align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/ConditionBoard.tsx'],
           Component: ProcessFlowInterlocks,
         },
       ],
@@ -1041,44 +872,131 @@ export default definePage({
     {
       id: 'diagrams',
       title: 'Parallel trains and diagrams',
-      description: 'Lanes for duty and standby, a simplified block diagram, and a full train overview.',
+      description: 'Duty and standby side by side, and the whole unit as blocks.',
       specimens: [
         {
           id: 'ProcessFlowTrainLanes',
           title: 'Parallel train lanes',
-          note: 'Pick it for A and B trains: one lane each, so duty and standby are compared stage by stage.',
+          note: 'Pick it for duty and standby equipment that must be compared stage by stage.',
           origin: 'custom',
-          uses: ['industrial/workflows/StageFlow.tsx', 'industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx'],
           size: 'full',
           align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/TrainLanes.tsx', 'kit/process-flow/FlowStages.tsx'],
           Component: ProcessFlowTrainLanes,
         },
         {
           id: 'ProcessFlowBlockDiagram',
-          title: 'Simplified block diagram',
-          note: 'Pick it when branches and recycles matter: boxes and lines only, drawn with tokens so it follows the theme.',
+          title: 'Block flow diagram',
+          note: 'Pick it when branches and recycles matter and a straight chain would hide them.',
           origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          Component: ProcessFlowBlockDiagram,
-        },
-        {
-          id: 'ProcessFlowDiagramLegend',
-          title: 'Diagram legend',
-          note: 'Pick it beside any diagram that uses line styles and state marks without labels.',
-          origin: 'custom',
-          uses: ['industrial/StatusIndicator.tsx', 'industrial/status.ts'],
-          Component: ProcessFlowDiagramLegend,
-        },
-        {
-          id: 'ProcessFlowOverview',
-          title: 'Train overview',
-          note: 'Pick it as the landing block for a train: stages with the bottleneck, main streams, balance and what blocks the next start.',
-          origin: 'custom',
-          uses: ['industrial/workflows/StageFlow.tsx', 'industrial/workflows/ConditionList.tsx', 'industrial/workflows/workflow.ts', 'industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx'],
           size: 'full',
           align: 'stretch',
-          Component: ProcessFlowOverview,
+          bleed: true,
+          uses: ['kit/process-flow/BlockFlow.tsx', 'kit/process-flow/blockRoute.ts'],
+          Component: ProcessFlowBlockDiagram,
+        },
+      ],
+    },
+    {
+      id: 'looks',
+      title: 'In other looks',
+      description: 'The same parts change anatomy with the look: state edges, solid tiles, drawn boxes, state-filled blocks.',
+      specimens: [
+        {
+          id: 'ProcessFlowConsole',
+          title: 'Console',
+          note: 'Pick it for an operator screen: stages are blocks with a state edge, tables are dense.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx', 'kit/process-flow/ConditionBoard.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowConsole,
+        },
+        {
+          id: 'ProcessFlowPoster',
+          title: 'Poster',
+          note: 'Pick it for a review screen: stages are solid tiles and the balance is drawn in blocks of colour.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx', 'kit/process-flow/BalanceFlow.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowPoster,
+        },
+        {
+          id: 'ProcessFlowBlueprint',
+          title: 'Blueprint',
+          note: 'Pick it in engineering tools: blocks are drawn boxes, steps are outlined numerals.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/BlockFlow.tsx', 'kit/process-flow/StepSequence.tsx', 'kit/process-flow/ConditionBoard.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowBlueprint,
+        },
+        {
+          id: 'ProcessFlowSignal',
+          title: 'Signal',
+          note: 'Pick it for a wall screen: every stage and interlock is filled with its state and says it in a word.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx', 'kit/process-flow/ConditionBoard.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowSignal,
+        },
+        {
+          id: 'ProcessFlowGlass',
+          title: 'Glass',
+          note: 'Pick it for a showpiece view of one sequence, with progress as a ring.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/StepSequence.tsx', 'kit/RingGauge.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowGlass,
+        },
+        {
+          id: 'ProcessFlowEditorial',
+          title: 'Editorial',
+          note: 'Pick it in a handover report: the verdict is the headline and the checklist is the evidence.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/ConditionBoard.tsx', 'kit/SectionHeader.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowEditorial,
+        },
+      ],
+    },
+    {
+      id: 'in-use',
+      title: 'In use',
+      description: 'Compositions that can be dropped into a product.',
+      specimens: [
+        {
+          id: 'ProcessFlowTrainOverview',
+          title: 'Train overview',
+          note: 'Pick it as the landing view of one process train: headline figures, stages, balance and line-up.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/FlowStages.tsx', 'kit/process-flow/BalanceFlow.tsx', 'kit/StatGroup.tsx', 'kit/ListRow.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowTrainOverview,
+        },
+        {
+          id: 'ProcessFlowRestartBoard',
+          title: 'Restart board',
+          note: 'Pick it for the shift that brings a tripped unit back: sequence, permissives and the diverted flow together.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/process-flow/StepSequence.tsx', 'kit/process-flow/ConditionBoard.tsx', 'kit/process-flow/FlowStages.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessFlowRestartBoard,
         },
       ],
     },

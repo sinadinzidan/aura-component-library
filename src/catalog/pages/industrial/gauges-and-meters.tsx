@@ -368,7 +368,7 @@ function GaugeBlockLadders() {
           <GaugeBlocks key={sensor.id} sensor={sensor} orientation="vertical" />
         ))}
         <BlockGauge label="Recompressor vibration" value={11.6} max={15} unit="mm/s" decimals={1} high={7.1} trip={11} tone="success" orientation="vertical" />
-        <GaugeBlocks sensor={GAUGE_LIVE[8]} orientation="vertical" />
+        <GaugeBlocks sensor={GAUGE_LIVE[10]} orientation="vertical" />
       </div>
     </GaugeSheet>
   );
@@ -489,8 +489,8 @@ function GaugeLookBlueprint() {
           </Panel>
           <Panel className="col-span-5" title="Instrument faces" subtitle="Needle on a ticked scale">
             <div className="grid flex-1 grid-cols-2 items-center justify-items-center gap-4">
-              <GaugeDial sensor={GAUGE_PRESSURE} size={176} ticks={5} pill={false} />
-              <GaugeDial sensor={GAUGE_SPEED} size={176} ticks={5} pill={false} />
+              <GaugeDial sensor={GAUGE_PRESSURE} size={208} ticks={5} />
+              <GaugeDial sensor={GAUGE_SPEED} size={208} ticks={5} />
             </div>
           </Panel>
         </Grid>
