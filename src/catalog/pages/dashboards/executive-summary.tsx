@@ -1,585 +1,703 @@
-import { ChartContainer, ChartTooltip, ChartTooltipContent, chartSeriesColor } from '@cognite/aura/chart';
-import type { ChartConfig } from '@cognite/aura/chart';
-import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
+import { Button } from '@cognite/aura/components/button';
+import { IconChevronLeft, IconChevronRight } from '@cognite/aura/icons';
 import { useState } from 'react';
-import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts';
+import type { ReactNode } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { formatValue } from '../../../library/industrial/status';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Delta } from '../../../library/kit/Delta';
+import { annotationNumbers, type YearPoint } from '../../../library/kit/executive-summary/annotations';
+import { YearChart } from '../../../library/kit/executive-summary/YearChart';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { cx, formatNumber } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
 import { PLANT_KPIS } from '../../data/plant';
-import { makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './executive-summary.tsx?raw';
 
-type ExecSummaryPoint = { lead: string; text: string };
+type EsPoint = { lead: string; text: string };
 
-type ExecSummaryNote = { id: string; day: number; text: string };
-
-type ExecSummaryLoss = { id: string; cause: string; tag: string; volume: number; previous: number };
-
-type ExecSummaryMonth = {
+type EsMonth = {
   id: string;
-  /** "February 2026". */
-  label: string;
-  /** Month name alone, for the selector and axis. */
+  /** "March 2026". */
   name: string;
   short: string;
-  days: number;
+  /** Average gas export for the month, MSm³/d. */
+  average: number;
+  availability: number;
+  /** kWh per barrel of oil equivalent. */
+  energy: number;
+  /** Days since the last recordable incident, at month end. */
+  safeDays: number;
   headline: string;
   lede: string;
-  /** Average gas export for the month in MSm³/d. */
-  average: number;
-  context: string;
-  facts: readonly { label: string; value: string; note: string }[];
-  /** Shape of the daily export curve: where it dipped and by how much. */
-  curve: { seed: number; dipFrom: number; dipTo: number; depth: number };
-  chartSummary: string;
-  notes: readonly ExecSummaryNote[];
-  well: readonly ExecSummaryPoint[];
-  notWell: readonly ExecSummaryPoint[];
-  next: readonly ExecSummaryPoint[];
-  losses: readonly ExecSummaryLoss[];
-  lossSummary: string;
-  outlookTitle: string;
+  /** What the numbered mark on the chart stands for, when the month has one. */
+  event?: string;
+  well: EsPoint;
+  notWell: EsPoint;
+  next: EsPoint;
+  losses: readonly { cause: string; volume: number }[];
   outlook: string;
-  dates: readonly { label: string; value: string }[];
-  preparedBy: string;
 };
 
-const EXEC_SUMMARY_PLAN = PLANT_KPIS.gasExport.target;
+const ES_PLAN = PLANT_KPIS.gasExport.target;
 
-const EXEC_SUMMARY_MONTHS: readonly ExecSummaryMonth[] = [
+const ES_MONTHS: readonly EsMonth[] = [
+  {
+    id: '2025-04',
+    name: 'April 2025',
+    short: 'Apr',
+    average: 4.46,
+    availability: 97.2,
+    energy: 30.8,
+    safeDays: 12,
+    headline: 'A steady month, one per cent under plan, with the spring inspections done on time.',
+    lede: 'April held close to plan on all but four days. A first-aid case on the 18th reset the incident counter, and the lessons from it changed how the lifting plan is signed off.',
+    well: { lead: 'Inspections closed early.', text: 'All 14 pressure vessel inspections were finished two days ahead of the permit date.' },
+    notWell: { lead: 'A hand injury during a lift.', text: 'First aid only, but the lifting plan had not been reviewed after a scope change.' },
+    next: { lead: 'Prepare the June turnaround.', text: 'Long-lead parts for the 2nd stage compressor arrive in May.' },
+    losses: [
+      { cause: 'Planned inspections', volume: 0.7 },
+      { cause: 'Low inlet pressure', volume: 0.4 },
+      { cause: 'Other, under 0.2 each', volume: 0.2 },
+    ],
+    outlook: 'May is planned at 4.50 with no outages. The turnaround team mobilises in the last week.',
+  },
+  {
+    id: '2025-05',
+    name: 'May 2025',
+    short: 'May',
+    average: 4.52,
+    availability: 98.1,
+    energy: 30.2,
+    safeDays: 43,
+    headline: 'Export beat plan for the first time this year, on the best availability since start-up.',
+    lede: 'Nothing tripped in May. The plant delivered 0.6 MSm³ more than planned and used the calm weeks to stage every turnaround job that could be done on the run.',
+    well: { lead: 'No unplanned stops.', text: 'All three compressors ran the full month.' },
+    notWell: { lead: 'Turnaround scope grew by 11 %.', text: 'Late findings on the export header added four days of welding.' },
+    next: { lead: 'Shut down on 9 June.', text: 'Nine days planned, with the cooler bundle as the critical path.' },
+    losses: [
+      { cause: 'Low inlet pressure', volume: 0.3 },
+      { cause: 'Valve stroke tests', volume: 0.2 },
+      { cause: 'Other, under 0.2 each', volume: 0.1 },
+    ],
+    outlook: 'June carries the turnaround: nine days at zero export, planned at 3.15 for the month on a calendar basis.',
+  },
+  {
+    id: '2025-06',
+    name: 'June 2025',
+    short: 'Jun',
+    average: 4.12,
+    availability: 71.4,
+    energy: 33.9,
+    safeDays: 73,
+    headline: 'The turnaround finished a day late; the rest of the month ran above plan.',
+    lede: 'Nine planned days became ten when a flange on the export header failed its leak test. Outside the outage the plant averaged 4.56, and all 212 turnaround jobs were closed without an injury.',
+    event: 'Planned turnaround, ten days without export.',
+    well: { lead: '212 jobs, no injuries.', text: 'The largest work scope since commissioning was completed with 140 contractors on site.' },
+    notWell: { lead: 'One day lost to a leak test.', text: 'The flange was re-made; the gasket batch has been quarantined.' },
+    next: { lead: 'Prove the new cooler bundle.', text: 'Performance test in the first warm week of July.' },
+    losses: [
+      { cause: 'Planned turnaround', volume: 9.8 },
+      { cause: 'Leak test repeat', volume: 1.1 },
+      { cause: 'Start-up losses', volume: 0.5 },
+    ],
+    outlook: 'July returns to 4.50. The summer sea temperature will be the first real test of the new cooler bundle.',
+  },
+  {
+    id: '2025-07',
+    name: 'July 2025',
+    short: 'Jul',
+    average: 4.49,
+    availability: 97.6,
+    energy: 30.6,
+    safeDays: 104,
+    headline: 'Back at plan after the turnaround, with the new cooler bundle holding through a warm month.',
+    lede: 'July was the proof the turnaround worked. Discharge temperatures stayed eight degrees under last summer’s, and the only shortfall came from two days of low nominations.',
+    well: { lead: 'The cooler passed its test.', text: 'Approach temperature of 4 °C at 14 °C sea water, better than design.' },
+    notWell: { lead: 'Two days of low nominations.', text: 'Upstream maintenance was announced with one day’s notice.' },
+    next: { lead: 'Agree a nomination notice period.', text: 'Seven days proposed to the upstream operator.' },
+    losses: [
+      { cause: 'Low nominations', volume: 0.5 },
+      { cause: 'Low inlet pressure', volume: 0.3 },
+      { cause: 'Other, under 0.2 each', volume: 0.2 },
+    ],
+    outlook: 'August is planned at 4.50 with full staffing and no outages.',
+  },
+  {
+    id: '2025-08',
+    name: 'August 2025',
+    short: 'Aug',
+    average: 4.55,
+    availability: 98.4,
+    energy: 30.1,
+    safeDays: 135,
+    headline: 'The best month of the year: one per cent over plan and the lowest energy use on record.',
+    lede: 'August set three records at once: export, availability and energy intensity. The debottlenecked cooler let the compressors run at nameplate through the warmest weeks.',
+    well: { lead: 'Record energy intensity.', text: '30.1 kWh/boe, within a tenth of the 30.0 target.' },
+    notWell: { lead: 'Backlog crept to 26.', text: 'Holiday cover left preventive work behind for the second month.' },
+    next: { lead: 'Storm season readiness.', text: 'Export line inspection and methanol stock check before October.' },
+    losses: [
+      { cause: 'Low inlet pressure', volume: 0.3 },
+      { cause: 'Instrument faults', volume: 0.2 },
+      { cause: 'Other, under 0.2 each', volume: 0.1 },
+    ],
+    outlook: 'September is planned at 4.50. The first autumn storms usually arrive in the second half.',
+  },
+  {
+    id: '2025-09',
+    name: 'September 2025',
+    short: 'Sep',
+    average: 4.43,
+    availability: 96.5,
+    energy: 30.9,
+    safeDays: 165,
+    headline: 'Storm Aina cost three days of export; the plant itself did not miss a beat.',
+    lede: 'Export was restricted from the 19th to the 21st while the receiving terminal was evacuated. Nordkapp stayed warm and returned to plan within four hours of the terminal reopening.',
+    event: 'Storm Aina closes the receiving terminal for three days.',
+    well: { lead: 'A four-hour restart.', text: 'The hot standby procedure written after last winter worked first time.' },
+    notWell: { lead: '2.1 MSm³ lost to the storm.', text: 'No line pack was available because the buffer was already full.' },
+    next: { lead: 'Keep 10 % line pack in storm season.', text: 'New operating rule from 1 October.' },
+    losses: [
+      { cause: 'Terminal closed by storm', volume: 2.1 },
+      { cause: 'Low inlet pressure', volume: 0.4 },
+      { cause: 'Other, under 0.2 each', volume: 0.2 },
+    ],
+    outlook: 'October is planned at 4.50. Two more named storms are forecast; the line pack rule is now in force.',
+  },
+  {
+    id: '2025-10',
+    name: 'October 2025',
+    short: 'Oct',
+    average: 4.51,
+    availability: 97.9,
+    energy: 30.5,
+    safeDays: 196,
+    headline: 'On plan through two storms, thanks to the line pack kept in reserve.',
+    lede: 'The rule introduced after Storm Aina paid for itself twice. Both October storms were ridden out on stored gas, and export finished a fraction over plan.',
+    well: { lead: 'Line pack covered both storms.', text: 'Eleven hours of terminal restrictions with no loss of export.' },
+    notWell: { lead: 'A turbine start failed twice.', text: 'A sticking fuel valve was replaced; the root cause report is due.' },
+    next: { lead: 'Winterise the export line.', text: 'Heat tracing checks and methanol pump overhaul in November.' },
+    losses: [
+      { cause: 'Turbine failed starts', volume: 0.4 },
+      { cause: 'Low inlet pressure', volume: 0.3 },
+      { cause: 'Other, under 0.2 each', volume: 0.2 },
+    ],
+    outlook: 'November is planned at 4.50 with the methanol pump overhaul taking one train down for a day.',
+  },
+  {
+    id: '2025-11',
+    name: 'November 2025',
+    short: 'Nov',
+    average: 4.47,
+    availability: 97.3,
+    energy: 31.1,
+    safeDays: 21,
+    headline: 'A quiet month just under plan, with winter preparations finished before the first frost.',
+    lede: 'November lost a day to the planned methanol pump overhaul and little else. A dropped object on the 9th, with nobody nearby, reset the incident counter for the last time this year.',
+    well: { lead: 'Winter readiness closed.', text: 'All 38 checks signed off by the 24th.' },
+    notWell: { lead: 'A dropped object from scaffolding.', text: 'No injury. Tool lanyards are now mandatory above two metres.' },
+    next: { lead: 'Watch the dew point margin.', text: 'Sea temperature is forecast to reach 3 °C in mid-December.' },
+    losses: [
+      { cause: 'Methanol pump overhaul', volume: 0.6 },
+      { cause: 'Low inlet pressure', volume: 0.3 },
+      { cause: 'Other, under 0.2 each', volume: 0.2 },
+    ],
+    outlook: 'December is planned at 4.50. The export line has little margin if the sea is colder than forecast.',
+  },
   {
     id: '2025-12',
-    label: 'December 2025',
-    name: 'December',
+    name: 'December 2025',
     short: 'Dec',
-    days: 31,
-    headline: 'Export ended 2% under plan after a cold week put hydrates in the export line.',
-    lede: 'The plant ran at plan for twenty-five of thirty-one days. Six days of restricted export in the middle of the month account for almost all of the shortfall, and the methanol injection that cleared the line is now a standing winter procedure.',
     average: 4.41,
-    context: 'Average gas export, against a plan of 4.50. The gap is 2.8 MSm³ over the month, most of it between the 12th and the 17th.',
-    facts: [
-      { label: 'Availability', value: '96.1%', note: 'target 97.5%' },
-      { label: 'Energy intensity', value: '31.6 kWh/boe', note: 'target 30.0' },
-      { label: 'Days since incident', value: '146', note: 'no recordables' },
-    ],
-    curve: { seed: 612, dipFrom: 12, dipTo: 17, depth: 0.36 },
-    chartSummary: 'Export held close to plan except for 12 to 17 December, when hydrate formation restricted the export line to about 4.1 MSm³/d.',
-    notes: [
-      { id: '1', day: 12, text: 'Sea temperature drops to 3 °C; differential pressure rises across the export line.' },
-      { id: '2', day: 15, text: 'Methanol injection doubled; rate held at 4.1 while the line clears.' },
-      { id: '3', day: 18, text: 'Line clear and export back at plan.' },
-    ],
-    well: [
-      { lead: 'No recordable incidents.', text: 'The winter readiness checks were closed before the cold week.' },
-      { lead: 'Compression ran all month.', text: 'No unplanned stops on any of the three compressors.' },
-      { lead: 'Flaring stayed under its limit.', text: '14.8 kSm³/d against a limit of 15.' },
-    ],
-    notWell: [
-      { lead: 'Hydrates cost 2.9 MSm³.', text: 'The dew point margin was known to be thin and was not acted on.' },
-      { lead: 'A power dip tripped the gas turbine.', text: 'Nine hours of reduced compression on the 27th.' },
-      { lead: 'Backlog grew to 31 work orders.', text: 'Holiday staffing left planned work behind.' },
-    ],
-    next: [
-      { lead: 'Make winter methanol dosing standard.', text: 'Procedure update due 15 January.' },
-      { lead: 'Review the turbine ride-through settings.', text: 'With the grid operator in January.' },
-      { lead: 'Clear the backlog to 25.', text: 'Two extra crews in weeks 2 and 3.' },
-    ],
+    availability: 96.1,
+    energy: 31.6,
+    safeDays: 52,
+    headline: 'Export ended two per cent under plan after a cold week put hydrates in the export line.',
+    lede: 'The plant ran at plan for twenty-five of thirty-one days. Six days of restricted export in the middle of the month account for almost all of the shortfall, and the methanol dosing that cleared the line is now a standing winter procedure.',
+    event: 'Hydrates restrict the export line for six days.',
+    well: { lead: 'Compression ran all month.', text: 'No unplanned stops on any of the three compressors.' },
+    notWell: { lead: 'Hydrates cost 2.9 MSm³.', text: 'The dew point margin was known to be thin and was not acted on.' },
+    next: { lead: 'Make winter dosing standard.', text: 'Procedure update due 15 January.' },
     losses: [
-      { id: 'hydrate', cause: 'Hydrates in the export line', tag: 'NK-27', volume: 2.9, previous: 0 },
-      { id: 'planned', cause: 'Planned maintenance', tag: 'NK-40', volume: 1.2, previous: 1.6 },
-      { id: 'turbine', cause: 'Gas turbine trip on power dip', tag: '23-GT-9001', volume: 0.9, previous: 0 },
-      { id: 'inlet', cause: 'Low inlet pressure', tag: '20-VA-1001', volume: 0.6, previous: 0.5 },
-      { id: 'other', cause: 'Other, under 0.2 each', tag: 'NK', volume: 0.3, previous: 0.4 },
+      { cause: 'Hydrates in the export line', volume: 2.9 },
+      { cause: 'Planned maintenance', volume: 1.2 },
+      { cause: 'Gas turbine trip on power dip', volume: 0.9 },
     ],
-    lossSummary: 'Lost against a technical capacity of 4.60 MSm³/d: 5.9 MSm³ in total, half of it to hydrates.',
-    outlookTitle: 'Outlook for January',
-    outlook: 'January is planned at 4.50 with no major maintenance. Weather is the main risk: sea temperature stays low until March, and the export line has no margin without the higher methanol rate.',
-    dates: [
-      { label: 'Procedure update', value: '15 Jan' },
-      { label: 'Grid operator review', value: '22 Jan' },
-      { label: 'Next report', value: '3 Feb' },
-    ],
-    preparedBy: 'Prepared by Magnus Solberg, 5 January 2026',
+    outlook: 'January is planned at 4.50 with no major maintenance. Weather is the main risk until the sea warms in March.',
   },
   {
     id: '2026-01',
-    label: 'January 2026',
-    name: 'January',
+    name: 'January 2026',
     short: 'Jan',
-    days: 31,
-    headline: 'Export finished 1% over plan in a month without a single unplanned compressor stop.',
-    lede: 'January was the steadiest month since start-up. The winter methanol procedure held the export line open through the coldest week, and the only loss of note was an export pump trip during the storm on the 22nd.',
     average: 4.53,
-    context: 'Average gas export, against a plan of 4.50. The plant delivered 0.9 MSm³ more than planned over the month.',
-    facts: [
-      { label: 'Availability', value: '98.2%', note: 'target 97.5%' },
-      { label: 'Energy intensity', value: '30.4 kWh/boe', note: 'target 30.0' },
-      { label: 'Days since incident', value: '177', note: 'no recordables' },
-    ],
-    curve: { seed: 733, dipFrom: 22, dipTo: 23, depth: 0.3 },
-    chartSummary: 'Export stayed at or above plan on 27 of 31 days; the dip on 22 and 23 January is the export pump trip during the storm.',
-    notes: [
-      { id: '1', day: 8, text: 'Coldest week of the winter passes with the export line at full rate.' },
-      { id: '2', day: 22, text: 'Storm trips export pump A; pump B takes over after forty minutes.' },
-      { id: '3', day: 24, text: 'Pump A back in service after a seal flush.' },
-    ],
-    well: [
-      { lead: 'Export beat plan by 0.9 MSm³.', text: 'Twenty-seven days at or above 4.50.' },
-      { lead: 'Availability reached 98.2%.', text: 'The highest monthly figure on record.' },
-      { lead: 'Backlog is down to 24.', text: 'The extra crews closed eleven overdue orders.' },
-    ],
-    notWell: [
-      { lead: 'Export pump A tripped in the storm.', text: 'The standby start took forty minutes instead of five.' },
-      { lead: 'Energy intensity is still over target.', text: '30.4 kWh/boe against 30.0.' },
-      { lead: 'Cooler approach temperature is drifting.', text: 'Up 4 °C on the interstage cooler since December.' },
-    ],
-    next: [
-      { lead: 'Test the standby pump start monthly.', text: 'First test on 6 February.' },
-      { lead: 'Inspect the interstage cooler.', text: 'Thermography in week 6.' },
-      { lead: 'Agree the energy plan for the spring.', text: 'Steering group on 19 February.' },
-    ],
+    availability: 98.2,
+    energy: 30.4,
+    safeDays: 83,
+    headline: 'Export finished one per cent over plan in a month without a single unplanned compressor stop.',
+    lede: 'January was the steadiest month since start-up. The winter methanol procedure held the export line open through the coldest week, and the only loss of note was an export pump trip during the storm on the 22nd.',
+    well: { lead: 'The winter procedure held.', text: 'Full rate through a week of 2 °C sea water.' },
+    notWell: { lead: 'Export pump A tripped in the storm.', text: 'Pump B took over after forty minutes; the changeover should take five.' },
+    next: { lead: 'Test the standby pump monthly.', text: 'The start test had lapsed since November.' },
     losses: [
-      { id: 'planned', cause: 'Planned maintenance', tag: 'NK-40', volume: 0.8, previous: 1.2 },
-      { id: 'pump', cause: 'Export pump A trip', tag: '27-PA-2001A', volume: 0.6, previous: 0 },
-      { id: 'inlet', cause: 'Low inlet pressure', tag: '20-VA-1001', volume: 0.4, previous: 0.6 },
-      { id: 'weather', cause: 'Weather restrictions', tag: 'NK-27', volume: 0.3, previous: 2.9 },
-      { id: 'other', cause: 'Other, under 0.2 each', tag: 'NK', volume: 0.1, previous: 0.3 },
+      { cause: 'Planned maintenance', volume: 0.8 },
+      { cause: 'Export pump A trip', volume: 0.6 },
+      { cause: 'Low inlet pressure', volume: 0.4 },
     ],
-    lossSummary: 'Lost against a technical capacity of 4.60 MSm³/d: 2.2 MSm³ in total, the lowest month this winter.',
-    outlookTitle: 'Outlook for February',
-    outlook: 'February is planned at 4.50. The drifting cooler is the item to watch: if the approach temperature keeps rising, compression will have to be turned down before the cleaning window in March.',
-    dates: [
-      { label: 'Standby pump test', value: '6 Feb' },
-      { label: 'Steering group', value: '19 Feb' },
-      { label: 'Next report', value: '3 Mar' },
-    ],
-    preparedBy: 'Prepared by Magnus Solberg, 3 February 2026',
+    outlook: 'February is planned at 4.50. The interstage cooler shows the first signs of fouling since the turnaround.',
   },
   {
     id: '2026-02',
-    label: 'February 2026',
-    name: 'February',
+    name: 'February 2026',
     short: 'Feb',
-    days: 28,
-    headline: 'Export was 3% under plan, held back by eleven days of a fouled interstage cooler.',
-    lede: 'The drift flagged in January became a restriction on the 9th. Compression was turned down until an offline clean on the 16th, and the plant was back at plan from the 20th. Safety and flaring both improved.',
     average: 4.36,
-    context: 'Average gas export, against a plan of 4.50. The gap is 3.9 MSm³ over the month, and the cooler explains two thirds of it.',
-    facts: [
-      { label: 'Availability', value: '95.7%', note: 'target 97.5%' },
-      { label: 'Energy intensity', value: '32.1 kWh/boe', note: 'target 30.0' },
-      { label: 'Days since incident', value: '205', note: 'no recordables' },
-    ],
-    curve: { seed: 854, dipFrom: 9, dipTo: 19, depth: 0.3 },
-    chartSummary: 'Export ran at plan for the first week, fell to about 4.1 MSm³/d from 9 to 19 February while the cooler limited compression, and recovered after the clean.',
-    notes: [
-      { id: '1', day: 9, text: 'Interstage cooler 23-HA-9114 limits compression; rate cut to 4.1.' },
-      { id: '2', day: 16, text: 'Offline chemical clean, fourteen hours at reduced rate.' },
-      { id: '3', day: 20, text: 'Back at full rate; approach temperature down by 6 °C.' },
-    ],
-    well: [
-      { lead: 'No recordable incidents.', text: '205 days since the last one.' },
-      { lead: 'Flaring fell by 18%.', text: 'To 12.6 kSm³/d after the purge rate change.' },
-      { lead: 'Planned work ran 94% to schedule.', text: 'The backlog is down to 23.' },
-    ],
-    notWell: [
-      { lead: 'Cooler fouling cost 4.1 MSm³.', text: 'The January warning did not lead to an earlier clean.' },
-      { lead: 'Energy intensity rose to 32.1.', text: 'Seven per cent over target while compression ran inefficiently.' },
-      { lead: 'The recompressor seal is still on order.', text: 'Delivery has slipped twice; health is at 41.' },
-    ],
-    next: [
-      { lead: 'Fit a differential pressure alarm on the cooler.', text: 'Work order due 20 March.' },
-      { lead: 'Change the recompressor seal.', text: 'In the April window, if the part arrives.' },
-      { lead: 'Decide on the anti-fouling dosing trial.', text: 'Decision by 31 March.' },
-    ],
+    availability: 96.9,
+    energy: 31.9,
+    safeDays: 111,
+    headline: 'A fouled interstage cooler held the plant three per cent under plan for most of the month.',
+    lede: 'From the 6th the compressors were limited by discharge temperature every afternoon. The loss was small each day and large in total: 4.1 MSm³, three times everything else combined.',
+    event: 'Interstage cooler fouling caps the rate.',
+    well: { lead: 'Found early by the trend.', text: 'The approach temperature alert flagged the fouling eleven days before the first alarm.' },
+    notWell: { lead: 'No window to clean it.', text: 'The spare bundle was in the workshop and the cleaning crew booked elsewhere.' },
+    next: { lead: 'Clean the bundle in March.', text: 'Work order raised; a two-day window is being agreed with the buyer.' },
     losses: [
-      { id: 'cooler', cause: 'Interstage cooler fouling', tag: '23-HA-9114', volume: 4.1, previous: 0 },
-      { id: 'planned', cause: 'Planned maintenance', tag: 'NK-40', volume: 1.1, previous: 0.8 },
-      { id: 'pump', cause: 'Export pump A trip', tag: '27-PA-2001A', volume: 0.7, previous: 0.6 },
-      { id: 'inlet', cause: 'Low inlet pressure', tag: '20-VA-1001', volume: 0.5, previous: 0.4 },
-      { id: 'other', cause: 'Other, under 0.2 each', tag: 'NK', volume: 0.3, previous: 0.1 },
+      { cause: 'Interstage cooler fouling', volume: 4.1 },
+      { cause: 'Planned maintenance', volume: 1.1 },
+      { cause: 'Export pump A trip', volume: 0.7 },
     ],
-    lossSummary: 'Lost against a technical capacity of 4.60 MSm³/d: 6.7 MSm³ in total, three times the January figure.',
-    outlookTitle: 'Outlook for March',
-    outlook: 'March is planned at 4.50 and started there. The recompressor is now the weakest unit in the plant: until its seal is changed, a trip would take export down by about 4% for as long as it lasts.',
-    dates: [
-      { label: 'Cooler alarm fitted', value: '20 Mar' },
-      { label: 'Dosing decision', value: '31 Mar' },
-      { label: 'Next report', value: '2 Apr' },
+    outlook: 'March is planned at 4.50, but the cooler will keep costing about 0.1 a day until it is cleaned.',
+  },
+  {
+    id: '2026-03',
+    name: 'March 2026',
+    short: 'Mar',
+    average: 4.34,
+    availability: PLANT_KPIS.availability.value,
+    energy: PLANT_KPIS.energyIntensity.value,
+    safeDays: 123,
+    headline: 'Twelve days in, export is four per cent under plan and the recompressor has tripped three times.',
+    lede: 'The fouled cooler still caps the rate, and vibration on the recompressor’s drive-end bearing has now tripped the machine on the 3rd, the 9th and today. Each trip sends flash gas to flare until the restart.',
+    event: 'Recompressor trips three times on vibration.',
+    well: { lead: 'Flaring stayed inside its limit.', text: '12.4 kSm³/d against a limit of 15, even with three trips.' },
+    notWell: { lead: 'The bearing was run to failure.', text: 'Vibration had trended upward for three weeks before the first trip.' },
+    next: { lead: 'Inspect the bearing today.', text: 'WO-104482 is in progress; the cooler cleaning follows on the 16th.' },
+    losses: [
+      { cause: 'Interstage cooler fouling', volume: 2.5 },
+      { cause: 'Recompressor trips', volume: 1.2 },
+      { cause: 'Planned cooler inspection', volume: 0.8 },
     ],
-    preparedBy: 'Prepared by Magnus Solberg, 3 March 2026',
+    outlook: 'With the bearing replaced and the cooler cleaned by the 18th, the forecast for the month is 4.40, two per cent under plan.',
   },
 ];
 
-function execSummaryMonth(monthId: string): ExecSummaryMonth {
-  return EXEC_SUMMARY_MONTHS.find((month) => month.id === monthId) ?? EXEC_SUMMARY_MONTHS[EXEC_SUMMARY_MONTHS.length - 1];
-}
+const ES_POINTS: YearPoint[] = ES_MONTHS.map((month) => ({
+  id: month.id,
+  label: month.short,
+  name: month.name,
+  value: month.average,
+  group: month.short === 'Apr' || month.short === 'Jan' ? month.id.slice(0, 4) : undefined,
+  annotated: month.event !== undefined,
+}));
 
-/** Daily export for a month: a steady run with one dip, shifted so its mean is the reported average. */
-function execSummaryDaily(month: ExecSummaryMonth): { day: number; export: number }[] {
-  const { seed, dipFrom, dipTo, depth } = month.curve;
-  const raw = makeValues({ seed, points: month.days, base: 4.5, amplitude: 0.03, noise: 0.03, cycles: 2, decimals: 3 }).map((value, index) => {
-    const day = index + 1;
-    const edge = day === dipFrom || day === dipTo ? 0.6 : 1;
-    return day >= dipFrom && day <= dipTo ? value - depth * edge : value;
-  });
-  const shift = month.average - raw.reduce((sum, value) => sum + value, 0) / raw.length;
-  return raw.map((value, index) => ({ day: index + 1, export: Math.round((value + shift) * 100) / 100 }));
-}
+const ES_NUMBERS = annotationNumbers(ES_POINTS);
 
-const EXEC_SUMMARY_CHART_CONFIG = {
-  export: { label: 'Gas export', color: chartSeriesColor(1) },
-} satisfies ChartConfig;
+const esDeviation = (month: EsMonth): number => ((month.average - ES_PLAN) / ES_PLAN) * 100;
 
-/** Small numbered heading above each block, like the section marks of a printed report. */
-function ExecSummarySectionMark({ number, children }: { number: string; children: string }) {
+function EsFigure({ month, size = 'xl' }: { month: EsMonth; size?: 'xl' | 'lg' }) {
+  const gap = month.average - ES_PLAN;
   return (
-    <p className="flex items-baseline gap-3 border-t border-default pt-4 text-xs font-medium text-muted-foreground">
-      <span className="tabular-nums">{number}</span>
-      <span>{children}</span>
-    </p>
-  );
-}
-
-/** The month in one sentence, then one paragraph. */
-function ExecSummaryHeadline({ month }: { month: ExecSummaryMonth }) {
-  return (
-    <header className="flex flex-col gap-6">
-      <p className="text-sm font-medium text-muted-foreground">{month.label} · Nordkapp gas processing plant</p>
-      <h4 className="max-w-4xl text-balance text-4xl font-semibold leading-tight tracking-tight text-base-foreground lg:text-5xl">{month.headline}</h4>
-      <p className="max-w-prose text-lg leading-relaxed text-medium-foreground">{month.lede}</p>
-    </header>
-  );
-}
-
-/** One big number with a sentence of context and three quiet supporting facts. */
-function ExecSummaryFigure({ month }: { month: ExecSummaryMonth }) {
-  return (
-    <section aria-label="Headline figure" className="flex flex-col gap-6">
-      <ExecSummarySectionMark number="01">The number</ExecSummarySectionMark>
-      <div className="grid grid-cols-1 items-end gap-x-12 gap-y-6 lg:grid-cols-2">
-        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-7xl font-semibold leading-none tracking-tight tabular-nums text-base-foreground lg:text-8xl">{formatValue(month.average, 2)}</span>
-          <span className="flex flex-col gap-1 text-base text-muted-foreground">
-            <span>MSm³/d</span>
-            <TrendDelta value={month.average} reference={EXEC_SUMMARY_PLAN} format="percent" decimals={1} goodDirection="up" caption="vs plan" size="md" />
-          </span>
-        </p>
-        <p className="max-w-prose text-base leading-relaxed text-medium-foreground">{month.context}</p>
-      </div>
-      <dl className="grid grid-cols-1 gap-x-12 gap-y-4 sm:grid-cols-3">
-        {month.facts.map((fact) => (
-          <div key={fact.label} className="flex flex-col gap-1">
-            <dt className="text-xs text-muted-foreground">{fact.label}</dt>
-            <dd className="flex flex-wrap items-baseline gap-x-2">
-              <span className="text-xl font-semibold tabular-nums text-base-foreground">{fact.value}</span>
-              <span className="text-xs tabular-nums text-muted-foreground">{fact.note}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-}
-
-/** The wide chart: every day of the month against plan, with the numbered moments explained underneath. */
-function ExecSummaryChart({ month }: { month: ExecSummaryMonth }) {
-  const [activeNote, setActiveNote] = useState<string | null>(null);
-  const data = execSummaryDaily(month);
-  const ticks = [1, 7, 14, 21, month.days];
-
-  return (
-    <section aria-label="Daily export" className="flex flex-col gap-6">
-      <ExecSummarySectionMark number="02">The month, day by day</ExecSummarySectionMark>
-      <div className="h-72 w-full">
-        <ChartContainer
-          config={EXEC_SUMMARY_CHART_CONFIG}
-          className="aspect-auto h-full w-full"
-          aria-label={`Daily gas export in ${month.label} against the plan of ${formatValue(EXEC_SUMMARY_PLAN, 2)} million standard cubic metres per day. ${month.chartSummary}`}
-        >
-          <AreaChart data={data} margin={{ top: 24, right: 12, bottom: 0, left: 0 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis dataKey="day" ticks={ticks} tickFormatter={(day: number) => `${day} ${month.short}`} tickLine={false} axisLine={false} />
-            <YAxis domain={[3.8, 4.8]} ticks={[3.8, 4, 4.2, 4.4, 4.6, 4.8]} tickLine={false} axisLine={false} width={32} />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <ReferenceLine
-              y={EXEC_SUMMARY_PLAN}
-              stroke="var(--muted-foreground)"
-              strokeDasharray="4 4"
-              label={{ value: `Plan ${formatValue(EXEC_SUMMARY_PLAN, 2)}`, position: 'insideBottomRight', fill: 'var(--muted-foreground)', fontSize: 12 }}
-            />
-            <Area dataKey="export" type="monotone" stroke="var(--color-export)" fill="var(--color-export)" fillOpacity={0.1} strokeWidth={2} isAnimationActive={false} />
-            {month.notes.map((note) => (
-              <ReferenceLine
-                key={note.id}
-                x={note.day}
-                stroke="var(--base-foreground)"
-                strokeWidth={activeNote === note.id ? 2 : 1}
-                strokeDasharray={activeNote === note.id ? undefined : '2 3'}
-                label={{ value: note.id, position: 'top', fill: 'var(--base-foreground)', fontSize: 12, fontWeight: 600 }}
-              />
-            ))}
-          </AreaChart>
-        </ChartContainer>
-      </div>
-      <ol aria-label="Moments marked on the chart" className="grid grid-cols-1 gap-x-12 gap-y-3 md:grid-cols-3">
-        {month.notes.map((note) => (
-          <li key={note.id}>
-            <button
-              type="button"
-              aria-pressed={activeNote === note.id}
-              onClick={() => setActiveNote((current) => (current === note.id ? null : note.id))}
-              className={`flex w-full cursor-pointer items-baseline gap-3 rounded-md border-l-2 py-1 pl-3 text-left outline-none focus-visible:shadow-focus-ring ${
-                activeNote === note.id ? 'border-l-base-foreground' : 'border-l-transparent hover:border-l-emphasized'
-              }`}
-            >
-              <span className="text-sm font-semibold tabular-nums text-base-foreground">{note.id}</span>
-              <span className="flex flex-col gap-0.5">
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {note.day} {month.short}
-                </span>
-                <span className="text-sm leading-relaxed text-medium-foreground">{note.text}</span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ol>
-      <p className="max-w-prose text-xs text-muted-foreground">{month.chartSummary} Select a note to mark its day.</p>
-    </section>
-  );
-}
-
-function ExecSummaryColumn({ title, points }: { title: string; points: readonly ExecSummaryPoint[] }) {
-  return (
-    <div className="flex flex-col gap-4 border-t-2 border-base-foreground pt-4">
-      <h5 className="text-xl font-semibold text-base-foreground">{title}</h5>
-      <ul className="flex flex-col gap-4">
-        {points.map((point) => (
-          <li key={point.lead} className="text-sm leading-relaxed text-medium-foreground">
-            <span className="font-semibold text-base-foreground">{point.lead}</span> {point.text}
-          </li>
-        ))}
-      </ul>
+    <div>
+      <p className="text-sm font-medium text-medium-foreground">Average gas export, {month.name}</p>
+      <p className={cx('font-medium tabular-nums text-base-foreground', size === 'xl' ? 'text-[11rem] leading-[0.82] tracking-[-0.06em]' : 'text-8xl leading-[0.9] tracking-[-0.05em]')}>
+        {formatNumber(month.average, 2)}
+      </p>
+      <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-base text-medium-foreground">
+        <span className="font-medium text-base-foreground">MSm³ a day</span>
+        <Delta value={esDeviation(month)} unit=" %" />
+        <span>
+          {gap >= 0 ? 'over' : 'under'} the plan of {formatNumber(ES_PLAN, 2)}
+        </span>
+      </p>
     </div>
   );
 }
 
-/** Three columns of three: what went well, what did not, what is next. */
-function ExecSummaryReview({ month }: { month: ExecSummaryMonth }) {
+function EsChart({ month, onSelect, height = 250 }: { month: EsMonth; onSelect: (id: string) => void; height?: number }) {
   return (
-    <section aria-label="Review" className="flex flex-col gap-6">
-      <ExecSummarySectionMark number="03">In review</ExecSummarySectionMark>
-      <div className="grid grid-cols-1 gap-x-12 gap-y-8 md:grid-cols-3">
-        <ExecSummaryColumn title="What went well" points={month.well} />
-        <ExecSummaryColumn title="What did not" points={month.notWell} />
-        <ExecSummaryColumn title="What is next" points={month.next} />
-      </div>
-    </section>
+    <YearChart
+      label="Average gas export per month over the last twelve months against the plan; select a month to read its report"
+      points={ES_POINTS}
+      selected={month.id}
+      onSelect={onSelect}
+      plan={ES_PLAN}
+      unit="MSm³/d"
+      height={height}
+    />
   );
 }
 
-/** A ranked table whose bars sit in the rows: where the lost production went. */
-function ExecSummaryLosses({ month }: { month: ExecSummaryMonth }) {
-  const largest = Math.max(...month.losses.map((loss) => loss.volume));
-  const total = month.losses.reduce((sum, loss) => sum + loss.volume, 0);
-
+function EsNotes({ month }: { month: EsMonth }) {
   return (
-    <section aria-label="Lost production" className="flex flex-col gap-6">
-      <ExecSummarySectionMark number="04">Where production was lost</ExecSummarySectionMark>
-      <table className="w-full table-fixed text-left text-sm">
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="w-10 pb-3 font-medium">
-              <span className="sr-only">Rank</span>
-            </th>
-            <th scope="col" className="w-2/5 pb-3 pr-6 font-medium">
-              Cause
-            </th>
-            <th scope="col" className="pb-3 pr-6 font-medium">
-              Share of all losses
-            </th>
-            <th scope="col" className="w-24 pb-3 pr-6 text-right font-medium">
-              Lost, MSm³
-            </th>
-            <th scope="col" className="w-36 pb-3 text-right font-medium">
-              Against last month
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {month.losses.map((loss, index) => (
-            <tr key={loss.id} className="border-t border-default align-middle">
-              <td className="py-4 text-xl font-semibold tabular-nums text-muted-foreground">{index + 1}</td>
-              <td className="py-4 pr-6">
-                <p className="text-base font-medium text-base-foreground">{loss.cause}</p>
-                <p className="font-mono text-xs text-muted-foreground">{loss.tag}</p>
-              </td>
-              <td className="py-4 pr-6">
-                <div className="flex items-center gap-3">
-                  <span aria-hidden="true" className="block h-2 min-w-0 flex-1 rounded-full bg-chart-neutral-100">
-                    <span className="block h-full rounded-full bg-chart-1-450" style={{ width: `${(loss.volume / largest) * 100}%` }} />
-                  </span>
-                  <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{formatValue((loss.volume / total) * 100, 0)}%</span>
-                </div>
-              </td>
-              <td className="py-4 pr-6 text-right text-base font-medium tabular-nums text-base-foreground">{formatValue(loss.volume, 1)}</td>
-              <td className="py-4 text-right">
-                <TrendDelta value={loss.volume} reference={loss.previous} decimals={1} goodDirection="down" />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="max-w-prose text-xs text-muted-foreground">{month.lossSummary}</p>
-    </section>
+    <ol className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+      {ES_MONTHS.filter((entry) => entry.event !== undefined).map((entry) => {
+        const active = entry.id === month.id;
+        return (
+          <li key={entry.id} className={cx('flex gap-2.5', active ? 'text-base-foreground' : 'text-medium-foreground')}>
+            <span
+              className={cx(
+                'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border border-[var(--kit-text)] text-xs font-semibold tabular-nums',
+                active ? 'bg-[var(--kit-text)] text-base-background' : 'text-base-foreground'
+              )}
+            >
+              {ES_NUMBERS.get(entry.id)}
+            </span>
+            <span>
+              <strong className="font-semibold text-base-foreground">{entry.short}.</strong> {entry.event}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
-/** The closing paragraph and the dates that follow from it. */
-function ExecSummaryOutlook({ month }: { month: ExecSummaryMonth }) {
+function EsProse({ month }: { month: EsMonth }) {
   return (
-    <section aria-label="Outlook" className="flex flex-col gap-6">
-      <ExecSummarySectionMark number="05">Looking ahead</ExecSummarySectionMark>
-      <div className="grid grid-cols-1 gap-x-12 gap-y-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-4 lg:col-span-2">
-          <h5 className="text-3xl font-semibold tracking-tight text-base-foreground">{month.outlookTitle}</h5>
-          <p className="max-w-prose text-lg leading-relaxed text-medium-foreground">{month.outlook}</p>
+    <div className="flex flex-col gap-4">
+      <h2 className="text-3xl font-medium leading-tight tracking-tight text-base-foreground">{month.headline}</h2>
+      <p className="text-base leading-relaxed text-medium-foreground">{month.lede}</p>
+    </div>
+  );
+}
+
+function EsFacts({ month }: { month: EsMonth }) {
+  const facts = [
+    { label: 'Availability', value: `${formatNumber(month.availability, 1)} %`, note: 'target 97.5', ok: month.availability >= 97.5 },
+    { label: 'Energy intensity', value: formatNumber(month.energy, 1), note: 'kWh/boe, target 30.0', ok: month.energy <= 30.5 },
+    { label: 'Days since an incident', value: String(month.safeDays), note: 'at month end', ok: month.safeDays >= 60 },
+  ];
+  return (
+    <dl className="flex flex-col">
+      {facts.map((fact) => (
+        <div key={fact.label} className="flex items-baseline gap-3 border-t border-[var(--kit-rule)] py-2.5">
+          <dt className="flex-1 text-sm text-medium-foreground">
+            <span className="block font-medium text-base-foreground">{fact.label}</span>
+            {fact.note}
+          </dt>
+          <dd className={cx('text-4xl font-medium tracking-tight tabular-nums', fact.ok ? 'text-base-foreground' : 'text-critical-foreground-strong')}>{fact.value}</dd>
         </div>
-        <dl className="flex flex-col">
-          {month.dates.map((date) => (
-            <div key={date.label} className="flex items-baseline justify-between gap-4 border-t border-default py-3">
-              <dt className="text-sm text-medium-foreground">{date.label}</dt>
-              <dd className="text-sm font-semibold tabular-nums text-base-foreground">{date.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-      <p className="text-xs text-muted-foreground">{month.preparedBy}</p>
+      ))}
+    </dl>
+  );
+}
+
+const ES_VERDICTS = [
+  { id: 'well', title: 'What went well', tone: 'success' },
+  { id: 'notWell', title: 'What did not', tone: 'critical' },
+  { id: 'next', title: 'What happens next', tone: 'info' },
+] as const;
+
+function EsVerdicts({ month, columns = true }: { month: EsMonth; columns?: boolean }) {
+  return (
+    <div className={cx('grid', columns ? 'grid-cols-3 gap-10' : 'grid-cols-1 gap-6')}>
+      {ES_VERDICTS.map((verdict, index) => (
+        <section key={verdict.id} className="border-t-2 border-[var(--kit-rule-strong)] pt-3">
+          <p className="flex items-baseline gap-2 text-sm text-medium-foreground">
+            <span className="tabular-nums">0{index + 1}</span>
+            <StatusPill tone={verdict.tone}>{verdict.title}</StatusPill>
+          </p>
+          <p className="mt-3 text-xl font-medium leading-snug tracking-tight text-base-foreground">{month[verdict.id].lead}</p>
+          <p className="mt-2 text-base leading-relaxed text-medium-foreground">{month[verdict.id].text}</p>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+type EsLoss = EsMonth['losses'][number];
+
+function EsLosses({ month }: { month: EsMonth }) {
+  const total = month.losses.reduce((sum, loss) => sum + loss.volume, 0);
+  const top = Math.max(...month.losses.map((loss) => loss.volume));
+  const columns: DataTableColumn<EsLoss>[] = [
+    { id: 'cause', header: 'Cause', cell: (loss) => loss.cause },
+    {
+      id: 'bar',
+      header: 'Share of the losses',
+      width: 'w-2/5',
+      cell: (loss) => (
+        <span className="flex items-center gap-3">
+          <span className="h-2 bg-[var(--kit-text)]" style={{ width: `${Math.round((loss.volume / top) * 70)}%` }} />
+          <span className="text-sm tabular-nums text-medium-foreground">{Math.round((loss.volume / total) * 100)} %</span>
+        </span>
+      ),
+    },
+    { id: 'volume', header: 'MSm³', numeric: true, cell: (loss) => <span className="text-lg font-medium">{formatNumber(loss.volume, 1)}</span> },
+  ];
+  return (
+    <section className="border-t-2 border-[var(--kit-rule-strong)] pt-3">
+      <h3 className="text-xl font-medium tracking-tight text-base-foreground">Where the volume went</h3>
+      <p className="mt-1 text-sm text-medium-foreground">
+        The three largest losses against technical capacity: {formatNumber(total, 1)} MSm³ in {month.name}.
+      </p>
+      <DataTable className="mt-3" label={`Largest production losses in ${month.name}`} columns={columns} rows={month.losses} rowKey={(loss) => loss.cause} />
     </section>
   );
 }
 
-/*
- * Archetype: a single scrolling narrative — a one-page printed report, read top to bottom, with
- * no panels and no grid of cards.
- * Dominant element: the headline sentence and the prose that follows it; figures illustrate it.
- * Interaction: the month selector swaps the whole narrative; in the chart, selecting a numbered
- * note marks its day.
- */
-function ExecSummaryDashboard() {
-  const [monthId, setMonthId] = useState(EXEC_SUMMARY_MONTHS[EXEC_SUMMARY_MONTHS.length - 1].id);
-  const month = execSummaryMonth(monthId);
-
+function EsOutlook({ month }: { month: EsMonth }) {
   return (
-    <DashboardFrame
-      title="Executive summary"
-      subtitle="Monthly report to the asset leadership team"
-      actions={
-        <SegmentedControl value={monthId} onValueChange={(value) => setMonthId(String(value))}>
-          <SegmentedControlList size="small" aria-label="Month">
-            {EXEC_SUMMARY_MONTHS.map((option) => (
-              <SegmentedControlButton key={option.id} value={option.id}>
-                {option.name}
-              </SegmentedControlButton>
-            ))}
-          </SegmentedControlList>
-        </SegmentedControl>
-      }
-    >
-      <article key={month.id} className="mx-auto flex w-full max-w-5xl flex-col gap-16 py-8">
-        <ExecSummaryHeadline month={month} />
-        <ExecSummaryFigure month={month} />
-        <ExecSummaryChart month={month} />
-        <ExecSummaryReview month={month} />
-        <ExecSummaryLosses month={month} />
-        <ExecSummaryOutlook month={month} />
-      </article>
-    </DashboardFrame>
+    <section className="flex flex-col border-t-2 border-[var(--kit-rule-strong)] pt-3">
+      <h3 className="text-xl font-medium tracking-tight text-base-foreground">Outlook</h3>
+      <p className="mt-3 text-lg leading-relaxed text-base-foreground">{month.outlook}</p>
+      <p className="mt-auto border-t border-[var(--kit-rule)] pt-3 text-sm text-medium-foreground">Prepared by Magnus Solberg, maintenance planner. Figures from the production accounting system at month end.</p>
+    </section>
   );
 }
 
-function ExecSummaryDashSignature() {
+function EsMasthead({ month, onStep }: { month: EsMonth; onStep: (step: number) => void }) {
+  const index = ES_MONTHS.indexOf(month);
   return (
-    <ThemeScope preset="editorial" className="w-full">
-      <ExecSummaryDashboard />
-    </ThemeScope>
+    <div className="flex items-center gap-4 border-b border-[var(--kit-rule-strong)] pb-3">
+      <p className="text-sm font-semibold text-base-foreground">Nordkapp monthly</p>
+      <p className="text-sm text-medium-foreground">Report to the asset board · issue {index + 16}</p>
+      <div className="ml-auto flex items-center gap-1">
+        <Button variant="ghost" size="icon-sm" aria-label="Previous month" disabled={index === 0} onClick={() => onStep(-1)}>
+          <IconChevronLeft />
+        </Button>
+        <p aria-live="polite" className="w-36 text-center text-sm font-semibold tabular-nums text-base-foreground">
+          {month.name}
+        </p>
+        <Button variant="ghost" size="icon-sm" aria-label="Next month" disabled={index === ES_MONTHS.length - 1} onClick={() => onStep(1)}>
+          <IconChevronRight />
+        </Button>
+      </div>
+    </div>
   );
 }
 
-function ExecSummaryDashAura() {
+function useEsMonth(initial: string) {
+  const [id, setId] = useState(initial);
+  const month = ES_MONTHS.find((entry) => entry.id === id) ?? ES_MONTHS[ES_MONTHS.length - 1];
+  const step = (by: number) => {
+    const next = ES_MONTHS[ES_MONTHS.indexOf(month) + by];
+    if (next) setId(next.id);
+  };
+  return { month, select: setId, step };
+}
+
+function EsReport() {
+  const { month, select, step } = useEsMonth('2026-03');
   return (
-    <ThemeScope preset="aura" className="w-full">
-      <ExecSummaryDashboard />
-    </ThemeScope>
+    <LookScope look="editorial">
+      <Canvas padding="none" className="h-[920px] overflow-y-auto">
+        <article className="mx-auto flex max-w-[1120px] flex-col gap-10 px-[clamp(1.5rem,5%,3.5rem)] py-8">
+          <EsMasthead month={month} onStep={step} />
+          <div className="grid grid-cols-12 gap-x-10">
+            <div className="col-span-7 flex flex-col gap-6">
+              <EsFigure month={month} />
+              <EsChart month={month} onSelect={select} />
+              <EsNotes month={month} />
+            </div>
+            <div className="col-span-5 flex flex-col justify-between gap-6 border-l border-[var(--kit-rule)] pl-10">
+              <EsProse month={month} />
+              <EsFacts month={month} />
+            </div>
+          </div>
+          <EsVerdicts month={month} />
+          <div className="grid grid-cols-12 gap-x-10">
+            <div className="col-span-7">
+              <EsLosses month={month} />
+            </div>
+            <div className="col-span-5 flex">
+              <EsOutlook month={month} />
+            </div>
+          </div>
+        </article>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function ExecSummaryDashSandstone() {
+function ExecutiveSummarySignature() {
+  return <EsReport />;
+}
+
+const ES_YEAR_AVERAGE = Math.round((ES_MONTHS.reduce((sum, month) => sum + month.average, 0) / ES_MONTHS.length) * 100) / 100;
+
+const ES_YEAR_COLUMNS: DataTableColumn<EsMonth>[] = [
+  { id: 'month', header: 'Month', nowrap: true, cell: (month) => month.name },
+  { id: 'average', header: 'MSm³/d', numeric: true, cell: (month) => <span className="text-lg font-medium">{formatNumber(month.average, 2)}</span> },
+  {
+    id: 'deviation',
+    header: 'Against plan',
+    width: 'w-44',
+    cell: (month) => {
+      const deviation = esDeviation(month);
+      const width = `${Math.min(50, Math.abs(deviation) * 5.5)}%`;
+      return (
+        <span className="relative block h-5 w-full">
+          <span className="absolute inset-y-0 left-1/2 w-px bg-[var(--kit-rule-strong)]" />
+          <span className={cx('absolute inset-y-1', deviation < 0 ? 'right-1/2 bg-[var(--kit-line-critical)]' : 'left-1/2 bg-[var(--kit-line-success)]')} style={{ width }} />
+        </span>
+      );
+    },
+  },
+  { id: 'percent', header: '%', numeric: true, cell: (month) => <Delta value={esDeviation(month)} unit=" %" /> },
+  { id: 'availability', header: 'Availability', numeric: true, muted: true, cell: (month) => `${formatNumber(month.availability, 1)} %` },
+  { id: 'story', header: 'In one line', cell: (month) => month.event ?? month.well.lead },
+];
+
+function ExecutiveSummaryYear() {
   return (
-    <ThemeScope preset="sandstone" className="w-full">
-      <ExecSummaryDashboard />
-    </ThemeScope>
+    <LookScope look="editorial">
+      <Canvas>
+        <div className="mx-auto flex max-w-[1120px] flex-col gap-8">
+          <header className="grid grid-cols-12 items-end gap-x-10 border-b-2 border-[var(--kit-rule-strong)] pb-6">
+            <div className="col-span-7">
+              <p className="text-sm font-medium text-medium-foreground">Nordkapp · twelve months to March 2026</p>
+              <h2 className="mt-2 text-5xl font-medium leading-none tracking-tight text-base-foreground">Seven months at plan, five with a story.</h2>
+            </div>
+            <div className="col-span-5 flex items-end justify-end gap-8 text-right">
+              <div>
+                <p className="text-sm text-medium-foreground">Year average, MSm³/d</p>
+                <p className="text-7xl font-medium leading-none tracking-tighter tabular-nums text-base-foreground">{formatNumber(ES_YEAR_AVERAGE, 2)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-medium-foreground">Plan</p>
+                <p className="text-4xl font-medium leading-none tracking-tighter tabular-nums text-medium-foreground">{formatNumber(ES_PLAN, 2)}</p>
+              </div>
+            </div>
+          </header>
+          <DataTable label="Monthly gas export against plan for the last twelve months" columns={ES_YEAR_COLUMNS} rows={ES_MONTHS} rowKey={(month) => month.id} density="default" />
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function ExecSummaryDashEditorialDark() {
+function ExecutiveSummaryPhone() {
+  const { month, step } = useEsMonth('2026-02');
+  const index = ES_MONTHS.indexOf(month);
   return (
-    <ThemeScope preset="editorial-dark" className="w-full">
-      <ExecSummaryDashboard />
-    </ThemeScope>
+    <LookScope look="editorial">
+      <Canvas padding="none">
+        <div className="flex justify-center bg-muted-background px-4 py-8">
+          <article className="flex w-full max-w-[400px] flex-col gap-6 border border-[var(--kit-rule)] bg-base-background p-6">
+            <div className="flex items-center justify-between border-b border-[var(--kit-rule-strong)] pb-3">
+              <p className="text-sm font-semibold text-base-foreground">Nordkapp monthly</p>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon-sm" aria-label="Previous month" disabled={index === 0} onClick={() => step(-1)}>
+                  <IconChevronLeft />
+                </Button>
+                <Button variant="ghost" size="icon-sm" aria-label="Next month" disabled={index === ES_MONTHS.length - 1} onClick={() => step(1)}>
+                  <IconChevronRight />
+                </Button>
+              </div>
+            </div>
+            <EsFigure month={month} size="lg" />
+            <h2 className="text-2xl font-medium leading-tight tracking-tight text-base-foreground">{month.headline}</h2>
+            <EsVerdicts month={month} columns={false} />
+          </article>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function ExecSummaryDashHeadline() {
-  return <ExecSummaryHeadline month={EXEC_SUMMARY_MONTHS[1]} />;
+const ES_FEBRUARY = ES_MONTHS[10];
+
+const ES_DECEMBER = ES_MONTHS[8];
+
+function EsPart({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <LookScope look="editorial" className={cx('flex flex-col', className)}>
+      <Canvas padding="none" className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col justify-center p-8">{children}</div>
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function ExecSummaryDashFigure() {
-  return <ExecSummaryFigure month={EXEC_SUMMARY_MONTHS[1]} />;
+function ExecutiveSummaryFigure() {
+  return (
+    <EsPart className="h-[380px]">
+      <EsFigure month={ES_DECEMBER} size="lg" />
+    </EsPart>
+  );
 }
 
-function ExecSummaryDashChart() {
-  return <ExecSummaryChart month={EXEC_SUMMARY_MONTHS[0]} />;
+function ExecutiveSummaryChart() {
+  const { month, select } = useEsMonth('2025-12');
+  return (
+    <EsPart className="h-[380px]">
+      <EsChart month={month} onSelect={select} height={250} />
+    </EsPart>
+  );
 }
 
-function ExecSummaryDashReview() {
-  return <ExecSummaryReview month={EXEC_SUMMARY_MONTHS[2]} />;
+function ExecutiveSummaryVerdicts() {
+  return (
+    <EsPart>
+      <EsVerdicts month={ES_FEBRUARY} />
+    </EsPart>
+  );
 }
 
-function ExecSummaryDashLosses() {
-  return <ExecSummaryLosses month={EXEC_SUMMARY_MONTHS[0]} />;
+function ExecutiveSummaryLosses() {
+  return (
+    <EsPart className="h-[420px]">
+      <EsLosses month={ES_FEBRUARY} />
+    </EsPart>
+  );
 }
 
-function ExecSummaryDashOutlook() {
-  return <ExecSummaryOutlook month={EXEC_SUMMARY_MONTHS[1]} />;
+function ExecutiveSummaryProse() {
+  return (
+    <EsPart className="h-[420px]">
+      <div className="flex flex-col gap-6">
+        <EsProse month={ES_FEBRUARY} />
+        <EsOutlook month={ES_FEBRUARY} />
+      </div>
+    </EsPart>
+  );
+}
+
+function ExecutiveSummaryMasthead() {
+  const { month, step } = useEsMonth('2025-09');
+  return (
+    <EsPart>
+      <div className="grid grid-cols-12 gap-x-10 gap-y-6">
+        <div className="col-span-12">
+          <EsMasthead month={month} onStep={step} />
+        </div>
+        <div className="col-span-7">
+          <EsNotes month={month} />
+        </div>
+        <div className="col-span-5">
+          <EsFacts month={month} />
+        </div>
+      </div>
+    </EsPart>
+  );
 }
 
 export default definePage({
   id: 'executive-summary',
   title: 'Executive summary',
   summary:
-    'The month on one page, written to be read rather than scanned: a headline that states the result in words, one number, one chart, a short review and an outlook. A report, not a control panel.',
+    'The month as one scrolling report: a single very large figure, a year of months on an annotated chart beside the prose that explains it, then what went well, what did not and what happens next. Switch month and every word and figure changes.',
   guidance: {
     use: [
-      'For readers who meet the plant once a month and need the conclusion first.',
-      'When the story matters more than the instruments: say what happened, then show it.',
-      'Keep each block to one idea and cap the line length so prose stays readable.',
-      'Prepare the text per period; a selector swaps whole reports, not single figures.',
+      'For the monthly report to a board or leadership team, read top to bottom on screen or on paper.',
+      'Lead with one figure and one sentence; everything else supports them.',
+      'Number the events on the chart and explain each number in the text beside it.',
     ],
     avoid: [
-      'Panels, tiles and borders around every block — whitespace separates the sections.',
-      'A headline that is only a title; it should carry the result and its cause.',
-      'More than one chart; a second figure belongs in a sentence.',
-      'Live data and alarms; this page describes a closed period.',
+      'Cards, tiles and coloured panels. Rules, columns and type size carry the structure.',
+      'More than one giant figure; the second one halves the first.',
+      'Live data. A report describes a closed period and says when it was prepared.',
     ],
   },
   source,
@@ -587,121 +705,119 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Shown in the Editorial theme. A single scrolling narrative: headline, number, chart, review, ranking and outlook, with a month selector that swaps the whole text.',
+      description: 'Editorial look: a scrolling narrative led by one figure and an annotated year chart.',
       specimens: [
         {
-          id: 'ExecSummaryDashSignature',
-          title: 'Executive summary',
-          note: 'Pick it for a monthly or quarterly report that leadership reads top to bottom.',
+          id: 'ExecutiveSummarySignature',
+          title: 'Monthly report',
+          note: 'Pick it when the reader wants the month explained, not a wall of indicators.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['dashboards/DashboardFrame.tsx', 'industrial/TrendDelta.tsx', 'themes/ThemeScope.tsx'],
-          Component: ExecSummaryDashSignature,
+          bleed: true,
+          uses: ['kit/executive-summary/YearChart.tsx', 'kit/executive-summary/annotations.ts', 'kit/DataTable.tsx', 'kit/Delta.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: ExecutiveSummarySignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same report, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Other screens of the same product.',
       specimens: [
         {
-          id: 'ExecSummaryDashAura',
-          title: 'Aura',
-          note: 'Pick it when the report is one page inside a standard Aura application.',
+          id: 'ExecutiveSummaryYear',
+          title: 'Year in review',
+          note: 'Pick it for the annual look back: twelve months as a typographic table with the deviation drawn in.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: ExecSummaryDashAura,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/Delta.tsx'],
+          Component: ExecutiveSummaryYear,
         },
         {
-          id: 'ExecSummaryDashSandstone',
-          title: 'Sandstone',
-          note: 'Pick it for a warmer, paper-like page that is often printed or exported.',
+          id: 'ExecutiveSummaryPhone',
+          title: 'Phone brief',
+          note: 'Pick it for the version read on a phone before the meeting: the figure, the sentence and three verdicts.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: ExecSummaryDashSandstone,
-        },
-        {
-          id: 'ExecSummaryDashEditorialDark',
-          title: 'Editorial dark',
-          note: 'Pick it when the report is presented on a large screen in a dimmed room.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: ExecSummaryDashEditorialDark,
+          bleed: true,
+          uses: ['kit/Delta.tsx', 'kit/StatusPill.tsx'],
+          Component: ExecutiveSummaryPhone,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Story blocks',
-      description: 'Each block of the narrative on its own, taken from different months.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The pieces of the report on their own.',
       specimens: [
         {
-          id: 'ExecSummaryDashHeadline',
-          title: 'Headline sentence',
-          note: 'Pick it to open a report: the result and its cause in one sentence, then one paragraph.',
+          id: 'ExecutiveSummaryFigure',
+          title: 'Headline figure',
+          note: 'Use it for the one number of a report, with its unit and its distance from plan in words.',
           origin: 'custom',
-          size: 'full',
+          size: 'sm',
           align: 'stretch',
-          Component: ExecSummaryDashHeadline,
+          bleed: true,
+          uses: ['kit/Delta.tsx'],
+          Component: ExecutiveSummaryFigure,
         },
         {
-          id: 'ExecSummaryDashFigure',
-          title: 'Big number with context',
-          note: 'Pick it for the one figure the period is judged by, with a sentence that explains the gap.',
+          id: 'ExecutiveSummaryChart',
+          title: 'Annotated year chart',
+          note: 'Use it when a year of periods needs context and the chart should double as the period switch.',
           origin: 'custom',
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: ExecSummaryDashFigure,
+          bleed: true,
+          uses: ['kit/executive-summary/YearChart.tsx'],
+          Component: ExecutiveSummaryChart,
         },
         {
-          id: 'ExecSummaryDashChart',
-          title: 'Annotated chart',
-          note: 'Pick it when a curve needs its story: numbered moments on the chart, explained underneath.',
+          id: 'ExecutiveSummaryVerdicts',
+          title: 'Three verdicts',
+          note: 'Use it to close an argument: what worked, what did not, what follows, one sentence each.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          Component: ExecSummaryDashChart,
+          bleed: true,
+          uses: ['kit/StatusPill.tsx'],
+          Component: ExecutiveSummaryVerdicts,
         },
         {
-          id: 'ExecSummaryDashReview',
-          title: 'Three-column review',
-          note: 'Pick it to sort a period into what went well, what did not and what follows.',
+          id: 'ExecutiveSummaryLosses',
+          title: 'Loss table',
+          note: 'Use it for a short ranked list where a drawn bar helps and a chart would be too much.',
           origin: 'custom',
-          size: 'full',
+          size: 'md',
           align: 'stretch',
-          Component: ExecSummaryDashReview,
+          bleed: true,
+          uses: ['kit/DataTable.tsx'],
+          Component: ExecutiveSummaryLosses,
         },
         {
-          id: 'ExecSummaryDashLosses',
-          title: 'Ranked table with bars',
-          note: 'Pick it for a short ranking where the reader needs both the order and the exact figures.',
+          id: 'ExecutiveSummaryProse',
+          title: 'Headline and prose',
+          note: 'Use it to carry the indicators inside sentences instead of tiles.',
           origin: 'custom',
-          size: 'full',
+          size: 'md',
           align: 'stretch',
-          uses: ['industrial/TrendDelta.tsx'],
-          Component: ExecSummaryDashLosses,
+          bleed: true,
+          Component: ExecutiveSummaryProse,
         },
         {
-          id: 'ExecSummaryDashOutlook',
-          title: 'Closing outlook',
-          note: 'Pick it to end a report: the main risk in prose and the dates that follow from it.',
+          id: 'ExecutiveSummaryMasthead',
+          title: 'Masthead and notes',
+          note: 'Use the masthead as the only chrome of a report: its name, its issue and the period pager.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          Component: ExecSummaryDashOutlook,
+          bleed: true,
+          uses: ['kit/executive-summary/YearChart.tsx'],
+          Component: ExecutiveSummaryMasthead,
         },
       ],
     },

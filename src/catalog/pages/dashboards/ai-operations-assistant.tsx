@@ -1,702 +1,770 @@
-import { chartSeriesColor } from '@cognite/aura/chart';
-import { Badge } from '@cognite/aura/components/badge';
 import { Button } from '@cognite/aura/components/button';
 import {
-  CheckboxItem,
-  CheckboxItemControl,
-  CheckboxItemDescription,
-  CheckboxItemLabel,
-} from '@cognite/aura/components/checkbox';
-import { Input } from '@cognite/aura/components/input';
-import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
-import { IconBox, IconChartLine, IconClock, IconPlayerStop, IconSend } from '@cognite/aura/icons';
+  IconArrowUp,
+  IconBolt,
+  IconChartLine,
+  IconCheck,
+  IconClipboardList,
+  IconDatabase,
+  IconFileText,
+  IconFlame,
+  IconGauge,
+  IconPlus,
+  IconSparkles,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
-import type { FormEvent } from 'react';
+import type { ReactNode } from 'react';
 
-import { ChatThread } from '../../../library/ai/ChatThread';
-import type { ChatMessage } from '../../../library/ai/ChatThread';
-import { PromptSuggestions } from '../../../library/ai/PromptSuggestions';
-import type { SourceItem } from '../../../library/ai/SourceList';
-import type { ToolCallData } from '../../../library/ai/ToolCall';
-import { useStreamedText } from '../../../library/ai/useStreamedText';
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { MINUTE, REFERENCE_NOW, makeSeries } from '../../data/series';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
+import { PLANT_KPIS, WORK_ORDERS, findPerson, type WorkOrder } from '../../data/plant';
+import { formatDate, formatTime, makeSeries, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './ai-operations-assistant.tsx?raw';
 
-type AiOpsTopicId = 'trip' | 'compare' | 'watch';
+type AoaTopicId = 'trip' | 'export' | 'orders' | 'energy';
 
-type AiOpsTopic = {
-  id: AiOpsTopicId;
-  /** The suggested prompt, also the user's message. */
+type AoaSource = { title: string; detail: string; kind: 'series' | 'document' | 'order' };
+
+type AoaTopic = {
+  id: AoaTopicId;
   question: string;
-  /** Short name on the canvas switch. */
-  tab: string;
-  canvasTitle: string;
-  canvasDescription: string;
-  canvasSummary: string;
-  context: readonly { id: string; icon: 'asset' | 'time' | 'signal'; text: string }[];
-  answer: string;
-  reasoning: readonly string[];
-  seconds: number;
-  tools: readonly ToolCallData[];
-  sources: readonly SourceItem[];
+  /** The answer in one line, for the collapsed exchange. */
+  summary: string;
+  /** What the assistant did before answering. */
+  steps: string;
+  confidence: number;
+  sources: readonly AoaSource[];
 };
 
-type AiOpsTurn = { id: string; topicId: AiOpsTopicId | null; prompt: string };
-
-const AI_OPS_TRIP_AT = REFERENCE_NOW - 15 * MINUTE;
-
-const AI_OPS_ALARM_AT = REFERENCE_NOW - 50 * MINUTE;
-
-const AI_OPS_FALLBACK =
-  'This workspace answers from three prepared investigations. Pick one of the suggested questions and the canvas shows the evidence behind the answer.';
-
-const AI_OPS_TOPICS: readonly AiOpsTopic[] = [
-  {
+const AOA_TOPICS: Record<AoaTopicId, AoaTopic> = {
+  trip: {
     id: 'trip',
     question: 'Why did the recompressor trip?',
-    tab: 'Trip',
-    canvasTitle: 'Recompressor trip',
-    canvasDescription: 'Drive-end vibration, 23-VT-92740, last 3 hours',
-    canvasSummary:
-      'Vibration left its normal 6.2 mm/s at about 13:00, passed the 7.1 high limit at 13:10 and reached the 11.0 trip limit at 13:45.',
-    context: [
-      { id: 'asset', icon: 'asset', text: '23-KA-9103 Recompressor' },
-      { id: 'time', icon: 'time', text: '12 Mar, 11:00 to 14:00' },
-      { id: 'signal', icon: 'signal', text: '1 time series, 2 events' },
-    ],
-    answer:
-      'The recompressor **tripped on high drive-end vibration at 13:45**. Vibration on `23-VT-92740` rose steadily for 45 minutes, from 6.2 to **11.6 mm/s**, and crossed the 11.0 mm/s trip limit. The high alarm at 13:10 was acknowledged but load was not reduced. Bearing temperature rose in step with it, which points at the drive-end bearing rather than the sensor. `WO-104482` is open to inspect that bearing.',
-    reasoning: [
-      'The trip event names 23-VT-92740, so start with that signal around 13:45.',
-      'The rise is gradual, not a step, so a failed sensor is unlikely.',
-      'Check whether anything else moved with it: bearing temperature did, suction pressure did not.',
-      'Look for an open work order on the same equipment.',
-    ],
-    seconds: 9,
-    tools: [
-      {
-        id: 'trip-1',
-        toolName: 'query_time_series',
-        title: 'Read 23-VT-92740, last 3 hours',
-        status: 'completed',
-        input: { externalId: '23-VT-92740', start: '3h-ago', granularity: '5m' },
-        output: { points: 37, max: 11.6, unit: 'mm/s' },
-      },
-      {
-        id: 'trip-2',
-        toolName: 'list_events',
-        title: 'List alarms on 23-KA-9103',
-        status: 'completed',
-        input: { asset: '23-KA-9103', type: 'alarm', start: '3h-ago' },
-        output: { events: ['alm-4810 high vibration 13:10', 'alm-4812 trip 13:45'] },
-      },
-    ],
+    summary: 'Drive-end vibration passed the 11.0 mm/s trip limit at 13:44; the bearing is the likely cause.',
+    steps: 'Read 3 time series, the alarm journal and 2 work orders in 4 s',
+    confidence: 86,
     sources: [
-      { id: 'trip-s1', title: '23-VT-92740 drive-end vibration', href: 'https://fusion.nordkapp.test/timeseries/23-VT-92740', kind: 'timeseries' },
-      { id: 'trip-s2', title: 'alm-4812 recompressor tripped', href: 'https://fusion.nordkapp.test/events/alm-4812', kind: 'event' },
-      { id: 'trip-s3', title: 'WO-104482 inspect drive-end bearing', href: 'https://fusion.nordkapp.test/workorders/WO-104482', kind: 'file' },
+      { title: '23-VT-92740 drive-end vibration', detail: 'Time series, 13:30 to 14:00, 1 s resolution', kind: 'series' },
+      { title: '23-TT-92532 discharge temperature', detail: 'Time series, same window', kind: 'series' },
+      { title: 'Alarm journal, compression area', detail: '8 entries between 13:32 and 13:59', kind: 'document' },
+      { title: 'WO-104482 Inspect drive-end bearing', detail: 'Raised 13:54, in progress', kind: 'order' },
     ],
   },
-  {
-    id: 'compare',
-    question: 'Compare discharge temperature across compressors',
-    tab: 'Compare',
-    canvasTitle: 'Discharge temperature',
-    canvasDescription: 'Three compressors, last 24 hours, against the 145 °C high limit',
-    canvasSummary:
-      'The 1st stage runs 3 to 5 °C under its limit and touched it at 13:20; the 2nd stage has 13 °C of margin; the recompressor has been cooling since the trip.',
-    context: [
-      { id: 'asset', icon: 'asset', text: '3 compressors in NK-23' },
-      { id: 'time', icon: 'time', text: 'Last 24 hours' },
-      { id: 'signal', icon: 'signal', text: '3 time series' },
-    ],
-    answer:
-      'The **1st stage compressor runs hottest**: 141.2 °C now, 3.8 °C under its 145 °C high limit, and it peaked at 146.3 °C at 13:22. The **2nd stage** is steady near 132 °C with 13 °C of margin. The **recompressor** tracked the 2nd stage until it tripped at 13:45 and is now cooling. Since the trip the 1st stage carries more load, so its margin is the one to protect.',
-    reasoning: [
-      'Find the discharge temperature tag of each compressor in gas compression.',
-      'Read all three over the same 24 hours at the same granularity.',
-      'Compare each with its own high limit rather than with each other only.',
-      'Explain the recompressor drop with the trip, not as an improvement.',
-    ],
-    seconds: 7,
-    tools: [
-      {
-        id: 'compare-1',
-        toolName: 'search_assets',
-        title: 'Find compressors in NK-23',
-        status: 'completed',
-        input: { parent: 'NK-23', type: 'compressor' },
-        output: { assets: ['23-KA-9101', '23-KA-9102', '23-KA-9103'] },
-      },
-      {
-        id: 'compare-2',
-        toolName: 'query_time_series',
-        title: 'Read 3 discharge temperatures, 24 hours',
-        status: 'completed',
-        input: { externalIds: ['23-TT-92532', '23-TT-92632', '23-TT-92732'], start: '24h-ago', granularity: '1h' },
-        output: { series: 3, points: 72 },
-      },
-    ],
+  export: {
+    id: 'export',
+    question: 'What is limiting export right now?',
+    summary: 'Two-stage operation: the first stage is 3.4 barg under its discharge pressure limit.',
+    steps: 'Read 5 time series and the operating envelope in 3 s',
+    confidence: 78,
     sources: [
-      { id: 'compare-s1', title: '23-TT-92532 discharge temperature', href: 'https://fusion.nordkapp.test/timeseries/23-TT-92532', kind: 'timeseries' },
-      { id: 'compare-s2', title: '23-TT-92632 discharge temperature', href: 'https://fusion.nordkapp.test/timeseries/23-TT-92632', kind: 'timeseries' },
-      { id: 'compare-s3', title: '23-TT-92732 discharge temperature', href: 'https://fusion.nordkapp.test/timeseries/23-TT-92732', kind: 'timeseries' },
-      { id: 'compare-s4', title: 'NK-23 gas compression', href: 'https://fusion.nordkapp.test/assets/NK-23', kind: 'asset' },
+      { title: 'Gas export flow', detail: 'Time series, last 24 hours', kind: 'series' },
+      { title: '23-PT-92531 discharge pressure', detail: 'Time series against the 52.0 barg limit', kind: 'series' },
+      { title: 'Operating envelope, compression train', detail: 'Document, revision 7', kind: 'document' },
     ],
   },
-  {
-    id: 'watch',
-    question: 'What should the next shift watch?',
-    tab: 'Watch list',
-    canvasTitle: 'Watch list for the next shift',
-    canvasDescription: 'Gas compression, 14:00 to 22:00, most urgent first',
-    canvasSummary:
-      'Five items. Two are close to a limit, one signal is uncertain, and the recompressor must stay isolated until its work order closes.',
-    context: [
-      { id: 'asset', icon: 'asset', text: 'NK-23 Gas compression' },
-      { id: 'time', icon: 'time', text: 'Next shift, 14:00 to 22:00' },
-      { id: 'signal', icon: 'signal', text: '4 alarms, 2 work orders' },
-    ],
-    answer:
-      'Five things for the next shift, most urgent first. **Keep the recompressor isolated** until `WO-104482` closes. **Watch 1st stage discharge temperature**: it is 3.8 °C under its limit and carries extra load. **Drive-end vibration on the 1st stage** is 0.3 mm/s under its limit. The **cooler outlet temperature** signal is uncertain, so confirm it locally. **Export is planned down** to 4.38 MSm³/d while the recompressor is out. Tick each item on the canvas as the incoming shift confirms it.',
-    reasoning: [
-      'Start from what is abnormal now: open alarms and tripped equipment in the area.',
-      'Rank by distance to a limit and by what the trip changed.',
-      'Add signals that cannot be trusted, since they hide the next problem.',
-      'Keep the list to what one shift can act on.',
-    ],
-    seconds: 11,
-    tools: [
-      {
-        id: 'watch-1',
-        toolName: 'list_events',
-        title: 'List open alarms in NK-23',
-        status: 'completed',
-        input: { asset: 'NK-23', state: ['active', 'acknowledged'] },
-        output: { alarms: 4 },
-      },
-      {
-        id: 'watch-2',
-        toolName: 'list_work_orders',
-        title: 'List open work orders in NK-23',
-        status: 'completed',
-        input: { asset: 'NK-23', status: ['in-progress', 'waiting'] },
-        output: { workOrders: ['WO-104482', 'WO-104471'] },
-      },
-    ],
+  orders: {
+    id: 'orders',
+    question: 'Which work orders are at risk this week?',
+    summary: 'Two of six: the standby start test is 4 days overdue and the vibration survey has no owner.',
+    steps: 'Read 6 work orders and the crew rota in 2 s',
+    confidence: 92,
     sources: [
-      { id: 'watch-s1', title: 'Open alarms, gas compression', href: 'https://fusion.nordkapp.test/alarms?area=NK-23', kind: 'event' },
-      { id: 'watch-s2', title: 'WO-104482 inspect drive-end bearing', href: 'https://fusion.nordkapp.test/workorders/WO-104482', kind: 'file' },
-      { id: 'watch-s3', title: '23-TT-91141 cooler outlet temperature', href: 'https://fusion.nordkapp.test/timeseries/23-TT-91141', kind: 'timeseries' },
+      { title: 'Open work orders, Nordkapp', detail: '6 orders, synced 13:58', kind: 'order' },
+      { title: 'Crew rota, week 11', detail: 'Document, maintenance day shift', kind: 'document' },
     ],
   },
-];
-
-/** Vibration that climbs for 45 minutes, trips, then falls away as the machine runs down. */
-const AI_OPS_VIBRATION = makeSeries({ seed: 74, points: 37, base: 6.2, noise: 0.12, stepMs: 5 * MINUTE, decimals: 1 }).map(
-  (point, index) => {
-    if (index <= 24) return point;
-    if (index <= 33) return { t: point.t, v: Math.round((point.v + ((index - 24) / 9) * 5.4) * 10) / 10 };
-    return { t: point.t, v: [3.1, 0.8, 0.4][index - 34] ?? 0.4 };
-  }
-);
-
-const AI_OPS_TEMP_FIRST = makeSeries({ seed: 13, points: 25, base: 141, amplitude: 2.2, noise: 0.8, cycles: 1.5, max: 146.3 });
-
-const AI_OPS_TEMP_SECOND = makeSeries({ seed: 33, points: 25, base: 132, amplitude: 1.4, noise: 0.6, cycles: 1.2 });
-
-const AI_OPS_TEMP_RECOMPRESSOR = makeSeries({ seed: 53, points: 25, base: 130, amplitude: 1.6, noise: 0.7, cycles: 1 }).map((point, index) =>
-  index === 24 ? { t: point.t, v: 96.4 } : point
-);
-
-const AI_OPS_SEQUENCE = [
-  { time: '13:00', text: 'Vibration leaves its normal band of 6.0 to 6.4 mm/s' },
-  { time: '13:10', text: 'High alarm at 7.1 mm/s, acknowledged, load unchanged' },
-  { time: '13:32', text: 'Bearing temperature up 9 °C in 30 minutes' },
-  { time: '13:45', text: 'Trip at 11.6 mm/s against the 11.0 mm/s limit' },
-] as const;
-
-const AI_OPS_COMPARISON = [
-  { tag: '23-KA-9101', name: '1st stage compressor', now: '141.2', peak: '146.3', margin: '3.8', note: 'Closest to its limit' },
-  { tag: '23-KA-9102', name: '2nd stage compressor', now: '132.0', peak: '134.1', margin: '13.0', note: 'Steady' },
-  { tag: '23-KA-9103', name: 'Recompressor', now: '96.4', peak: '132.4', margin: '48.6', note: 'Cooling after the trip' },
-] as const;
-
-const AI_OPS_WATCH = [
-  { id: 'isolate', label: 'Keep the recompressor isolated', detail: '23-KA-9103 · until WO-104482 closes' },
-  { id: 'temp', label: 'Watch 1st stage discharge temperature', detail: '23-TT-92532 · call the engineer above 145 °C' },
-  { id: 'vibration', label: 'Watch 1st stage drive-end vibration', detail: '23-VT-92540 · 0.3 mm/s under the high limit' },
-  { id: 'cooler', label: 'Confirm cooler outlet temperature locally', detail: '23-TT-91141 · signal quality uncertain' },
-  { id: 'export', label: 'Hold export at the reduced plan', detail: '4.38 MSm³/d while the recompressor is out' },
-] as const;
-
-const AI_OPS_CONTEXT_ICON = { asset: IconBox, time: IconClock, signal: IconChartLine } as const;
-
-function aiOpsTopic(id: AiOpsTopicId): AiOpsTopic {
-  return AI_OPS_TOPICS.find((topic) => topic.id === id) ?? AI_OPS_TOPICS[0];
-}
-
-function isAiOpsTopicId(value: unknown): value is AiOpsTopicId {
-  return value === 'trip' || value === 'compare' || value === 'watch';
-}
-
-function aiOpsAnswer(turn: AiOpsTurn): string {
-  return turn.topicId ? aiOpsTopic(turn.topicId).answer : AI_OPS_FALLBACK;
-}
-
-/** The thread as ChatThread wants it. Only the newest turn can still be streaming. */
-function aiOpsMessages(turns: readonly AiOpsTurn[], streamedText: string, streaming: boolean): ChatMessage[] {
-  return turns.flatMap((turn, index): ChatMessage[] => {
-    const live = streaming && index === turns.length - 1;
-    const topic = turn.topicId ? aiOpsTopic(turn.topicId) : undefined;
-    return [
-      { id: `${turn.id}-user`, role: 'user', text: turn.prompt },
-      {
-        id: `${turn.id}-assistant`,
-        role: 'assistant',
-        text: live ? streamedText : aiOpsAnswer(turn),
-        status: live ? 'streaming' : 'done',
-        reasoning: topic ? { steps: topic.reasoning, durationSeconds: topic.seconds } : undefined,
-        tools: topic?.tools,
-        sources: topic?.sources,
-      },
-    ];
-  });
-}
-
-function AiOpsContextChips({ topicId }: { topicId: AiOpsTopicId }) {
-  return (
-    <div className="flex w-full flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground">Looking at</span>
-      <ul aria-label="What the assistant is looking at" className="flex flex-wrap items-center gap-2">
-        {aiOpsTopic(topicId).context.map((chip) => {
-          const Icon = AI_OPS_CONTEXT_ICON[chip.icon];
-          return (
-            <li key={chip.id} className="flex">
-              <Badge variant="secondary">
-                <Icon aria-hidden="true" /> {chip.text}
-              </Badge>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-
-type AiOpsComposerProps = {
-  streaming: boolean;
-  onAsk: (topicId: AiOpsTopicId) => void;
-  onSend: (text: string) => void;
-  onStop: () => void;
+  energy: {
+    id: 'energy',
+    question: 'How does energy use compare with last week?',
+    summary: 'Energy intensity is 31.2 kWh/boe, 1.4 lower than last week but still above the 30.0 target.',
+    steps: 'Read 2 time series for 14 days in 3 s',
+    confidence: 81,
+    sources: [
+      { title: 'Energy intensity', detail: 'Time series, daily mean, 14 days', kind: 'series' },
+      { title: 'Fuel gas to turbine 23-GT-9001', detail: 'Time series, hourly', kind: 'series' },
+    ],
+  },
 };
 
-function AiOpsComposer({ streaming, onAsk, onSend, onStop }: AiOpsComposerProps) {
-  const [draft, setDraft] = useState('');
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const text = draft.trim();
-    if (text === '' || streaming) return;
-    onSend(text);
-    setDraft('');
-  };
+const AOA_ORDER: readonly AoaTopicId[] = ['trip', 'export', 'orders', 'energy'];
 
+const AOA_MINUTES = Array.from({ length: 31 }, (_, index) => `13:${String(30 + index).padStart(2, '0')}`).map((label) => (label === '13:60' ? '14:00' : label));
+
+const AOA_VIBRATION = [5.8, 6.5, 7.3, 7.6, 7.9, 8.1, 8.4, 7.9, 7.7, 7.9, 8.4, 8.9, 9.4, 10.3, 11.2, 12.0, 12.4, 4.6, 1.2, 0.8, 0.4, 0.4, 0.4, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3];
+
+const AOA_TEMPERATURE = [138.2, 138.9, 139.6, 140.4, 141.1, 141.8, 142.5, 143.8, 145.1, 146.3, 146.7, 147.1, 147.5, 147.9, 148.3, 148.7, 149.1, 144.2, 138.0, 131.5, 125.4, 119.8, 114.9, 110.6, 106.8, 103.4, 100.3, 97.6, 95.1, 92.9, 90.8];
+
+const AOA_SEQUENCE: readonly { time: string; title: string; tone: Tone }[] = [
+  { time: '13:32', title: 'Drive-end vibration high', tone: 'warning' },
+  { time: '13:36', title: 'Operator lowered speed to 96 %', tone: 'info' },
+  { time: '13:39', title: 'Discharge temperature high', tone: 'warning' },
+  { time: '13:44', title: 'Drive-end vibration high-high', tone: 'critical' },
+  { time: '13:46', title: 'Recompressor tripped by machine protection', tone: 'critical' },
+];
+
+const AOA_EXPORT = makeSeries({ seed: 31, points: 25, base: 4.32, amplitude: 0.14, noise: 0.04, cycles: 1.2, decimals: 2 });
+
+const AOA_EXPORT_VALUES = [...AOA_EXPORT.slice(0, -1).map((point) => point.v), PLANT_KPIS.gasExport.value];
+
+const AOA_HOURS = AOA_EXPORT.map((point) => formatTime(point.t));
+
+const AOA_ENERGY = makeValues({ seed: 43, points: 14, base: 32.2, amplitude: 0.5, noise: 0.3, drift: -1.2 });
+
+const AOA_ENERGY_DAYS = Array.from({ length: 14 }, (_, index) => `${index + 27 > 28 ? index - 1 : index + 27} ${index + 27 > 28 ? 'Mar' : 'Feb'}`);
+
+const AOA_WEEK_DAYS = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
+
+const AOA_HEADROOM = ['1st stage pressure', 'Cooler outlet temperature', '2nd stage power', 'Export pressure'];
+
+const AOA_OPEN_ORDERS = WORK_ORDERS.filter((order) => order.status !== 'done');
+
+function aoaRisk(order: WorkOrder): { word: string; tone: Tone } {
+  if (order.id === 'WO-104458') return { word: 'Overdue', tone: 'critical' };
+  if (order.assigneeId === null) return { word: 'No owner', tone: 'warning' };
+  if (order.status === 'waiting') return { word: 'Waiting on parts', tone: 'info' };
+  return { word: 'On track', tone: 'success' };
+}
+
+const AOA_ORDER_COLUMNS: DataTableColumn<WorkOrder>[] = [
+  {
+    id: 'title',
+    header: 'Work order',
+    cell: (order) => (
+      <>
+        {order.title}
+        <span className="block text-xs text-[var(--kit-text-2)]">{findPerson(order.assigneeId)?.name ?? 'Unassigned'}</span>
+      </>
+    ),
+  },
+  { id: 'due', header: 'Due', numeric: true, nowrap: true, cell: (order) => formatDate(order.dueAt) },
+  { id: 'risk', header: 'Risk', nowrap: true, cell: (order) => <StatusPill tone={aoaRisk(order).tone}>{aoaRisk(order).word}</StatusPill> },
+];
+
+/** A numbered reference to a source listed on the evidence canvas. */
+function AoaCite({ n }: { n: number }) {
   return (
-    <div className="flex w-full flex-col gap-3">
-      <PromptSuggestions
-        label="Suggested questions"
-        layout="wrap"
-        disabled={streaming}
-        suggestions={AI_OPS_TOPICS.map((topic) => ({ id: topic.id, label: topic.question }))}
-        onSelect={(_prompt, suggestion) => {
-          if (isAiOpsTopicId(suggestion.id)) onAsk(suggestion.id);
-        }}
-      />
-      <form className="flex w-full items-center gap-2" onSubmit={submit}>
-        <Input
-          className="min-w-0 flex-1"
-          aria-label="Ask about the plant"
-          placeholder="Ask about the plant"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        {streaming ? (
-          <Button type="button" variant="outline" onClick={onStop}>
-            <IconPlayerStop /> Stop
-          </Button>
-        ) : (
-          <Button type="submit">
-            <IconSend /> Send
-          </Button>
-        )}
-      </form>
-    </div>
+    <span className="mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-[var(--kit-rule-strong)] px-1 align-text-top text-xs font-semibold text-[var(--kit-text-2)] tabular-nums">
+      {n}
+    </span>
   );
 }
 
-function AiOpsTripEvidence() {
+function AoaFigure({ label, value, unit, tone = 'neutral' }: { label: string; value: string; unit: string; tone?: Tone }) {
   return (
-    <div className="flex w-full flex-col gap-4">
-      <TrendChart
-        label="Drive-end vibration of the recompressor over the last 3 hours: steady near 6.2 millimetres per second, then rising from 13:00 to 11.6 at the trip at 13:45"
-        series={[{ key: 'vibration', label: 'Drive-end vibration', points: AI_OPS_VIBRATION, color: chartSeriesColor(1) }]}
-        limits={[
-          { value: 7.1, label: 'High 7.1', tone: 'warning', align: 'left' },
-          { value: 11, label: 'Trip 11.0', tone: 'critical', align: 'left' },
-        ]}
-        events={[
-          { t: AI_OPS_ALARM_AT, label: 'High alarm', tone: 'warning' },
-          { t: AI_OPS_TRIP_AT, label: 'Trip', tone: 'critical' },
-        ]}
-        yDomain={[0, 14]}
-        yTicks={[0, 2, 4, 6, 8, 10, 12, 14]}
-        unit="mm/s"
-        decimals={1}
-        maxTicks={6}
-        heightClassName="h-96"
-      />
-      <ol aria-label="Sequence of events" className="grid w-full grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2">
-        {AI_OPS_SEQUENCE.map((step) => (
-          <li key={step.time} className="flex items-baseline gap-3 text-sm">
-            <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">{step.time}</span>
-            <span className="min-w-0 text-base-foreground">{step.text}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
-function AiOpsCompareEvidence() {
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <TrendChart
-        label="Discharge temperature of three compressors over 24 hours: the 1st stage runs near 141 degrees and touches its 145 degree limit, the 2nd stage is steady near 132, the recompressor drops after its trip"
-        series={[
-          { key: 'first', label: '1st stage, 23-KA-9101', points: AI_OPS_TEMP_FIRST, color: chartSeriesColor(1) },
-          { key: 'second', label: '2nd stage, 23-KA-9102', points: AI_OPS_TEMP_SECOND, color: chartSeriesColor(2) },
-          { key: 'recompressor', label: 'Recompressor, 23-KA-9103', points: AI_OPS_TEMP_RECOMPRESSOR, color: chartSeriesColor(3) },
-        ]}
-        limits={[{ value: 145, label: 'High 145', tone: 'warning', align: 'left' }]}
-        events={[{ t: AI_OPS_TRIP_AT, label: 'Trip', tone: 'critical' }]}
-        yDomain={[90, 150]}
-        yTicks={[90, 100, 110, 120, 130, 140, 150]}
-        unit="°C"
-        decimals={1}
-        maxTicks={6}
-        legend
-        heightClassName="h-64"
-      />
-      <table className="w-full table-fixed text-left text-sm">
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="pb-2 pr-3 font-medium">
-              Compressor
-            </th>
-            <th scope="col" className="w-[14%] pb-2 pr-3 text-right font-medium">
-              Now
-            </th>
-            <th scope="col" className="w-[14%] pb-2 pr-3 text-right font-medium">
-              Peak
-            </th>
-            <th scope="col" className="w-[16%] pb-2 pr-3 text-right font-medium">
-              Margin
-            </th>
-            <th scope="col" className="w-[26%] pb-2 font-medium">
-              Reading
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {AI_OPS_COMPARISON.map((row) => (
-            <tr key={row.tag} className="border-t border-default align-top">
-              <th scope="row" className="py-2 pr-3 font-normal">
-                <p className="text-base-foreground">{row.name}</p>
-                <p className="font-mono text-xs text-muted-foreground">{row.tag}</p>
-              </th>
-              <td className="py-2 pr-3 text-right tabular-nums text-base-foreground">{row.now}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-medium-foreground">{row.peak}</td>
-              <td className="py-2 pr-3 text-right tabular-nums text-medium-foreground">{row.margin}</td>
-              <td className="py-2 text-medium-foreground">{row.note}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-type AiOpsWatchProps = { confirmed: readonly string[]; onToggle: (id: string, checked: boolean) => void };
-
-function AiOpsWatchEvidence({ confirmed, onToggle }: AiOpsWatchProps) {
-  return (
-    <div className="flex w-full flex-col gap-4">
-      <p className="text-xs font-medium text-muted-foreground">Confirm with the incoming shift</p>
-      <ul aria-label="Watch list" className="flex w-full flex-col gap-3">
-        {AI_OPS_WATCH.map((item) => (
-          <li key={item.id}>
-            <CheckboxItem>
-              <CheckboxItemControl
-                checked={confirmed.includes(item.id)}
-                onCheckedChange={(checked) => onToggle(item.id, checked)}
-              />
-              <CheckboxItemLabel>{item.label}</CheckboxItemLabel>
-              <CheckboxItemDescription>{item.detail}</CheckboxItemDescription>
-            </CheckboxItem>
-          </li>
-        ))}
-      </ul>
-      <p aria-live="polite" className="text-sm tabular-nums text-medium-foreground">
-        {confirmed.length} of {AI_OPS_WATCH.length} confirmed by the incoming shift
+    <div data-tone={tone}>
+      <p className="text-xs text-[var(--kit-text-2)]">{label}</p>
+      <p className="mt-0.5">
+        <span className={`text-2xl leading-tight font-semibold tabular-nums ${tone === 'neutral' ? 'text-[var(--kit-text)]' : 'text-[var(--t-line)]'}`}>{value}</span>
+        <span className="ml-1 text-sm text-[var(--kit-text-2)]">{unit}</span>
       </p>
-      <p className="text-xs font-medium text-muted-foreground">Readings behind the list, 1st stage compressor and cooler</p>
-      <div className="grid w-full grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-3">
-        <RangeIndicator label="Discharge" value={141.2} min={80} max={160} limits={{ low: 90, high: 145 }} unit="°C" decimals={1} />
-        <RangeIndicator label="Vibration" value={6.8} min={0} max={12} limits={{ low: 0, high: 7.1 }} unit="mm/s" decimals={1} />
-        <RangeIndicator label="Cooler outlet" value={38.9} min={10} max={50} limits={{ low: 20, high: 40 }} unit="°C" decimals={1} />
-      </div>
     </div>
   );
 }
 
-type AiOpsCanvasProps = AiOpsWatchProps & { view: AiOpsTopicId; onViewChange: (view: AiOpsTopicId) => void };
-
-/** The dominant element: the evidence behind the latest answer, one view per investigation. */
-function AiOpsCanvasPanel({ view, onViewChange, confirmed, onToggle }: AiOpsCanvasProps) {
-  const topic = aiOpsTopic(view);
-  return (
-    <DashboardPanel
-      title={topic.canvasTitle}
-      description={topic.canvasDescription}
-      footnote={topic.canvasSummary}
-      actions={
-        <SegmentedControl
-          value={view}
-          onValueChange={(value) => {
-            if (isAiOpsTopicId(value)) onViewChange(value);
-          }}
-        >
-          <SegmentedControlList size="small" aria-label="Evidence view">
-            {AI_OPS_TOPICS.map((entry) => (
-              <SegmentedControlButton key={entry.id} value={entry.id}>
-                {entry.tab}
-              </SegmentedControlButton>
-            ))}
-          </SegmentedControlList>
-        </SegmentedControl>
-      }
-    >
-      {view === 'trip' ? <AiOpsTripEvidence /> : null}
-      {view === 'compare' ? <AiOpsCompareEvidence /> : null}
-      {view === 'watch' ? <AiOpsWatchEvidence confirmed={confirmed} onToggle={onToggle} /> : null}
-    </DashboardPanel>
-  );
+function AoaInlineCard({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-4 rounded-2xl border border-[var(--kit-rule)] bg-[var(--kit-well)] p-4">{children}</div>;
 }
 
-type AiOpsThreadPanelProps = AiOpsComposerProps & { view: AiOpsTopicId; messages: readonly ChatMessage[] };
-
-function AiOpsThreadPanel({ view, messages, streaming, onAsk, onSend, onStop }: AiOpsThreadPanelProps) {
+function AoaVibrationChart({ height }: { height: number }) {
   return (
-    <DashboardPanel title="Assistant" description="Answers from Nordkapp time series, alarms and work orders">
-      <AiOpsContextChips topicId={view} />
-      <div className="h-72 w-full border-y border-default">
-        <ChatThread messages={messages} label="Conversation with the operations assistant" pendingLabel="Reading plant data" />
-      </div>
-      <AiOpsComposer streaming={streaming} onAsk={onAsk} onSend={onSend} onStop={onStop} />
-    </DashboardPanel>
-  );
-}
-
-function useAiOpsWorkspace(initialTopic: AiOpsTopicId) {
-  const [turns, setTurns] = useState<readonly AiOpsTurn[]>([
-    { id: 'turn-1', topicId: initialTopic, prompt: aiOpsTopic(initialTopic).question },
-  ]);
-  const [view, setView] = useState<AiOpsTopicId>(initialTopic);
-  const [confirmed, setConfirmed] = useState<readonly string[]>(['isolate']);
-  const latest = aiOpsAnswer(turns[turns.length - 1]);
-  // The answer is revealed chunk by chunk; the timer stops at the last character.
-  const stream = useStreamedText(latest, { chunkSize: 10, intervalMs: 30, initialLength: latest.length });
-  const streaming = stream.status === 'streaming';
-
-  const append = (topicId: AiOpsTopicId | null, prompt: string) => {
-    setTurns((current) => [...current, { id: `turn-${current.length + 1}`, topicId, prompt }]);
-    stream.start();
-  };
-
-  return {
-    view,
-    setView,
-    streaming,
-    confirmed,
-    messages: aiOpsMessages(turns, stream.text, streaming),
-    ask: (topicId: AiOpsTopicId) => {
-      append(topicId, aiOpsTopic(topicId).question);
-      setView(topicId);
-    },
-    send: (text: string) => append(null, text),
-    stop: stream.finish,
-    toggle: (id: string, checked: boolean) =>
-      setConfirmed((current) => (checked ? [...current, id] : current.filter((entry) => entry !== id))),
-  };
-}
-
-/**
- * Archetype: conversation-first — a chat column beside a canvas that the conversation drives.
- * Dominant element: the evidence canvas on the right, about 60% of the width.
- * Interaction: choosing a suggested question streams a prepared answer with its reasoning, tool
- * steps and sources, and swaps the canvas and the context chips to the matching evidence; the
- * canvas switch browses the three views without asking, and the watch list can be ticked off.
- */
-function AiOpsDashboard() {
-  const workspace = useAiOpsWorkspace('trip');
-
-  return (
-    <DashboardFrame
-      title="AI operations assistant"
-      subtitle="Nordkapp gas processing plant · data as of 14:00 UTC"
-      status={<StatusIndicator tone="info" shape="ring" label="Prepared demo answers" />}
-      actions={
-        <Button variant="outline" size="sm">
-          Start new conversation
-        </Button>
-      }
-    >
-      <DashboardGrid>
-        <DashboardCell span={5}>
-          <AiOpsThreadPanel
-            view={workspace.view}
-            messages={workspace.messages}
-            streaming={workspace.streaming}
-            onAsk={workspace.ask}
-            onSend={workspace.send}
-            onStop={workspace.stop}
-          />
-        </DashboardCell>
-        <DashboardCell span={7}>
-          <AiOpsCanvasPanel
-            view={workspace.view}
-            onViewChange={workspace.setView}
-            confirmed={workspace.confirmed}
-            onToggle={workspace.toggle}
-          />
-        </DashboardCell>
-      </DashboardGrid>
-    </DashboardFrame>
-  );
-}
-
-function AiOpsDashSignature() {
-  return (
-    <ThemeScope preset="dusk-night" className="w-full">
-      <AiOpsDashboard />
-    </ThemeScope>
-  );
-}
-
-function AiOpsDashAura() {
-  return (
-    <ThemeScope preset="aura" className="w-full">
-      <AiOpsDashboard />
-    </ThemeScope>
-  );
-}
-
-function AiOpsDashNeonDusk() {
-  return (
-    <ThemeScope preset="neon-dusk" className="w-full">
-      <AiOpsDashboard />
-    </ThemeScope>
-  );
-}
-
-function AiOpsDashHologram() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <AiOpsDashboard />
-    </ThemeScope>
-  );
-}
-
-function AiOpsDashThread() {
-  const workspace = useAiOpsWorkspace('compare');
-  return (
-    <AiOpsThreadPanel
-      view={workspace.view}
-      messages={workspace.messages}
-      streaming={workspace.streaming}
-      onAsk={workspace.ask}
-      onSend={workspace.send}
-      onStop={workspace.stop}
+    <TrendLine
+      label="Drive-end vibration of the recompressor from 13:30 to 14:00 against the high and trip limits"
+      labels={AOA_MINUTES}
+      unit="mm/s"
+      decimals={1}
+      height={height}
+      highlightLast={false}
+      yDomain={[0, 14]}
+      series={[{ id: 'vibration', label: 'Vibration', values: AOA_VIBRATION, tone: 'pink' }]}
+      limits={[
+        { value: 11, label: 'Trip', tone: 'critical' },
+        { value: 7.1, label: 'High', tone: 'warning' },
+      ]}
     />
   );
 }
 
-function AiOpsDashTripCanvas() {
+/** The body of an answer: prose with numbered citations, then the chart or card that backs it. */
+function AoaAnswer({ topic }: { topic: AoaTopicId }) {
+  if (topic === 'trip') {
+    return (
+      <>
+        <p>
+          The recompressor <TagId>23-KA-9103</TagId> tripped at 13:46 on drive-end vibration. The reading crossed the high limit at 13:32 and kept climbing after the speed was lowered to
+          96 %, passing the trip limit at 13:44
+          <AoaCite n={1} />. Discharge temperature rose with it
+          <AoaCite n={2} />, which points at the drive-end bearing rather than a process upset.
+        </p>
+        <AoaInlineCard>
+          <AoaVibrationChart height={170} />
+          <div className="grid grid-cols-3 gap-4 border-t border-[var(--kit-rule)] pt-3">
+            <AoaFigure label="Peak" value="12.4" unit="mm/s" tone="critical" />
+            <AoaFigure label="Above high limit" value="14" unit="min" tone="warning" />
+            <AoaFigure label="Trip delay" value="90" unit="s" />
+          </div>
+        </AoaInlineCard>
+        <p>
+          Tomás Barros found the bearing housing hot and the oil discoloured at 13:56
+          <AoaCite n={4} />. I would keep the machine down until the bearing has been opened.
+        </p>
+      </>
+    );
+  }
+  if (topic === 'export') {
+    return (
+      <>
+        <p>
+          Export is held at 4.38 MSm³/d, 0.12 under plan
+          <AoaCite n={1} />, because the train runs on two stages. The tightest constraint is the first stage: discharge pressure is 48.6 barg against a limit of 52.0
+          <AoaCite n={2} />.
+        </p>
+        <AoaInlineCard>
+          <Bars
+            label="Headroom to the nearest limit for four constraints, in percent"
+            orientation="horizontal"
+            categories={AOA_HEADROOM}
+            series={[{ id: 'headroom', label: 'Headroom', values: [6.5, 9.2, 14, 21] }]}
+            tones={['warning', 'sky', 'sky', 'sky']}
+            unit="%"
+            decimals={1}
+            showValues
+            height={170}
+          />
+        </AoaInlineCard>
+        <p>
+          Roughly 0.05 MSm³/d more is available before the first stage reaches its limit
+          <AoaCite n={3} />. The rest of the gap closes only when the recompressor is back.
+        </p>
+      </>
+    );
+  }
+  if (topic === 'orders') {
+    return (
+      <>
+        <p>
+          Two of the six open work orders are at risk
+          <AoaCite n={1} />. The standby start test on export pump B is four days overdue, and the vibration survey on the first stage is due Saturday with nobody assigned
+          <AoaCite n={2} />.
+        </p>
+        <AoaInlineCard>
+          <ul>
+            {AOA_OPEN_ORDERS.filter((order) => aoaRisk(order).tone !== 'success')
+              .slice(0, 3)
+              .map((order) => (
+                <ListRow
+                  key={order.id}
+                  tone={aoaRisk(order).tone}
+                  title={order.title}
+                  meta={
+                    <>
+                      <TagId>{order.id}</TagId>
+                      <span>due {formatDate(order.dueAt)}</span>
+                    </>
+                  }
+                  trailing={<StatusPill tone={aoaRisk(order).tone}>{aoaRisk(order).word}</StatusPill>}
+                />
+              ))}
+          </ul>
+        </AoaInlineCard>
+        <p>The survey matters most today: it covers the machine now carrying the recompressor load.</p>
+      </>
+    );
+  }
   return (
-    <DashboardPanel title="Recompressor trip" description="Trend with limits and event markers, then the sequence in words">
-      <AiOpsTripEvidence />
-    </DashboardPanel>
+    <>
+      <p>
+        Energy intensity is 31.2 kWh/boe today, 1.4 lower than a week ago
+        <AoaCite n={1} /> but still above the 30.0 target. Most of the gain came from the turbine running closer to its best point
+        <AoaCite n={2} />.
+      </p>
+      <AoaInlineCard>
+        <Bars
+          label="Energy intensity per day for the last seven days against the target"
+          categories={AOA_WEEK_DAYS}
+          series={[{ id: 'intensity', label: 'Energy intensity', values: AOA_ENERGY.slice(7), tone: 'purple' }]}
+          unit="kWh/boe"
+          decimals={1}
+          showValues
+          height={170}
+          limit={{ value: 30, label: 'Target', tone: 'success' }}
+        />
+      </AoaInlineCard>
+      <p>Expect a step up tonight: two-stage operation recycles more gas per unit exported.</p>
+    </>
   );
 }
 
-function AiOpsDashCompareCanvas() {
+function AoaAssistantMark() {
   return (
-    <DashboardPanel title="Discharge temperature" description="One chart for the shape, one table for the figures">
-      <AiOpsCompareEvidence />
-    </DashboardPanel>
+    <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--kit-accent)] text-[var(--kit-on-accent)] [&>svg]:size-4">
+      <IconSparkles />
+    </span>
   );
 }
 
-function AiOpsDashWatchCanvas() {
-  const [confirmed, setConfirmed] = useState<readonly string[]>(['isolate', 'export']);
+function AoaQuestion({ children }: { children: ReactNode }) {
   return (
-    <DashboardPanel title="Watch list for the next shift" description="A list people tick off, with the three readings it refers to">
-      <AiOpsWatchEvidence
-        confirmed={confirmed}
-        onToggle={(id, checked) =>
-          setConfirmed((current) => (checked ? [...current, id] : current.filter((entry) => entry !== id)))
-        }
-      />
-    </DashboardPanel>
+    <p className="max-w-[85%] self-end rounded-3xl rounded-br-md border border-[color-mix(in_oklab,var(--kit-line-accent)_45%,transparent)] bg-[color-mix(in_oklab,var(--kit-line-accent)_24%,transparent)] px-4 py-2.5 text-base font-medium text-[var(--kit-text)]">
+      {children}
+    </p>
   );
 }
 
-function AiOpsDashContext() {
+/** One question and its answer. Earlier exchanges fold to a line that reopens their evidence. */
+function AoaExchange({ topic, open, onOpen }: { topic: AoaTopic; open: boolean; onOpen: (id: AoaTopicId) => void }) {
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(topic.id)}
+        aria-label={`Show the answer to: ${topic.question}`}
+        className="flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--kit-rule)] px-4 py-3 text-left outline-none hover:bg-[var(--kit-surface)] focus-visible:ring-2 focus-visible:ring-[var(--kit-text)]"
+      >
+        <AoaAssistantMark />
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-[var(--kit-text)]">{topic.question}</span>
+          <span className="block text-sm text-[var(--kit-text-2)]">{topic.summary}</span>
+        </span>
+      </button>
+    );
+  }
   return (
-    <div className="flex w-full flex-col gap-4">
-      <AiOpsContextChips topicId="trip" />
-      <AiOpsContextChips topicId="watch" />
+    <div className="flex flex-col gap-4">
+      <AoaQuestion>{topic.question}</AoaQuestion>
+      <div className="flex gap-3">
+        <AoaAssistantMark />
+        <div className="flex min-w-0 flex-1 flex-col gap-3.5 text-base leading-relaxed text-[var(--kit-text)]">
+          <p className="flex items-center gap-1.5 text-sm text-[var(--kit-text-2)] [&>svg]:size-4">
+            <IconCheck aria-hidden="true" /> {topic.steps}
+          </p>
+          <AoaAnswer topic={topic.id} />
+        </div>
+      </div>
     </div>
   );
 }
 
-function AiOpsDashComposer() {
-  const [last, setLast] = useState('Nothing asked yet');
+function AoaSuggestions({ topics, onAsk }: { topics: readonly AoaTopic[]; onAsk: (id: AoaTopicId) => void }) {
+  if (topics.length === 0) {
+    return <p className="text-sm text-[var(--kit-text-2)]">You have asked everything on today&apos;s briefing. Type a question to go further.</p>;
+  }
   return (
-    <div className="flex w-full flex-col gap-3">
-      <AiOpsComposer
-        streaming={false}
-        onAsk={(topicId) => setLast(aiOpsTopic(topicId).question)}
-        onSend={setLast}
-        onStop={() => setLast('Stopped')}
+    <ul className="flex flex-wrap gap-2" aria-label="Suggested questions">
+      {topics.map((topic) => (
+        <li key={topic.id}>
+          <button
+            type="button"
+            onClick={() => onAsk(topic.id)}
+            className="flex cursor-pointer items-center gap-2 rounded-full border border-[var(--kit-rule-strong)] bg-[var(--kit-surface)] px-3.5 py-2 text-sm font-medium text-[var(--kit-text)] outline-none hover:bg-[color-mix(in_oklab,var(--kit-line-accent)_24%,transparent)] focus-visible:ring-2 focus-visible:ring-[var(--kit-text)] [&>svg]:size-4 [&>svg]:text-[var(--kit-line-accent)]"
+          >
+            <IconSparkles aria-hidden="true" />
+            {topic.question}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AoaComposer({ placeholder = 'Ask about Nordkapp' }: { placeholder?: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-full border border-[var(--kit-rule-strong)] bg-[var(--kit-well)] py-1.5 pr-1.5 pl-5">
+      <span className="flex-1 text-base text-[var(--kit-text-3)]">{placeholder}</span>
+      <Button size="icon" aria-label="Send question">
+        <IconArrowUp />
+      </Button>
+    </div>
+  );
+}
+
+function AoaSourceIcon({ kind }: { kind: AoaSource['kind'] }) {
+  if (kind === 'series') return <IconChartLine />;
+  if (kind === 'order') return <IconClipboardList />;
+  return <IconFileText />;
+}
+
+function AoaSources({ topic }: { topic: AoaTopic }) {
+  return (
+    <ol>
+      {topic.sources.map((entry, index) => (
+        <ListRow
+          key={entry.title}
+          leading={
+            <span className="flex items-center gap-2">
+              <AoaCite n={index + 1} />
+              <IconChip tone={entry.kind === 'series' ? 'sky' : entry.kind === 'order' ? 'amber' : 'purple'} size="sm">
+                <AoaSourceIcon kind={entry.kind} />
+              </IconChip>
+            </span>
+          }
+          title={entry.title}
+          meta={entry.detail}
+        />
+      ))}
+    </ol>
+  );
+}
+
+/** The side canvas: the full-size evidence behind the answer that is open in the thread. */
+function AoaEvidence({ topic }: { topic: AoaTopicId }) {
+  if (topic === 'trip') {
+    return (
+      <>
+        <Panel className="h-auto" title="Discharge temperature" subtitle="23-TT-92532, 13:30 to 14:00" tone="pink">
+          <TrendLine
+            label="Discharge temperature of the recompressor from 13:30 to 14:00 against the high limit"
+            labels={AOA_MINUTES}
+            unit="°C"
+            decimals={0}
+            height={170}
+            highlightLast={false}
+            series={[{ id: 'temperature', label: 'Discharge temperature', values: AOA_TEMPERATURE, tone: 'amber' }]}
+            limits={[{ value: 145, label: 'High', tone: 'warning' }]}
+          />
+        </Panel>
+        <Panel className="h-auto" title="Alarm journal" subtitle="The five entries the answer rests on" padding="none">
+          <ul>
+            {AOA_SEQUENCE.map((entry) => (
+              <ListRow key={entry.time} tone={entry.tone} title={entry.title} trailing={entry.time} />
+            ))}
+          </ul>
+        </Panel>
+      </>
+    );
+  }
+  if (topic === 'export') {
+    return (
+      <>
+        <Panel className="h-auto" title="Gas export, last 24 hours" subtitle="Against the 4.50 MSm³/d plan" tone="sky">
+          <TrendArea
+            label="Gas export over the last 24 hours against the daily plan"
+            labels={AOA_HOURS}
+            unit="MSm³/d"
+            decimals={2}
+            height={190}
+            series={[{ id: 'export', label: 'Export', values: AOA_EXPORT_VALUES, tone: 'sky' }]}
+            limits={[{ value: PLANT_KPIS.gasExport.target, label: 'Plan', tone: 'warning' }]}
+          />
+        </Panel>
+        <Panel className="h-auto" title="Nearest limits" subtitle="First stage, live">
+          <div className="flex flex-col gap-4">
+            <Meter label="Discharge pressure" value={48.6} max={60} unit="barg" decimals={1} high={52} target={{ value: 52, label: 'Limit' }} tone="warning" />
+            <Meter label="Cooler outlet temperature" value={36.3} max={50} unit="°C" decimals={1} high={40} target={{ value: 40, label: 'Limit' }} tone="sky" />
+          </div>
+        </Panel>
+      </>
+    );
+  }
+  if (topic === 'orders') {
+    return (
+      <Panel className="h-auto" title="Open work orders" subtitle="Six open, two at risk" padding="none" tone="amber">
+        <DataTable label="Open work orders with their risk" flush columns={AOA_ORDER_COLUMNS} rows={AOA_OPEN_ORDERS} rowKey={(order) => order.id} rowTone={(order) => (aoaRisk(order).tone === 'success' ? undefined : aoaRisk(order).tone)} />
+      </Panel>
+    );
+  }
+  return (
+    <Panel className="h-auto" title="Energy intensity, 14 days" subtitle="Daily mean against the 30.0 kWh/boe target" tone="purple">
+      <TrendArea
+        label="Energy intensity per day for the last 14 days against the target"
+        labels={AOA_ENERGY_DAYS}
+        unit="kWh/boe"
+        decimals={1}
+        height={230}
+        series={[{ id: 'intensity', label: 'Energy intensity', values: AOA_ENERGY, tone: 'purple' }]}
+        limits={[{ value: 30, label: 'Target', tone: 'success' }]}
       />
-      <p aria-live="polite" className="text-xs text-muted-foreground">
-        Last question: {last}
+    </Panel>
+  );
+}
+
+function AoaConfidence({ topic }: { topic: AoaTopic }) {
+  return (
+    <div className="flex items-center gap-5">
+      <RingGauge label="Confidence in this answer" value={topic.confidence} size={92} tone={topic.confidence >= 85 ? 'success' : 'sky'} hideLabel />
+      <p className="text-sm leading-relaxed text-[var(--kit-text-2)]">
+        <strong className="block text-base font-semibold text-[var(--kit-text)]">{topic.confidence >= 85 ? 'Well supported' : 'Supported, with gaps'}</strong>
+        Based on {topic.sources.length} sources, all read live at 14:00. Nothing was inferred from documents older than 30 days.
       </p>
     </div>
+  );
+}
+
+function AoaTopBar() {
+  return (
+    <div className="flex items-center gap-3 rounded-full border border-[var(--kit-rule)] bg-[var(--kit-surface)] py-2 pr-2 pl-3">
+      <AoaAssistantMark />
+      <div className="mr-2">
+        <p className="text-sm leading-tight font-semibold text-[var(--kit-text)]">Atlas</p>
+        <p className="text-xs text-[var(--kit-text-2)]">Operations assistant</p>
+      </div>
+      <StatusPill tone="sky" icon={<IconFlame />}>
+        Nordkapp
+      </StatusPill>
+      <StatusPill tone="success" icon={<IconDatabase />}>
+        Live data to 14:00 UTC
+      </StatusPill>
+      <span className="ml-auto text-sm text-[var(--kit-text-2)]">Day shift · Ingrid Haugen</span>
+      <Button variant="outline" size="sm">
+        <IconPlus /> New briefing
+      </Button>
+    </div>
+  );
+}
+
+function AiOperationsAssistantSignature() {
+  const [asked, setAsked] = useState<readonly AoaTopicId[]>(['trip']);
+  const [active, setActive] = useState<AoaTopicId>('trip');
+  const ask = (id: AoaTopicId) => {
+    setAsked((current) => (current.includes(id) ? current : [...current, id]));
+    setActive(id);
+  };
+  const topic = AOA_TOPICS[active];
+  const remaining = AOA_ORDER.filter((id) => !asked.includes(id)).map((id) => AOA_TOPICS[id]);
+  return (
+    <LookScope look="glass">
+      <Canvas className="flex min-h-[860px] flex-col gap-4">
+        <AoaTopBar />
+        <div className="grid flex-1 grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] gap-4">
+          <Panel>
+            <div className="flex flex-1 flex-col gap-5">
+              <div className="flex flex-1 flex-col gap-4">
+                {asked.map((id) => (
+                  <AoaExchange key={id} topic={AOA_TOPICS[id]} open={id === active} onOpen={setActive} />
+                ))}
+              </div>
+              <div className="flex flex-col gap-3 border-t border-[var(--kit-rule)] pt-4">
+                <AoaSuggestions topics={remaining} onAsk={ask} />
+                <AoaComposer />
+              </div>
+            </div>
+          </Panel>
+          <div className="flex min-w-0 flex-col gap-4">
+            <div className="px-1">
+              <p className="text-sm text-[var(--kit-text-2)]">Evidence for</p>
+              <h2 className="text-xl leading-snug font-semibold text-[var(--kit-text)]">{topic.question}</h2>
+            </div>
+            <AoaEvidence topic={active} />
+            <Panel className="h-auto" title="Sources" subtitle="Numbered as cited in the answer">
+              <AoaSources topic={topic} />
+            </Panel>
+            <Panel className="h-auto flex-1">
+              <div className="flex flex-1 items-center">
+                <AoaConfidence topic={topic} />
+              </div>
+            </Panel>
+          </div>
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+const AOA_STARTERS: readonly { id: AoaTopicId; icon: ReactNode; tone: Tone; hint: string }[] = [
+  { id: 'trip', icon: <IconGauge />, tone: 'pink', hint: 'Tripped 14 minutes ago' },
+  { id: 'export', icon: <IconFlame />, tone: 'sky', hint: '0.12 MSm³/d under plan' },
+  { id: 'orders', icon: <IconClipboardList />, tone: 'amber', hint: '6 open, 1 overdue' },
+  { id: 'energy', icon: <IconBolt />, tone: 'purple', hint: '31.2 kWh/boe today' },
+];
+
+const AOA_CHANGES: readonly { title: string; detail: string; tone: Tone; when: string }[] = [
+  { title: 'Recompressor tripped on high vibration', detail: 'Export moved to two stages at 13:49', tone: 'critical', when: '14 min ago' },
+  { title: 'Discharge temperature alarm raised', detail: '146.3 °C against a limit of 145.0 °C', tone: 'warning', when: '21 min ago' },
+  { title: 'Flaring down 6.5 kSm³/d on last week', detail: 'Lowest weekly mean this quarter', tone: 'success', when: 'Since Monday' },
+];
+
+function AiOperationsAssistantStart() {
+  const [picked, setPicked] = useState<AoaTopicId>('trip');
+  return (
+    <LookScope look="glass">
+      <Canvas className="flex flex-col gap-5">
+        <AoaTopBar />
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 py-6">
+          <div className="text-center">
+            <h2 className="text-4xl leading-tight font-semibold tracking-tight text-[var(--kit-text)]">Good afternoon, Ingrid</h2>
+            <p className="mt-2 text-lg text-[var(--kit-text-2)]">Three things changed at Nordkapp since you last looked. Where do you want to start?</p>
+          </div>
+          <AoaComposer placeholder={AOA_TOPICS[picked].question} />
+          <ul className="grid grid-cols-2 gap-4">
+            {AOA_STARTERS.map((starter) => (
+              <li key={starter.id}>
+                <button
+                  type="button"
+                  aria-pressed={picked === starter.id}
+                  onClick={() => setPicked(starter.id)}
+                  data-tone={starter.tone}
+                  className={`flex w-full cursor-pointer items-center gap-4 rounded-3xl border p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-[var(--kit-text)] ${
+                    picked === starter.id
+                      ? 'border-[var(--t-line)] bg-[color-mix(in_oklab,var(--t-line)_22%,transparent)]'
+                      : 'border-[var(--kit-rule)] bg-[var(--kit-surface)] hover:border-[var(--kit-rule-strong)]'
+                  }`}
+                >
+                  <IconChip tone={starter.tone} size="lg">
+                    {starter.icon}
+                  </IconChip>
+                  <span className="min-w-0">
+                    <span className="block text-base font-semibold text-[var(--kit-text)]">{AOA_TOPICS[starter.id].question}</span>
+                    <span className="block text-sm text-[var(--kit-text-2)]">{starter.hint}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Panel className="h-auto" title="Since you last looked" subtitle="12:10 UTC, before the shift meeting">
+            <ul>
+              {AOA_CHANGES.map((change) => (
+                <ListRow key={change.title} tone={change.tone} title={change.title} meta={change.detail} trailing={change.when} />
+              ))}
+            </ul>
+          </Panel>
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AoaPhone({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section aria-label={label} className="flex min-h-[640px] w-[360px] shrink-0 flex-col gap-4 rounded-[40px] border border-[var(--kit-rule-strong)] bg-[var(--kit-surface)] p-4 pt-6">
+      <span aria-hidden="true" className="mx-auto h-1.5 w-20 rounded-full bg-[var(--kit-rule-strong)]" />
+      {children}
+    </section>
+  );
+}
+
+function AiOperationsAssistantPhone() {
+  const topic = AOA_TOPICS.export;
+  return (
+    <LookScope look="glass">
+      <Canvas className="flex flex-wrap items-stretch justify-center gap-8 py-10">
+        <AoaPhone label="Answer on a phone">
+          <div className="flex items-center gap-2.5">
+            <AoaAssistantMark />
+            <p className="text-sm font-semibold text-[var(--kit-text)]">Atlas · Nordkapp</p>
+          </div>
+          <AoaQuestion>{topic.question}</AoaQuestion>
+          <div className="flex flex-1 flex-col gap-3 text-base leading-relaxed text-[var(--kit-text)]">
+            <p>
+              Export is held at 4.38 MSm³/d, 0.12 under plan
+              <AoaCite n={1} />. The first stage is 3.4 barg under its discharge pressure limit
+              <AoaCite n={2} />.
+            </p>
+            <AoaInlineCard>
+              <Meter label="Discharge pressure" value={48.6} max={60} unit="barg" decimals={1} high={52} target={{ value: 52, label: 'Limit' }} tone="warning" />
+            </AoaInlineCard>
+            <p className="text-sm text-[var(--kit-text-2)]">About 0.05 MSm³/d more is available before the limit.</p>
+          </div>
+          <AoaComposer placeholder="Ask a follow-up" />
+        </AoaPhone>
+        <AoaPhone label="Evidence sheet on a phone">
+          <div>
+            <p className="text-sm text-[var(--kit-text-2)]">Evidence for</p>
+            <p className="text-base font-semibold text-[var(--kit-text)]">{topic.question}</p>
+          </div>
+          <TrendArea
+            label="Gas export over the last 24 hours against the daily plan"
+            labels={AOA_HOURS}
+            unit="MSm³/d"
+            decimals={2}
+            height={170}
+            series={[{ id: 'export', label: 'Export', values: AOA_EXPORT_VALUES, tone: 'sky' }]}
+            limits={[{ value: PLANT_KPIS.gasExport.target, label: 'Plan', tone: 'warning' }]}
+          />
+          <AoaSources topic={topic} />
+        </AoaPhone>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AiOperationsAssistantPartExchange() {
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Panel>
+          <AoaExchange topic={AOA_TOPICS.orders} open onOpen={() => undefined} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AiOperationsAssistantPartFolded() {
+  const [open, setOpen] = useState<AoaTopicId>('energy');
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Panel>
+          <div className="flex flex-col gap-4">
+            <AoaExchange topic={AOA_TOPICS.trip} open={open === 'trip'} onOpen={setOpen} />
+            <AoaExchange topic={AOA_TOPICS.energy} open={open === 'energy'} onOpen={setOpen} />
+          </div>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AiOperationsAssistantPartAsk() {
+  const [asked, setAsked] = useState<readonly AoaTopicId[]>(['trip']);
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Panel title="Ask" subtitle="Suggestions leave the row once asked">
+          <div className="flex flex-col gap-3">
+            <AoaSuggestions topics={AOA_ORDER.filter((id) => !asked.includes(id)).map((id) => AOA_TOPICS[id])} onAsk={(id) => setAsked((current) => [...current, id])} />
+            <AoaComposer />
+          </div>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AiOperationsAssistantPartSources() {
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Panel title="Sources" subtitle="Numbered as cited in the answer">
+          <AoaSources topic={AOA_TOPICS.trip} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AiOperationsAssistantPartConfidence() {
+  return (
+    <LookScope look="glass">
+      <Canvas>
+        <Panel title="Confidence" subtitle="How well the answer is supported">
+          <AoaConfidence topic={AOA_TOPICS.orders} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function AiOperationsAssistantPartEvidence() {
+  return (
+    <LookScope look="glass">
+      <Canvas className="flex flex-col gap-4">
+        <AoaEvidence topic="export" />
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -704,19 +772,17 @@ export default definePage({
   id: 'ai-operations-assistant',
   title: 'AI operations assistant',
   summary:
-    'An assistant that shows its work: the conversation sits beside a canvas, and every answer puts its evidence there as a trend with events, a comparison or a list the shift can tick off.',
+    'A conversation-first screen for an operations assistant: answers carry their charts and cards inline, and a side canvas shows the full evidence, the numbered sources and how well the answer is supported.',
   guidance: {
     use: [
-      'When answers about the plant must be checked against the data behind them.',
-      'Give the evidence more room than the chat; the chart is what people trust.',
-      'Show what the assistant is looking at: asset, time range and signals.',
-      'Offer the questions people really ask as one-tap suggestions.',
+      'When people ask questions in words and need to check the answer against live data.',
+      'Number the citations in the prose and list the same numbers on the evidence canvas.',
+      'Fold earlier exchanges to a line, so the open answer and its evidence stay on one screen.',
     ],
     avoid: [
-      'An answer with no reasoning, tool steps or sources to open.',
-      'A canvas that keeps showing the evidence of the previous question.',
-      'Letting the assistant act on equipment; it explains and lists, people decide.',
-      'Streaming that cannot be stopped.',
+      'Answers without sources, or a confidence figure with no explanation of what it rests on.',
+      'Letting the assistant act on the plant from the chat; it reads and explains.',
+      'A wall of text: put the number, the chart or the list inline where it supports a claim.',
     ],
   },
   source,
@@ -724,135 +790,120 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Shown in the Dusk night theme. Choose a suggested question and watch the canvas follow the answer.',
+      description: 'The full screen in the glass look. Pick a suggested question: it joins the thread and the evidence canvas changes with it.',
       specimens: [
         {
-          id: 'AiOpsDashSignature',
-          title: 'AI operations assistant',
-          note: 'Pick it for an assistant workspace where every answer has to be backed by plant data.',
+          id: 'AiOperationsAssistantSignature',
+          title: 'Conversation with evidence',
+          note: 'Pick it when an assistant sits beside live plant data and every answer has to be checkable at a glance.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'dashboards/DashboardGrid.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'ai/ChatThread.tsx',
-            'ai/PromptSuggestions.tsx',
-            'ai/useStreamedText.ts',
-            'industrial/charts/TrendChart.tsx',
-            'industrial/RangeIndicator.tsx',
-            'industrial/StatusIndicator.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: AiOpsDashSignature,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/Panel.tsx', 'kit/TrendLine.tsx', 'kit/Bars.tsx', 'kit/ListRow.tsx', 'kit/RingGauge.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: AiOperationsAssistantSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same workspace, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Other screens of the same product: the start of a session, and the phone companion.',
       specimens: [
         {
-          id: 'AiOpsDashAura',
-          title: 'Aura',
-          note: 'Pick it when the assistant is one page of a product in the default light theme.',
+          id: 'AiOperationsAssistantStart',
+          title: 'Start of a session',
+          note: 'Pick it for the empty state: a greeting, what changed since the last visit and four questions worth asking.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: AiOpsDashAura,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/Panel.tsx', 'kit/IconChip.tsx', 'kit/ListRow.tsx'],
+          Component: AiOperationsAssistantStart,
         },
         {
-          id: 'AiOpsDashNeonDusk',
-          title: 'Neon dusk',
-          note: 'Pick it for a showpiece AI screen: purple on black with grotesk type.',
+          id: 'AiOperationsAssistantPhone',
+          title: 'Phone companion',
+          note: 'Pick it for a supervisor away from the desk: the answer on one screen and the evidence as a sheet behind it.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: AiOpsDashNeonDusk,
-        },
-        {
-          id: 'AiOpsDashHologram',
-          title: 'Hologram',
-          note: 'Pick it when the assistant sits beside 3D and digital-twin views.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: AiOpsDashHologram,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/Meter.tsx', 'kit/TrendArea.tsx', 'kit/ListRow.tsx'],
+          Component: AiOperationsAssistantPhone,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Panels',
-      description: 'Each part on its own, ready to drop into another workspace.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The pieces of the conversation and of the evidence canvas on their own.',
       specimens: [
         {
-          id: 'AiOpsDashThread',
-          title: 'Assistant column',
-          note: 'Pick it as the conversation side: context chips, the thread, suggestions and the input.',
+          id: 'AiOperationsAssistantPartExchange',
+          title: 'Exchange with inline card',
+          note: 'Pick it for one question and answer where a short list backs the claim inside the reply.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'ai/ChatThread.tsx', 'ai/PromptSuggestions.tsx', 'ai/useStreamedText.ts'],
-          Component: AiOpsDashThread,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/ListRow.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: AiOperationsAssistantPartExchange,
         },
         {
-          id: 'AiOpsDashTripCanvas',
-          title: 'Trend with event markers',
-          note: 'Pick it as evidence for a why question: one signal, its limits and the events on it.',
+          id: 'AiOperationsAssistantPartFolded',
+          title: 'Folded and open exchanges',
+          note: 'Pick it to keep a long thread on one screen: earlier answers fold to their one-line summary.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/charts/TrendChart.tsx'],
-          Component: AiOpsDashTripCanvas,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Bars.tsx'],
+          Component: AiOperationsAssistantPartFolded,
         },
         {
-          id: 'AiOpsDashCompareCanvas',
-          title: 'Comparison',
-          note: 'Pick it as evidence for a compare question: the same signal on several machines.',
+          id: 'AiOperationsAssistantPartEvidence',
+          title: 'Evidence panels',
+          note: 'Pick them for the side canvas: the full-size trend behind an answer and the limits it was judged against.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/charts/TrendChart.tsx'],
-          Component: AiOpsDashCompareCanvas,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/TrendArea.tsx', 'kit/Meter.tsx'],
+          Component: AiOperationsAssistantPartEvidence,
         },
         {
-          id: 'AiOpsDashWatchCanvas',
-          title: 'Watch list',
-          note: 'Pick it when the answer is a list of things to do or confirm.',
+          id: 'AiOperationsAssistantPartSources',
+          title: 'Numbered sources',
+          note: 'Pick it wherever an answer cites data: the same numbers as in the prose, with what each source is.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/RangeIndicator.tsx'],
-          Component: AiOpsDashWatchCanvas,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/ListRow.tsx', 'kit/IconChip.tsx'],
+          Component: AiOperationsAssistantPartSources,
         },
         {
-          id: 'AiOpsDashContext',
-          title: 'Context chips',
-          note: 'Pick it above a thread to say which asset, period and signals the assistant reads.',
+          id: 'AiOperationsAssistantPartAsk',
+          title: 'Suggestions and composer',
+          note: 'Pick it as the foot of a thread: questions worth asking next, above the place to type one.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          Component: AiOpsDashContext,
+          bleed: true,
+          uses: ['kit/Panel.tsx'],
+          Component: AiOperationsAssistantPartAsk,
         },
         {
-          id: 'AiOpsDashComposer',
-          title: 'Suggestions and input',
-          note: 'Pick it under a thread: the usual questions as buttons, free text below.',
+          id: 'AiOperationsAssistantPartConfidence',
+          title: 'Confidence note',
+          note: 'Pick it to say how well an answer is supported, in a ring and a sentence that explains it.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['ai/PromptSuggestions.tsx'],
-          Component: AiOpsDashComposer,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/RingGauge.tsx'],
+          Component: AiOperationsAssistantPartConfidence,
         },
       ],
     },

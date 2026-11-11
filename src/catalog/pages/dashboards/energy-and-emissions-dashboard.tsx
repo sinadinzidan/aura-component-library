@@ -1,646 +1,690 @@
-import { Badge } from '@cognite/aura/components/badge';
+import { Button } from '@cognite/aura/components/button';
 import {
   SegmentedControl,
   SegmentedControlButton,
   SegmentedControlList,
 } from '@cognite/aura/components/segmented-control';
+import {
+  IconBolt,
+  IconBulb,
+  IconCloud,
+  IconEngine,
+  IconFlame,
+  IconLeaf,
+  IconPlug,
+  IconRecycle,
+  IconWind,
+  IconX,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { SankeyDiagram } from '../../../library/experiences/journeys/SankeyDiagram';
-import type { SankeyDiagramLink, SankeyDiagramNode } from '../../../library/experiences/journeys/SankeyDiagram';
-import { sankeyLinkId } from '../../../library/experiences/journeys/sankeyLayout';
-import type { SankeySelection } from '../../../library/experiences/journeys/sankeyLayout';
-import { DistributionBar } from '../../../library/industrial/operations/DistributionBar';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { formatValue } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { PLANT_KPIS } from '../../data/plant';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { Delta } from '../../../library/kit/Delta';
+import { MixDonut, type MixSegment } from '../../../library/kit/energy-and-emissions-dashboard/MixDonut';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { cx, formatNumber, type Tone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import { LookScope } from '../../../library/looks/LookScope';
 import { makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './energy-and-emissions-dashboard.tsx?raw';
 
-type EnergyMode = 'energy' | 'co2';
+type EeMode = 'energy' | 'co2';
 
-type EnergyConsumerId = 'turbine' | 'heater' | 'flare' | 'pumps' | 'cooling' | 'utilities';
+type EeIdea = { title: string; detail: string; saving: string; status: 'Proposed' | 'In study' | 'Planned' };
 
-type EnergyConsumer = {
-  id: EnergyConsumerId;
+type EeView = {
+  id: string;
   label: string;
-  tag: string;
-  source: 'fuel' | 'power';
-  /** Energy in, MW, and how much of it ends as useful work. */
+  /** Name on the dock. */
+  short: string;
+  tone: Tone;
+  /** MW, 24-hour average. */
   energy: number;
-  useful: number;
-  /** CO₂, tonnes a day. */
+  /** Tonnes of CO₂ a day. */
   co2: number;
-  /** kWh and kg CO₂ per barrel of oil equivalent exported. */
-  energyIntensity: number;
-  co2Intensity: number;
+  /** Installed or contracted capacity, MW. */
+  capacity: number;
+  /** Change on last week, percent. */
+  change: number;
+  /** What the gauge card measures for this view. */
+  gauge: { title: string; value: number; caption: string };
+  /** Daily averages for the last seven days, MW. */
+  week: readonly number[];
+  consumers: readonly { label: string; value: number }[];
+  idea: EeIdea;
   seed: number;
-  /** Change over the last 30 days, percent. */
-  drift: number;
-  idea: { title: string; detail: string; energySaving: number; co2Saving: number; effort: 'Low' | 'Medium' | 'High'; status: 'Proposed' | 'In study' | 'Planned' };
 };
 
-/** Nordkapp, 24-hour average for 12 March. 108 MW in: 84 MW fuel gas and 24 MW imported power. */
-const ENERGY_CONSUMERS: readonly EnergyConsumer[] = [
+/** Nordkapp, 24-hour average for Thursday 12 March. 112 MW in, 358 tonnes of CO₂. */
+const EE_SOURCES: readonly EeView[] = [
   {
-    id: 'turbine',
-    label: 'Compressor gas turbine',
-    tag: '23-GT-9001',
-    source: 'fuel',
-    energy: 60,
-    useful: 21,
-    co2: 288,
-    energyIntensity: 17.3,
-    co2Intensity: 3.47,
-    seed: 201,
-    drift: 2.1,
-    idea: {
-      title: 'Recover exhaust heat',
-      detail: 'A waste heat recovery unit on the turbine exhaust would supply about 9 MW to the hot oil loop and retire most heater firing.',
-      energySaving: 9,
-      co2Saving: 52,
-      effort: 'High',
-      status: 'In study',
-    },
+    id: 'gas',
+    label: 'Fuel gas turbines',
+    short: 'Fuel gas',
+    tone: 'amber',
+    energy: 58,
+    co2: 318,
+    capacity: 72,
+    change: 2.1,
+    gauge: { title: 'Load factor', value: 81, caption: '58 of 72 MW installed' },
+    week: [55, 56, 54, 57, 56, 61, 58],
+    consumers: [
+      { label: 'Gas compression', value: 41 },
+      { label: 'Power generation', value: 12 },
+      { label: 'Hot oil heater', value: 5 },
+    ],
+    idea: { title: 'Recover turbine exhaust heat', detail: 'A waste heat unit on the second turbine would retire most heater firing.', saving: '−9 MW · −52 t CO₂ a day', status: 'In study' },
+    seed: 401,
   },
   {
-    id: 'heater',
-    label: 'Hot oil heater',
-    tag: '41-FA-4101',
-    source: 'fuel',
-    energy: 16,
-    useful: 13,
-    co2: 77,
-    energyIntensity: 4.6,
-    co2Intensity: 0.93,
-    seed: 202,
-    drift: -0.6,
-    idea: {
-      title: 'Retune burner excess air',
-      detail: 'Trimming stack oxygen from 4.5% to 3% cuts fuel by about 0.6 MW with no hardware change.',
-      energySaving: 0.6,
-      co2Saving: 3,
-      effort: 'Low',
-      status: 'Planned',
-    },
+    id: 'grid',
+    label: 'Grid import, hydro',
+    short: 'Grid',
+    tone: 'blue',
+    energy: 26,
+    co2: 6,
+    capacity: 40,
+    change: -3.4,
+    gauge: { title: 'Cable loading', value: 65, caption: '26 of 40 MW contracted' },
+    week: [29, 28, 30, 27, 28, 24, 26],
+    consumers: [
+      { label: 'Export pumps', value: 11 },
+      { label: 'Cooling water', value: 8 },
+      { label: 'Utilities and buildings', value: 7 },
+    ],
+    idea: { title: 'Move one compressor to electric drive', detail: 'The spare 14 MW on the cable can carry the recompressor after its overhaul.', saving: '−14 MW of fuel gas · −77 t CO₂ a day', status: 'Proposed' },
+    seed: 402,
+  },
+  {
+    id: 'wind',
+    label: 'Offshore wind link',
+    short: 'Wind',
+    tone: 'teal',
+    energy: 14,
+    co2: 0,
+    capacity: 24,
+    change: 18.6,
+    gauge: { title: 'Capacity factor', value: 58, caption: '14 of 24 MW installed' },
+    week: [9, 17, 21, 6, 11, 19, 14],
+    consumers: [
+      { label: 'Gas compression, electric', value: 8 },
+      { label: 'Export pumps', value: 4 },
+      { label: 'Battery charging', value: 2 },
+    ],
+    idea: { title: 'Follow the wind with cooling load', detail: 'Pre-cool the water loop when the turbines produce more than the plant can take.', saving: '−2 MW of grid import at peak', status: 'Planned' },
+    seed: 403,
+  },
+  {
+    id: 'heat',
+    label: 'Waste heat recovery',
+    short: 'Waste heat',
+    tone: 'green',
+    energy: 8,
+    co2: 0,
+    capacity: 9,
+    change: 0.8,
+    gauge: { title: 'Recovery rate', value: 89, caption: '8 of 9 MW recoverable' },
+    week: [8, 8, 7, 8, 8, 8, 8],
+    consumers: [
+      { label: 'Hot oil loop', value: 6 },
+      { label: 'Condensate stabiliser', value: 2 },
+    ],
+    idea: { title: 'Clean the economiser bundle', detail: 'Fouling costs about 1 MW of recovered heat; cleaning fits the April shutdown.', saving: '+1 MW recovered', status: 'Planned' },
+    seed: 404,
   },
   {
     id: 'flare',
-    label: 'Flare and pilots',
-    tag: '43-FL-4301',
-    source: 'fuel',
-    energy: 8,
-    useful: 0,
-    co2: 38,
-    energyIntensity: 2.3,
-    co2Intensity: 0.46,
-    seed: 203,
-    drift: 14.8,
-    idea: {
-      title: 'Restart the recompressor',
-      detail: 'Flash gas has gone to flare since the 13:46 trip. Recovering it again removes about 5 MW of flared gas.',
-      energySaving: 5,
-      co2Saving: 24,
-      effort: 'Low',
-      status: 'Planned',
-    },
+    label: 'Flared gas',
+    short: 'Flare',
+    tone: 'pink',
+    energy: 4,
+    co2: 21,
+    capacity: 5,
+    change: 34.8,
+    gauge: { title: 'Share of flare permit', value: 83, caption: '12.4 of 15 kSm³ a day' },
+    week: [2, 2, 3, 2, 2, 3, 4],
+    consumers: [
+      { label: 'Flash gas since the trip', value: 3 },
+      { label: 'Pilots and purge', value: 1 },
+    ],
+    idea: { title: 'Restart the recompressor', detail: 'Flash gas has gone to flare since the 13:46 trip. Recovering it ends most flaring.', saving: '−3 MW · −16 t CO₂ a day', status: 'Planned' },
+    seed: 405,
   },
   {
-    id: 'pumps',
-    label: 'Export pumps',
-    tag: '27-PA-2001A/B',
-    source: 'power',
-    energy: 9,
-    useful: 7,
-    co2: 4,
-    energyIntensity: 2.6,
-    co2Intensity: 0.05,
-    seed: 204,
-    drift: 0.4,
-    idea: {
-      title: 'Fit a variable speed drive',
-      detail: 'Export pump A runs throttled. A variable speed drive would save about 1.8 MW at the current rate.',
-      energySaving: 1.8,
-      co2Saving: 0.8,
-      effort: 'Medium',
-      status: 'Proposed',
-    },
-  },
-  {
-    id: 'cooling',
-    label: 'Cooling water',
-    tag: '40-PA-4001',
-    source: 'power',
-    energy: 6,
-    useful: 4,
-    co2: 2,
-    energyIntensity: 1.7,
-    co2Intensity: 0.02,
-    seed: 205,
-    drift: 3.2,
-    idea: {
-      title: 'Clean the interstage cooler',
-      detail: 'Work order WO-104471 restores the approach temperature and saves about 0.4 MW of pumping and 1.5 MW of compressor work.',
-      energySaving: 1.9,
-      co2Saving: 7.4,
-      effort: 'Low',
-      status: 'Planned',
-    },
-  },
-  {
-    id: 'utilities',
-    label: 'Utilities and quarters',
-    tag: 'NK-80',
-    source: 'power',
-    energy: 9,
-    useful: 6,
-    co2: 4,
-    energyIntensity: 2.6,
-    co2Intensity: 0.05,
-    seed: 206,
-    drift: -1.1,
-    idea: {
-      title: 'Heat the quarters by heat pump',
-      detail: 'Replacing direct electric heating in the living quarters saves about 1.2 MW through the winter.',
-      energySaving: 1.2,
-      co2Saving: 0.5,
-      effort: 'Medium',
-      status: 'Proposed',
-    },
+    id: 'diesel',
+    label: 'Diesel backup',
+    short: 'Diesel',
+    tone: 'purple',
+    energy: 2,
+    co2: 13,
+    capacity: 12,
+    change: -41,
+    gauge: { title: 'Running hours limit', value: 17, caption: '86 of 500 hours this year' },
+    week: [3, 1, 0, 4, 3, 2, 2],
+    consumers: [
+      { label: 'Emergency switchboard test', value: 1 },
+      { label: 'Fire water pumps', value: 1 },
+    ],
+    idea: { title: 'Test on battery, not diesel', detail: 'The weekly switchboard test can run from the 4 MWh battery instead.', saving: '−1 MW · −6 t CO₂ a day', status: 'Proposed' },
+    seed: 406,
   },
 ];
 
-const ENERGY_SOURCE_NODES: readonly SankeyDiagramNode[] = [
-  { id: 'fuel', label: 'Fuel gas', column: 0, series: 1 },
-  { id: 'power', label: 'Power import', column: 0, series: 2 },
-];
+const EE_TOTAL_ENERGY = EE_SOURCES.reduce((sum, entry) => sum + entry.energy, 0);
 
-const ENERGY_CONSUMER_NODES: readonly SankeyDiagramNode[] = ENERGY_CONSUMERS.map((consumer) => ({ id: consumer.id, label: consumer.label, column: 1 }));
+const EE_TOTAL_CO2 = EE_SOURCES.reduce((sum, entry) => sum + entry.co2, 0);
 
-type EnergyFlow = {
-  title: string;
-  unit: string;
-  decimals: number;
-  nodes: readonly SankeyDiagramNode[];
-  links: readonly SankeyDiagramLink[];
-  total: number;
-  description: string;
-  footnote: string;
-  label: string;
+const EE_ALL: EeView = {
+  id: 'all',
+  label: 'All sources',
+    short: 'All sources',
+  tone: 'accent',
+  energy: EE_TOTAL_ENERGY,
+  co2: EE_TOTAL_CO2,
+  capacity: 162,
+  change: 1.2,
+  gauge: { title: 'Low-carbon share', value: 43, caption: '48 of 112 MW from hydro, wind and heat' },
+  week: [106, 112, 115, 104, 108, 117, 112],
+  consumers: [
+    { label: 'Gas compression', value: 49 },
+    { label: 'Export pumps', value: 15 },
+    { label: 'Power generation', value: 12 },
+  ],
+  idea: { title: 'Electrify the recompressor', detail: 'The largest single cut on the list: the cable has room and the drive is due for overhaul.', saving: '−14 MW of fuel gas · −77 t CO₂ a day', status: 'Proposed' },
+  seed: 400,
 };
 
-const ENERGY_FLOWS: Record<EnergyMode, EnergyFlow> = {
-  energy: {
-    title: 'Energy flow',
-    unit: 'MW',
-    decimals: 0,
-    nodes: [
-      ...ENERGY_SOURCE_NODES,
-      ...ENERGY_CONSUMER_NODES,
-      { id: 'work', label: 'Useful work', column: 2, series: 3 },
-      { id: 'heat', label: 'Losses', column: 2 },
-    ],
-    links: ENERGY_CONSUMERS.flatMap((consumer) => [
-      { source: consumer.source, target: consumer.id, value: consumer.energy },
-      { source: consumer.id, target: 'work', value: consumer.useful, series: 3 as const },
-      { source: consumer.id, target: 'heat', value: consumer.energy - consumer.useful, series: 'neutral' as const },
-    ]),
-    total: 108,
-    description: '24-hour average · select a node or a ribbon to trace its path',
-    footnote: 'Of 108 MW in, 51 MW becomes useful work and 57 MW is lost as heat, 39 MW of it up the gas turbine exhaust.',
-    label: 'Energy flow from fuel gas and power import, through six consumers, to useful work and losses',
-  },
-  co2: {
-    title: 'CO₂ flow',
-    unit: 't/d',
-    decimals: 0,
-    nodes: [
-      ...ENERGY_SOURCE_NODES,
-      ...ENERGY_CONSUMER_NODES,
-      { id: 'scope1', label: 'Direct, scope 1', column: 2, series: 1 },
-      { id: 'scope2', label: 'Indirect, scope 2', column: 2, series: 2 },
-    ],
-    links: ENERGY_CONSUMERS.flatMap((consumer) => [
-      { source: consumer.source, target: consumer.id, value: consumer.co2 },
-      { source: consumer.id, target: consumer.source === 'fuel' ? 'scope1' : 'scope2', value: consumer.co2 },
-    ]),
-    total: 413,
-    description: '24-hour total by reporting scope · select a node or a ribbon to trace its path',
-    footnote: 'Of 413 t CO₂ a day, 403 t is burnt on site and the gas turbine alone accounts for 288 t; imported power adds 10 t.',
-    label: 'CO₂ flow from fuel gas and power import, through six consumers, to direct and indirect emissions',
-  },
-};
+const EE_DAYS = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
 
-const energyConsumer = (id: string): EnergyConsumer | undefined => ENERGY_CONSUMERS.find((consumer) => consumer.id === id);
+const EE_IDEA_TONE: Record<EeIdea['status'], Tone> = { Proposed: 'neutral', 'In study': 'info', Planned: 'success' };
 
-/** The consumer a selection is about: the node itself, or the consumer end of a ribbon. */
-function energyFocus(selection: SankeySelection | null, flow: EnergyFlow): EnergyConsumer | undefined {
-  if (!selection) return undefined;
-  if (selection.kind === 'node') return energyConsumer(selection.id);
-  const link = flow.links.find((candidate) => sankeyLinkId(candidate) === selection.id);
-  return link ? (energyConsumer(link.source) ?? energyConsumer(link.target)) : undefined;
+function eeView(id: string | null): EeView {
+  return EE_SOURCES.find((entry) => entry.id === id) ?? EE_ALL;
 }
 
-function energyTrend(consumer: EnergyConsumer, mode: EnergyMode): number[] {
-  const base = mode === 'energy' ? consumer.energy : consumer.co2;
-  return makeValues({ seed: consumer.seed, points: 30, base, amplitude: base * 0.03, noise: base * 0.012, drift: (base * consumer.drift) / 100, decimals: 1 });
+function eeSegments(mode: EeMode): MixSegment[] {
+  return EE_SOURCES.filter((entry) => (mode === 'energy' ? entry.energy : entry.co2) > 0).map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    value: mode === 'energy' ? entry.energy : entry.co2,
+    tone: entry.tone,
+  }));
 }
 
-function EnergyDashFlowPanel({
-  mode,
-  selection,
-  onSelect,
-}: {
-  mode: EnergyMode;
-  selection: SankeySelection | null;
-  onSelect: (selection: SankeySelection) => void;
-}) {
-  const flow = ENERGY_FLOWS[mode];
+function EeSourceIcon({ id }: { id: string }) {
+  if (id === 'gas') return <IconEngine />;
+  if (id === 'grid') return <IconPlug />;
+  if (id === 'wind') return <IconWind />;
+  if (id === 'heat') return <IconRecycle />;
+  if (id === 'flare') return <IconFlame />;
+  if (id === 'diesel') return <IconCloud />;
+  return <IconBolt />;
+}
 
+const eeUnit = (mode: EeMode): string => (mode === 'energy' ? 'MW' : 't CO₂/d');
+
+const eeValue = (view: EeView, mode: EeMode): number => (mode === 'energy' ? view.energy : view.co2);
+
+const eeShare = (view: EeView, mode: EeMode): number => Math.round((eeValue(view, mode) / (mode === 'energy' ? EE_TOTAL_ENERGY : EE_TOTAL_CO2)) * 100);
+
+function EeDonut({ mode, selected, onSelect, className }: { mode: EeMode; selected: string | null; onSelect: (id: string | null) => void; className?: string }) {
+  const view = eeView(selected);
   return (
-    <DashboardPanel title={flow.title} description={flow.description} footnote={flow.footnote}>
-      <SankeyDiagram nodes={flow.nodes} links={flow.links} unit={flow.unit} decimals={flow.decimals} label={flow.label} selection={selection} onSelect={onSelect} />
-    </DashboardPanel>
-  );
-}
-
-function EnergyDashInspectorPanel({ mode, selection }: { mode: EnergyMode; selection: SankeySelection | null }) {
-  const flow = ENERGY_FLOWS[mode];
-  const consumer = energyFocus(selection, flow);
-
-  if (!consumer) {
-    const node = flow.nodes.find((candidate) => candidate.id === selection?.id);
-    const flows = flow.links.filter((link) => link.source === node?.id || link.target === node?.id).sort((a, b) => b.value - a.value);
-    const total = flows.reduce((sum, link) => sum + link.value, 0);
-    return (
-      <DashboardPanel title={node?.label ?? 'Inspector'} description={node ? `${formatValue((total / flow.total) * 100, 0)}% of the total · by consumer` : 'Nothing selected'}>
-        {node ? (
-          <>
-            <ValueReadout value={total} unit={flow.unit} decimals={flow.decimals} size="lg" />
-            <ul className="flex flex-col gap-2 border-t border-default pt-3">
-              {flows.map((link) => {
-                const other = link.source === node.id ? link.target : link.source;
-                return (
-                  <li key={sankeyLinkId(link)} className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="text-base-foreground">{flow.nodes.find((candidate) => candidate.id === other)?.label}</span>
-                    <span className="tabular-nums text-medium-foreground">
-                      {formatValue(link.value, flow.decimals)} {flow.unit}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="text-xs text-muted-foreground">Select a consumer for its intensity, trend and abatement idea.</p>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">Select a node or a ribbon in the flow to inspect it.</p>
-        )}
-      </DashboardPanel>
-    );
-  }
-
-  const value = mode === 'energy' ? consumer.energy : consumer.co2;
-  const trend = energyTrend(consumer, mode);
-  const first = trend[0] ?? value;
-  const last = trend[trend.length - 1] ?? value;
-
-  return (
-    <DashboardPanel title={consumer.label} description={`${consumer.tag} · ${formatValue((value / flow.total) * 100, 0)}% of the plant total`}>
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">{mode === 'energy' ? 'Energy use' : 'CO₂ emitted'}</p>
-          <ValueReadout value={value} unit={flow.unit} decimals={flow.decimals} size="lg" />
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <p className="text-xs text-muted-foreground">Intensity</p>
-          <ValueReadout
-            value={mode === 'energy' ? consumer.energyIntensity : consumer.co2Intensity}
-            unit={mode === 'energy' ? 'kWh/boe' : 'kg/boe'}
-            decimals={mode === 'energy' ? 1 : 2}
-            size="sm"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2 border-t border-default pt-3">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="text-xs font-medium text-muted-foreground">Last 30 days</p>
-          <TrendDelta value={last} reference={first} format="percent" goodDirection="down" decimals={1} />
-        </div>
-        <Sparkline values={trend} label={`${consumer.label}, last 30 days`} variant="area" height={56} showLast unit={flow.unit} decimals={1} />
-      </div>
-
-      <div className="flex flex-col gap-1.5 border-t border-default pt-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs font-medium text-muted-foreground">Abatement idea</p>
-          <Badge variant="secondary">{consumer.idea.status}</Badge>
-        </div>
-        <p className="text-sm font-medium text-base-foreground">{consumer.idea.title}</p>
-        <p className="text-sm text-medium-foreground">{consumer.idea.detail}</p>
-        <p className="text-xs text-muted-foreground tabular-nums">
-          Saves {formatValue(consumer.idea.energySaving, 1)} MW · {formatValue(consumer.idea.co2Saving, 1)} t CO₂/d · {consumer.idea.effort.toLowerCase()} effort
-        </p>
-      </div>
-    </DashboardPanel>
-  );
-}
-
-function EnergyDashBalancePanel({ mode }: { mode: EnergyMode }) {
-  return mode === 'energy' ? (
-    <DashboardPanel title="Balance" description="Where 108 MW ends up">
-      <DistributionBar
-        label="Energy balance"
-        unit="MW"
-        segments={[
-          { id: 'work', label: 'Useful work', value: 51, colorClass: 'bg-chart-3-450' },
-          { id: 'heat', label: 'Losses', value: 57, colorClass: 'bg-chart-neutral-300' },
-        ]}
-      />
-      <p className="text-xs text-muted-foreground tabular-nums">
-        Energy intensity {formatValue(PLANT_KPIS.energyIntensity.value, 1)} kWh/boe against a target of {formatValue(PLANT_KPIS.energyIntensity.target, 1)}.
-      </p>
-    </DashboardPanel>
-  ) : (
-    <DashboardPanel title="Balance" description="How 413 t CO₂ a day is reported">
-      <DistributionBar
-        label="CO₂ by scope"
-        unit="t/d"
-        segments={[
-          { id: 'scope1', label: 'Direct, scope 1', value: 403, colorClass: 'bg-chart-1-450' },
-          { id: 'scope2', label: 'Indirect, scope 2', value: 10, colorClass: 'bg-chart-2-450' },
-        ]}
-      />
-      <p className="text-xs text-muted-foreground tabular-nums">Carbon intensity 4.97 kg CO₂/boe, of which the gas turbine is 3.47.</p>
-    </DashboardPanel>
-  );
-}
-
-function EnergyDashShortlistPanel({ selected, onSelect }: { selected: string | undefined; onSelect: (id: EnergyConsumerId) => void }) {
-  const ranked = [...ENERGY_CONSUMERS].sort((a, b) => b.idea.co2Saving - a.idea.co2Saving);
-
-  return (
-    <DashboardPanel title="Abatement shortlist" description="One idea per consumer, largest CO₂ saving first · select a row to trace it in the flow">
-      <table className="w-full table-fixed text-left text-sm">
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="pb-2 pr-3 pl-3.5 font-medium">
-              Idea
-            </th>
-            <th scope="col" className="w-24 pb-2 pr-3 text-right font-medium">
-              Energy, MW
-            </th>
-            <th scope="col" className="w-24 pb-2 pr-3 text-right font-medium">
-              CO₂, t/d
-            </th>
-            <th scope="col" className="w-20 pb-2 pr-3 font-medium">
-              Effort
-            </th>
-            <th scope="col" className="w-24 pb-2 font-medium">
-              Status
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {ranked.map((consumer) => {
-            const isSelected = consumer.id === selected;
-            return (
-              <tr key={consumer.id} data-selected={isSelected} className={`border-t border-default align-top ${isSelected ? 'bg-[color-mix(in_oklab,var(--primary-background)_10%,transparent)]' : ''}`}>
-                <td className={`border-l-2 py-2 pr-3 pl-2 ${isSelected ? 'border-l-[color:var(--primary-background)]' : 'border-l-transparent'}`}>
-                  <button
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => onSelect(consumer.id)}
-                    className="flex w-full cursor-pointer flex-col rounded-md px-1 text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--ring-default)]"
-                  >
-                    <span className="font-medium text-base-foreground">{consumer.idea.title}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {consumer.label} · <span className="font-mono">{consumer.tag}</span>
-                    </span>
-                  </button>
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-base-foreground">{formatValue(consumer.idea.energySaving, 1)}</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-base-foreground">{formatValue(consumer.idea.co2Saving, 1)}</td>
-                <td className="py-2 pr-3 text-medium-foreground">{consumer.idea.effort}</td>
-                <td className="py-2 text-medium-foreground">{consumer.idea.status}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </DashboardPanel>
-  );
-}
-
-/** Year to date on 12 March: day 71 of 365, against an annual permit of 160 kt CO₂. */
-const ENERGY_PERMIT = { annual: 160, emitted: 29.3, allowance: 31.1, forecast: 150.7 };
-const ENERGY_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function EnergyDashPermitPanel() {
-  const share = (value: number): string => `${Math.round((value / ENERGY_PERMIT.annual) * 10000) / 100}%`;
-
-  return (
-    <DashboardPanel
-      title="Emissions against permit"
-      description="Year to date, 1 January to 12 March · annual permit 160 kt CO₂"
-      footnote="29.3 kt emitted against an allowance of 31.1 kt at an even rate: 6% under pace. At today's rate the year ends at 150.7 kt, 94% of the permit."
+    <MixDonut
+      className={className}
+      label={mode === 'energy' ? 'Energy in by source, 24-hour average' : 'CO₂ emitted by source, tonnes a day'}
+      segments={eeSegments(mode)}
+      selected={selected}
+      onSelect={onSelect}
+      unit={eeUnit(mode)}
+      thickness={0.32}
     >
-      <div className="flex flex-wrap gap-x-10 gap-y-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">Emitted to date</p>
-          <ValueReadout value={ENERGY_PERMIT.emitted} unit="kt" decimals={1} size="md" />
+      <span data-tone={view.tone} className="flex max-w-[54cqw] flex-col items-center">
+        <span className="text-[clamp(0.75rem,3.8cqw,1rem)] font-semibold leading-tight text-[var(--kit-text-2)]">{selected === null ? (mode === 'energy' ? 'Energy in' : 'CO₂ emitted') : view.label}</span>
+        <span className="text-[18cqw] font-bold leading-none tracking-tight tabular-nums text-[var(--kit-text)]">{formatNumber(eeValue(view, mode))}</span>
+        <span className="mt-[1cqw] text-[clamp(0.75rem,3.8cqw,1rem)] font-semibold leading-tight text-[var(--kit-text-2)]">{mode === 'energy' ? 'MW, 24-hour average' : 'tonnes a day'}</span>
+        {selected === null ? null : (
+          <span className="mt-[1.5cqw] rounded-full bg-[var(--t-soft)] px-2.5 py-0.5 text-[clamp(0.75rem,3.4cqw,0.875rem)] font-semibold text-[var(--t-on-soft)]">{eeShare(view, mode)} % of the mix</span>
+        )}
+      </span>
+    </MixDonut>
+  );
+}
+
+function EeFigure({ value, unit, decimals = 0 }: { value: number; unit: string; decimals?: number }) {
+  return (
+    <p className="text-5xl font-bold leading-none tracking-tight tabular-nums text-[var(--kit-text)]">
+      {formatNumber(value, decimals)} <span className="text-base font-semibold text-[var(--kit-text-2)]">{unit}</span>
+    </p>
+  );
+}
+
+/** A satellite keeps its own family while the whole is shown, and takes the source's once one is picked. */
+const eeTone = (view: EeView, own: Tone): Tone => (view.id === 'all' ? own : view.tone);
+
+function EeOutputCard({ view, mode, className }: { view: EeView; mode: EeMode; className?: string }) {
+  const values = makeValues({ seed: view.seed, points: 24, base: eeValue(view, mode), amplitude: eeValue(view, mode) * 0.06, noise: eeValue(view, mode) * 0.03, cycles: 1.5, min: 0, decimals: 1 });
+  return (
+    <Panel className={className} tone={eeTone(view, 'amber')} title={mode === 'energy' ? 'Output now' : 'Emitting now'}>
+      <div className="flex flex-1 flex-col justify-between gap-2">
+        <EeFigure value={eeValue(view, mode)} unit={eeUnit(mode)} />
+        <div className="flex items-center gap-2 text-sm text-[var(--kit-text-2)]">
+          <Delta value={view.change} unit="%" good={view.id === 'wind' || view.id === 'heat' ? 'up' : 'down'} />
+          on last week
         </div>
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">Allowance to date</p>
-          <ValueReadout value={ENERGY_PERMIT.allowance} unit="kt" decimals={1} size="md" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">Forecast for the year</p>
-          <ValueReadout value={ENERGY_PERMIT.forecast} unit="kt" decimals={1} size="md" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <p className="text-xs text-muted-foreground">Headroom at year end</p>
-          <ValueReadout value={ENERGY_PERMIT.annual - ENERGY_PERMIT.forecast} unit="kt" decimals={1} size="md" />
-        </div>
+        <SparkLine values={values} label={`${view.label} over the last 24 hours`} tone={eeTone(view, 'amber')} className="h-10 w-full" />
       </div>
-      <div
-        role="img"
-        aria-label="Emissions against the annual permit: 29.3 kilotonnes emitted, allowance to date 31.1, forecast 150.7 of 160"
-        className="relative mt-2 h-5 w-full rounded-sm bg-chart-neutral-100"
-      >
-        <div className="absolute inset-y-0 left-0 rounded-sm bg-chart-1-200" style={{ width: share(ENERGY_PERMIT.forecast) }} />
-        <div className="absolute inset-y-0 left-0 rounded-sm bg-chart-1-450" style={{ width: share(ENERGY_PERMIT.emitted) }} />
-        <div className="absolute -inset-y-1.5 border-l-2 border-base-foreground" style={{ left: share(ENERGY_PERMIT.allowance) }} />
+    </Panel>
+  );
+}
+
+function EeGaugeCard({ view, className }: { view: EeView; className?: string }) {
+  return (
+    <Panel className={className} tone={eeTone(view, 'teal')} title={view.gauge.title}>
+      <div className="flex flex-1 items-center gap-5">
+        <RingGauge label={`${view.label}: ${view.gauge.title}`} value={view.gauge.value} size={100} tone={eeTone(view, 'teal')} hideLabel className="shrink-0" />
+        <p className="min-w-0 text-sm font-medium text-[var(--kit-text-2)]">{view.gauge.caption}</p>
       </div>
-      <div aria-hidden className="grid w-full grid-cols-12 text-xs text-muted-foreground">
-        {ENERGY_MONTHS.map((month) => (
-          <span key={month} className="border-l border-emphasized pl-1">
-            {month}
-          </span>
+    </Panel>
+  );
+}
+
+function EeConsumersCard({ view, className }: { view: EeView; className?: string }) {
+  const top = Math.max(...view.consumers.map((consumer) => consumer.value));
+  return (
+    <Panel className={className} tone={eeTone(view, 'blue')} title="Where it goes">
+      <div className="flex flex-1 flex-col justify-between gap-2">
+        {view.consumers.map((consumer) => (
+          <Meter key={consumer.label} label={consumer.label} value={consumer.value} max={top} unit="MW" tone={eeTone(view, 'blue')} hideScale />
         ))}
       </div>
-      <ul aria-label="Strip key" className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
-        <li className="inline-flex items-center gap-2">
-          <span aria-hidden className="size-2.5 rounded-xs bg-chart-1-450" /> Emitted
-        </li>
-        <li className="inline-flex items-center gap-2">
-          <span aria-hidden className="size-2.5 rounded-xs bg-chart-1-200" /> Forecast to year end
-        </li>
-        <li className="inline-flex items-center gap-2">
-          <span aria-hidden className="h-3 border-l-2 border-base-foreground" /> Allowance to date
-        </li>
-        <li>The full strip is the permit; each month is one twelfth of it.</li>
-      </ul>
-    </DashboardPanel>
+    </Panel>
   );
 }
 
-function EnergyDashDashboard() {
-  // Archetype: flow-first. A diagram of where energy goes is the screen; an inspector explains
-  //   whatever is selected in it, and a permit strip runs along the bottom.
-  // Dominant element: the Sankey-style flow from fuel gas and power import, through the
-  //   consumers, to useful work and losses (or to emission scopes).
-  // Interaction: hover or select a node or ribbon to light its whole path and fill the inspector
-  //   with that consumer's intensity, trend and abatement idea; pick an idea in the shortlist to
-  //   trace it in the flow; switch the diagram between energy (MW) and CO₂ (t/d).
-  const [mode, setMode] = useState<EnergyMode>('energy');
-  const [selection, setSelection] = useState<SankeySelection | null>({ kind: 'node', id: 'turbine' });
-  const focus = energyFocus(selection, ENERGY_FLOWS[mode]);
+function EeOtherCard({ view, mode, className }: { view: EeView; mode: EeMode; className?: string }) {
+  const intensity = view.energy === 0 ? 0 : (view.co2 * 1000) / (view.energy * 24);
+  return (
+    <Panel className={className} tone={eeTone(view, 'pink')} title={mode === 'energy' ? 'Carbon' : 'Energy'}>
+      <div className="flex flex-1 flex-col justify-between gap-2">
+        <EeFigure value={mode === 'energy' ? view.co2 : view.energy} unit={eeUnit(mode === 'energy' ? 'co2' : 'energy')} />
+        <p className="text-sm font-medium text-[var(--kit-text-2)]">
+          {view.co2 === 0 ? 'No direct emissions from this source.' : `${formatNumber(intensity)} kg CO₂ for every MWh it delivers.`}
+        </p>
+        <StatusPill tone={view.co2 === 0 ? 'success' : view.id === 'all' || intensity > 200 ? 'warning' : 'neutral'} icon={view.co2 === 0 ? <IconLeaf /> : undefined} className="self-start">
+          {view.co2 === 0 ? 'Carbon free' : view.id === 'all' ? '51 t over the daily budget' : `${Math.round((view.co2 / EE_TOTAL_CO2) * 100)} % of site CO₂`}
+        </StatusPill>
+      </div>
+    </Panel>
+  );
+}
 
-  const changeMode = (next: EnergyMode) => {
+function EeWeekCard({ view, className }: { view: EeView; className?: string }) {
+  const low = Math.min(...view.week);
+  const high = Math.max(...view.week);
+  return (
+    <Panel className={className} tone={eeTone(view, 'purple')} title="Seven days">
+      <div className="flex flex-1 flex-col justify-between gap-2">
+        <SparkLine values={view.week} label={`${view.label}, daily average for the last seven days`} tone={eeTone(view, 'purple')} variant="bars" className="h-16 w-full" />
+        <div className="flex justify-between text-xs font-medium text-[var(--kit-text-2)]">
+          {EE_DAYS.map((day) => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+        <p className="text-sm font-medium text-[var(--kit-text-2)]">
+          Between {low} and {high} MW a day.
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+function EeIdeaCard({ view, className }: { view: EeView; className?: string }) {
+  return (
+    <Panel className={className} tone={eeTone(view, 'green')} title="Best idea" actions={<StatusPill tone={EE_IDEA_TONE[view.idea.status]}>{view.idea.status}</StatusPill>}>
+      <div className="flex flex-1 flex-col justify-between gap-2">
+        <div>
+          <p className="text-base font-bold text-[var(--kit-text)]">{view.idea.title}</p>
+          <p className="mt-1 text-sm text-[var(--kit-text-2)]">{view.idea.detail}</p>
+        </div>
+        <p className="flex items-center gap-2 text-sm font-bold text-[var(--kit-text)] [&>svg]:size-4">
+          <IconBulb aria-hidden="true" />
+          {view.idea.saving}
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+function EeToolbar({ mode, onMode }: { mode: EeMode; onMode: (mode: EeMode) => void }) {
+  return (
+    <div className="flex items-center gap-4 self-center rounded-full bg-[var(--kit-surface)] py-2 pl-2 pr-5 shadow-lg">
+      <IconChip tone="accent" size="sm">
+        <IconBolt />
+      </IconChip>
+      <span className="whitespace-nowrap text-base font-bold text-[var(--kit-text)]">Nordkapp energy</span>
+      <SegmentedControl value={mode} onValueChange={(next) => onMode(next === 'co2' ? 'co2' : 'energy')}>
+        <SegmentedControlList size="small" aria-label="Measure">
+          <SegmentedControlButton value="energy">Energy</SegmentedControlButton>
+          <SegmentedControlButton value="co2">CO₂</SegmentedControlButton>
+        </SegmentedControlList>
+      </SegmentedControl>
+      <span className="whitespace-nowrap text-sm font-medium text-[var(--kit-text-2)]">Thu 12 March</span>
+    </div>
+  );
+}
+
+function EeDock({ mode, selected, onSelect }: { mode: EeMode; selected: string | null; onSelect: (id: string | null) => void }) {
+  return (
+    <div role="group" aria-label="Source" className="flex flex-wrap items-center justify-center gap-2">
+      {[EE_ALL, ...EE_SOURCES].map((entry) => {
+        const id = entry.id === 'all' ? null : entry.id;
+        const active = selected === id;
+        return (
+          <button
+            key={entry.id}
+            type="button"
+            data-tone={entry.tone}
+            aria-pressed={active}
+            onClick={() => onSelect(id)}
+            className={cx(
+              'flex h-10 cursor-pointer items-center gap-2 rounded-full pl-2.5 pr-4 text-sm font-semibold outline-none transition-colors focus-visible:[box-shadow:var(--shadow-focus-ring)]',
+              active ? 'bg-[var(--t-solid)] text-[var(--t-on-solid)] shadow-md' : 'bg-[var(--kit-surface)] text-[var(--kit-text)] hover:bg-[var(--t-soft)]'
+            )}
+          >
+            <span className={cx('size-3 rounded-full', active ? 'bg-current' : 'bg-[var(--t-line)]')} />
+            {entry.short}
+            <span className={cx('tabular-nums', active ? '' : 'text-[var(--kit-text-2)]')}>{formatNumber(eeValue(entry, mode))}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function EeOrbit() {
+  const [mode, setMode] = useState<EeMode>('energy');
+  const [selected, setSelected] = useState<string | null>(null);
+  const view = eeView(selected);
+  const pick = (id: string | null) => setSelected(id !== null && eeSegments(mode).some((segment) => segment.id === id) ? id : null);
+  const switchMode = (next: EeMode) => {
     setMode(next);
-    // Sinks differ between the two diagrams, so a selection that does not exist in the new one
-    // falls back to the consumer it belonged to.
-    const exists = selection?.kind === 'node' && ENERGY_FLOWS[next].nodes.some((node) => node.id === selection.id);
-    if (!exists) setSelection({ kind: 'node', id: focus?.id ?? 'turbine' });
+    if (selected !== null && !eeSegments(next).some((segment) => segment.id === selected)) setSelected(null);
   };
 
   return (
-    <DashboardFrame
-      title="Energy and emissions"
-      subtitle="Nordkapp gas processing plant · 12 March 2026, 24-hour average"
-      status={<StatusIndicator tone="success" label="Under permit pace" detail="6% headroom" />}
-      actions={
-        <SegmentedControl value={mode} onValueChange={(value) => changeMode(value === 'co2' ? 'co2' : 'energy')}>
-          <SegmentedControlList size="small" aria-label="Quantity shown in the flow">
-            <SegmentedControlButton value="energy">Energy, MW</SegmentedControlButton>
-            <SegmentedControlButton value="co2">CO₂, t/d</SegmentedControlButton>
-          </SegmentedControlList>
-        </SegmentedControl>
-      }
-    >
-      <DashboardGrid>
-        <DashboardCell span={8}>
-          <EnergyDashFlowPanel mode={mode} selection={selection} onSelect={setSelection} />
-        </DashboardCell>
-        <DashboardCell span={4}>
-          <div className="flex min-w-0 flex-col gap-4 [&>*:first-child]:flex-1">
-            <EnergyDashInspectorPanel mode={mode} selection={selection} />
-            <EnergyDashBalancePanel mode={mode} />
+    <LookScope look="soft">
+      <Canvas className="flex h-[900px] flex-col gap-5">
+        <EeToolbar mode={mode} onMode={switchMode} />
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)] gap-5">
+          <div className="grid min-h-0 grid-rows-3 gap-5">
+            <EeOutputCard view={view} mode={mode} className="ml-6" />
+            <EeGaugeCard view={view} className="mr-6" />
+            <EeConsumersCard view={view} className="ml-6" />
           </div>
-        </DashboardCell>
-        <DashboardCell span={12}>
-          <EnergyDashShortlistPanel selected={focus?.id} onSelect={(id) => setSelection({ kind: 'node', id })} />
-        </DashboardCell>
-        <DashboardCell span={12}>
-          <EnergyDashPermitPanel />
-        </DashboardCell>
-      </DashboardGrid>
-    </DashboardFrame>
+          <div className="flex min-w-0 items-center justify-center">
+            <EeDonut mode={mode} selected={selected} onSelect={pick} className="w-full max-w-[430px]" />
+          </div>
+          <div className="grid min-h-0 grid-rows-3 gap-5">
+            <EeOtherCard view={view} mode={mode} className="mr-6" />
+            <EeWeekCard view={view} className="ml-6" />
+            <EeIdeaCard view={view} className="mr-6" />
+          </div>
+        </div>
+        <EeDock mode={mode} selected={selected} onSelect={pick} />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function EnergyDashSignature() {
+function EnergyAndEmissionsDashboardSignature() {
+  return <EeOrbit />;
+}
+
+const EE_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Cumulative CO₂ this year in kilotonnes, to 12 March, then the forecast at today's rate. */
+const EE_YEAR_ACTUAL = [0, 11.4, 21.6, 26.1];
+
+const EE_YEAR_LABELS = ['1 Jan', '1 Feb', '1 Mar', '12 Mar', '1 Apr', '1 May', '1 Jun', '1 Jul', '1 Aug', '1 Sep', '1 Oct', '1 Nov', '31 Dec'];
+
+const EE_YEAR_FORECAST = [0, 11.4, 21.6, 26.1, 32.9, 43.6, 54.7, 65.4, 76.5, 87.6, 98.3, 109.4, 120.1];
+
+/** The permit of 112 kt spread evenly over the year, at the same dates. */
+const EE_YEAR_BUDGET = [0, 9.3, 18.7, 22.1, 28, 37.3, 46.7, 56, 65.3, 74.7, 84, 93.3, 112];
+
+const EE_MONTH_SOURCES = [
+  { id: 'gas', label: 'Fuel gas turbines', tone: 'amber', values: [9.9, 8.9, 3.9] },
+  { id: 'flare', label: 'Flared gas', tone: 'pink', values: [0.9, 0.7, 0.4] },
+  { id: 'other', label: 'Diesel and grid', tone: 'purple', values: [0.6, 0.6, 0.2] },
+] as const;
+
+function EnergyAndEmissionsDashboardPermit() {
+  const [scope, setScope] = useState('year');
+  const year = scope === 'year';
   return (
-    <ThemeScope preset="aurora" className="w-full">
-      <EnergyDashDashboard />
-    </ThemeScope>
+    <LookScope look="soft">
+      <Canvas className="flex flex-col gap-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-bold tracking-tight text-[var(--kit-text)]">The permit lasts until late November</h2>
+            <p className="mt-1 text-base text-[var(--kit-text-2)]">At today’s rate Nordkapp emits 120 kt of CO₂ this year against a permit of 112 kt.</p>
+          </div>
+          <SegmentedControl value={scope} onValueChange={(next) => setScope(String(next))}>
+            <SegmentedControlList size="small" aria-label="Period">
+              <SegmentedControlButton value="year">Whole year</SegmentedControlButton>
+              <SegmentedControlButton value="date">To date</SegmentedControlButton>
+            </SegmentedControlList>
+          </SegmentedControl>
+        </div>
+        <div className="grid grid-cols-12 gap-5">
+          <Panel className="col-span-4" tone="amber" title="Permit used">
+            <div className="flex flex-1 flex-col items-center justify-center gap-4">
+              <RingGauge label="Share of the annual CO₂ permit used" value={23} size={208} tone="amber" hideLabel />
+              <p className="text-center text-sm font-medium text-[var(--kit-text-2)]">
+                26.1 of 112 kt used with 19 % of the year gone.
+                <strong className="block text-base font-bold text-[var(--kit-text)]">4 points ahead of budget</strong>
+              </p>
+            </div>
+          </Panel>
+          <Panel className="col-span-8" title={year ? 'Cumulative CO₂, forecast to December' : 'Cumulative CO₂ to 12 March'} subtitle="Kilotonnes against an even budget">
+            <TrendArea
+              label="Cumulative CO₂ emissions this year against the permit budget"
+              labels={year ? EE_YEAR_LABELS : EE_YEAR_LABELS.slice(0, 4)}
+              unit="kt"
+              decimals={1}
+              height={270}
+              series={[
+                { id: 'actual', label: year ? 'Actual and forecast' : 'Actual', values: year ? EE_YEAR_FORECAST : EE_YEAR_ACTUAL, tone: 'amber' },
+                { id: 'budget', label: 'Even budget', values: year ? EE_YEAR_BUDGET : EE_YEAR_BUDGET.slice(0, 4), tone: 'neutral', dashed: true },
+              ]}
+              limits={year ? [{ value: 112, label: 'Permit', tone: 'critical' }] : []}
+            />
+          </Panel>
+          <Panel className="col-span-7" tone="pink" title="This year by source" subtitle="Kilotonnes of CO₂ a month">
+            <Bars
+              label="CO₂ emitted per month this year, by source"
+              categories={EE_MONTHS.slice(0, 3)}
+              series={EE_MONTH_SOURCES.map((entry) => ({ id: entry.id, label: entry.label, values: entry.values, tone: entry.tone }))}
+              stacked
+              decimals={1}
+              unit="kt"
+              height={200}
+            />
+          </Panel>
+          <Panel className="col-span-5" tone="green" title="What closes the gap" subtitle="8 kt to find before December">
+            <ul className="flex flex-1 flex-col justify-between">
+              {[EE_SOURCES[1], EE_SOURCES[0], EE_SOURCES[4]].map((entry) => (
+                <ListRow
+                  key={entry.id}
+                  leading={
+                    <IconChip tone={entry.tone} size="sm">
+                      <EeSourceIcon id={entry.id} />
+                    </IconChip>
+                  }
+                  title={entry.idea.title}
+                  meta={entry.idea.saving}
+                  trailing={<StatusPill tone={EE_IDEA_TONE[entry.idea.status]}>{entry.idea.status}</StatusPill>}
+                />
+              ))}
+            </ul>
+          </Panel>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function EnergyDashAura() {
+function EnergyAndEmissionsDashboardPhone() {
+  const [selected, setSelected] = useState<string | null>('wind');
+  const view = eeView(selected);
   return (
-    <ThemeScope preset="aura" className="w-full">
-      <EnergyDashDashboard />
-    </ThemeScope>
+    <LookScope look="soft">
+      <Canvas className="flex justify-center">
+        <div className="flex w-full max-w-[390px] flex-col gap-4 rounded-[40px] bg-[var(--kit-surface)] p-5 shadow-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-[var(--kit-text-2)]">Thu 12 March</p>
+              <h2 className="text-2xl font-bold tracking-tight text-[var(--kit-text)]">Energy mix</h2>
+            </div>
+            {selected === null ? null : (
+              <Button variant="outline" size="sm" onClick={() => setSelected(null)}>
+                <IconX /> All sources
+              </Button>
+            )}
+          </div>
+          <EeDonut mode="energy" selected={selected} onSelect={setSelected} className="mx-auto w-full max-w-[300px]" />
+          <EeGaugeCard view={view} />
+          <ul className="flex flex-col gap-2">
+            {EE_SOURCES.slice(0, 4).map((entry) => (
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  data-tone={entry.tone}
+                  aria-pressed={selected === entry.id}
+                  onClick={() => setSelected(selected === entry.id ? null : entry.id)}
+                  className={cx(
+                    'flex w-full cursor-pointer items-center gap-3 rounded-3xl p-3 text-left outline-none focus-visible:[box-shadow:var(--shadow-focus-ring)]',
+                    selected === entry.id ? 'bg-[var(--t-soft)]' : 'bg-[var(--kit-well)]'
+                  )}
+                >
+                  <IconChip tone={entry.tone} size="sm">
+                    <EeSourceIcon id={entry.id} />
+                  </IconChip>
+                  <span className="flex-1 text-sm font-semibold text-[var(--kit-text)]">{entry.label}</span>
+                  <span className="text-base font-bold tabular-nums text-[var(--kit-text)]">{entry.energy} MW</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function EnergyDashNordicNight() {
+function EePart({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <ThemeScope preset="nordic-night" className="w-full">
-      <EnergyDashDashboard />
-    </ThemeScope>
+    <LookScope look="soft" className={cx('flex flex-col', className)}>
+      <Canvas className="flex min-h-0 flex-1 flex-col justify-center gap-5">{children}</Canvas>
+    </LookScope>
   );
 }
 
-function EnergyDashBlueprint() {
+function EnergyAndEmissionsDashboardDonut() {
+  const [selected, setSelected] = useState<string | null>('grid');
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <EnergyDashDashboard />
-    </ThemeScope>
+    <EePart className="h-[500px]">
+      <EeDonut mode="energy" selected={selected} onSelect={setSelected} className="mx-auto w-full max-w-[400px]" />
+    </EePart>
   );
 }
 
-function EnergyDashPanelFlow() {
-  const [selection, setSelection] = useState<SankeySelection | null>({ kind: 'node', id: 'pumps' });
-
-  return <EnergyDashFlowPanel mode="energy" selection={selection} onSelect={setSelection} />;
+function EnergyAndEmissionsDashboardControls() {
+  const [mode, setMode] = useState<EeMode>('co2');
+  const [selected, setSelected] = useState<string | null>('gas');
+  return (
+    <EePart className="h-[500px]">
+      <EeToolbar mode={mode} onMode={setMode} />
+      <EeDonut mode={mode} selected={selected} onSelect={setSelected} className="mx-auto w-full max-w-[250px]" />
+      <EeDock mode={mode} selected={selected} onSelect={setSelected} />
+    </EePart>
+  );
 }
 
-function EnergyDashPanelInspector() {
-  return <EnergyDashInspectorPanel mode="energy" selection={{ kind: 'node', id: 'pumps' }} />;
+function EnergyAndEmissionsDashboardOutput() {
+  return (
+    <EePart className="h-[310px]">
+      <EeOutputCard view={EE_SOURCES[0]} mode="energy" />
+    </EePart>
+  );
 }
 
-function EnergyDashPanelCarbonFlow() {
-  const [selection, setSelection] = useState<SankeySelection | null>(null);
-
-  return <EnergyDashFlowPanel mode="co2" selection={selection} onSelect={setSelection} />;
+function EnergyAndEmissionsDashboardGauge() {
+  return (
+    <EePart className="h-[310px]">
+      <EeGaugeCard view={EE_SOURCES[2]} />
+    </EePart>
+  );
 }
 
-function EnergyDashPanelSourceInspector() {
-  return <EnergyDashInspectorPanel mode="co2" selection={{ kind: 'node', id: 'fuel' }} />;
+function EnergyAndEmissionsDashboardConsumers() {
+  return (
+    <EePart className="h-[310px]">
+      <EeConsumersCard view={EE_SOURCES[1]} />
+    </EePart>
+  );
 }
 
-function EnergyDashPanelBalance() {
-  return <EnergyDashBalancePanel mode="energy" />;
+function EnergyAndEmissionsDashboardCarbon() {
+  return (
+    <EePart className="h-[310px]">
+      <EeOtherCard view={EE_SOURCES[4]} mode="energy" />
+    </EePart>
+  );
 }
 
-function EnergyDashPanelPermit() {
-  return <EnergyDashPermitPanel />;
+function EnergyAndEmissionsDashboardWeek() {
+  return (
+    <EePart className="h-[310px]">
+      <EeWeekCard view={EE_SOURCES[2]} />
+    </EePart>
+  );
 }
 
-function EnergyDashPanelShortlist() {
-  const [selected, setSelected] = useState<EnergyConsumerId>('flare');
-
-  return <EnergyDashShortlistPanel selected={selected} onSelect={setSelected} />;
+function EnergyAndEmissionsDashboardIdea() {
+  return (
+    <EePart className="h-[310px]">
+      <EeIdeaCard view={EE_SOURCES[3]} />
+    </EePart>
+  );
 }
 
 export default definePage({
   id: 'energy-and-emissions-dashboard',
   title: 'Energy and emissions',
   summary:
-    'Where the energy goes and what it emits. A flow diagram from fuel gas and imported power, through every consumer, to useful work and losses is the screen; select any part of it to see intensity, trend and the best abatement idea, with the year against the emissions permit along the bottom.',
+    'Where the plant’s energy comes from and what it emits. A large mix donut holds the total; pick a slice and the six cards around it answer for that source: output, loading, where it goes, carbon, the week and the best idea to cut it.',
   guidance: {
     use: [
-      'For energy management and emissions reporting, where the question is where it all goes.',
-      'When a few large consumers dominate and the eye should find them without reading numbers.',
-      'Let the same diagram answer in energy and in CO₂; the shapes differ and that is the insight.',
-      'Pair every consumer with one concrete abatement idea, sized in MW and tonnes.',
+      'When a handful of sources or categories make up one total and each deserves the same set of answers.',
+      'Keep the satellites’ roles fixed and let the selection change their content, so the eye learns where to look.',
+      'Offer the same picture in energy and in CO₂; the shares differ and that is the insight.',
     ],
     avoid: [
-      'More than about eight nodes in a column; group the small consumers.',
-      'Colouring every consumer. Colour the sources and the outcomes; the middle stays neutral.',
-      'A flow diagram for values that do not add up; ribbons promise a balance.',
-      'Showing permit status as a gauge. A strip shows pace, forecast and limit on one scale.',
+      'More than about seven slices; group the tail.',
+      'A legend far from the ring. The dock under it is the legend and the selector at once.',
+      'Status colour for categories: sources get decorative families, judgements get status tones.',
     ],
   },
   source,
@@ -648,148 +692,142 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description:
-        'Shown in the Aurora theme. Hover or select a node or a ribbon to light its path and fill the inspector, pick an idea in the shortlist, or switch the flow between energy and CO₂.',
+      description: 'Soft look: the energy-mix donut in the centre with satellite cards around it.',
       specimens: [
         {
-          id: 'EnergyDashSignature',
-          title: 'Energy and emissions',
-          note: 'Pick it when the story is a balance: what comes in, who uses it and what is lost or emitted.',
+          id: 'EnergyAndEmissionsDashboardSignature',
+          title: 'Energy mix orbit',
+          note: 'Pick it for an energy or sustainability lead who explores one total by its parts.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'dashboards/DashboardGrid.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'experiences/journeys/SankeyDiagram.tsx',
-            'experiences/journeys/sankeyLayout.ts',
-            'industrial/operations/DistributionBar.tsx',
-            'industrial/Sparkline.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/TrendDelta.tsx',
-            'industrial/ValueReadout.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: EnergyDashSignature,
+          bleed: true,
+          uses: ['kit/energy-and-emissions-dashboard/MixDonut.tsx', 'kit/Panel.tsx', 'kit/RingGauge.tsx', 'kit/Meter.tsx', 'kit/SparkLine.tsx', 'looks/LookScope.tsx'],
+          Component: EnergyAndEmissionsDashboardSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same dashboard, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Other screens of the same product.',
       specimens: [
         {
-          id: 'EnergyDashAura',
-          title: 'Aura',
-          note: 'Pick it when the dashboard sits among other Fusion pages and should not stand apart.',
+          id: 'EnergyAndEmissionsDashboardPermit',
+          title: 'Permit year',
+          note: 'Pick it for the emissions review: how much of the annual permit is used and what closes the gap.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: EnergyDashAura,
+          bleed: true,
+          uses: ['kit/TrendArea.tsx', 'kit/Bars.tsx', 'kit/RingGauge.tsx', 'kit/ListRow.tsx'],
+          Component: EnergyAndEmissionsDashboardPermit,
         },
         {
-          id: 'EnergyDashNordicNight',
-          title: 'Nordic night',
-          note: 'Pick it for a view that stays open all shift: teal on tinted dark surfaces.',
+          id: 'EnergyAndEmissionsDashboardPhone',
+          title: 'Phone',
+          note: 'Pick it for a quick look on a phone: the donut, one gauge and the sources as a list.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: EnergyDashNordicNight,
-        },
-        {
-          id: 'EnergyDashBlueprint',
-          title: 'Blueprint',
-          note: 'Pick it for process engineers: blue accents, tinted panels and sharp corners.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: EnergyDashBlueprint,
+          bleed: true,
+          uses: ['kit/energy-and-emissions-dashboard/MixDonut.tsx', 'kit/IconChip.tsx'],
+          Component: EnergyAndEmissionsDashboardPhone,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Panels',
-      description: 'Each part on its own, ready to drop into another dashboard.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The donut, its controls and the six satellites on their own.',
       specimens: [
         {
-          id: 'EnergyDashPanelFlow',
-          title: 'Energy flow',
-          note: 'Pick it to show a balance from sources through consumers to outcomes, with a selectable path.',
+          id: 'EnergyAndEmissionsDashboardDonut',
+          title: 'Mix donut',
+          note: 'Use it when the parts of a total should be picked directly on the chart.',
           origin: 'custom',
-          size: 'lg',
+          size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'experiences/journeys/SankeyDiagram.tsx', 'experiences/journeys/sankeyLayout.ts'],
-          Component: EnergyDashPanelFlow,
+          bleed: true,
+          uses: ['kit/energy-and-emissions-dashboard/MixDonut.tsx'],
+          Component: EnergyAndEmissionsDashboardDonut,
         },
         {
-          id: 'EnergyDashPanelInspector',
-          title: 'Consumer inspector',
-          note: 'Pick it beside a diagram to explain the selected consumer: value, intensity, trend and one idea.',
+          id: 'EnergyAndEmissionsDashboardControls',
+          title: 'Toolbar and dock',
+          note: 'Use the floating toolbar for the measure and the dock as legend and selector in one.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/energy-and-emissions-dashboard/MixDonut.tsx', 'kit/IconChip.tsx'],
+          Component: EnergyAndEmissionsDashboardControls,
+        },
+        {
+          id: 'EnergyAndEmissionsDashboardOutput',
+          title: 'Output card',
+          note: 'Use it for the headline figure of the selection with its change and 24-hour shape.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/Sparkline.tsx', 'industrial/TrendDelta.tsx', 'industrial/ValueReadout.tsx'],
-          Component: EnergyDashPanelInspector,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Delta.tsx', 'kit/SparkLine.tsx'],
+          Component: EnergyAndEmissionsDashboardOutput,
         },
         {
-          id: 'EnergyDashPanelCarbonFlow',
-          title: 'CO₂ flow',
-          note: 'Pick it for emissions reporting: the same consumers, sized by tonnes and ending in reporting scopes.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'experiences/journeys/SankeyDiagram.tsx', 'experiences/journeys/sankeyLayout.ts'],
-          Component: EnergyDashPanelCarbonFlow,
-        },
-        {
-          id: 'EnergyDashPanelSourceInspector',
-          title: 'Source inspector',
-          note: 'Pick it when a source or an outcome is selected: its total and the flows that make it up.',
+          id: 'EnergyAndEmissionsDashboardGauge',
+          title: 'Gauge card',
+          note: 'Use it for a share of a capacity or limit, with the two figures written out.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/ValueReadout.tsx'],
-          Component: EnergyDashPanelSourceInspector,
+          bleed: true,
+          uses: ['kit/RingGauge.tsx'],
+          Component: EnergyAndEmissionsDashboardGauge,
         },
         {
-          id: 'EnergyDashPanelPermit',
-          title: 'Permit strip',
-          note: 'Pick it to show pace against an annual limit: emitted, allowance to date and forecast on one scale.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/ValueReadout.tsx'],
-          Component: EnergyDashPanelPermit,
-        },
-        {
-          id: 'EnergyDashPanelBalance',
-          title: 'Balance',
-          note: 'Pick it as the one-line answer under an inspector: how the total splits into two outcomes.',
+          id: 'EnergyAndEmissionsDashboardConsumers',
+          title: 'Consumers card',
+          note: 'Use it to rank the few largest users of the selected source.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/DistributionBar.tsx'],
-          Component: EnergyDashPanelBalance,
+          bleed: true,
+          uses: ['kit/Meter.tsx'],
+          Component: EnergyAndEmissionsDashboardConsumers,
         },
         {
-          id: 'EnergyDashPanelShortlist',
-          title: 'Abatement shortlist',
-          note: 'Pick it to rank improvement ideas by saving, with effort and status, and link each to its consumer.',
+          id: 'EnergyAndEmissionsDashboardCarbon',
+          title: 'Carbon card',
+          note: 'Use it to put the other measure next to the headline: carbon beside energy, or the reverse.',
           origin: 'custom',
-          size: 'full',
+          size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: EnergyDashPanelShortlist,
+          bleed: true,
+          uses: ['kit/StatusPill.tsx'],
+          Component: EnergyAndEmissionsDashboardCarbon,
+        },
+        {
+          id: 'EnergyAndEmissionsDashboardWeek',
+          title: 'Week card',
+          note: 'Use it for a short history where the shape matters more than exact values.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/SparkLine.tsx'],
+          Component: EnergyAndEmissionsDashboardWeek,
+        },
+        {
+          id: 'EnergyAndEmissionsDashboardIdea',
+          title: 'Idea card',
+          note: 'Use it to end on an action: the best saving for the selection and how far it has come.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx'],
+          Component: EnergyAndEmissionsDashboardIdea,
         },
       ],
     },

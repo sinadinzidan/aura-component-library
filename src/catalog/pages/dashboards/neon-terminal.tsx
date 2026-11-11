@@ -1,663 +1,572 @@
-import { useEffect, useId, useReducer, useRef, useState } from 'react';
-import type { Dispatch, FormEvent, KeyboardEvent, ReactNode } from 'react';
+import { Button } from '@cognite/aura/components/button';
+import { IconChevronRight, IconCornerDownLeft, IconHistory, IconSearch } from '@cognite/aura/icons';
+import { useId, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 
-import { BoxPane } from '../../../library/experiences/futuristic/BoxPane';
-import { CharChart } from '../../../library/experiences/futuristic/CharChart';
-import { COMMAND_HELP } from '../../../library/experiences/futuristic/commandParser';
-import { GlowText } from '../../../library/experiences/futuristic/GlowText';
-import { neonFromStatus } from '../../../library/experiences/futuristic/neon';
-import {
-  effectiveAlarmState,
-  initialTerminalState,
-  subtreeIds,
-  terminalReducer,
-  visibleNodes,
-} from '../../../library/experiences/futuristic/terminalSession';
-import type { TerminalAction, TerminalLine, TerminalState, TerminalWorld } from '../../../library/experiences/futuristic/terminalSession';
-import { TextMeter } from '../../../library/experiences/futuristic/TextMeter';
-import { formatLimit, formatValue, runStateStatus, severityStatus, toneFromLimits } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { ALARMS, ASSETS, SENSORS, findAsset } from '../../data/plant';
-import type { Sensor } from '../../data/plant';
-import { REFERENCE_NOW, formatAgo, formatDateTime, makeValues } from '../../data/series';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Donut } from '../../../library/kit/Donut';
+import { EmptyPanel } from '../../../library/kit/EmptyPanel';
+import { Meter } from '../../../library/kit/Meter';
+import { filterCommands, matchCommand, pushHistory, type CommandSpec, type HistoryEntry } from '../../../library/kit/neon-terminal/commands';
+import { Panel } from '../../../library/kit/Panel';
+import { Stat } from '../../../library/kit/Stat';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
+import { ALARMS, ASSETS, PLANT_KPIS, WORK_ORDERS, childrenOf, findAsset, findPerson, type Alarm, type Asset, type WorkOrder } from '../../data/plant';
+import { MINUTE, REFERENCE_NOW, formatAgo, formatDate, formatTime, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './neon-terminal.tsx?raw';
 
-type NeonTerminalPane = 'tree' | 'tags' | 'trend' | 'alarms' | 'output';
-type NeonTerminalSession = { state: TerminalState; dispatch: Dispatch<TerminalAction>; run: (input: string) => void };
+type NtCommand = CommandSpec & { group: string; summary: string; result: string };
 
-/** The shared plant, in the shape the console session reads. */
-const NEON_TERMINAL_WORLD: TerminalWorld = {
-  nodes: ASSETS.map((asset) => ({ id: asset.id, tag: asset.tag, name: asset.name, parentId: asset.parentId })),
-  tags: SENSORS.map((sensor) => ({ tag: sensor.tag, name: sensor.name, nodeId: sensor.assetId })),
-  alarms: ALARMS.map((alarm) => ({ id: alarm.id, state: alarm.state })),
+const NT_COMMANDS: readonly NtCommand[] = [
+  { id: 'status', text: 'status plant', keywords: ['overview', 'areas', 'health'], group: 'Plant', summary: 'State and health of every area', result: '4 areas · 1 reduced' },
+  { id: 'trend', text: 'trend 23-PT-92531 24h', keywords: ['pressure', 'discharge', 'chart'], group: 'Time series', summary: 'Discharge pressure against its limits', result: '1 series · 25 points' },
+  { id: 'alarms', text: 'alarms open', keywords: ['alerts', 'active', 'critical'], group: 'Events', summary: 'Open alarms, most severe first', result: '6 open · 1 critical' },
+  { id: 'compare', text: 'compare compressors', keywords: ['machines', 'trains', 'health'], group: 'Assets', summary: 'The three compressors side by side', result: '3 machines · 2 measures' },
+  { id: 'orders', text: 'orders due 7d', keywords: ['work', 'maintenance', 'backlog'], group: 'Maintenance', summary: 'Work orders due this week', result: '5 orders · 1 overdue' },
+];
+
+const NT_START_HISTORY: readonly HistoryEntry[] = [
+  { id: 'h3', text: 'alarms open', at: REFERENCE_NOW - 6 * MINUTE },
+  { id: 'h2', text: 'trend 23-PT-92531 24h', at: REFERENCE_NOW - 21 * MINUTE },
+  { id: 'h1', text: 'status plant', at: REFERENCE_NOW - 58 * MINUTE },
+];
+
+const NT_SEVERITY: Record<Alarm['severity'], { label: string; tone: Tone }> = {
+  critical: { label: 'Critical', tone: 'critical' },
+  high: { label: 'High', tone: 'warning' },
+  medium: { label: 'Medium', tone: 'info' },
+  low: { label: 'Low', tone: 'neutral' },
 };
 
-const NEON_TERMINAL_REDUCER = terminalReducer(NEON_TERMINAL_WORLD);
-
-/** One character per run state, so the tree reads without colour. */
-const NEON_TERMINAL_STATE_GLYPH: Record<string, string> = {
-  running: '●',
-  standby: '○',
-  stopped: '□',
-  tripped: '◆',
-  maintenance: '■',
+const NT_HEALTH: Record<Asset['health'], { label: string; tone: Tone }> = {
+  good: { label: 'Good', tone: 'success' },
+  watch: { label: 'Watch', tone: 'warning' },
+  poor: { label: 'Poor', tone: 'critical' },
 };
 
-const NEON_TERMINAL_TONE_TEXT: Record<Tone, string> = {
-  neutral: 'text-muted-foreground',
-  success: 'text-success-foreground-strong',
-  warning: 'text-warning-foreground-strong',
-  critical: 'text-critical-foreground-strong',
-  info: 'text-info-foreground-strong',
+const NT_STATE: Record<Asset['state'], { label: string; tone: Tone }> = {
+  running: { label: 'Running', tone: 'success' },
+  standby: { label: 'Standby', tone: 'info' },
+  stopped: { label: 'Stopped', tone: 'neutral' },
+  tripped: { label: 'Tripped', tone: 'critical' },
+  maintenance: { label: 'Maintenance', tone: 'warning' },
 };
 
-const NEON_TERMINAL_LINE_STYLE: Record<TerminalLine['kind'], { prefix: string; className: string }> = {
-  input: { prefix: '> ', className: 'text-[color:var(--primary-background)]' },
-  ok: { prefix: 'ok  ', className: 'text-base-foreground' },
-  error: { prefix: 'err ', className: 'text-critical-foreground-strong' },
-  info: { prefix: '    ', className: 'text-medium-foreground' },
+const NT_OPEN_ALARMS = ALARMS.filter((alarm) => alarm.state !== 'cleared');
+
+const NT_AREAS = childrenOf('nk');
+
+const NT_COMPRESSORS = ASSETS.filter((asset) => asset.type === 'compressor');
+
+const NT_ORDERS = WORK_ORDERS.filter((order) => order.status !== 'done' && order.dueAt < REFERENCE_NOW + 7 * 24 * 60 * MINUTE);
+
+const NT_PRESSURE = makeSeries({ seed: 11, points: 25, base: 48.2, amplitude: 2.1, noise: 0.6, decimals: 1 });
+
+const NT_PRESSURE_VALUES = NT_PRESSURE.map((point) => point.v);
+
+const NT_ALARM_COLUMNS: DataTableColumn<Alarm>[] = [
+  { id: 'severity', header: 'Severity', cell: (alarm) => <StatusPill tone={NT_SEVERITY[alarm.severity].tone}>{NT_SEVERITY[alarm.severity].label}</StatusPill> },
+  { id: 'message', header: 'Alarm', cell: (alarm) => alarm.message },
+  { id: 'tag', header: 'Tag', cell: (alarm) => <TagId>{alarm.sensorTag}</TagId>, nowrap: true },
+  { id: 'value', header: 'Value', cell: (alarm) => alarm.value, numeric: true, nowrap: true },
+  { id: 'raised', header: 'Raised', cell: (alarm) => formatAgo(alarm.raisedAt), numeric: true, nowrap: true, muted: true },
+];
+
+const NT_AREA_COLUMNS: DataTableColumn<Asset>[] = [
+  { id: 'name', header: 'Area', cell: (area) => area.name },
+  { id: 'tag', header: 'Tag', cell: (area) => <TagId>{area.tag}</TagId>, nowrap: true },
+  { id: 'health', header: 'Health', cell: (area) => <StatusPill tone={NT_HEALTH[area.health].tone}>{NT_HEALTH[area.health].label}</StatusPill> },
+  { id: 'score', header: 'Score', cell: (area) => area.healthScore, numeric: true },
+  { id: 'units', header: 'Units', cell: (area) => childrenOf(area.id).length, numeric: true },
+];
+
+const NT_MACHINE_COLUMNS: DataTableColumn<Asset>[] = [
+  { id: 'name', header: 'Machine', cell: (asset) => asset.name },
+  { id: 'state', header: 'State', cell: (asset) => <StatusPill tone={NT_STATE[asset.state].tone}>{NT_STATE[asset.state].label}</StatusPill> },
+  { id: 'score', header: 'Health', cell: (asset) => asset.healthScore, numeric: true },
+];
+
+const NT_ORDER_COLUMNS: DataTableColumn<WorkOrder>[] = [
+  { id: 'title', header: 'Work order', cell: (order) => order.title },
+  { id: 'asset', header: 'Asset', cell: (order) => <TagId>{findAsset(order.assetId)?.tag ?? order.assetId}</TagId>, nowrap: true },
+  { id: 'priority', header: 'Priority', cell: (order) => order.priority },
+  { id: 'owner', header: 'Owner', cell: (order) => findPerson(order.assigneeId)?.name ?? 'Unassigned', muted: true, nowrap: true },
+  { id: 'due', header: 'Due', cell: (order) => formatDate(order.dueAt), numeric: true, nowrap: true },
+];
+
+function ntCommand(id: string): NtCommand {
+  return NT_COMMANDS.find((command) => command.id === id) ?? NT_COMMANDS[0];
+}
+
+type NtCommandBarProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onRun: (text: string) => void;
+  /** The quick commands under the field. */
+  presets?: boolean;
+  /** Id of the command whose result is showing, to mark its preset. */
+  current?: string;
 };
 
-const NEON_TERMINAL_SEVERITY_CODE: Record<string, string> = { critical: 'CRIT', high: 'HIGH', medium: 'MED', low: 'LOW' };
-
-const NEON_TERMINAL_INVERSE = 'bg-[color:var(--primary-background)] text-[color:var(--primary-foreground)]';
-
-function neonTerminalSeries(sensor: Sensor): number[] {
-  const span = sensor.rangeMax - sensor.rangeMin;
-  const values = makeValues({
-    seed: sensor.seed,
-    points: 48,
-    base: sensor.value,
-    amplitude: span * 0.04,
-    noise: span * 0.012,
-    cycles: 2,
-    min: sensor.rangeMin,
-    max: sensor.rangeMax,
-    decimals: sensor.decimals,
-  });
-  return [...values.slice(0, -1), sensor.value];
-}
-
-function neonTerminalSensorTone(sensor: Sensor): Tone {
-  if (sensor.quality === 'bad') return 'neutral';
-  return toneFromLimits(sensor.value, { low: sensor.lowLimit, high: sensor.highLimit, highHigh: sensor.highHighLimit });
-}
-
-/** The pane the last command acted on, read from the scrollback. */
-function neonTerminalActivePane(lines: readonly TerminalLine[]): NeonTerminalPane {
-  const last = [...lines].reverse().find((line) => line.kind === 'input');
-  const words = last?.text.toLowerCase().split(/\s+/) ?? [];
-  if (words[0] === 'trend') return 'trend';
-  if (words[0] === 'ack' || (words[0] === 'show' && words[1] === 'alarms')) return 'alarms';
-  if (words[0] === 'goto') return 'tree';
-  if (words[0] === 'show' && words[1] === 'tags') return 'tags';
-  return 'output';
-}
-
-function neonTerminalAlarmCounts(state: TerminalState): { unacknowledged: number; open: number } {
-  const states = NEON_TERMINAL_WORLD.alarms.map((alarm) => effectiveAlarmState(alarm, state.acknowledged));
-  return {
-    unacknowledged: states.filter((alarmState) => alarmState === 'active').length,
-    open: states.filter((alarmState) => alarmState === 'active' || alarmState === 'acknowledged').length,
-  };
-}
-
-function neonTerminalTopActiveAlarm(state: TerminalState) {
-  return ALARMS.find((alarm) => effectiveAlarmState(alarm, state.acknowledged) === 'active');
-}
-
-function useNeonTerminalSession(overrides: Partial<TerminalState> = {}): NeonTerminalSession {
-  const [state, dispatch] = useReducer(NEON_TERMINAL_REDUCER, overrides, (initial) => initialTerminalState(NEON_TERMINAL_WORLD, initial));
-  return { state, dispatch, run: (input: string) => dispatch({ type: 'command', input }) };
-}
-
-function NeonTerminalTree({ state, dispatch, active = false, className }: Pick<NeonTerminalSession, 'state' | 'dispatch'> & { active?: boolean; className?: string }) {
-  const treeId = useId();
-  const rows = visibleNodes(NEON_TERMINAL_WORLD.nodes, state.collapsed);
-  const selected = rows.find((row) => row.node.id === state.selectedId);
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLUListElement>) => {
-    if (event.key === 'ArrowDown') dispatch({ type: 'move', direction: 1 });
-    else if (event.key === 'ArrowUp') dispatch({ type: 'move', direction: -1 });
-    else if (event.key === 'ArrowLeft' && selected?.hasChildren && !selected.collapsed) dispatch({ type: 'collapse', id: state.selectedId });
-    else if (event.key === 'ArrowLeft' && selected?.node.parentId) dispatch({ type: 'select', id: selected.node.parentId });
-    else if (event.key === 'ArrowRight' && selected?.collapsed) dispatch({ type: 'expand', id: state.selectedId });
-    else return;
+/** The command bar: one large field that runs the workspace, with the preset commands one click away. */
+function NtCommandBar({ value, onChange, onRun, presets = true, current }: NtCommandBarProps) {
+  const field = useId();
+  const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    onRun(value);
   };
-
   return (
-    <BoxPane title="Process tree" meta={`${NEON_TERMINAL_WORLD.nodes.length} nodes`} active={active} className={className} bodyClassName="px-0">
-      <ul
-        role="tree"
-        aria-label="Process tree"
-        tabIndex={0}
-        aria-activedescendant={`${treeId}-${state.selectedId}`}
-        onKeyDown={handleKeyDown}
-        className="outline-none focus-visible:bg-[color-mix(in_oklab,var(--primary-background)_8%,transparent)]"
-      >
-        {rows.map((row) => {
-          const asset = findAsset(row.node.id);
-          const status = asset ? runStateStatus(asset.state) : undefined;
-          const isSelected = row.node.id === state.selectedId;
-          const marker = row.hasChildren ? (row.collapsed ? '▸' : '▾') : '·';
-          return (
-            <li
-              key={row.node.id}
-              id={`${treeId}-${row.node.id}`}
-              role="treeitem"
-              aria-level={row.depth + 1}
-              aria-selected={isSelected}
-              aria-expanded={row.hasChildren ? !row.collapsed : undefined}
-              onClick={() => dispatch({ type: 'select', id: row.node.id })}
-              onDoubleClick={() => dispatch({ type: row.collapsed ? 'expand' : 'collapse', id: row.node.id })}
-              className={`flex cursor-pointer gap-[1ch] whitespace-pre px-[1ch] ${isSelected ? NEON_TERMINAL_INVERSE : 'hover:bg-[color-mix(in_oklab,var(--primary-background)_14%,transparent)]'}`}
+    <div className="bg-[var(--mountain-black)]" style={{ boxShadow: 'inset 0 -2px 0 var(--kit-accent), 0 10px 28px -12px var(--kit-accent)' }}>
+      <form onSubmit={submit} className="flex items-center gap-3 px-5 pt-4 pb-3">
+        <IconChevronRight className="size-7 shrink-0 text-[var(--kit-accent)]" stroke={2.5} aria-hidden="true" style={{ filter: 'drop-shadow(0 0 6px var(--kit-accent))' }} />
+        <label htmlFor={field} className="sr-only">
+          Command
+        </label>
+        <input
+          id={field}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Type a command, for example alarms open"
+          autoComplete="off"
+          spellCheck={false}
+          className="min-w-0 flex-1 bg-transparent text-2xl font-medium tracking-tight text-[var(--kit-text)] caret-[var(--kit-accent)] outline-none placeholder:text-[var(--kit-text-3)]"
+        />
+        <Button type="submit" size="sm">
+          Run <IconCornerDownLeft />
+        </Button>
+      </form>
+      {presets ? (
+        <div role="group" aria-label="Preset commands" className="flex flex-wrap gap-2 px-5 pb-4">
+          {NT_COMMANDS.map((command) => (
+            <button
+              key={command.id}
+              type="button"
+              aria-pressed={command.id === current}
+              onClick={() => onRun(command.text)}
+              className={`border px-3 py-1.5 text-sm font-medium outline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--kit-accent)] ${
+                command.id === current
+                  ? 'border-[var(--kit-accent)] bg-[color-mix(in_oklab,var(--kit-accent)_24%,transparent)] text-[var(--kit-text)]'
+                  : 'border-[var(--kit-rule)] bg-[var(--kit-surface)] text-[var(--kit-text-2)]'
+              }`}
             >
-              <span aria-hidden="true">{`${'  '.repeat(row.depth)}${marker}`}</span>
-              <span className="shrink-0 font-semibold">{row.node.tag}</span>
-              <span className={`min-w-0 flex-1 truncate ${isSelected ? '' : 'text-medium-foreground'}`}>{row.node.name}</span>
-              {status && asset ? (
-                <span className={`shrink-0 ${isSelected ? '' : NEON_TERMINAL_TONE_TEXT[status.tone]}`}>
-                  <span aria-hidden="true">{NEON_TERMINAL_STATE_GLYPH[asset.state]}</span>
-                  <span className="sr-only">{status.label}</span>
-                </span>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </BoxPane>
-  );
-}
-
-function NeonTerminalTagTable({ state, run, active = false, className }: Pick<NeonTerminalSession, 'state' | 'run'> & { active?: boolean; className?: string }) {
-  const scope = subtreeIds(NEON_TERMINAL_WORLD.nodes, state.selectedId);
-  const sensors = SENSORS.filter((sensor) => scope.includes(sensor.assetId));
-  const selected = findAsset(state.selectedId);
-
-  return (
-    <BoxPane title="Tags" meta={`${selected?.tag ?? ''} · ${sensors.length} tags`} active={active} className={className}>
-      {sensors.length === 0 ? (
-        <p className="text-medium-foreground">{`No tags mapped under ${selected?.tag ?? 'this node'}. Select a parent, or type show tags.`}</p>
-      ) : (
-        <table className="w-full whitespace-nowrap">
-          <thead>
-            <tr className="text-left text-muted-foreground">
-              <th scope="col" className="pr-[2ch] font-normal">
-                TAG
-              </th>
-              <th scope="col" className="pr-[2ch] font-normal">
-                NAME
-              </th>
-              <th scope="col" className="pr-[1ch] text-right font-normal">
-                VALUE
-              </th>
-              <th scope="col" className="pr-[2ch] font-normal">
-                UNIT
-              </th>
-              <th scope="col" className="pr-[2ch] font-normal">
-                RANGE
-              </th>
-              <th scope="col" className="pr-[2ch] font-normal">
-                LIMITS
-              </th>
-              <th scope="col" className="font-normal">
-                STATE
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {sensors.map((sensor) => {
-              const tone = neonTerminalSensorTone(sensor);
-              const bad = sensor.quality === 'bad';
-              const trended = sensor.tag === state.trendTag;
-              const word = bad ? 'BAD Q' : tone === 'critical' ? 'TRIP' : tone === 'warning' ? 'HIGH' : sensor.quality === 'uncertain' ? 'UNCERT' : 'OK';
-              return (
-                <tr key={sensor.id} className={trended ? 'bg-[color-mix(in_oklab,var(--primary-background)_14%,transparent)]' : undefined}>
-                  <th scope="row" className="pr-[2ch] text-left font-normal">
-                    <button
-                      type="button"
-                      aria-label={`Trend ${sensor.tag}`}
-                      aria-pressed={trended}
-                      onClick={() => run(`trend ${sensor.tag}`)}
-                      className="font-semibold text-[color:var(--primary-background)] underline-offset-2 outline-none hover:underline focus-visible:underline"
-                    >
-                      {`${trended ? '►' : ' '} ${sensor.tag}`}
-                    </button>
-                  </th>
-                  <td className="pr-[2ch] text-medium-foreground">{sensor.name}</td>
-                  <td className={`pr-[1ch] text-right tabular-nums ${tone === 'neutral' ? '' : NEON_TERMINAL_TONE_TEXT[tone]}`}>
-                    {formatValue(bad ? null : sensor.value, sensor.decimals)}
-                  </td>
-                  <td className="pr-[2ch] text-muted-foreground">{sensor.unit}</td>
-                  <td className="pr-[2ch]">
-                    <TextMeter
-                      value={bad ? null : sensor.value}
-                      label={`${sensor.name}, share of range`}
-                      min={sensor.rangeMin}
-                      max={sensor.rangeMax}
-                      width={14}
-                      unit={sensor.unit}
-                      decimals={sensor.decimals}
-                      tone={bad ? 'neutral' : neonFromStatus(tone)}
-                    />
-                  </td>
-                  <td className="pr-[2ch] tabular-nums text-muted-foreground">
-                    {`${formatLimit(sensor.lowLimit, sensor.decimals)}–${formatLimit(sensor.highLimit, sensor.decimals)}`}
-                  </td>
-                  <td className={word === 'OK' ? 'text-muted-foreground' : bad ? 'text-critical-foreground-strong' : 'text-warning-foreground-strong'}>{word}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </BoxPane>
-  );
-}
-
-function NeonTerminalTrend({ state, active = false, columns = 40, className }: Pick<NeonTerminalSession, 'state'> & { active?: boolean; columns?: number; className?: string }) {
-  const sensor = SENSORS.find((candidate) => candidate.tag === state.trendTag);
-  return (
-    <BoxPane title="Trend" meta={sensor ? `${sensor.tag} · ${sensor.unit}` : undefined} active={active} className={className}>
-      {sensor ? (
-        <div className="flex flex-col gap-1">
-          <span className="text-medium-foreground">{`${sensor.name}, 48 h, limit ${formatLimit(sensor.highLimit, sensor.decimals)}`}</span>
-          <CharChart
-            values={neonTerminalSeries(sensor)}
-            label={`${sensor.tag} ${sensor.name}, last 48 hours`}
-            columns={columns}
-            rows={6}
-            limit={sensor.highLimit}
-            unit={sensor.unit}
-            decimals={sensor.decimals}
-            startLabel="-48 h"
-            endLabel="now"
-            tone={neonFromStatus(neonTerminalSensorTone(sensor))}
-          />
+              {command.text}
+            </button>
+          ))}
         </div>
-      ) : (
-        <p className="text-medium-foreground">No tag plotted. Type trend and a tag.</p>
-      )}
-    </BoxPane>
-  );
-}
-
-function NeonTerminalAlarmLog({ state, run, active = false, className }: Pick<NeonTerminalSession, 'state' | 'run'> & { active?: boolean; className?: string }) {
-  const rows = ALARMS.map((alarm) => ({ alarm, current: effectiveAlarmState(alarm, state.acknowledged) })).filter(
-    (row) => state.alarmFilter === 'all' || row.current === 'active'
-  );
-  return (
-    <BoxPane title="Alarm log" meta={state.alarmFilter === 'all' ? `all · ${rows.length}` : `unacknowledged · ${rows.length}`} active={active} tone="warning" className={className}>
-      {rows.length === 0 ? (
-        <p className="text-medium-foreground">Nothing unacknowledged. Type show alarms all for the whole log.</p>
-      ) : (
-        <table className="w-full">
-          <thead>
-            <tr className="whitespace-nowrap text-left text-muted-foreground">
-              <th scope="col" className="pr-[2ch] font-normal">
-                ID
-              </th>
-              <th scope="col" className="pr-[2ch] font-normal">
-                SEV
-              </th>
-              <th scope="col" className="pr-[2ch] font-normal">
-                MESSAGE
-              </th>
-              <th scope="col" className="font-normal">
-                STATE
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ alarm, current }) => {
-              const severity = severityStatus(alarm.severity);
-              return (
-                <tr key={alarm.id} className="align-top">
-                  <th scope="row" className="whitespace-nowrap pr-[2ch] text-left font-semibold">
-                    {alarm.id}
-                  </th>
-                  <td className={`whitespace-nowrap pr-[2ch] ${NEON_TERMINAL_TONE_TEXT[severity.tone]}`}>{NEON_TERMINAL_SEVERITY_CODE[alarm.severity]}</td>
-                  <td className="pr-[2ch]">
-                    {alarm.message}
-                    <span className="block text-muted-foreground">{`${alarm.sensorTag} \u00b7 ${formatAgo(alarm.raisedAt)}`}</span>
-                  </td>
-                  <td className="whitespace-nowrap">
-                    {current === 'active' ? (
-                      <button
-                        type="button"
-                        onClick={() => run(`ack ${alarm.id}`)}
-                        aria-label={`Acknowledge ${alarm.id}`}
-                        className="text-[color:var(--primary-background)] underline-offset-2 outline-none hover:underline focus-visible:underline"
-                      >
-                        [ack]
-                      </button>
-                    ) : (
-                      <span className="text-muted-foreground">{current === 'acknowledged' ? 'acked' : current}</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </BoxPane>
-  );
-}
-
-function NeonTerminalOutput({ lines, active = false, className }: { lines: readonly TerminalLine[]; active?: boolean; className?: string }) {
-  const endRef = useRef<HTMLLIElement>(null);
-  useEffect(() => {
-    const list = endRef.current?.parentElement?.parentElement;
-    if (list) list.scrollTop = list.scrollHeight;
-  }, [lines]);
-
-  return (
-    <BoxPane title="Output" meta={`${lines.length} lines`} active={active} className={className}>
-      <ol role="log" aria-label="Command output" className="whitespace-pre-wrap">
-        {lines.map((line, index) => (
-          <li key={index} className={NEON_TERMINAL_LINE_STYLE[line.kind].className}>
-            <span aria-hidden="true">{NEON_TERMINAL_LINE_STYLE[line.kind].prefix}</span>
-            {line.kind === 'error' ? <span className="sr-only">Error: </span> : null}
-            {line.text}
-          </li>
-        ))}
-        <li ref={endRef} aria-hidden="true" />
-      </ol>
-    </BoxPane>
-  );
-}
-
-function NeonTerminalStatusLine({ state }: Pick<NeonTerminalSession, 'state'>) {
-  const counts = neonTerminalAlarmCounts(state);
-  const selected = findAsset(state.selectedId);
-  return (
-    <p role="status" className={`flex flex-wrap gap-x-[2ch] whitespace-pre px-[1ch] font-semibold ${NEON_TERMINAL_INVERSE}`}>
-      <span>NORMAL</span>
-      <span>{`SEL ${selected?.tag ?? '-'}`}</span>
-      <span>{`TREND ${state.trendTag || '-'}`}</span>
-      <span>{`ALARMS ${counts.unacknowledged} unack / ${counts.open} open`}</span>
-      <span className="ml-auto">{`${formatDateTime(REFERENCE_NOW)} UTC`}</span>
-    </p>
-  );
-}
-
-function NeonTerminalPrompt({ state, dispatch, run }: NeonTerminalSession) {
-  const promptId = useId();
-  const [value, setValue] = useState('');
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    run(value);
-    setValue('');
-  };
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    // With nothing typed, the arrows drive the tree, so one hand never leaves the prompt.
-    if (value !== '' || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
-    event.preventDefault();
-    dispatch({ type: 'move', direction: event.key === 'ArrowDown' ? 1 : -1 });
-  };
-  const selected = findAsset(state.selectedId);
-
-  return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-[1ch] px-[1ch]">
-      <label htmlFor={promptId} className="shrink-0 font-semibold text-[color:var(--primary-background)]">
-        <span className="sr-only">Command</span>
-        <span aria-hidden="true">{`nk:${selected?.tag ?? ''}>`}</span>
-      </label>
-      <input
-        id={promptId}
-        name="command"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-        autoComplete="off"
-        autoCapitalize="off"
-        spellCheck={false}
-        placeholder="Type a command, then Enter. Try help"
-        className="min-w-0 flex-1 bg-transparent py-1 text-base-foreground caret-[color:var(--primary-background)] outline-none placeholder:text-muted-foreground focus-visible:bg-[color-mix(in_oklab,var(--primary-background)_10%,transparent)]"
-      />
-    </form>
-  );
-}
-
-/** The function keys as command strings, so the legend and the keyboard run the same thing. */
-function neonTerminalFunctionKeys(state: TerminalState): readonly { key: string; label: string; command: string }[] {
-  const scope = subtreeIds(NEON_TERMINAL_WORLD.nodes, state.selectedId);
-  const firstTag = SENSORS.find((sensor) => scope.includes(sensor.assetId) && sensor.tag !== state.trendTag) ?? SENSORS[0];
-  const alarm = neonTerminalTopActiveAlarm(state);
-  const alarmAsset = alarm ? findAsset(alarm.assetId) : undefined;
-  return [
-    { key: 'F1', label: 'Help', command: 'help' },
-    { key: 'F2', label: state.alarmFilter === 'all' ? 'Unacked' : 'All alarms', command: state.alarmFilter === 'all' ? 'show alarms' : 'show alarms all' },
-    { key: 'F3', label: 'Trend next', command: `trend ${firstTag.tag}` },
-    { key: 'F4', label: 'Goto alarm', command: alarmAsset ? `goto ${alarmAsset.tag}` : 'show alarms' },
-    { key: 'F5', label: 'Ack top', command: alarm ? `ack ${alarm.id}` : 'show alarms' },
-    { key: 'F6', label: 'Clear', command: 'clear' },
-  ];
-}
-
-function NeonTerminalFunctionKeys({ state, run }: Pick<NeonTerminalSession, 'state' | 'run'>) {
-  return (
-    <ul aria-label="Function keys" className="flex flex-wrap gap-x-[2ch] gap-y-1 px-[1ch]">
-      {neonTerminalFunctionKeys(state).map((entry) => (
-        <li key={entry.key}>
-          <button
-            type="button"
-            onClick={() => run(entry.command)}
-            aria-label={`${entry.key} ${entry.label}: ${entry.command}`}
-            className="group flex items-center gap-[1ch] outline-none"
-          >
-            <span className={`px-[0.5ch] font-semibold ${NEON_TERMINAL_INVERSE}`}>{entry.key}</span>
-            <span className="text-medium-foreground underline-offset-2 group-hover:text-base-foreground group-hover:underline group-focus-visible:underline">
-              {entry.label}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function NeonTerminalShell({ children, label, onKeyDown, className = '' }: { children: ReactNode; label: string; onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void; className?: string }) {
-  return (
-    <div
-      role="region"
-      aria-label={label}
-      onKeyDown={onKeyDown}
-      className={`relative overflow-hidden rounded-xl border border-default bg-base-background font-mono text-xs leading-5 text-base-foreground ${className}`.trim()}
-    >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,color-mix(in_oklab,var(--primary-background)_6%,transparent)_0,color-mix(in_oklab,var(--primary-background)_6%,transparent)_1px,transparent_1px,transparent_3px)]"
-      />
-      {children}
+      ) : null}
     </div>
   );
 }
 
-function NeonTerminalScreen({ initialCommands = [] }: { initialCommands?: readonly string[] }) {
-  const session = useNeonTerminalSession(
-    initialCommands.reduce((state, input) => NEON_TERMINAL_REDUCER(state, { type: 'command', input }), initialTerminalState(NEON_TERMINAL_WORLD))
-  );
-  const { state, dispatch, run } = session;
-  const active = neonTerminalActivePane(state.lines);
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const entry = neonTerminalFunctionKeys(state).find((candidate) => candidate.key === event.key);
-    if (!entry) return;
-    event.preventDefault();
-    run(entry.command);
-  };
-
+/** The session so far: every command that was run, newest first; pick one to run it again. */
+function NtHistory({ history, onRun, className }: { history: readonly HistoryEntry[]; onRun: (text: string) => void; className?: string }) {
   return (
-    <NeonTerminalShell label="Plant console" onKeyDown={handleKeyDown} className="h-[44rem]">
-      <div className="relative flex h-full flex-col gap-1 p-3">
-        <div className="flex flex-wrap justify-between gap-x-[2ch] px-[1ch]">
-          <GlowText variant="label">Nordkapp plant console</GlowText>
-          <span className="text-muted-foreground">tty1 · operator ih · read/ack</span>
+    <Panel className={className} title="History" subtitle={`${history.length} runs`} padding="none" icon={<IconHistory className="size-4" aria-hidden="true" />}>
+      <ol className="flex flex-col">
+        {history.map((entry, index) => (
+          <li key={entry.id} className="border-b border-[var(--kit-rule)]">
+            <button
+              type="button"
+              onClick={() => onRun(entry.text)}
+              className={`flex w-full flex-col gap-0.5 border-l-4 px-3 py-2.5 text-left outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-[var(--kit-accent)] ${
+                index === 0 ? 'border-[var(--kit-accent)] bg-[color-mix(in_oklab,var(--kit-accent)_14%,transparent)]' : 'border-transparent'
+              }`}
+            >
+              <span className="text-sm leading-snug font-medium">{entry.text}</span>
+              <span className="text-xs text-[var(--kit-text-2)] tabular-nums">{formatTime(entry.at)} UTC</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </Panel>
+  );
+}
+
+function NtResultStatus() {
+  return (
+    <div className="grid flex-1 grid-cols-12 gap-px">
+      <Panel className="col-span-5" tone="warning" title="Plant state" subtitle="Nordkapp">
+        <div className="flex flex-1 flex-col justify-between gap-4">
+          <p className="text-4xl leading-none font-semibold tracking-tight">Reduced capacity</p>
+          <p className="text-sm leading-relaxed text-[var(--kit-text-2)]">
+            Recompressor 23-KA-9103 tripped on high vibration at 13:46. Export runs 0.12 MSm³/d under plan while the bearing is inspected.
+          </p>
+          <Meter label="Gas export against plan" value={PLANT_KPIS.gasExport.value} min={3.5} max={5} decimals={2} unit="MSm³/d" target={{ value: 4.5, label: 'Plan' }} tone="warning" />
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-[21rem_minmax(0,1fr)] grid-rows-[minmax(0,1fr)_12rem] gap-x-[1ch] gap-y-1">
-          <NeonTerminalTree state={state} dispatch={dispatch} active={active === 'tree'} className="row-span-2" />
-          <NeonTerminalTagTable state={state} run={run} active={active === 'tags'} />
-          <div className="flex min-h-0 min-w-0 gap-[1ch]">
-            <NeonTerminalTrend state={state} active={active === 'trend'} columns={30} className="w-[44ch] shrink-0" />
-            <NeonTerminalAlarmLog state={state} run={run} active={active === 'alarms'} className="flex-1" />
-          </div>
-        </div>
-        <NeonTerminalOutput lines={state.lines} active={active === 'output'} className="h-32 shrink-0" />
-        <NeonTerminalStatusLine state={state} />
-        <NeonTerminalPrompt {...session} />
-        <NeonTerminalFunctionKeys state={state} run={run} />
+      </Panel>
+      <Panel className="col-span-7" title="Areas" subtitle="Health score out of 100" padding="none">
+        <DataTable label="Plant areas" columns={NT_AREA_COLUMNS} rows={NT_AREAS} rowKey={(area) => area.id} rowTone={(area) => NT_HEALTH[area.health].tone} flush />
+      </Panel>
+      <Panel className="col-span-12" title="Area health" subtitle="Score by area">
+        <Bars
+          label="Health score by plant area"
+          categories={NT_AREAS.map((area) => area.name)}
+          series={[{ id: 'score', label: 'Health score', values: NT_AREAS.map((area) => area.healthScore) }]}
+          tones={NT_AREAS.map((area) => NT_HEALTH[area.health].tone)}
+          orientation="horizontal"
+          showValues
+          height={176}
+        />
+      </Panel>
+    </div>
+  );
+}
+
+function NtResultTrend() {
+  const low = Math.min(...NT_PRESSURE_VALUES);
+  const high = Math.max(...NT_PRESSURE_VALUES);
+  const mean = NT_PRESSURE_VALUES.reduce((sum, value) => sum + value, 0) / NT_PRESSURE_VALUES.length;
+  return (
+    <div className="grid flex-1 grid-cols-12 gap-px">
+      <Panel className="col-span-9" title="Discharge pressure" subtitle="23-PT-92531 · 1st stage compressor · last 24 h">
+        <TrendLine
+          label="Discharge pressure of the 1st stage compressor, last 24 hours, against its high and trip limits"
+          series={[{ id: 'pressure', label: 'Discharge pressure', values: NT_PRESSURE_VALUES, tone: 'accent' }]}
+          labels={NT_PRESSURE.map((point) => formatTime(point.t))}
+          unit="barg"
+          decimals={1}
+          limits={[
+            { value: 52, label: 'High', tone: 'warning' },
+            { value: 55, label: 'Trip', tone: 'critical' },
+          ]}
+          bands={[{ from: 40, to: 52, tone: 'success' }]}
+          yDomain={[38, 58]}
+          height={372}
+          highlightLast
+        />
+      </Panel>
+      <div className="col-span-3 grid grid-rows-4 gap-px">
+        <Stat label="Now" value={48.6} decimals={1} unit="barg" tone="accent" size="lg" />
+        <Stat label="Mean, 24 h" value={mean} decimals={1} unit="barg" />
+        <Stat label="Highest" value={high} decimals={1} unit="barg" target="High limit 52.0" />
+        <Stat label="Lowest" value={low} decimals={1} unit="barg" target="Low limit 40.0" />
       </div>
-    </NeonTerminalShell>
+    </div>
   );
 }
 
-function NeonTerminalStage({ children, className = '' }: { children: ReactNode; className?: string }) {
+function NtResultAlarms() {
+  const counts = (['critical', 'high', 'medium', 'low'] as const).map((severity) => NT_OPEN_ALARMS.filter((alarm) => alarm.severity === severity).length);
   return (
-    <ThemeScope preset="night-vision" className="w-full">
-      <NeonTerminalShell label="Console part" className={className}>
-        <div className="relative flex h-full flex-col gap-2 p-3">{children}</div>
-      </NeonTerminalShell>
-    </ThemeScope>
+    <div className="grid flex-1 grid-cols-12 gap-px">
+      <Panel className="col-span-8" title="Open alarms" subtitle={`${NT_OPEN_ALARMS.length} open, most severe first`} padding="none">
+        <DataTable label="Open alarms" columns={NT_ALARM_COLUMNS} rows={NT_OPEN_ALARMS} rowKey={(alarm) => alarm.id} rowTone={(alarm) => NT_SEVERITY[alarm.severity].tone} flush />
+      </Panel>
+      <Panel className="col-span-4" title="By severity" subtitle="Open alarms">
+        <Bars
+          label="Open alarms by severity"
+          categories={['Critical', 'High', 'Medium', 'Low']}
+          series={[{ id: 'count', label: 'Open alarms', values: counts }]}
+          tones={['critical', 'warning', 'info', 'neutral']}
+          orientation="horizontal"
+          showValues
+          height={220}
+        />
+      </Panel>
+    </div>
   );
 }
 
-function NeonTerminalExperience() {
+function NtResultCompare() {
   return (
-    <ThemeScope preset="night-vision" className="w-full">
-      <NeonTerminalScreen />
-    </ThemeScope>
+    <div className="grid flex-1 grid-cols-12 gap-px">
+      <Panel className="col-span-7" title="Compressors compared" subtitle="Health score and load, percent">
+        <Bars
+          label="Health score and load of the three compressors"
+          categories={NT_COMPRESSORS.map((asset) => asset.name)}
+          series={[
+            { id: 'health', label: 'Health score', values: NT_COMPRESSORS.map((asset) => asset.healthScore), tone: 'accent' },
+            { id: 'load', label: 'Load', values: [97, 91, 0], tone: 'purple' },
+          ]}
+          limit={{ value: 85, label: 'Good from', tone: 'success' }}
+          unit="%"
+          height={340}
+        />
+      </Panel>
+      <Panel className="col-span-5" title="Machines" subtitle="Gas compression" padding="none">
+        <DataTable label="Compressors" columns={NT_MACHINE_COLUMNS} rows={NT_COMPRESSORS} rowKey={(asset) => asset.id} rowTone={(asset) => NT_STATE[asset.state].tone} flush />
+      </Panel>
+    </div>
   );
 }
 
-function NeonTerminalThemeTerminal() {
+function NtResultOrders() {
+  const types = ['corrective', 'preventive', 'inspection'] as const;
   return (
-    <ThemeScope preset="terminal" className="w-full">
-      <NeonTerminalScreen initialCommands={['goto 23-KA-9101', 'trend 23-TT-92532']} />
-    </ThemeScope>
+    <div className="grid flex-1 grid-cols-12 gap-px">
+      <Panel className="col-span-8" title="Work orders due within 7 days" subtitle={`${NT_ORDERS.length} orders`} padding="none">
+        <DataTable
+          label="Work orders due within seven days"
+          columns={NT_ORDER_COLUMNS}
+          rows={NT_ORDERS}
+          rowKey={(order) => order.id}
+          rowTone={(order) => (order.dueAt < REFERENCE_NOW ? 'critical' : order.priority === 'P1' ? 'warning' : 'neutral')}
+          flush
+        />
+      </Panel>
+      <Panel className="col-span-4" title="By type" subtitle="Due this week">
+        <div className="flex flex-1 items-center">
+          <Donut
+            label="Work orders due this week by type"
+            segments={types.map((type, index) => ({
+              label: type.charAt(0).toUpperCase() + type.slice(1),
+              value: NT_ORDERS.filter((order) => order.type === type).length,
+              tone: (['amber', 'teal', 'purple'] as const)[index],
+            }))}
+            centerCaption="orders"
+            legend="bottom"
+            size={150}
+            className="w-full"
+          />
+        </div>
+      </Panel>
+    </div>
   );
 }
 
-function NeonTerminalThemeEmber() {
-  return (
-    <ThemeScope preset="ember" className="w-full">
-      <NeonTerminalScreen initialCommands={['show alarms all', 'ack alm-4811', 'goto NK-23']} />
-    </ThemeScope>
-  );
+function NtResult({ id }: { id: string }) {
+  if (id === 'trend') return <NtResultTrend />;
+  if (id === 'alarms') return <NtResultAlarms />;
+  if (id === 'compare') return <NtResultCompare />;
+  if (id === 'orders') return <NtResultOrders />;
+  return <NtResultStatus />;
 }
 
-function NeonTerminalPartTagTable() {
-  const session = useNeonTerminalSession({ selectedId: 'nk-23' });
+/** The echo above a result: what ran and what came back. */
+function NtEcho({ text, detail }: { text: string; detail: string }) {
   return (
-    <NeonTerminalStage>
-      <NeonTerminalTagTable state={session.state} run={session.run} active />
-    </NeonTerminalStage>
-  );
-}
-
-function NeonTerminalPartTree() {
-  const session = useNeonTerminalSession({ selectedId: '23-ka-9103', collapsed: ['nk-20'] });
-  return (
-    <NeonTerminalStage className="h-[21rem]">
-      <NeonTerminalTree state={session.state} dispatch={session.dispatch} active className="flex-1" />
-    </NeonTerminalStage>
-  );
-}
-
-function NeonTerminalPartChart() {
-  const session = useNeonTerminalSession({ trendTag: '23-VT-92540' });
-  return (
-    <NeonTerminalStage className="h-[21rem]">
-      <NeonTerminalTrend state={session.state} active columns={44} className="flex-1" />
-    </NeonTerminalStage>
-  );
-}
-
-function NeonTerminalPartAlarmLog() {
-  const session = useNeonTerminalSession({ alarmFilter: 'all' });
-  return (
-    <NeonTerminalStage className="h-[24rem]">
-      <NeonTerminalAlarmLog state={session.state} run={session.run} active className="flex-1" />
-    </NeonTerminalStage>
-  );
-}
-
-function NeonTerminalPartCommandLine() {
-  const session = useNeonTerminalSession({
-    lines: [
-      { kind: 'input', text: 'trend 23-pt-92531' },
-      { kind: 'ok', text: 'Trending 23-PT-92531 Discharge pressure' },
-      { kind: 'input', text: 'ack alm-4809' },
-      { kind: 'error', text: 'alm-4809 is already acknowledged' },
-    ],
-  });
-  return (
-    <NeonTerminalStage className="h-[24rem]">
-      <NeonTerminalOutput lines={session.state.lines} active className="min-h-0 flex-1" />
-      <NeonTerminalStatusLine state={session.state} />
-      <NeonTerminalPrompt {...session} />
-    </NeonTerminalStage>
-  );
-}
-
-function NeonTerminalPartTextMeter() {
-  return (
-    <NeonTerminalStage>
-      <dl className="grid grid-cols-[auto_auto_1fr] items-center gap-x-[2ch] gap-y-1">
-        <dt className="text-medium-foreground">Level</dt>
-        <dd>
-          <TextMeter value={54.3} label="Separator level" unit="%" decimals={1} width={12} />
-        </dd>
-        <dd className="tabular-nums">54.3 %</dd>
-        <dt className="text-medium-foreground">Vibration</dt>
-        <dd>
-          <TextMeter value={7.6} label="Drive-end vibration" max={15} unit="mm/s" decimals={1} width={12} tone="warning" />
-        </dd>
-        <dd className="tabular-nums text-warning-foreground-strong">7.6 mm/s HIGH</dd>
-        <dt className="text-medium-foreground">Trip</dt>
-        <dd>
-          <TextMeter value={11.6} label="Recompressor vibration" max={15} unit="mm/s" decimals={1} width={12} tone="critical" />
-        </dd>
-        <dd className="tabular-nums text-critical-foreground-strong">11.6 mm/s TRIP</dd>
-        <dt className="text-medium-foreground">No signal</dt>
-        <dd>
-          <TextMeter value={null} label="Bearing temperature" max={120} unit="°C" width={12} tone="neutral" />
-        </dd>
-        <dd className="text-muted-foreground">— BAD Q</dd>
-      </dl>
-    </NeonTerminalStage>
-  );
-}
-
-function NeonTerminalPartBoxPane() {
-  return (
-    <NeonTerminalStage>
-      <BoxPane title="Active" meta="bright frame" active>
-        <p>The pane the last command acted on.</p>
-      </BoxPane>
-      <BoxPane title="Resting" meta="dim frame">
-        <p className="text-medium-foreground">Every other pane on the screen.</p>
-      </BoxPane>
-    </NeonTerminalStage>
-  );
-}
-
-function NeonTerminalPartFunctionKeys() {
-  const session = useNeonTerminalSession();
-  const last = session.state.lines[session.state.lines.length - 1];
-  return (
-    <NeonTerminalStage>
-      <NeonTerminalFunctionKeys state={session.state} run={session.run} />
-      <p role="status" className="px-[1ch] text-medium-foreground">
-        {last ? `Last: ${last.text}` : 'Output cleared.'}
+    <div className="flex flex-wrap items-baseline justify-between gap-3 bg-[var(--kit-surface)] px-4 py-2.5">
+      <p className="flex items-center gap-2 text-base font-semibold">
+        <IconChevronRight className="size-4 text-[var(--kit-accent)]" stroke={2.5} aria-hidden="true" />
+        {text}
       </p>
-      <p className="px-[1ch] text-muted-foreground">{`${COMMAND_HELP.length} commands in the grammar. Each key runs one of them.`}</p>
-    </NeonTerminalStage>
+      <p className="text-sm text-[var(--kit-text-2)] tabular-nums">{detail}</p>
+    </div>
+  );
+}
+
+/** The line at the bottom: connection, scope and the two keys worth knowing. */
+function NtStatusLine() {
+  const key = 'border border-[var(--kit-rule-strong)] bg-[var(--kit-surface)] px-1.5 py-0.5 font-sans text-xs font-medium text-[var(--kit-text)]';
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-[var(--mountain-black)] px-4 py-2 text-sm text-[var(--kit-text-2)]">
+      <p className="flex items-center gap-3">
+        <StatusPill tone="success">Connected</StatusPill>
+        Nordkapp · 12 tags subscribed · updated 14:00 UTC
+      </p>
+      <p className="flex items-center gap-2">
+        <kbd className={key}>Enter</kbd> run
+        <kbd className={key}>Ctrl K</kbd> all commands
+      </p>
+    </div>
+  );
+}
+
+function NtWorkspace({ className = '', children }: { className?: string; children: ReactNode }) {
+  return (
+    <LookScope look="console">
+      <Canvas padding="none" className={`flex flex-col gap-px ${className}`}>
+        {children}
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function NeonTerminalSignature() {
+  const [input, setInput] = useState('trend 23-PT-92531 24h');
+  const [current, setCurrent] = useState<{ id: string | null; text: string }>({ id: 'trend', text: 'trend 23-PT-92531 24h' });
+  const [history, setHistory] = useState<readonly HistoryEntry[]>(NT_START_HISTORY);
+  const run = (text: string) => {
+    const typed = text.trim();
+    if (typed === '') return;
+    const command = matchCommand(typed, NT_COMMANDS);
+    const shown = command?.text ?? typed;
+    setInput(shown);
+    setCurrent({ id: command?.id ?? null, text: shown });
+    setHistory(pushHistory(history, { id: `run-${history.length + 1}`, text: shown, at: REFERENCE_NOW }));
+  };
+  return (
+    <NtWorkspace className="min-h-[47.5rem]">
+      <NtCommandBar value={input} onChange={setInput} onRun={run} current={current.id ?? undefined} />
+      <div className="grid flex-1 grid-cols-[15rem_minmax(0,1fr)] gap-px">
+        <NtHistory history={history} onRun={run} />
+        <div className="flex min-w-0 flex-col gap-px">
+          <NtEcho text={current.text} detail={current.id ? ntCommand(current.id).result : 'No match'} />
+          {current.id ? (
+            <NtResult id={current.id} />
+          ) : (
+            <Panel className="flex-1">
+              <EmptyPanel
+                icon={<IconSearch />}
+                title={`No command matches “${current.text}”`}
+                description="Try one of the presets under the command bar, or start typing status, trend, alarms, compare or orders."
+              />
+            </Panel>
+          )}
+        </div>
+      </div>
+      <NtStatusLine />
+    </NtWorkspace>
+  );
+}
+
+function NeonTerminalPalette() {
+  const [query, setQuery] = useState('');
+  const [picked, setPicked] = useState('alarms');
+  const field = useId();
+  const matches = filterCommands(query, NT_COMMANDS);
+  return (
+    <NtWorkspace className="h-full">
+      <div className="flex flex-1 flex-col gap-px bg-[color-mix(in_oklab,var(--mountain-black)_80%,var(--kit-accent))] p-5">
+        <div className="mx-auto flex w-full max-w-xl flex-1 flex-col border border-[var(--kit-accent)] bg-[var(--mountain-black)]" style={{ boxShadow: '0 0 40px -8px var(--kit-accent)' }}>
+          <div className="flex items-center gap-3 border-b border-[var(--kit-rule)] px-4 py-3">
+            <IconSearch className="size-5 shrink-0 text-[var(--kit-accent)]" aria-hidden="true" />
+            <label htmlFor={field} className="sr-only">
+              Find a command
+            </label>
+            <input
+              id={field}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Find a command"
+              autoComplete="off"
+              className="min-w-0 flex-1 bg-transparent text-lg font-medium text-[var(--kit-text)] caret-[var(--kit-accent)] outline-none placeholder:text-[var(--kit-text-3)]"
+            />
+          </div>
+          {matches.length === 0 ? (
+            <EmptyPanel icon={<IconSearch />} title="No command found" description="Clear the field to see all five commands." />
+          ) : (
+            <ul className="flex flex-1 flex-col">
+              {matches.map((command) => (
+                <li key={command.id} className="flex flex-1 border-b border-[var(--kit-rule)]">
+                  <button
+                    type="button"
+                    aria-pressed={command.id === picked}
+                    onClick={() => setPicked(command.id)}
+                    className={`flex w-full items-center gap-4 border-l-4 px-4 py-3 text-left outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-[var(--kit-accent)] ${
+                      command.id === picked ? 'border-[var(--kit-accent)] bg-[color-mix(in_oklab,var(--kit-accent)_18%,transparent)]' : 'border-transparent'
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-base font-semibold">{command.text}</span>
+                      <span className="block text-sm text-[var(--kit-text-2)]">{command.summary}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-[var(--kit-text-2)]">{command.group}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="px-4 py-2.5 text-sm text-[var(--kit-text-2)]">
+            Runs <span className="font-semibold text-[var(--kit-text)]">{ntCommand(picked).text}</span> · {ntCommand(picked).result}
+          </p>
+        </div>
+      </div>
+    </NtWorkspace>
+  );
+}
+
+function NeonTerminalStart() {
+  const [input, setInput] = useState('');
+  const [ran, setRan] = useState<string | null>(null);
+  const run = (text: string) => {
+    const command = matchCommand(text, NT_COMMANDS);
+    setRan(command?.id ?? null);
+    setInput(command?.text ?? text);
+  };
+  return (
+    <NtWorkspace className="h-full">
+      <NtCommandBar value={input} onChange={setInput} onRun={run} presets={false} />
+      <div className="flex flex-1 flex-col gap-4 bg-[var(--kit-surface)] p-5">
+        <div>
+          <p className="text-2xl font-semibold tracking-tight">{ran ? ntCommand(ran).summary : 'What do you want to see?'}</p>
+          <p className="text-sm text-[var(--kit-text-2)]">{ran ? `Ready: ${ntCommand(ran).result}` : 'Pick a command to start the session, or type one above.'}</p>
+        </div>
+        <ul className="grid flex-1 grid-cols-1 gap-px bg-[var(--kit-rule)]">
+          {NT_COMMANDS.map((command) => (
+            <li key={command.id} className="flex">
+              <button
+                type="button"
+                aria-pressed={command.id === ran}
+                onClick={() => run(command.text)}
+                className={`flex w-full items-center justify-between gap-3 border-l-4 px-3 py-2.5 text-left outline-offset-[-2px] focus-visible:outline-2 focus-visible:outline-[var(--kit-accent)] ${
+                  command.id === ran ? 'border-[var(--kit-accent)] bg-[color-mix(in_oklab,var(--kit-accent)_22%,var(--mountain-black))]' : 'border-transparent bg-[var(--mountain-black)]'
+                }`}
+              >
+                <span>
+                  <span className="block text-xs text-[var(--kit-text-2)]">{command.group}</span>
+                  <span className="block text-sm font-semibold">{command.text}</span>
+                </span>
+                <IconCornerDownLeft className="size-4 shrink-0 text-[var(--kit-text-2)]" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </NtWorkspace>
+  );
+}
+
+function NeonTerminalCommandBar() {
+  const [input, setInput] = useState('alarms open');
+  const [current, setCurrent] = useState('alarms');
+  const run = (text: string) => {
+    const command = matchCommand(text, NT_COMMANDS);
+    if (!command) return;
+    setInput(command.text);
+    setCurrent(command.id);
+  };
+  return (
+    <NtWorkspace className="w-full">
+      <NtCommandBar value={input} onChange={setInput} onRun={run} current={current} />
+      <NtEcho text={ntCommand(current).text} detail={ntCommand(current).result} />
+    </NtWorkspace>
+  );
+}
+
+function NeonTerminalHistory() {
+  const [history, setHistory] = useState<readonly HistoryEntry[]>(NT_START_HISTORY);
+  const run = (text: string) => setHistory(pushHistory(history, { id: `run-${history.length + 1}`, text, at: REFERENCE_NOW }, 5));
+  return (
+    <NtWorkspace className="h-full w-full">
+      <NtHistory history={history} onRun={run} className="flex-1" />
+    </NtWorkspace>
+  );
+}
+
+function NeonTerminalTrendResult() {
+  return (
+    <NtWorkspace className="w-full">
+      <NtEcho text="trend 23-PT-92531 24h" detail="1 series · 25 points" />
+      <NtResultTrend />
+    </NtWorkspace>
+  );
+}
+
+function NeonTerminalAlarmResult() {
+  return (
+    <NtWorkspace className="w-full">
+      <NtEcho text="alarms open" detail="6 open · 1 critical" />
+      <NtResultAlarms />
+    </NtWorkspace>
+  );
+}
+
+function NeonTerminalStatusResult() {
+  return (
+    <NtWorkspace className="w-full">
+      <NtEcho text="status plant" detail="4 areas · 1 reduced" />
+      <NtResultStatus />
+      <NtStatusLine />
+    </NtWorkspace>
   );
 }
 
@@ -665,173 +574,126 @@ export default definePage({
   id: 'neon-terminal',
   title: 'Neon terminal',
   summary:
-    'A text-mode plant: one monospaced screen split into panes with box-drawing characters, bar meters made of block characters, and a command prompt that really drives it. Underneath it is ordinary tables, a tree and a form.',
+    'A workspace driven by one command bar: type or pick a command and the canvas below is rebuilt from result cards. Terminal speed, set in readable sans type on an operator console.',
   guidance: {
     use: [
-      'For engineers and operators who live at a keyboard and want every action to be a command they can repeat.',
-      'When the same console must run in a constrained or remote environment and look intentional doing it.',
-      'Keep real semantics underneath: a tree, tables, a log and a labelled input. The characters are decoration.',
-      'Give every command a mouse path too; here tags, alarms and the function-key row are all clickable.',
+      'For expert users who know what they want and ask for it faster than they could navigate to it.',
+      'A small, memorable command set, each with a preset button so the keyboard is never required.',
+      'Result cards from the kit, so a command returns a finished view rather than rows of text.',
     ],
     avoid: [
-      'As the only way into a product. A prompt has no affordances, so pair it with a conventional screen.',
-      'Drawing data with characters where precision matters; the character chart shows shape, not values.',
-      'Colour as the only state signal. States are words (HIGH, TRIP, BAD Q) and shapes as well.',
-      'Proportional fonts. The screen sets its own monospaced type, whatever the theme says.',
+      'Monospace for the interface: commands, tags and figures all use the UI typeface.',
+      'Free-form commands with no match feedback; the echo line always says what ran and what came back.',
+      'Hiding the only way in behind typing: presets and history stay visible.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'Shown in the Night vision theme. Click the prompt and type help, show alarms all, trend 23-PT-92531, goto 23-KA-9101, ack alm-4811 or clear, then Enter. With the prompt empty, or with the tree focused, the up and down arrows move the selection; left and right fold the tree. F1 to F6 run the legend, which is also clickable.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'Run a preset, type a command and press Enter, or pick an entry in the history: the canvas shows that result.',
       specimens: [
         {
-          id: 'NeonTerminalExperience',
-          title: 'Neon terminal',
-          note: 'Pick it for keyboard-first users who want the whole plant on one screen and every action as a command.',
+          id: 'NeonTerminalSignature',
+          title: 'Command workspace',
+          note: 'Pick it for engineers who would rather ask for a view than browse to it.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'experiences/futuristic/BoxPane.tsx',
-            'experiences/futuristic/TextMeter.tsx',
-            'experiences/futuristic/CharChart.tsx',
-            'experiences/futuristic/commandParser.ts',
-            'experiences/futuristic/terminalSession.ts',
-            'experiences/futuristic/textCharts.ts',
-            'experiences/futuristic/GlowText.tsx',
-            'experiences/futuristic/neon.ts',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: NeonTerminalExperience,
+          bleed: true,
+          uses: ['kit/neon-terminal/commands.ts', 'kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/TrendLine.tsx', 'kit/Bars.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: NeonTerminalSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'Themes',
-      description: 'The same console in two other presets, each after a few commands. The screen keeps its monospaced type in both.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Two more screens: the first-run start screen, and the palette that lists every command.',
       specimens: [
         {
-          id: 'NeonTerminalThemeTerminal',
-          title: 'Terminal',
-          note: 'Pick it inside developer tools; neutral dark surfaces, shown after goto and trend.',
+          id: 'NeonTerminalPalette',
+          title: 'Command palette',
+          note: 'Pick it as the overlay behind a shortcut: filter the list, see what a command returns before running it.',
           origin: 'custom',
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: NeonTerminalThemeTerminal,
+          bleed: true,
+          uses: ['kit/neon-terminal/commands.ts', 'kit/EmptyPanel.tsx'],
+          Component: NeonTerminalPalette,
         },
         {
-          id: 'NeonTerminalThemeEmber',
-          title: 'Ember',
-          note: 'Pick it for an amber-phosphor look at high contrast; shown with the whole alarm log and one acknowledgement.',
+          id: 'NeonTerminalStart',
+          title: 'Start screen',
+          note: 'Pick it for a new session or a narrow window: the bar on top and every command as one row.',
           origin: 'custom',
-          size: 'full',
+          size: 'sm',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: NeonTerminalThemeEmber,
+          bleed: true,
+          uses: ['kit/neon-terminal/commands.ts'],
+          Component: NeonTerminalStart,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The panes and their pieces on their own. Each one is interactive here too.',
+      description: 'The bar, the history and three result canvases on their own.',
       specimens: [
         {
-          id: 'NeonTerminalPartTagTable',
-          title: 'Tag table with bar meters',
-          note: 'Pick it for a dense list of readings; the meter shows position in range, the last column says the state.',
+          id: 'NeonTerminalCommandBar',
+          title: 'Command bar and echo',
+          note: 'Pick them together: the bar takes the command, the echo confirms what ran and what came back.',
+          origin: 'custom',
+          size: 'lg',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/neon-terminal/commands.ts'],
+          Component: NeonTerminalCommandBar,
+        },
+        {
+          id: 'NeonTerminalHistory',
+          title: 'History rail',
+          note: 'Pick it so a session can be retraced; choosing an entry runs it again and moves it to the top.',
+          origin: 'custom',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/neon-terminal/commands.ts', 'kit/Panel.tsx'],
+          Component: NeonTerminalHistory,
+        },
+        {
+          id: 'NeonTerminalTrendResult',
+          title: 'Trend result',
+          note: 'Pick it for a time series command: the chart with its limits, and four figures stacked beside it.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/BoxPane.tsx', 'experiences/futuristic/TextMeter.tsx'],
-          Component: NeonTerminalPartTagTable,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: NeonTerminalTrendResult,
         },
         {
-          id: 'NeonTerminalPartTree',
-          title: 'Process tree',
-          note: 'Pick it as the navigation pane; arrows move and fold, and a glyph carries the run state.',
+          id: 'NeonTerminalAlarmResult',
+          title: 'Alarm result',
+          note: 'Pick it for a list command: a status-banded table with the count by severity beside it.',
           origin: 'custom',
-          size: 'md',
+          size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/BoxPane.tsx', 'experiences/futuristic/terminalSession.ts'],
-          Component: NeonTerminalPartTree,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/Bars.tsx', 'kit/StatusPill.tsx'],
+          Component: NeonTerminalAlarmResult,
         },
         {
-          id: 'NeonTerminalPartChart',
-          title: 'Character chart',
-          note: 'Pick it to show the shape of a trend in text mode, with its limit as a dashed row.',
+          id: 'NeonTerminalStatusResult',
+          title: 'Status result with status line',
+          note: 'Pick it for a summary command: the state in words first, then the table and the ranking.',
           origin: 'custom',
-          size: 'md',
+          size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/CharChart.tsx', 'experiences/futuristic/textCharts.ts', 'experiences/futuristic/BoxPane.tsx'],
-          Component: NeonTerminalPartChart,
-        },
-        {
-          id: 'NeonTerminalPartAlarmLog',
-          title: 'Alarm log',
-          note: 'Pick it for the alarm pane; active rows carry their own acknowledge action.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/BoxPane.tsx', 'experiences/futuristic/terminalSession.ts'],
-          Component: NeonTerminalPartAlarmLog,
-        },
-        {
-          id: 'NeonTerminalPartCommandLine',
-          title: 'Command line',
-          note: 'Pick the output, status line and prompt together; errors are printed in words, never only in colour.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/commandParser.ts', 'experiences/futuristic/terminalSession.ts', 'experiences/futuristic/BoxPane.tsx'],
-          Component: NeonTerminalPartCommandLine,
-        },
-        {
-          id: 'NeonTerminalPartTextMeter',
-          title: 'Text meters',
-          note: 'Pick one wherever a bar has to live inside a line of monospaced text.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/TextMeter.tsx', 'experiences/futuristic/textCharts.ts'],
-          Component: NeonTerminalPartTextMeter,
-        },
-        {
-          id: 'NeonTerminalPartBoxPane',
-          title: 'Box pane',
-          note: 'Pick it to frame any region of a text-mode screen; mark only one pane active at a time.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/BoxPane.tsx'],
-          Component: NeonTerminalPartBoxPane,
-        },
-        {
-          id: 'NeonTerminalPartFunctionKeys',
-          title: 'Function-key legend',
-          note: 'Pick it as the mouse path to the commands; each key shows what it will run.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/commandParser.ts', 'experiences/futuristic/terminalSession.ts'],
-          Component: NeonTerminalPartFunctionKeys,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/Bars.tsx', 'kit/Meter.tsx'],
+          Component: NeonTerminalStatusResult,
         },
       ],
     },

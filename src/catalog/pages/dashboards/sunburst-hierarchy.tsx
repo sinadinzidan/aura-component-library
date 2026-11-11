@@ -1,52 +1,97 @@
-import { Kbd } from '@cognite/aura/components/kbd';
-import { useReducer } from 'react';
-
+import { Button } from '@cognite/aura/components/button';
 import {
-  createDrillReducer,
-  createDrillState,
-  currentNode,
-  pathNodes,
-} from '../../../library/experiences/drilldown/drillReducer';
-import { LEVEL_LABEL, buildHierarchy, childSummary, descendantsAt, isAbnormal } from '../../../library/experiences/drilldown/hierarchy';
-import type { DrillNode } from '../../../library/experiences/drilldown/hierarchy';
-import { LevelLegend } from '../../../library/experiences/drilldown/LevelLegend';
-import { NodeList } from '../../../library/experiences/drilldown/NodeList';
-import { NodePreview } from '../../../library/experiences/drilldown/NodePreview';
-import { PathBar } from '../../../library/experiences/drilldown/PathBar';
-import { SunburstChart } from '../../../library/experiences/drilldown/SunburstChart';
-import { FULL_CIRCLE, arcCentroid, arcPath, partition, shapeArcs } from '../../../library/experiences/drilldown/sunburstLayout';
-import { SvgStatusMark } from '../../../library/experiences/drilldown/SvgStatusMark';
-import { TONE_TEXT } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+  SegmentedControl,
+  SegmentedControlButton,
+  SegmentedControlList,
+} from '@cognite/aura/components/segmented-control';
+import { IconAlertOctagon, IconAlertTriangle, IconArrowBackUp, IconBell, IconChevronRight, IconCircleCheck, IconPlayerPause } from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
+
+import { Canvas } from '../../../library/kit/Canvas';
+import { IconChip } from '../../../library/kit/IconChip';
+import { ListRow } from '../../../library/kit/ListRow';
+import {
+  TREE_LEVEL_LABEL,
+  TREE_LEVEL_PLURAL,
+  buildAssetTree,
+  isAbnormal,
+  isOpenAlarm,
+  leafCount,
+  nodesAt,
+  pathTo,
+  type TreeLevel,
+  type TreeNode,
+  type TreeSensor,
+} from '../../../library/kit/miller-columns/assetTree';
+import { EXTRA_SENSORS } from '../../../library/kit/miller-columns/plantFixture';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { Stat } from '../../../library/kit/Stat';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { SunburstRings, type SunburstDatum } from '../../../library/kit/sunburst-hierarchy/SunburstRings';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
 import { ALARMS, ASSETS, SENSORS } from '../../data/plant';
-import type { Sensor } from '../../data/plant';
-import { MINUTE, formatAgo, makeSeries } from '../../data/series';
-import type { SeriesPoint } from '../../data/series';
+import { MINUTE, formatAgo, formatTime, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './sunburst-hierarchy.tsx?raw';
 
-/** Measurement points on the machines the shared plant leaves bare, in the same tag style. */
-const SUNBURST_EXTRA_SENSORS: readonly Sensor[] = [
-  { id: 'lt-10022', tag: '20-LT-10022', name: 'Separator level', assetId: '20-va-1002', unit: '%', value: 12.5, lowLimit: 0, highLimit: 70, highHighLimit: 85, rangeMin: 0, rangeMax: 100, decimals: 1, quality: 'good', seed: 51 },
-  { id: 'zt-11051', tag: '20-ZT-11051', name: 'Valve position', assetId: '20-xv-1105', unit: '%', value: 100, lowLimit: 95, highLimit: 100, rangeMin: 0, rangeMax: 100, decimals: 0, quality: 'good', seed: 52 },
-  { id: 'pt-92631', tag: '23-PT-92631', name: 'Discharge pressure', assetId: '23-ka-9102', unit: 'barg', value: 96.4, lowLimit: 85, highLimit: 102, highHighLimit: 108, rangeMin: 0, rangeMax: 120, decimals: 1, quality: 'good', seed: 53 },
-  { id: 'tt-92632', tag: '23-TT-92632', name: 'Discharge temperature', assetId: '23-ka-9102', unit: '°C', value: 128.5, lowLimit: 90, highLimit: 145, highHighLimit: 155, rangeMin: 0, rangeMax: 180, decimals: 1, quality: 'good', seed: 54 },
-  { id: 'vt-92640', tag: '23-VT-92640', name: 'Drive-end vibration', assetId: '23-ka-9102', unit: 'mm/s', value: 3.2, lowLimit: 0, highLimit: 7.1, highHighLimit: 11, rangeMin: 0, rangeMax: 15, decimals: 1, quality: 'good', seed: 55 },
-  { id: 'vt-92740', tag: '23-VT-92740', name: 'Drive-end vibration', assetId: '23-ka-9103', unit: 'mm/s', value: 11.6, lowLimit: 0, highLimit: 7.1, highHighLimit: 11, rangeMin: 0, rangeMax: 15, decimals: 1, quality: 'good', seed: 56 },
-  { id: 'st-92701', tag: '23-ST-92701', name: 'Shaft speed', assetId: '23-ka-9103', unit: 'rpm', value: 0, lowLimit: 0, highLimit: 10500, rangeMin: 0, rangeMax: 12000, decimals: 0, quality: 'good', seed: 57 },
-  { id: 'tt-90011', tag: '23-TT-90011', name: 'Exhaust temperature', assetId: '23-gt-9001', unit: '°C', value: 512, lowLimit: 400, highLimit: 540, highHighLimit: 560, rangeMin: 0, rangeMax: 650, decimals: 0, quality: 'good', seed: 58 },
-  { id: 'st-90001', tag: '23-ST-90001', name: 'Turbine speed', assetId: '23-gt-9001', unit: 'rpm', value: 9840, lowLimit: 7000, highLimit: 10500, rangeMin: 0, rangeMax: 12000, decimals: 0, quality: 'good', seed: 59 },
-  { id: 'it-20023', tag: '27-IT-20023', name: 'Motor current', assetId: '27-pa-2001b', unit: 'A', value: 0, lowLimit: 0, highLimit: 95, highHighLimit: 105, rangeMin: 0, rangeMax: 120, decimals: 1, quality: 'good', seed: 60 },
-];
+const SUNBURST_TREE = buildAssetTree({ assets: ASSETS, sensors: [...SENSORS, ...EXTRA_SENSORS], alarms: ALARMS });
 
-const SUNBURST_SENSORS: readonly Sensor[] = [...SENSORS, ...SUNBURST_EXTRA_SENSORS];
+/** One decorative family per area, chosen to stay clear of the warning and critical colours. */
+const SUNBURST_AREA_TONE: Record<string, Tone> = {
+  'nk-20': 'blue',
+  'nk-23': 'purple',
+  'nk-27': 'teal',
+  'nk-40': 'sky',
+};
 
-/** The last 24 hours of a sensor, ending on its current value. A dead or idle signal has no trend. */
-function sunburstSeries(sensor: Sensor): SeriesPoint[] {
-  if (sensor.quality === 'bad') return [];
+type SunburstWeight = 'tags' | 'risk';
+
+type SunburstColour = 'area' | 'state';
+
+const SUNBURST_WEIGHT_LABEL: Record<SunburstWeight, string> = {
+  tags: 'Tag count',
+  risk: 'Closeness to limits',
+};
+
+function sunburstAreaTone(node: TreeNode): Tone {
+  const area = pathTo(SUNBURST_TREE, node.id).find((step) => step.level === 'area');
+  return (area ? SUNBURST_AREA_TONE[area.id] : undefined) ?? 'accent';
+}
+
+function sunburstReading(sensor: TreeSensor): string {
+  return sensor.quality === 'bad' ? 'no reading' : `${formatNumber(sensor.value, sensor.decimals)} ${sensor.unit}`;
+}
+
+/** Instrument letters of a tag: `23-VT-92540` → `VT`. Short enough for the outer ring. */
+function sunburstShort(node: TreeNode): string {
+  return node.level === 'tag' ? (node.tag.split('-')[1] ?? node.tag) : node.tag;
+}
+
+/** Turns a tree node into what the chart draws. Units and tags in trouble are filled in their state. */
+function sunburstDatum(node: TreeNode, weight: SunburstWeight, colour: SunburstColour): SunburstDatum {
+  const alert = isAbnormal(node.tone) && (colour === 'state' || node.level === 'unit' || node.level === 'tag');
+  const base: Tone = colour === 'state' ? (node.tone === 'info' || node.tone === 'neutral' ? 'neutral' : 'success') : sunburstAreaTone(node);
+  return {
+    id: node.id,
+    label: node.level === 'tag' ? sunburstShort(node) : node.name,
+    short: sunburstShort(node),
+    title: `${node.name}, ${node.tag}, ${node.sensor ? `${sunburstReading(node.sensor)}, ` : ''}${node.stateLabel}`,
+    tone: alert ? node.tone : base,
+    emphasis: alert ? 'alert' : 'normal',
+    weight: weight === 'tags' ? 1 : 108 - node.score,
+    children: node.children.map((child) => sunburstDatum(child, weight, colour)),
+  };
+}
+
+/** The last 24 hours of a tag, ending on its current value. A dead signal has no trend. */
+function sunburstTrend(sensor: TreeSensor): { values: number[]; labels: string[] } {
+  if (sensor.quality === 'bad') return { values: [], labels: [] };
   const band = sensor.highLimit - sensor.lowLimit;
   const idle = sensor.value === 0;
   const raw = makeSeries({
@@ -60,269 +105,304 @@ function sunburstSeries(sensor: Sensor): SeriesPoint[] {
     decimals: sensor.decimals,
   });
   const offset = sensor.value - (raw[raw.length - 1]?.v ?? sensor.value);
-  return raw.map((point) => ({ t: point.t, v: Number(Math.max(sensor.rangeMin, point.v + offset).toFixed(sensor.decimals)) }));
+  return {
+    values: raw.map((point) => Number(Math.max(sensor.rangeMin, point.v + offset).toFixed(sensor.decimals))),
+    labels: raw.map((point) => formatTime(point.t)),
+  };
 }
 
-const SUNBURST_TREE = buildHierarchy({
-  assets: ASSETS,
-  sensors: SUNBURST_SENSORS,
-  alarms: ALARMS,
-  series: Object.fromEntries(SUNBURST_SENSORS.map((sensor) => [sensor.id, sunburstSeries(sensor)])),
-});
-
-
-const SUNBURST_REDUCER = createDrillReducer(SUNBURST_TREE);
-
-const SUNBURST_LIST_HEADING: Record<DrillNode['level'], string> = {
-  site: 'Areas',
-  area: 'Equipment',
-  equipment: 'Measurement points',
-  sensor: '',
+type SunburstExplorer = {
+  /** The node in the middle of the chart. */
+  focus: TreeNode;
+  /** The node the side panels describe: a picked tag, otherwise the focus. */
+  selected: TreeNode;
+  weight: SunburstWeight;
+  setWeight: (weight: SunburstWeight) => void;
+  /** Click on an arc: zoom to it when it has rings below it, otherwise select it. */
+  pick: (id: string) => void;
+  zoomTo: (id: string) => void;
+  up: () => void;
 };
 
-/** Centre first, then one entry per ring below the node the chart is rooted on. */
-function sunburstLegend(node: DrillNode) {
-  const items = [{ label: LEVEL_LABEL[node.level], detail: node.name }];
-  if (node.level === 'site') items.push({ label: 'Areas', detail: String(node.children.length) });
-  if (node.level === 'site' || node.level === 'area') items.push({ label: 'Equipment', detail: String(descendantsAt(node, 'equipment').length) });
-  if (node.level !== 'sensor') items.push({ label: 'Sensors', detail: String(descendantsAt(node, 'sensor').length) });
-  return items;
+function useSunburstExplorer(initialFocus: string, initialSelected: string | null = null): SunburstExplorer {
+  const [focusId, setFocusId] = useState(initialFocus);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelected);
+  const [weight, setWeight] = useState<SunburstWeight>('tags');
+  const focus = SUNBURST_TREE.byId.get(focusId) ?? SUNBURST_TREE.root;
+  const selected = (selectedId ? SUNBURST_TREE.byId.get(selectedId) : undefined) ?? focus;
+
+  const zoomTo = (id: string) => {
+    setFocusId(id);
+    setSelectedId(null);
+  };
+
+  return {
+    focus,
+    selected,
+    weight,
+    setWeight,
+    zoomTo,
+    pick: (id) => {
+      const node = SUNBURST_TREE.byId.get(id);
+      if (!node) return;
+      if (node.children.length > 0) zoomTo(id);
+      else setSelectedId(id === selectedId ? null : id);
+    },
+    up: () => {
+      if (selectedId) setSelectedId(null);
+      else if (focus.parentId) zoomTo(focus.parentId);
+    },
+  };
 }
 
-function SunburstKeys() {
+function SunburstStateIcon({ tone }: { tone: Tone }) {
+  if (tone === 'critical') return <IconAlertOctagon />;
+  if (tone === 'warning') return <IconAlertTriangle />;
+  if (tone === 'info') return <IconPlayerPause />;
+  return <IconCircleCheck />;
+}
+
+/** The centre of the chart: the focused node and its health. Pressing it steps out one level. */
+function SunburstCenter({ explorer, size = 'lg' }: { explorer: SunburstExplorer; size?: 'md' | 'lg' }) {
+  const { focus } = explorer;
+  const top = focus.parentId === null;
   return (
-    <p className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span className="flex items-center gap-1">
-        <Kbd>←</Kbd>
-        <Kbd>→</Kbd> move
-      </span>
-      <span className="flex items-center gap-1">
-        <Kbd>Enter</Kbd> re-root
-      </span>
-      <span className="flex items-center gap-1">
-        <Kbd>Esc</Kbd> up
-      </span>
-    </p>
+    <button
+      type="button"
+      disabled={top}
+      onClick={explorer.up}
+      aria-label={top ? `${focus.name}, health ${focus.score}` : `${focus.name}, health ${focus.score}. Step out`}
+      className="flex h-full w-full flex-col items-center justify-center rounded-full border border-[color:var(--kit-rule)] bg-[var(--kit-surface)] px-4 text-center outline-none backdrop-blur-xl focus-visible:ring-2 focus-visible:ring-[color:var(--kit-text)] enabled:hover:bg-[color-mix(in_oklab,var(--kit-text)_12%,transparent)]"
+    >
+      <span className="text-xs font-medium text-[color:var(--kit-text-2)]">{TREE_LEVEL_LABEL[focus.level]} health</span>
+      <span className={`font-semibold tracking-tight tabular-nums ${size === 'lg' ? 'text-6xl' : 'text-4xl'} leading-none`}>{focus.score}</span>
+      <span className={`mt-1 font-semibold leading-tight ${size === 'lg' ? 'text-sm' : 'text-xs'}`}>{focus.name}</span>
+      {top ? null : (
+        <span className="mt-1.5 flex items-center gap-1 text-xs font-medium text-[color:var(--kit-text-2)]">
+          <IconArrowBackUp aria-hidden="true" className="size-3.5" /> Step out
+        </span>
+      )}
+    </button>
   );
 }
 
-function SunburstStateKey() {
+function SunburstChart({
+  explorer,
+  colour = 'area',
+  centerSize = 'lg',
+  displaySize = 600,
+  className,
+}: {
+  explorer: SunburstExplorer;
+  colour?: SunburstColour;
+  centerSize?: 'md' | 'lg';
+  /** The width the chart is drawn at, in px: keeps arc labels readable. */
+  displaySize?: number;
+  className?: string;
+}) {
+  const { focus, selected, weight } = explorer;
   return (
-    <ul aria-label="Segment states" className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-medium-foreground">
-      <li className="flex items-center gap-1.5">
-        <span className="size-3 rounded-sm bg-[color-mix(in_oklab,var(--primary-background)_26%,var(--card-background))]" />
-        Normal
-      </li>
-      <li className="flex items-center gap-1.5">
-        <svg aria-hidden="true" viewBox="0 0 14 14" className="size-3.5 rounded-sm bg-warning-background">
-          <SvgStatusMark x={7} y={7} size={8} tone="warning" shape="square" />
-        </svg>
-        Needs attention
-      </li>
-      <li className="flex items-center gap-1.5">
-        <svg aria-hidden="true" viewBox="0 0 14 14" className="size-3.5 rounded-sm bg-critical-background">
-          <SvgStatusMark x={7} y={7} size={9} tone="critical" shape="diamond" />
-        </svg>
-        Critical
-      </li>
-    </ul>
+    <SunburstRings
+      label={`${focus.name}: ${leafCount(focus)} tags by ${TREE_LEVEL_PLURAL[focus.children[0]?.level ?? 'tag']}`}
+      root={sunburstDatum(focus, weight, colour)}
+      selectedId={selected.id === focus.id ? null : selected.id}
+      onPick={explorer.pick}
+      center={<SunburstCenter explorer={explorer} size={centerSize} />}
+      displaySize={displaySize}
+      className={className}
+    />
   );
 }
 
-function SunburstJourney({ startId }: { startId?: string }) {
-  const [state, dispatch] = useReducer(SUNBURST_REDUCER, SUNBURST_TREE, (tree) => createDrillState(tree, { startId }));
-  const current = currentNode(SUNBURST_TREE, state);
-  const nodes = pathNodes(SUNBURST_TREE, state);
-  const abnormal = isAbnormal(current.status.tone);
-
+/** A floating glass chip: the surface every overlay around the chart sits on. */
+function SunburstFloat({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <div className="flex h-[44rem] w-full flex-col overflow-hidden rounded-xl border border-default bg-base-background">
-      <header className="flex items-center gap-4 border-b border-default px-3 py-2">
-        <PathBar nodes={nodes} onSelect={(id) => dispatch({ type: 'jump', id })} className="flex-1" />
-      </header>
+    <div
+      style={{ boxShadow: 'var(--kit-panel-shadow)' }}
+      className={`rounded-[var(--kit-radius-sm)] border border-[color:var(--kit-rule)] bg-[var(--kit-surface)] backdrop-blur-xl ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col gap-3 bg-[radial-gradient(circle_at_50%_45%,color-mix(in_oklab,var(--primary-background)_16%,transparent),transparent_62%)] p-4">
-          <div className="min-h-0 flex-1">
-            <SunburstChart
-              tree={SUNBURST_TREE}
-              state={state}
-              dispatch={dispatch}
-              label={`Sunburst of ${current.name}. Arrow keys move between segments, Enter re-roots, Escape goes up.`}
-            />
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
-            <LevelLegend items={sunburstLegend(current)} />
-            <SunburstStateKey />
-          </div>
-        </div>
+function SunburstCrumbs({ explorer }: { explorer: SunburstExplorer }) {
+  const trail = pathTo(SUNBURST_TREE, explorer.selected.id);
+  return (
+    <SunburstFloat className="flex items-center gap-1 p-1.5">
+      <Button variant="ghost" size="sm" disabled={trail.length <= 1} onClick={explorer.up}>
+        <IconArrowBackUp /> Back
+      </Button>
+      <nav aria-label="Path">
+        <ol className="flex flex-wrap items-center gap-0.5 pr-2 text-sm">
+          {trail.map((node, index) => {
+            const current = node.id === explorer.selected.id;
+            return (
+              <li key={node.id} className="flex items-center gap-0.5">
+                {index > 0 ? <IconChevronRight aria-hidden="true" className="size-3.5 text-[color:var(--kit-text-3)]" /> : null}
+                <button
+                  type="button"
+                  aria-current={current ? 'location' : undefined}
+                  onClick={() => (node.children.length > 0 ? explorer.zoomTo(node.id) : explorer.pick(node.id))}
+                  className={`rounded-full px-2 py-0.5 tabular-nums hover:bg-[color-mix(in_oklab,var(--kit-text)_12%,transparent)] ${
+                    current ? 'bg-[color-mix(in_oklab,var(--kit-text)_14%,transparent)] font-semibold' : 'font-medium text-[color:var(--kit-text-2)]'
+                  }`}
+                >
+                  {index === 0 ? node.name : node.tag}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    </SunburstFloat>
+  );
+}
 
-        <aside className="flex w-80 shrink-0 flex-col border-l border-default">
-          {current.level === 'sensor' ? (
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
-              <NodePreview node={current} formatAge={formatAgo} maxAlarms={2} />
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-col gap-1 border-b border-default p-4">
-                <span className="text-xs text-muted-foreground">
-                  {LEVEL_LABEL[current.level]} · <span className="font-mono">{current.tag}</span>
-                </span>
-                <span className="text-lg font-semibold text-base-foreground">{current.name}</span>
-                <div className="flex items-center justify-between gap-3">
-                  <StatusIndicator {...current.status} className={abnormal ? TONE_TEXT[current.status.tone] : undefined} />
-                  <ValueReadout value={current.figure.value} unit={current.figure.unit} decimals={current.figure.decimals} size="sm" tone={current.figure.tone} />
-                </div>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
-                <span className="px-2 pt-1 text-xs font-medium text-muted-foreground">
-                  {SUNBURST_LIST_HEADING[current.level]} · {current.children.length}
-                </span>
-                <NodeList
-                  nodes={current.children}
-                  label={`${SUNBURST_LIST_HEADING[current.level]} in ${current.name}`}
-                  activeId={state.hoverId ?? null}
-                  onSelect={(id) => dispatch({ type: 'drill', id })}
-                  onPreview={(id) => dispatch({ type: 'hover', id })}
-                  emptyText="No measurement points on this machine"
-                  className="px-0"
+function SunburstWeightSwitch({ explorer }: { explorer: SunburstExplorer }) {
+  return (
+    <SegmentedControl value={explorer.weight} onValueChange={(next) => explorer.setWeight(next === 'risk' ? 'risk' : 'tags')}>
+      <SegmentedControlList size="small" aria-label="Arc width">
+        <SegmentedControlButton value="tags">{SUNBURST_WEIGHT_LABEL.tags}</SegmentedControlButton>
+        <SegmentedControlButton value="risk">{SUNBURST_WEIGHT_LABEL.risk}</SegmentedControlButton>
+      </SegmentedControlList>
+    </SegmentedControl>
+  );
+}
+
+/** Which ring is which level, drawn as the rings themselves, with the count on each. */
+function SunburstRingGuide({ focus }: { focus: TreeNode }) {
+  const levels: TreeLevel[] = [];
+  let cursor: TreeNode | undefined = focus.children[0];
+  while (cursor) {
+    levels.push(cursor.level);
+    cursor = cursor.children[0];
+  }
+  return (
+    <SunburstFloat className="p-3">
+      <p className="text-xs font-semibold text-[color:var(--kit-text-2)]">Rings, from the centre</p>
+      <ol className="mt-2 space-y-1.5">
+        {levels.map((level, index) => (
+          <li key={level} className="flex items-center gap-2.5 text-sm">
+            <svg viewBox="0 0 24 24" aria-hidden="true" className="size-5 shrink-0">
+              {levels.map((ring, ringIndex) => (
+                <circle
+                  key={ring}
+                  cx="12"
+                  cy="12"
+                  r={4 + ringIndex * 3.5}
+                  fill="none"
+                  strokeWidth={ringIndex === index ? 2.5 : 1}
+                  stroke={ringIndex === index ? 'var(--kit-text)' : 'var(--kit-rule-strong)'}
                 />
-              </div>
-            </>
-          )}
-          <div className="border-t border-default px-4 py-2.5">
-            <SunburstKeys />
-          </div>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-function SunburstHierarchyJourney() {
-  return (
-    <ThemeScope preset="neon-dusk" className="w-full">
-      <SunburstJourney />
-    </ThemeScope>
-  );
-}
-
-function SunburstHierarchyHologram() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <SunburstJourney startId="nk-23" />
-    </ThemeScope>
-  );
-}
-
-function SunburstHierarchyAura() {
-  return (
-    <ThemeScope preset="aura" className="w-full">
-      <SunburstJourney startId="23-ka-9101" />
-    </ThemeScope>
-  );
-}
-
-function SunburstHierarchyAreaChart() {
-  const [state, dispatch] = useReducer(SUNBURST_REDUCER, SUNBURST_TREE, (tree) => createDrillState(tree, { startId: 'nk-23' }));
-
-  return (
-    <div className="h-[26rem] w-full">
-      <SunburstChart tree={SUNBURST_TREE} state={state} dispatch={dispatch} label="Sunburst of Gas compression: equipment and sensors" />
-    </div>
-  );
-}
-
-function SunburstHierarchySensorGauge() {
-  const [state, dispatch] = useReducer(SUNBURST_REDUCER, SUNBURST_TREE, (tree) => createDrillState(tree, { startId: 'vt-92540' }));
-
-  return (
-    <div className="h-[26rem] w-full">
-      <SunburstChart tree={SUNBURST_TREE} state={state} dispatch={dispatch} label="Drive-end vibration on its range, with limits" />
-    </div>
-  );
-}
-
-function SunburstHierarchyChildList() {
-  const [state, dispatch] = useReducer(SUNBURST_REDUCER, SUNBURST_TREE, (tree) => createDrillState(tree, { startId: 'nk-23' }));
-  const current = currentNode(SUNBURST_TREE, state);
-
-  return (
-    <div className="flex w-full max-w-sm flex-col gap-2">
-      <PathBar nodes={pathNodes(SUNBURST_TREE, state)} onSelect={(id) => dispatch({ type: 'jump', id })} />
-      <NodeList
-        nodes={current.children}
-        label={`Children of ${current.name}`}
-        activeId={state.hoverId ?? null}
-        onSelect={(id) => dispatch({ type: 'drill', id })}
-        onPreview={(id) => dispatch({ type: 'hover', id })}
-        emptyText={`${current.name} is a measurement: nothing below it. Use the trail to go back up.`}
-      />
-    </div>
-  );
-}
-
-function SunburstHierarchyLayout() {
-  const area = SUNBURST_TREE.byId.get('nk-23') ?? SUNBURST_TREE.root;
-  const shapes = shapeArcs(
-    partition(area, { id: (node: DrillNode) => node.id, children: (node: DrillNode) => node.children }),
-    { inner: 34, outer: 118, gap: 2 }
-  );
-
-  return (
-    <div className="flex w-full items-center gap-6">
-      <svg role="img" aria-label="Partition of Gas compression: five machines, each as wide as its number of sensors" viewBox="0 0 240 240" className="w-56 shrink-0">
-        {shapes.map((shape) => {
-          const centre = arcCentroid(120, 120, shape);
-          return (
-            <g key={shape.id}>
-              <path d={arcPath(120, 120, shape.r0, shape.r1, shape.start, shape.end)} strokeWidth={1.5} className="fill-card-background stroke-emphasized" />
-              {shape.depth === 1 ? (
-                <text x={centre.x} y={centre.y + 4} fontSize={10} textAnchor="middle" className="fill-base-foreground tabular-nums">
-                  {Math.round(((shape.end - shape.start) / FULL_CIRCLE) * 360)}°
-                </text>
-              ) : null}
-            </g>
-          );
-        })}
-        <circle cx={120} cy={120} r={30} strokeWidth={1.5} className="fill-muted-background stroke-emphasized" />
-      </svg>
-      <ul className="flex flex-col gap-1.5 text-xs text-medium-foreground">
-        {area.children.map((machine) => (
-          <li key={machine.id} className="flex items-baseline gap-2">
-            <span className="font-mono text-base-foreground">{machine.tag}</span>
-            <span className="tabular-nums">{childSummary(machine)}</span>
+              ))}
+            </svg>
+            <span className="font-medium">{TREE_LEVEL_LABEL[level]}s</span>
+            <span className="ml-auto pl-4 tabular-nums text-[color:var(--kit-text-2)]">{nodesAt(focus, level).length}</span>
           </li>
         ))}
-        <li className="pt-1 text-muted-foreground">Every sensor gets the same angle, so a machine is as wide as what hangs under it.</li>
-      </ul>
+      </ol>
+    </SunburstFloat>
+  );
+}
+
+/** How many tags under the focus are in each state: the legend for the solid arcs. */
+function SunburstStateLegend({ focus }: { focus: TreeNode }) {
+  const tags = nodesAt(focus, 'tag');
+  const count = (tone: Tone) => tags.filter((tag) => tag.tone === tone).length;
+  return (
+    <SunburstFloat className="flex flex-col items-start gap-1.5 p-3">
+      <p className="text-xs font-semibold text-[color:var(--kit-text-2)]">Tags by state</p>
+      <StatusPill tone="critical" variant="filled" icon={<IconAlertOctagon />}>
+        {count('critical')} critical
+      </StatusPill>
+      <StatusPill tone="warning" variant="filled" icon={<IconAlertTriangle />}>
+        {count('warning')} in alarm
+      </StatusPill>
+      <StatusPill tone="success" icon={<IconCircleCheck />}>
+        {count('success')} normal
+      </StatusPill>
+    </SunburstFloat>
+  );
+}
+
+function SunburstFact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-t border-[color:var(--kit-rule)] py-2 text-sm first:border-t-0">
+      <dt className="text-[color:var(--kit-text-2)]">{label}</dt>
+      <dd className="text-right font-medium tabular-nums">{children}</dd>
     </div>
   );
 }
 
-function SunburstHierarchyRingLegend() {
-  return <LevelLegend items={sunburstLegend(SUNBURST_TREE.root)} orientation="vertical" />;
+/** Who is selected: name, tag and state, then health for an asset or the reading for a tag. */
+function SunburstFocusPanel({ node, className }: { node: TreeNode; className?: string }) {
+  const sensor = node.sensor;
+  const parent = node.parentId ? SUNBURST_TREE.byId.get(node.parentId) : undefined;
+  return (
+    <Panel className={className} tone={isAbnormal(node.tone) ? node.tone : sunburstAreaTone(node)}>
+      <p className="text-xs font-medium text-[color:var(--kit-text-2)]">{TREE_LEVEL_LABEL[node.level]}</p>
+      <h3 className="text-xl font-semibold leading-6 tracking-tight">{node.name}</h3>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <TagId variant="chip">{node.tag}</TagId>
+        <StatusPill tone={node.tone} icon={<SunburstStateIcon tone={node.tone} />}>
+          {node.stateLabel}
+        </StatusPill>
+      </div>
+      {sensor ? (
+        <div className="mt-4">
+          <p className="flex items-baseline gap-2">
+            <span className="text-5xl font-semibold leading-none tracking-tight tabular-nums">{sensor.quality === 'bad' ? '—' : formatNumber(sensor.value, sensor.decimals)}</span>
+            <span className="text-base font-medium text-[color:var(--kit-text-2)]">{sensor.unit}</span>
+          </p>
+          <dl className="mt-3">
+            <SunburstFact label="High limit">
+              {formatNumber(sensor.highLimit, sensor.decimals)} {sensor.unit}
+            </SunburstFact>
+            <SunburstFact label="Measured on">{parent ? parent.name : '—'}</SunburstFact>
+          </dl>
+        </div>
+      ) : (
+        <div className="mt-4 flex items-center gap-4">
+          <RingGauge label={`${node.name} health`} value={node.score} unit="" size={92} tone={isAbnormal(node.tone) ? node.tone : 'success'} hideLabel />
+          <dl className="min-w-0 flex-1">
+            <SunburstFact label="Units">{nodesAt(node, 'unit').length}</SunburstFact>
+            <SunburstFact label="Tags">{nodesAt(node, 'tag').length}</SunburstFact>
+            <SunburstFact label="Open alarms">{node.openAlarms}</SunburstFact>
+          </dl>
+        </div>
+      )}
+    </Panel>
+  );
 }
 
-function SunburstHierarchyArcStates() {
-  const arcs = [
-    { tone: 'neutral', shape: 'dot', label: 'Normal: accent tint, lighter per ring', fill: 'fill-[color-mix(in_oklab,var(--primary-background)_26%,var(--card-background))]' },
-    { tone: 'warning', shape: 'square', label: 'Needs attention: tint and a square', fill: 'fill-warning-background' },
-    { tone: 'critical', shape: 'diamond', label: 'Critical: tint and a diamond', fill: 'fill-critical-background' },
-  ] as const;
-
+/** The first ring as a list: each child with its share of the circle. Pick one to zoom to it. */
+function SunburstInsideList({ explorer, limit = 5 }: { explorer: SunburstExplorer; limit?: number }) {
+  const { focus, weight } = explorer;
+  const weigh = (node: TreeNode): number => (node.children.length === 0 ? (weight === 'tags' ? 1 : 108 - node.score) : node.children.reduce((sum, child) => sum + weigh(child), 0));
+  const total = weigh(focus) || 1;
+  const ranked = [...focus.children].sort((a, b) => weigh(b) - weigh(a)).slice(0, limit);
   return (
-    <ul className="flex w-full max-w-xs flex-col gap-3">
-      {arcs.map((arc, index) => {
-        const shape = { start: -0.42, end: 0.42, r0: 44, r1: 80 };
-        const centre = arcCentroid(40, 92, shape);
+    <ul className="flex flex-1 flex-col justify-between gap-2.5">
+      {ranked.map((child) => {
+        const share = Math.round((weigh(child) / total) * 100);
+        const alert = isAbnormal(child.tone);
         return (
-          <li key={arc.label} className="flex items-center gap-3 text-sm text-base-foreground">
-            <svg aria-hidden="true" viewBox="0 0 80 52" className="w-20 shrink-0">
-              <path d={arcPath(40, 92, shape.r0, shape.r1, shape.start, shape.end)} strokeWidth={1.5} className={`${arc.fill} stroke-base-background`} />
-              {index > 0 ? <SvgStatusMark x={centre.x} y={centre.y} size={10} tone={arc.tone} shape={arc.shape} /> : null}
-            </svg>
-            {arc.label}
+          <li key={child.id}>
+            <button type="button" onClick={() => explorer.pick(child.id)} className="block w-full rounded-[var(--kit-radius-sm)] text-left outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--kit-text)]">
+              <span className="flex items-baseline justify-between gap-3 text-sm">
+                <span className="font-medium">{child.name}</span>
+                <span className="shrink-0 tabular-nums text-[color:var(--kit-text-2)]">{child.sensor ? sunburstReading(child.sensor) : `${share} %`}</span>
+              </span>
+              <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-[var(--kit-track)]" aria-hidden="true">
+                <span data-tone={alert ? child.tone : sunburstAreaTone(child)} className="block h-full rounded-full bg-[var(--t-line)]" style={{ width: `${Math.max(share, 3)}%` }} />
+              </span>
+              {alert ? (
+                <span data-tone={child.tone} className="mt-1 block text-xs font-semibold text-[color:var(--t-ink)]">
+                  {child.stateLabel}
+                </span>
+              ) : null}
+            </button>
           </li>
         );
       })}
@@ -330,27 +410,265 @@ function SunburstHierarchyArcStates() {
   );
 }
 
-function SunburstHierarchyKeyboard() {
+function SunburstTagTrend({ sensor, height = 190 }: { sensor: TreeSensor; height?: number }) {
+  const { values, labels } = sunburstTrend(sensor);
+  if (values.length === 0) return <p className="text-sm text-[color:var(--kit-text-2)]">The transmitter has not reported since 05:02, so there is no trend to draw.</p>;
   return (
-    <dl className="grid w-full max-w-xs grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 text-sm">
-      <dt className="flex gap-1">
-        <Kbd>←</Kbd>
-        <Kbd>→</Kbd>
-      </dt>
-      <dd className="text-medium-foreground">Step around the first ring; the path lights up</dd>
-      <dt className="flex gap-1">
-        <Kbd>Enter</Kbd>
-      </dt>
-      <dd className="text-medium-foreground">Re-root the chart on the highlighted segment</dd>
-      <dt className="flex gap-1">
-        <Kbd>Esc</Kbd>
-      </dt>
-      <dd className="text-medium-foreground">Go up one level, same as the centre disc</dd>
-      <dt className="flex gap-1">
-        <Kbd>Tab</Kbd>
-      </dt>
-      <dd className="text-medium-foreground">Move to the list, where every row is a button</dd>
-    </dl>
+    <TrendLine
+      label={`${sensor.name}, ${sensor.tag}, last 24 hours`}
+      series={[{ id: 'value', label: sensor.name, values, tone: 'accent' }]}
+      labels={labels}
+      unit={sensor.unit}
+      decimals={sensor.decimals}
+      limits={sensor.value === 0 ? [] : [{ value: sensor.highLimit, label: 'High', tone: 'warning' }]}
+      fill
+      height={height}
+      showLegend={false}
+    />
+  );
+}
+
+function SunburstAlarmList({ node, limit = 2 }: { node: TreeNode; limit?: number }) {
+  const open = node.alarms.filter(isOpenAlarm).slice(0, limit);
+  if (open.length === 0) {
+    return (
+      <p className="flex items-center gap-2 text-sm text-[color:var(--kit-text-2)]">
+        <IconCircleCheck aria-hidden="true" className="size-4 shrink-0" /> Nothing open on or below this {TREE_LEVEL_LABEL[node.level].toLowerCase()}.
+      </p>
+    );
+  }
+  return (
+    <ul>
+      {open.map((alarm) => {
+        const tone: Tone = alarm.severity === 'critical' ? 'critical' : alarm.severity === 'low' ? 'neutral' : 'warning';
+        return (
+          <ListRow
+            key={alarm.id}
+            tone={tone}
+            leading={
+              <IconChip tone={tone} size="sm">
+                <IconBell />
+              </IconChip>
+            }
+            title={alarm.message}
+            meta={
+              <span className="tabular-nums">
+                {alarm.sensorTag} · {alarm.value} · {formatAgo(alarm.raisedAt)}
+              </span>
+            }
+          />
+        );
+      })}
+    </ul>
+  );
+}
+
+function SunburstHierarchySignature() {
+  const explorer = useSunburstExplorer('nk');
+  const { focus, selected } = explorer;
+  const sensor = selected.sensor;
+
+  return (
+    <LookScope look="glass">
+      <Canvas className="@container flex h-[840px] gap-4">
+        <div className="relative flex min-w-0 flex-1 items-center justify-center">
+          <SunburstChart explorer={explorer} className="max-h-full max-w-[720px]" />
+          <div className="absolute left-0 top-0 max-w-[calc(100%-18rem)]">
+            <SunburstCrumbs explorer={explorer} />
+          </div>
+          <div className="absolute right-0 top-0">
+            <SunburstFloat className="p-1.5">
+              <SunburstWeightSwitch explorer={explorer} />
+            </SunburstFloat>
+          </div>
+          <div className="absolute bottom-0 left-0">
+            <SunburstRingGuide focus={focus} />
+          </div>
+          <div className="absolute bottom-0 right-0">
+            <SunburstStateLegend focus={focus} />
+          </div>
+        </div>
+        <div className="flex w-[300px] shrink-0 flex-col gap-4 @min-[1040px]:w-[330px]">
+          <SunburstFocusPanel node={selected} />
+          <Panel
+            className="flex-1"
+            title={sensor ? 'Last 24 hours' : `Inside ${focus.name}`}
+            subtitle={sensor ? `${sensor.unit}, against the high limit` : `Share of the circle by ${SUNBURST_WEIGHT_LABEL[explorer.weight].toLowerCase()}`}
+          >
+            {sensor ? <SunburstTagTrend sensor={sensor} /> : <SunburstInsideList explorer={explorer} />}
+          </Panel>
+          <Panel title="Open alarms" subtitle="Newest first">
+            <SunburstAlarmList node={selected} />
+          </Panel>
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyTablet() {
+  const explorer = useSunburstExplorer('nk-23');
+  const { focus } = explorer;
+  return (
+    <LookScope look="glass" className="mx-auto w-full max-w-2xl">
+      <Canvas className="flex flex-col gap-4">
+        <div className="flex items-start justify-between gap-3">
+          <SunburstCrumbs explorer={explorer} />
+          <StatusPill tone={focus.tone} size="lg" variant="filled" icon={<SunburstStateIcon tone={focus.tone} />}>
+            {focus.stateLabel}
+          </StatusPill>
+        </div>
+        <SunburstChart explorer={explorer} displaySize={520} className="mx-auto max-w-[520px]" />
+        <Panel title={`Inside ${focus.name}`} subtitle="Pick a row or an arc to zoom">
+          <ul className="grid grid-cols-2 gap-x-6">
+            {focus.children.map((child) => (
+              <ListRow
+                key={child.id}
+                tone={isAbnormal(child.tone) ? child.tone : 'neutral'}
+                title={
+                  <button type="button" className="text-left font-medium" onClick={() => explorer.pick(child.id)}>
+                    {child.name}
+                  </button>
+                }
+                meta={child.sensor ? sunburstReading(child.sensor) : <TagId>{child.tag}</TagId>}
+                trailing={
+                  <StatusPill tone={child.tone} icon={<SunburstStateIcon tone={child.tone} />}>
+                    {child.stateLabel}
+                  </StatusPill>
+                }
+              />
+            ))}
+          </ul>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyWall() {
+  const explorer = useSunburstExplorer('nk');
+  const areas = SUNBURST_TREE.root.children;
+  const flagged = areas.filter((area) => isAbnormal(area.tone));
+  return (
+    <LookScope look="signal">
+      <Canvas className="grid grid-cols-12 items-stretch gap-4">
+        <div className="col-span-5 flex flex-col gap-4">
+          <Stat
+            size="hero"
+            tone={flagged.some((area) => area.tone === 'critical') ? 'critical' : flagged.length > 0 ? 'warning' : 'success'}
+            label="Nordkapp plant, 14:00 UTC"
+            value={flagged.length}
+            unit={`of ${areas.length} areas`}
+            state={flagged.length > 0 ? 'Need attention' : 'All normal'}
+            stateIcon={<IconAlertOctagon />}
+          />
+          <div className="grid flex-1 grid-cols-2 gap-4">
+            {areas.map((area) => (
+              <Stat
+                key={area.id}
+                size="md"
+                tone={area.tone === 'info' || area.tone === 'neutral' ? 'success' : area.tone}
+                label={area.name}
+                value={area.score}
+                unit="health"
+                state={area.tone === 'success' ? 'Normal' : area.tone === 'critical' ? 'Critical' : 'Watch'}
+                stateIcon={<SunburstStateIcon tone={area.tone} />}
+              />
+            ))}
+          </div>
+        </div>
+        <Panel className="col-span-7" title="Where it is" subtitle="Every tag in the plant; solid arcs are in alarm or tripped">
+          <div className="flex flex-1 items-center justify-center">
+            <SunburstChart explorer={explorer} colour="state" centerSize="md" displaySize={520} className="max-w-[520px]" />
+          </div>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyChart() {
+  const explorer = useSunburstExplorer('23-ka-9101');
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex justify-center">
+        <SunburstChart explorer={explorer} centerSize="md" displaySize={440} className="max-w-[440px]" />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyFocusPanel() {
+  const node = SUNBURST_TREE.byId.get('nk-23') ?? SUNBURST_TREE.root;
+  const tag = SUNBURST_TREE.byId.get('vt-92740') ?? SUNBURST_TREE.root;
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-full flex-col justify-center gap-4">
+        <SunburstFocusPanel node={node} />
+        <SunburstFocusPanel node={tag} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyCrumbs() {
+  const explorer = useSunburstExplorer('nk-23');
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex min-h-40 items-center justify-center">
+        <SunburstCrumbs explorer={explorer} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyRingGuide() {
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex min-h-40 items-center justify-center">
+        <SunburstRingGuide focus={SUNBURST_TREE.root} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyStateLegend() {
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex min-h-40 items-center justify-center">
+        <SunburstStateLegend focus={SUNBURST_TREE.root} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyInside() {
+  const explorer = useSunburstExplorer('nk-23');
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas>
+        <Panel
+          title={`Inside ${explorer.focus.name}`}
+          subtitle={`Share of the circle by ${SUNBURST_WEIGHT_LABEL[explorer.weight].toLowerCase()}`}
+          actions={<SunburstWeightSwitch explorer={explorer} />}
+        >
+          <SunburstInsideList explorer={explorer} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SunburstHierarchyTagTrend() {
+  const node = SUNBURST_TREE.byId.get('tt-92532');
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas>
+        <Panel title="Last 24 hours" subtitle="Discharge temperature, °C, against the high limit">
+          {node?.sensor ? <SunburstTagTrend sensor={node.sensor} height={230} /> : null}
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -358,151 +676,147 @@ export default definePage({
   id: 'sunburst-hierarchy',
   title: 'Sunburst hierarchy',
   summary:
-    'The plant as rings. The node you are on sits in the centre, each level below it is a ring, and clicking a segment re-roots the chart on it. The centre always says where you are and takes you back up; a list beside the chart carries the same journey in rows.',
+    'The asset tree as rings: the plant in the middle, then areas, units and tags. Arc width is the number of tags below, or how close they run to their limits, and anything in alarm is filled solid. Pick an arc to make it the centre.',
   guidance: {
     use: [
-      'To show the shape of a hierarchy at a glance: how much hangs under what, and where the trouble is.',
-      'When two or three levels should be visible at once without opening anything.',
-      'Always with a list of the same nodes, so nobody has to read a ring to act.',
-      'On dark, large displays, where the rings can be big enough to label.',
+      'To show the shape of a hierarchy and where its trouble sits in one picture.',
+      'With three or four levels and a few dozen leaves; zoom to go deeper.',
+      'As a showpiece or an overview next to a list that carries the exact figures.',
     ],
     avoid: [
-      'Reading exact values off arcs. Angles show structure; figures belong in the centre and the list.',
-      'More than three rings or more than a few dozen outer segments.',
-      'Tint alone for state: abnormal segments also carry a square or a diamond.',
-      'Labels squeezed into every segment. Print one only where it fits along its arc; the list has the rest.',
+      'Reading precise values off arc lengths; pair it with a list or a table.',
+      'More than four rings at once: the outer arcs become slivers.',
+      'A hue per node. Hue is the area; state is the solid fill, always with a word nearby.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'Hover a segment to light up its path from the centre, click it to re-root the chart there. Click the centre disc, or press Escape, to go up. The list on the right selects the same nodes; at a sensor the rings become a gauge and the panel shows trend and alarms.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'Pick an arc to zoom, the centre or the breadcrumb to step back out. Pick a tag to read it on the right.',
       specimens: [
         {
-          id: 'SunburstHierarchyJourney',
-          title: 'Re-rooting sunburst',
-          note: 'Pick it when the structure itself is the message and people explore from the whole towards a part.',
+          id: 'SunburstHierarchySignature',
+          title: 'Sunburst hierarchy',
+          note: 'Pick it when people need to see the whole tree and its trouble spots at once, then zoom in.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'experiences/drilldown/SunburstChart.tsx',
-            'experiences/drilldown/sunburstLayout.ts',
-            'experiences/drilldown/drillReducer.ts',
-            'experiences/drilldown/hierarchy.ts',
-            'experiences/drilldown/NodeList.tsx',
-            'experiences/drilldown/LevelLegend.tsx',
-            'experiences/drilldown/PathBar.tsx',
-            'experiences/drilldown/NodePreview.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: SunburstHierarchyJourney,
+          bleed: true,
+          uses: ['kit/sunburst-hierarchy/SunburstRings.tsx', 'experiences/drilldown/sunburstLayout.ts', 'kit/miller-columns/assetTree.ts', 'kit/Panel.tsx', 'kit/RingGauge.tsx', 'looks/LookScope.tsx'],
+          Component: SunburstHierarchySignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'Themes',
-      description: 'The same chart in two other presets, rooted on an area and on a machine. Ring tints follow the accent of the theme.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Zoomed into one area on a tablet, and the same tree as a status wall.',
       specimens: [
         {
-          id: 'SunburstHierarchyHologram',
-          title: 'Hologram, rooted on an area',
-          note: 'Pick it for wall displays that want a softer, teal-on-black look.',
+          id: 'SunburstHierarchyTablet',
+          title: 'One area on a tablet',
+          note: 'Pick it for a narrow screen: the chart on top, the first ring as a list underneath.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/drilldown/SunburstChart.tsx', 'experiences/drilldown/drillReducer.ts', 'themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: SunburstHierarchyHologram,
+          bleed: true,
+          uses: ['kit/sunburst-hierarchy/SunburstRings.tsx', 'kit/ListRow.tsx', 'kit/StatusPill.tsx'],
+          Component: SunburstHierarchyTablet,
         },
         {
-          id: 'SunburstHierarchyAura',
-          title: 'Aura, rooted on a machine',
-          note: 'Pick it inside a regular application page; the rings calm down to neutral greys.',
+          id: 'SunburstHierarchyWall',
+          title: 'Status wall',
+          note: 'Pick it for a wall screen: colour carries state only, and the count of areas in trouble leads.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/drilldown/SunburstChart.tsx', 'experiences/drilldown/drillReducer.ts', 'themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: SunburstHierarchyAura,
+          bleed: true,
+          uses: ['kit/sunburst-hierarchy/SunburstRings.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: SunburstHierarchyWall,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The pieces on their own, ready for another radial view.',
+      description: 'The chart and the floating pieces around it.',
       specimens: [
         {
-          id: 'SunburstHierarchyAreaChart',
-          title: 'Chart on its own',
-          note: 'Pick it as a compact overview of one area: equipment in the first ring, sensors in the second.',
+          id: 'SunburstHierarchyChart',
+          title: 'Chart on one unit',
+          note: 'With one ring left the arcs are wide enough to carry instrument letters.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['experiences/drilldown/SunburstChart.tsx', 'experiences/drilldown/drillReducer.ts'],
-          Component: SunburstHierarchyAreaChart,
+          bleed: true,
+          uses: ['kit/sunburst-hierarchy/SunburstRings.tsx'],
+          Component: SunburstHierarchyChart,
         },
         {
-          id: 'SunburstHierarchySensorGauge',
-          title: 'Sensor gauge',
-          note: 'Pick it for the last level: the value on its range with the operating band and limits marked.',
+          id: 'SunburstHierarchyFocusPanel',
+          title: 'Focus panel',
+          note: 'An asset shows health and counts; a tag shows its reading and limit.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['experiences/drilldown/SunburstChart.tsx', 'experiences/drilldown/drillReducer.ts'],
-          Component: SunburstHierarchySensorGauge,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/RingGauge.tsx', 'kit/TagId.tsx'],
+          Component: SunburstHierarchyFocusPanel,
         },
         {
-          id: 'SunburstHierarchyChildList',
-          title: 'Child list',
-          note: 'Pick it beside any chart of a hierarchy, so the journey also works as plain rows.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['experiences/drilldown/NodeList.tsx', 'experiences/drilldown/NodeRow.tsx', 'experiences/drilldown/PathBar.tsx'],
-          Component: SunburstHierarchyChildList,
-        },
-        {
-          id: 'SunburstHierarchyLayout',
-          title: 'Partition layout',
-          note: 'Pick equal angles per leaf when the chart should show structure rather than a quantity.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['experiences/drilldown/sunburstLayout.ts'],
-          Component: SunburstHierarchyLayout,
-        },
-        {
-          id: 'SunburstHierarchyRingLegend',
-          title: 'Ring legend',
-          note: 'Pick it under the chart to say which level each ring holds and how many nodes it has.',
+          id: 'SunburstHierarchyCrumbs',
+          title: 'Breadcrumb',
+          note: 'The way back: every ancestor is one press away.',
           origin: 'custom',
           size: 'sm',
-          uses: ['experiences/drilldown/LevelLegend.tsx'],
-          Component: SunburstHierarchyRingLegend,
+          align: 'stretch',
+          bleed: true,
+          Component: SunburstHierarchyCrumbs,
         },
         {
-          id: 'SunburstHierarchyArcStates',
-          title: 'Segment states',
-          note: 'Pick these three treatments so a state never depends on tint alone.',
+          id: 'SunburstHierarchyRingGuide',
+          title: 'Ring guide',
+          note: 'Says which ring is which level, since the rings themselves carry no axis.',
           origin: 'custom',
           size: 'sm',
-          uses: ['experiences/drilldown/SvgStatusMark.tsx', 'experiences/drilldown/sunburstLayout.ts'],
-          Component: SunburstHierarchyArcStates,
+          align: 'stretch',
+          bleed: true,
+          Component: SunburstHierarchyRingGuide,
         },
         {
-          id: 'SunburstHierarchyKeyboard',
-          title: 'Keyboard map',
-          note: 'Pick it for a help popover, so the chart is usable without a pointer.',
+          id: 'SunburstHierarchyStateLegend',
+          title: 'State legend',
+          note: 'Counts the solid arcs by state, in words.',
           origin: 'custom',
           size: 'sm',
-          Component: SunburstHierarchyKeyboard,
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/StatusPill.tsx'],
+          Component: SunburstHierarchyStateLegend,
+        },
+        {
+          id: 'SunburstHierarchyInside',
+          title: 'First ring as a list',
+          note: 'The exact shares the arcs only suggest, with the switch for what arc width means.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx'],
+          Component: SunburstHierarchyInside,
+        },
+        {
+          id: 'SunburstHierarchyTagTrend',
+          title: 'Tag trend',
+          note: 'What replaces the list when a tag is picked.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/TrendLine.tsx'],
+          Component: SunburstHierarchyTagTrend,
         },
       ],
     },

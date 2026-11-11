@@ -1,601 +1,1298 @@
 import { Button } from '@cognite/aura/components/button';
-import { Input } from '@cognite/aura/components/input';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
-import { IconAlertTriangle, IconArrowBackUp, IconCircleCheck, IconDownload, IconSend } from '@cognite/aura/icons';
+  IconAlertTriangle,
+  IconArrowBackUp,
+  IconBinaryTree,
+  IconCheck,
+  IconGitCompare,
+  IconHistory,
+  IconListCheck,
+  IconRuler2,
+  IconSend,
+  IconSettings,
+  IconTable,
+  IconX,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import {
-  LIMIT_LABELS,
-  LIMIT_ORDER,
-  parseLimit,
-  validateLimits,
-} from '../../../library/dashboards/panels/engineering-config/limitOrder';
-import type { LimitIssue, LimitKey, LimitSet } from '../../../library/dashboards/panels/engineering-config/limitOrder';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ChangeDiff } from '../../../library/patterns/collaboration/ChangeDiff';
-import { EditableCell } from '../../../library/patterns/data-entry/EditableCell';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { AppFrame } from '../../../library/kit/AppFrame';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { Panel } from '../../../library/kit/Panel';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { formatNumber, toneLine } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
 import { definePage } from '../../types';
 
 import source from './engineering-config.tsx?raw';
 
-type EngConfigField = LimitKey | 'deadband';
+type EcMode = 'live' | 'draft' | 'compare';
 
-type EngConfigTag = {
+type EcLimitKey = 'low' | 'high' | 'trip';
+
+type EcLimits = {
+  low: number;
+  high: number;
+  trip: number;
+  deadband: number;
+  delay: number;
+  priority: string;
+};
+
+type EcConfig = {
   id: string;
   tag: string;
   name: string;
-  /** Area number, the first part of the tag. */
-  area: string;
+  asset: string;
   unit: string;
-  limits: LimitSet;
-  deadband: number;
+  decimals: number;
+  range: readonly [number, number];
+  /** The part of the range the drawing shows, so a change of a few units is visible. */
+  window: readonly [number, number];
+  tick: number;
+  /** Reading at the time of the draft. */
+  now: number;
+  live: EcLimits;
+  draft: EcLimits;
+  owner: string;
+  reason: string;
 };
 
-/** Edited values per tag id. A field is present only while it differs from the baseline. */
-type EngConfigEdits = Readonly<Record<string, Partial<Record<EngConfigField, number | null>>>>;
+const EC_CONFIGS: EcConfig[] = [
+  {
+    id: 'tt-92532',
+    tag: '23-TT-92532',
+    name: 'Discharge temperature',
+    asset: '1st stage compressor',
+    unit: '°C',
+    decimals: 1,
+    range: [0, 180],
+    window: [130, 160],
+    tick: 5,
+    now: 141.2,
+    live: {
+      low: 90,
+      high: 145,
+      trip: 155,
+      deadband: 1,
+      delay: 5,
+      priority: 'High',
+    },
+    draft: {
+      low: 90,
+      high: 142,
+      trip: 152,
+      deadband: 1,
+      delay: 10,
+      priority: 'High',
+    },
+    owner: 'Aisha Khan',
+    reason: 'Vendor bulletin RB-114 lowers the continuous discharge limit after the seal upgrade.',
+  },
+  {
+    id: 'vt-92540',
+    tag: '23-VT-92540',
+    name: 'Drive-end vibration',
+    asset: '1st stage compressor',
+    unit: 'mm/s',
+    decimals: 1,
+    range: [0, 15],
+    window: [3, 13],
+    tick: 1,
+    now: 6.8,
+    live: {
+      low: 0,
+      high: 7.1,
+      trip: 11,
+      deadband: 0.2,
+      delay: 3,
+      priority: 'High',
+    },
+    draft: {
+      low: 0,
+      high: 7.5,
+      trip: 11,
+      deadband: 0.2,
+      delay: 3,
+      priority: 'High',
+    },
+    owner: 'Aisha Khan',
+    reason: 'Baseline moved after the coupling realignment; the alarm has been standing for three weeks.',
+  },
+  {
+    id: 'pt-92531',
+    tag: '23-PT-92531',
+    name: 'Discharge pressure',
+    asset: '1st stage compressor',
+    unit: 'barg',
+    decimals: 1,
+    range: [0, 60],
+    window: [36, 58],
+    tick: 2,
+    now: 48.6,
+    live: {
+      low: 40,
+      high: 52,
+      trip: 55,
+      deadband: 0.5,
+      delay: 2,
+      priority: 'High',
+    },
+    draft: {
+      low: 40,
+      high: 52,
+      trip: 55,
+      deadband: 0.5,
+      delay: 2,
+      priority: 'High',
+    },
+    owner: 'Ingrid Haugen',
+    reason: 'No change in this draft.',
+  },
+  {
+    id: 'tt-91141',
+    tag: '23-TT-91141',
+    name: 'Cooler outlet temperature',
+    asset: 'Interstage cooler',
+    unit: '°C',
+    decimals: 1,
+    range: [0, 60],
+    window: [30, 50],
+    tick: 2,
+    now: 38.9,
+    live: {
+      low: 20,
+      high: 40,
+      trip: 45,
+      deadband: 0.5,
+      delay: 30,
+      priority: 'Medium',
+    },
+    draft: {
+      low: 20,
+      high: 42,
+      trip: 46,
+      deadband: 0.5,
+      delay: 30,
+      priority: 'Medium',
+    },
+    owner: 'Magnus Solberg',
+    reason: 'Summer cooling water runs 2 °C warmer; the alarm fires daily without an action.',
+  },
+  {
+    id: 'lt-10012',
+    tag: '20-LT-10012',
+    name: 'Separator level',
+    asset: 'Inlet separator',
+    unit: '%',
+    decimals: 1,
+    range: [0, 100],
+    window: [20, 90],
+    tick: 10,
+    now: 54.3,
+    live: {
+      low: 30,
+      high: 70,
+      trip: 85,
+      deadband: 1,
+      delay: 5,
+      priority: 'Medium',
+    },
+    draft: {
+      low: 35,
+      high: 70,
+      trip: 85,
+      deadband: 1,
+      delay: 5,
+      priority: 'Medium',
+    },
+    owner: 'Ingrid Haugen',
+    reason: 'Gas blow-by study asks for 5 % more liquid seal at the low alarm.',
+  },
+  {
+    id: 'it-20013',
+    tag: '27-IT-20013',
+    name: 'Motor current',
+    asset: 'Export pump A',
+    unit: 'A',
+    decimals: 1,
+    range: [0, 120],
+    window: [70, 110],
+    tick: 5,
+    now: 86.2,
+    live: {
+      low: 40,
+      high: 95,
+      trip: 105,
+      deadband: 1,
+      delay: 5,
+      priority: 'Medium',
+    },
+    draft: {
+      low: 40,
+      high: 95,
+      trip: 105,
+      deadband: 1,
+      delay: 5,
+      priority: 'Medium',
+    },
+    owner: 'Jonas Nyberg',
+    reason: 'No change in this draft.',
+  },
+];
 
-type EngConfigHistoryItem = {
+const EC_LIMIT_KEYS: readonly EcLimitKey[] = ['low', 'high', 'trip'];
+
+const EC_LIMIT_LETTER: Record<EcLimitKey, string> = {
+  low: 'L',
+  high: 'H',
+  trip: 'HH',
+};
+
+const EC_LIMIT_NAME: Record<EcLimitKey, string> = {
+  low: 'Low alarm',
+  high: 'High alarm',
+  trip: 'High-high trip',
+};
+
+type EcTreeRow = {
   id: string;
-  title: string;
-  by: string;
-  date: string;
-  state: 'applied' | 'rejected' | 'awaiting';
+  depth: number;
+  label: string;
+  tag: string;
+  configId?: string;
 };
 
-type EngConfigChange = {
-  tag: EngConfigTag;
-  fields: readonly { field: EngConfigField; before: number | null; after: number | null }[];
-  /** The four limits as they would be after the change. */
-  limits: LimitSet;
-  issues: readonly LimitIssue[];
-};
-
-const ENG_CONFIG_TAGS: readonly EngConfigTag[] = [
-  { id: 'tt-92532', tag: '23-TT-92532', name: 'Discharge temperature', area: '23', unit: '°C', limits: { ll: null, l: 90, h: 145, hh: 155 }, deadband: 2 },
-  { id: 'vt-92540', tag: '23-VT-92540', name: 'Drive-end vibration', area: '23', unit: 'mm/s', limits: { ll: null, l: null, h: 7.1, hh: 11 }, deadband: 0.3 },
-  { id: 'pt-92531', tag: '23-PT-92531', name: 'Discharge pressure', area: '23', unit: 'barg', limits: { ll: 35, l: 40, h: 52, hh: 55 }, deadband: 0.5 },
-  { id: 'pt-92530', tag: '23-PT-92530', name: 'Suction pressure', area: '23', unit: 'barg', limits: { ll: 8, l: 10, h: 15, hh: 17 }, deadband: 0.2 },
-  { id: 'tt-91141', tag: '23-TT-91141', name: 'Cooler outlet temperature', area: '23', unit: '°C', limits: { ll: null, l: 20, h: 40, hh: 45 }, deadband: 1 },
-  { id: 'lt-10012', tag: '20-LT-10012', name: 'Separator level', area: '20', unit: '%', limits: { ll: 15, l: 30, h: 70, hh: 85 }, deadband: 2 },
-  { id: 'pt-10010', tag: '20-PT-10010', name: 'Separator pressure', area: '20', unit: 'barg', limits: { ll: 9, l: 11, h: 15, hh: 17 }, deadband: 0.2 },
-  { id: 'it-20013', tag: '27-IT-20013', name: 'Motor current', area: '27', unit: 'A', limits: { ll: null, l: 40, h: 95, hh: 105 }, deadband: 1 },
-  { id: 'ft-20011', tag: '27-FT-20011', name: 'Export flow', area: '27', unit: 'm³/h', limits: { ll: 250, l: 300, h: 480, hh: 520 }, deadband: 5 },
+const EC_TREE: EcTreeRow[] = [
+  { id: 'nk', depth: 0, label: 'Nordkapp plant', tag: 'NK' },
+  { id: 'nk-20', depth: 1, label: 'Inlet and separation', tag: 'NK-20' },
+  { id: 'va-1001', depth: 2, label: 'Inlet separator', tag: '20-VA-1001' },
+  {
+    id: 'r-lt',
+    depth: 3,
+    label: 'Separator level',
+    tag: '20-LT-10012',
+    configId: 'lt-10012',
+  },
+  { id: 'nk-23', depth: 1, label: 'Gas compression', tag: 'NK-23' },
+  { id: 'ka-9101', depth: 2, label: '1st stage compressor', tag: '23-KA-9101' },
+  {
+    id: 'r-pt',
+    depth: 3,
+    label: 'Discharge pressure',
+    tag: '23-PT-92531',
+    configId: 'pt-92531',
+  },
+  {
+    id: 'r-tt',
+    depth: 3,
+    label: 'Discharge temperature',
+    tag: '23-TT-92532',
+    configId: 'tt-92532',
+  },
+  {
+    id: 'r-vt',
+    depth: 3,
+    label: 'Drive-end vibration',
+    tag: '23-VT-92540',
+    configId: 'vt-92540',
+  },
+  { id: 'ha-9114', depth: 2, label: 'Interstage cooler', tag: '23-HA-9114' },
+  {
+    id: 'r-ct',
+    depth: 3,
+    label: 'Cooler outlet temperature',
+    tag: '23-TT-91141',
+    configId: 'tt-91141',
+  },
+  { id: 'nk-27', depth: 1, label: 'Gas export', tag: 'NK-27' },
+  { id: 'pa-2001a', depth: 2, label: 'Export pump A', tag: '27-PA-2001A' },
+  {
+    id: 'r-it',
+    depth: 3,
+    label: 'Motor current',
+    tag: '27-IT-20013',
+    configId: 'it-20013',
+  },
 ];
 
-const ENG_CONFIG_AREAS = [
-  { value: 'all', label: 'All' },
-  { value: '20', label: '20' },
-  { value: '23', label: '23' },
-  { value: '27', label: '27' },
-] as const;
+/** The accent of the drawing: everything that differs between live and draft is drawn in it. */
+const EC_ACCENT = toneLine('warning');
 
-const ENG_CONFIG_FIELDS: readonly EngConfigField[] = [...LIMIT_ORDER, 'deadband'];
+function ecConfig(id: string): EcConfig {
+  return EC_CONFIGS.find((config) => config.id === id) ?? EC_CONFIGS[0];
+}
 
-const ENG_CONFIG_FIELD_LABEL: Record<EngConfigField, string> = { ...LIMIT_LABELS, deadband: 'DB' };
-
-const ENG_CONFIG_FIELD_NAME: Record<EngConfigField, string> = {
-  ll: 'Low-low limit',
-  l: 'Low limit',
-  h: 'High limit',
-  hh: 'High-high limit',
-  deadband: 'Deadband',
+type EcDiffRow = {
+  id: string;
+  property: string;
+  live: string;
+  draft: string;
+  delta: string;
+  changed: boolean;
 };
 
-const ENG_CONFIG_SEED_EDITS: EngConfigEdits = { 'tt-92532': { h: 148 }, 'vt-92540': { hh: 6.5 } };
-
-const ENG_CONFIG_HISTORY: readonly EngConfigHistoryItem[] = [
-  { id: 'MOC-2291', title: 'Lowered H on 23-TT-91141 to 40 °C', by: 'Aisha Khan', date: '11 Mar', state: 'applied' },
-  { id: 'MOC-2288', title: 'Added HH on 27-IT-20013 at 105 A', by: 'Jonas Nyberg', date: '9 Mar', state: 'applied' },
-  { id: 'MOC-2285', title: 'Widened deadband on 20-LT-10012 to 5 %', by: 'Jonas Nyberg', date: '6 Mar', state: 'rejected' },
-  { id: 'MOC-2279', title: 'Raised L on 23-PT-92530 to 10 barg', by: 'Aisha Khan', date: '2 Mar', state: 'applied' },
-  { id: 'MOC-2274', title: 'Set LL and HH on 27-FT-20011', by: 'Aisha Khan', date: '26 Feb', state: 'applied' },
-];
-
-const ENG_CONFIG_HISTORY_STATE = {
-  applied: { tone: 'neutral', label: 'Applied', shape: 'dot' },
-  rejected: { tone: 'critical', label: 'Rejected', shape: 'square' },
-  awaiting: { tone: 'info', label: 'Awaiting approval', shape: 'ring' },
-} as const;
-
-const ENG_CONFIG_NO_VALUE = '—';
-
-function engConfigBaseline(tag: EngConfigTag, field: EngConfigField): number | null {
-  return field === 'deadband' ? tag.deadband : tag.limits[field];
-}
-
-function engConfigCurrent(tag: EngConfigTag, edits: EngConfigEdits, field: EngConfigField): number | null {
-  const edited = edits[tag.id]?.[field];
-  return edited === undefined ? engConfigBaseline(tag, field) : edited;
-}
-
-function engConfigText(value: number | null): string {
-  return value === null ? ENG_CONFIG_NO_VALUE : String(value);
-}
-
-/** The pending change set: every tag with at least one edited field, checked against the limit rules. */
-function engConfigChanges(edits: EngConfigEdits): EngConfigChange[] {
-  return ENG_CONFIG_TAGS.flatMap((tag) => {
-    const fields = ENG_CONFIG_FIELDS.flatMap((field) => {
-      const after = edits[tag.id]?.[field];
-      return after === undefined ? [] : [{ field, before: engConfigBaseline(tag, field), after }];
-    });
-    if (fields.length === 0) return [];
-    const limits: LimitSet = {
-      ll: engConfigCurrent(tag, edits, 'll'),
-      l: engConfigCurrent(tag, edits, 'l'),
-      h: engConfigCurrent(tag, edits, 'h'),
-      hh: engConfigCurrent(tag, edits, 'hh'),
+function ecDiff(config: EcConfig): EcDiffRow[] {
+  const figure = (value: number, unit: string) => `${formatNumber(value, config.decimals)} ${unit}`;
+  const signed = (value: number, unit: string) => `${value > 0 ? '+' : '−'}${formatNumber(Math.abs(value), config.decimals)} ${unit}`;
+  const limits = EC_LIMIT_KEYS.map((key): EcDiffRow => {
+    const change = config.draft[key] - config.live[key];
+    return {
+      id: key,
+      property: `${EC_LIMIT_NAME[key]} (${EC_LIMIT_LETTER[key]})`,
+      live: figure(config.live[key], config.unit),
+      draft: figure(config.draft[key], config.unit),
+      delta: change === 0 ? '—' : signed(change, config.unit),
+      changed: change !== 0,
     };
-    return [{ tag, fields, limits, issues: validateLimits(limits, engConfigCurrent(tag, edits, 'deadband') ?? 0) }];
   });
+  const deadband = config.draft.deadband - config.live.deadband;
+  const delay = config.draft.delay - config.live.delay;
+  return [
+    ...limits,
+    {
+      id: 'deadband',
+      property: 'Deadband',
+      live: figure(config.live.deadband, config.unit),
+      draft: figure(config.draft.deadband, config.unit),
+      delta: deadband === 0 ? '—' : signed(deadband, config.unit),
+      changed: deadband !== 0,
+    },
+    {
+      id: 'delay',
+      property: 'On-delay',
+      live: `${config.live.delay} s`,
+      draft: `${config.draft.delay} s`,
+      delta: delay === 0 ? '—' : `${delay > 0 ? '+' : '−'}${Math.abs(delay)} s`,
+      changed: delay !== 0,
+    },
+    {
+      id: 'priority',
+      property: 'Priority',
+      live: config.live.priority,
+      draft: config.draft.priority,
+      delta: '—',
+      changed: config.live.priority !== config.draft.priority,
+    },
+  ];
 }
 
-function engConfigValidateCell(field: EngConfigField) {
-  return (text: string): string | null => {
-    const parsed = parseLimit(text);
-    if (parsed === undefined) return 'Enter a number';
-    if (parsed === null && field === 'deadband') return 'A deadband is required';
-    return null;
-  };
+function ecChangeCount(config: EcConfig): number {
+  return ecDiff(config).filter((row) => row.changed).length;
 }
 
-type EngConfigState = {
-  edits: EngConfigEdits;
-  changes: readonly EngConfigChange[];
-  history: readonly EngConfigHistoryItem[];
-  submittedId: string | null;
-  setField: (tagId: string, field: EngConfigField, value: number | null) => void;
-  revertTag: (tagId: string) => void;
-  discard: () => void;
-  submit: () => void;
-};
+const EC_TOTAL_CHANGES = EC_CONFIGS.reduce((sum, config) => sum + ecChangeCount(config), 0);
 
-function useEngConfigState(initialEdits: EngConfigEdits): EngConfigState {
-  const [edits, setEdits] = useState<EngConfigEdits>(initialEdits);
-  const [history, setHistory] = useState(ENG_CONFIG_HISTORY);
-  const [submittedId, setSubmittedId] = useState<string | null>(null);
-  const changes = engConfigChanges(edits);
+type EcCheck = { id: string; label: string; detail: string; pass: boolean };
 
-  const setField = (tagId: string, field: EngConfigField, value: number | null) => {
-    const tag = ENG_CONFIG_TAGS.find((candidate) => candidate.id === tagId);
-    if (!tag) return;
-    setSubmittedId(null);
-    setEdits((current) => {
-      const next = { ...current[tagId] };
-      if (value === engConfigBaseline(tag, field)) delete next[field];
-      else next[field] = value;
-      return { ...current, [tagId]: next };
-    });
-  };
-
-  const revertTag = (tagId: string) => setEdits((current) => ({ ...current, [tagId]: {} }));
-
-  const discard = () => setEdits({});
-
-  const submit = () => {
-    const id = `MOC-${2292 + history.length - ENG_CONFIG_HISTORY.length}`;
-    const fieldCount = changes.reduce((sum, change) => sum + change.fields.length, 0);
-    const title = `${fieldCount} limit ${fieldCount === 1 ? 'change' : 'changes'} on ${changes.map((change) => change.tag.tag).join(', ')}`;
-    setHistory((current) => [{ id, title, by: 'Ingrid Haugen', date: '12 Mar', state: 'awaiting' }, ...current]);
-    setSubmittedId(id);
-    setEdits({});
-  };
-
-  return { edits, changes, history, submittedId, setField, revertTag, discard, submit };
+function ecChecks(config: EcConfig): EcCheck[] {
+  const { draft } = config;
+  const span = config.range[1] - config.range[0];
+  const margin = draft.high - config.now;
+  const ordered = draft.low < draft.high && draft.high < draft.trip;
+  const inside = draft.low >= config.range[0] && draft.trip <= config.range[1];
+  return [
+    {
+      id: 'order',
+      label: 'Limits in order',
+      detail: ordered ? 'L below H below HH' : 'Limits overlap',
+      pass: ordered,
+    },
+    {
+      id: 'range',
+      label: 'Inside instrument range',
+      detail: `${formatNumber(config.range[0])} to ${formatNumber(config.range[1])} ${config.unit}`,
+      pass: inside,
+    },
+    {
+      id: 'margin',
+      label: 'Margin to current reading',
+      detail: `${formatNumber(margin, config.decimals)} ${config.unit} below H${margin / span < 0.01 ? ', expect a standing alarm' : ''}`,
+      pass: margin / span >= 0.01,
+    },
+    {
+      id: 'deadband',
+      label: 'Deadband under 5 % of the band',
+      detail: `${formatNumber(draft.deadband, config.decimals)} ${config.unit}`,
+      pass: draft.deadband <= (draft.high - draft.low) * 0.05,
+    },
+  ];
 }
 
-type EngConfigFilterProps = {
-  query: string;
-  area: string;
-  onQueryChange: (query: string) => void;
-  onAreaChange: (area: string) => void;
-};
+function ecHatch(color: string): string {
+  return `repeating-linear-gradient(135deg, ${color} 0 1.5px, transparent 1.5px 6px)`;
+}
 
-function EngConfigFilter({ query, area, onQueryChange, onAreaChange }: EngConfigFilterProps) {
+/** A dimension line as on a drawing: two arrowheads, extension ticks and the measure written on it. */
+function EcDimension({
+  from,
+  to,
+  top,
+  label,
+  accent = false,
+  side = 'center',
+}: {
+  from: number;
+  to: number;
+  top: number;
+  label: string;
+  accent?: boolean;
+  side?: 'center' | 'before' | 'after';
+}) {
+  const left = Math.min(from, to);
+  const width = Math.abs(to - from);
+  const color = accent ? EC_ACCENT : 'var(--kit-text)';
+  const text =
+    side === 'center' ? 'left-1/2 -translate-x-1/2 bottom-1.5' : side === 'before' ? 'right-full mr-3 -translate-y-1/2' : 'left-full ml-3 -translate-y-1/2';
   return (
-    <div className="flex w-full flex-wrap items-center gap-3">
-      <div className="min-w-40 flex-1">
-        <Input
-          aria-label="Filter tags by tag or name"
-          placeholder="Filter by tag or name"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-        />
-      </div>
-      <SegmentedControl value={area} onValueChange={(value) => onAreaChange(String(value))}>
-        <SegmentedControlList size="small" aria-label="Area">
-          {ENG_CONFIG_AREAS.map((option) => (
-            <SegmentedControlButton key={option.value} value={option.value}>
-              {option.label}
-            </SegmentedControlButton>
-          ))}
-        </SegmentedControlList>
-      </SegmentedControl>
+    <div
+      className="absolute h-0"
+      style={{
+        left: `${left}%`,
+        width: `${width}%`,
+        top,
+        borderTop: `1.5px solid ${color}`,
+      }}
+    >
+      <span
+        className="absolute top-[-5.5px] left-0 size-0"
+        style={{
+          borderBlock: '4.75px solid transparent',
+          borderRight: `8px solid ${color}`,
+          transform: 'translateX(-1px)',
+        }}
+      />
+      <span
+        className="absolute top-[-5.5px] right-0 size-0"
+        style={{
+          borderBlock: '4.75px solid transparent',
+          borderLeft: `8px solid ${color}`,
+          transform: 'translateX(1px)',
+        }}
+      />
+      <span className={`absolute bg-[var(--kit-halo)] px-1 text-sm leading-4 font-semibold whitespace-nowrap tabular-nums ${text}`} style={{ color }}>
+        {label}
+      </span>
     </div>
   );
 }
 
-type EngConfigTablePanelProps = Pick<EngConfigState, 'edits' | 'setField'>;
+type EcRailProps = {
+  config: EcConfig;
+  limits: EcLimits;
+  /** Limits to compare against: a flag whose value differs is drawn in the accent. */
+  against: EcLimits;
+  top: number;
+  name: string;
+  flags: 'above' | 'below';
+};
 
-/** The left half: the baseline with every limit cell editable in place. */
-function EngConfigTablePanel({ edits, setField }: EngConfigTablePanelProps) {
-  const [query, setQuery] = useState('');
-  const [area, setArea] = useState('all');
-  const needle = query.trim().toLowerCase();
-  const matches = ENG_CONFIG_TAGS.filter(
-    (tag) =>
-      (area === 'all' || tag.area === area) &&
-      (needle === '' || tag.tag.toLowerCase().includes(needle) || tag.name.toLowerCase().includes(needle))
-  );
-  const rows = matches.slice(0, 8);
-
+/** One revision as a rail on the scale: the normal band hatched, and a flag at every limit. */
+function EcRail({ config, limits, against, top, name, flags }: EcRailProps) {
+  const [start, end] = config.window;
+  const at = (value: number) => ((value - start) / (end - start)) * 100;
+  const clamp = (value: number) => Math.min(100, Math.max(0, at(value)));
   return (
-    <DashboardPanel
-      title="Alarm limits"
-      description="Baseline of 11 Mar · select a cell to edit it"
-      footnote={`Showing ${rows.length} of ${matches.length} matching tags, ${ENG_CONFIG_TAGS.length} in the baseline. Edited cells are bold and shaded.`}
-    >
-      <EngConfigFilter query={query} area={area} onQueryChange={setQuery} onAreaChange={setArea} />
-      {rows.length === 0 ? (
-        <p className="py-6 text-sm text-muted-foreground">No tag matches the filter. Clear the text or pick another area.</p>
-      ) : (
-        <table className="w-full table-fixed text-left text-sm">
-          <thead>
-            <tr className="text-xs text-muted-foreground">
-              <th scope="col" className="pb-2 pr-2 font-medium">
-                Tag
-              </th>
-              {ENG_CONFIG_FIELDS.map((field) => (
-                <th key={field} scope="col" className="w-[14%] pb-2 pr-2 text-right font-medium">
-                  <abbr title={ENG_CONFIG_FIELD_NAME[field]} className="no-underline">
-                    {ENG_CONFIG_FIELD_LABEL[field]}
-                  </abbr>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((tag) => (
-              <tr key={tag.id} className="border-t border-default align-top">
-                <th scope="row" className="py-1.5 pr-2 font-normal">
-                  <p className="font-mono text-xs text-base-foreground">
-                    {tag.tag} <span className="text-muted-foreground">{tag.unit}</span>
-                  </p>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{tag.name}</p>
-                </th>
-                {ENG_CONFIG_FIELDS.map((field) => {
-                  const edited = edits[tag.id]?.[field] !== undefined;
-                  const text = engConfigText(engConfigCurrent(tag, edits, field));
-                  return (
-                    <td key={field} className={`py-0.5 ${edited ? 'bg-medium-background' : ''}`}>
-                      <EditableCell
-                        value={text}
-                        label={`${ENG_CONFIG_FIELD_NAME[field]} for ${tag.tag}`}
-                        align="end"
-                        inputMode="decimal"
-                        validate={engConfigValidateCell(field)}
-                        display={
-                          <span className={`font-mono text-xs ${edited ? 'font-semibold' : ''}`}>
-                            {text}
-                            {edited ? <span className="sr-only"> (edited)</span> : null}
-                          </span>
-                        }
-                        onSave={(next) => {
-                          const parsed = parseLimit(next);
-                          if (parsed !== undefined) setField(tag.id, field, parsed);
-                        }}
-                      />
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </DashboardPanel>
+    <>
+      <p className="absolute left-0 w-24 -translate-y-1/2 text-sm leading-4 font-semibold" style={{ top }}>
+        {name}
+      </p>
+      <div className="absolute right-0 left-28" style={{ top }}>
+        <div className="absolute inset-x-0 top-[-1px] h-0.5 bg-[var(--kit-text)]" />
+        <div
+          className="absolute h-3"
+          style={{
+            left: `${clamp(limits.low)}%`,
+            width: `${clamp(limits.high) - clamp(limits.low)}%`,
+            top: flags === 'above' ? 2 : -14,
+            background: ecHatch('color-mix(in oklab, var(--kit-text) 45%, transparent)'),
+          }}
+        />
+        <div
+          className="absolute h-3"
+          style={{
+            left: `${clamp(limits.high)}%`,
+            width: `${clamp(limits.trip) - clamp(limits.high)}%`,
+            top: flags === 'above' ? 2 : -14,
+            background: ecHatch(EC_ACCENT),
+          }}
+        />
+        <div
+          className="absolute h-3"
+          style={{
+            left: `${clamp(limits.trip)}%`,
+            right: 0,
+            top: flags === 'above' ? 2 : -14,
+            background: toneLine('critical'),
+            opacity: 0.8,
+          }}
+        />
+        {EC_LIMIT_KEYS.map((key) => {
+          const value = limits[key];
+          const position = at(value);
+          if (position < 0 || position > 100) return null;
+          const changed = value !== against[key];
+          return (
+            <div key={key} className="absolute" style={{ left: `${position}%` }}>
+              <span className="absolute -left-px w-0.5 bg-[var(--kit-text)]" style={flags === 'above' ? { top: -22, height: 22 } : { top: 0, height: 22 }} />
+              <span
+                className="absolute -translate-x-1/2 border px-1.5 py-0.5 text-sm leading-4 font-semibold whitespace-nowrap tabular-nums"
+                style={{
+                  top: flags === 'above' ? -46 : 22,
+                  borderColor: changed ? EC_ACCENT : 'var(--kit-text)',
+                  background: changed && flags === 'below' ? EC_ACCENT : 'var(--kit-halo)',
+                  color: changed && flags === 'below' ? 'var(--kit-halo)' : changed ? EC_ACCENT : 'var(--kit-text)',
+                }}
+              >
+                {EC_LIMIT_LETTER[key]} {formatNumber(value, config.decimals)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
-type EngConfigChangesProps = Pick<EngConfigState, 'changes' | 'revertTag'>;
-
-/** The right half, top: the change set as before and after, one block per tag. */
-function EngConfigPendingPanel({ changes, revertTag }: EngConfigChangesProps) {
-  const fieldCount = changes.reduce((sum, change) => sum + change.fields.length, 0);
-  return (
-    <DashboardPanel
-      title="Pending changes"
-      description={
-        changes.length === 0
-          ? 'Nothing edited yet'
-          : `${fieldCount} ${fieldCount === 1 ? 'value' : 'values'} on ${changes.length} ${changes.length === 1 ? 'tag' : 'tags'}, baseline to proposed`
-      }
-    >
-      {changes.length === 0 ? (
-        <p className="py-4 text-sm text-muted-foreground">
-          Edit a limit in the table and it appears here as a before and after pair, ready to check and submit.
-        </p>
-      ) : (
-        <ul className="flex w-full flex-col">
-          {changes.map((change) => (
-            <li key={change.tag.id} className="flex items-start gap-3 border-t border-default py-3 first:border-t-0 first:pt-0">
-              <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <p className="text-sm text-base-foreground">
-                  <span className="font-mono text-xs">{change.tag.tag}</span> · {change.tag.name}
-                </p>
-                {change.fields.map((entry) => (
-                  <ChangeDiff
-                    key={entry.field}
-                    field={ENG_CONFIG_FIELD_NAME[entry.field]}
-                    before={`${engConfigText(entry.before)} ${change.tag.unit}`}
-                    after={`${engConfigText(entry.after)} ${change.tag.unit}`}
-                    mono
-                  />
-                ))}
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => revertTag(change.tag.id)}>
-                <IconArrowBackUp /> Revert
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </DashboardPanel>
-  );
-}
-
-function EngConfigValidationPanel({ changes }: Pick<EngConfigState, 'changes'>) {
-  const failed = changes.filter((change) => change.issues.length > 0).length;
-  return (
-    <DashboardPanel
-      title="Validation"
-      description="Limit order LL < L < H < HH and a deadband inside the L to H band"
-      footnote={
-        changes.length === 0
-          ? 'Checks run on every edit.'
-          : failed === 0
-            ? 'Every changed tag passes. The change set can be submitted.'
-            : `${failed} of ${changes.length} changed tags fail a check. Edit the limit or revert the tag.`
-      }
-    >
-      {changes.length === 0 ? (
-        <p className="py-2 text-sm text-muted-foreground">No changes to check.</p>
-      ) : (
-        <ul className="flex w-full flex-col gap-3">
-          {changes.map((change) => (
-            <li key={change.tag.id} className="flex items-start gap-2">
-              {change.issues.length === 0 ? (
-                <IconCircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              ) : (
-                <IconAlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-critical-foreground-strong" />
-              )}
-              <div className="min-w-0 flex-1 text-sm">
-                <p className="text-base-foreground">
-                  <span className="font-mono text-xs">{change.tag.tag}</span>{' '}
-                  <span className={change.issues.length === 0 ? 'text-medium-foreground' : 'font-medium text-critical-foreground-strong'}>
-                    {change.issues.length === 0 ? 'Passed' : 'Failed'}
-                  </span>
-                </p>
-                {change.issues.length === 0 ? (
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {LIMIT_ORDER.filter((key) => change.limits[key] !== null)
-                      .map((key) => `${LIMIT_LABELS[key]} ${engConfigText(change.limits[key])}`)
-                      .join(' < ')}
-                  </p>
-                ) : (
-                  change.issues.map((issue) => (
-                    <p key={issue.message} className="text-xs text-medium-foreground">
-                      {issue.message}
-                    </p>
-                  ))
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </DashboardPanel>
-  );
-}
-
-type EngConfigSubmitBarProps = Pick<EngConfigState, 'changes' | 'submittedId' | 'discard' | 'submit'>;
-
-function EngConfigSubmitBar({ changes, submittedId, discard, submit }: EngConfigSubmitBarProps) {
-  const failed = changes.filter((change) => change.issues.length > 0).length;
-  const blocked = changes.length === 0 || failed > 0;
-  let message = `${changes.length} ${changes.length === 1 ? 'tag' : 'tags'} changed, all checks passed. Aisha Khan approves limit changes in area 23.`;
-  if (failed > 0) message = `Submitting is blocked: ${failed} ${failed === 1 ? 'tag fails' : 'tags fail'} validation.`;
-  else if (changes.length === 0) {
-    message = submittedId
-      ? `Sent for approval as ${submittedId}. The baseline changes when it is approved.`
-      : 'Nothing to submit. Edit a limit to start a change set.';
-  }
+/** Live and draft limits of one tag drawn to scale, with every change dimensioned between the rails. */
+function EcLadder({ config, mode }: { config: EcConfig; mode: EcMode }) {
+  const [start, end] = config.window;
+  const at = (value: number) => ((value - start) / (end - start)) * 100;
+  const ticks = Array.from({ length: Math.floor((end - start) / config.tick) + 1 }, (_, index) => start + index * config.tick);
+  const compare = mode === 'compare';
+  const liveTop = compare ? 96 : 170;
+  const draftTop = compare ? 276 : 170;
+  const changes = EC_LIMIT_KEYS.filter((key) => config.live[key] !== config.draft[key] && at(config.live[key]) >= 0 && at(config.draft[key]) <= 100);
+  const shown = mode === 'draft' ? config.draft : config.live;
+  const span = config.range[1] - config.range[0];
+  const offScale = EC_LIMIT_KEYS.filter((key) => at(shown[key]) < 0);
 
   return (
     <div
-      role="group"
-      aria-label="Submit change set"
-      className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-xl bg-card-background p-4"
+      className="relative h-[24.5rem]"
+      role="img"
+      aria-label={`${config.name} limits, ${mode === 'compare' ? 'live against draft' : mode}, drawn on a scale from ${start} to ${end} ${config.unit}`}
     >
-      <p aria-live="polite" className="min-w-64 flex-1 text-sm text-medium-foreground">
-        {message}
+      {mode !== 'draft' ? <EcRail config={config} limits={config.live} against={config.draft} top={liveTop} name="Live · rev C" flags="above" /> : null}
+      {mode !== 'live' ? (
+        <EcRail config={config} limits={config.draft} against={config.live} top={draftTop} name="Draft · rev D" flags={compare ? 'below' : 'above'} />
+      ) : null}
+
+      <div className="absolute inset-y-0 right-0 left-28">
+        {compare
+          ? changes.map((key) => (
+              <div key={key}>
+                <span
+                  className="absolute w-px"
+                  style={{
+                    left: `${at(config.live[key])}%`,
+                    top: liveTop,
+                    height: draftTop - liveTop,
+                    background: `repeating-linear-gradient(${EC_ACCENT} 0 5px, transparent 5px 9px)`,
+                  }}
+                />
+                <span
+                  className="absolute w-px"
+                  style={{
+                    left: `${at(config.draft[key])}%`,
+                    top: liveTop,
+                    height: draftTop - liveTop,
+                    background: `repeating-linear-gradient(${EC_ACCENT} 0 5px, transparent 5px 9px)`,
+                  }}
+                />
+                <EcDimension
+                  from={at(config.live[key])}
+                  to={at(config.draft[key])}
+                  top={(liveTop + draftTop) / 2}
+                  accent
+                  label={`${config.draft[key] > config.live[key] ? '+' : '−'}${formatNumber(Math.abs(config.draft[key] - config.live[key]), config.decimals)} ${config.unit}`}
+                />
+              </div>
+            ))
+          : null}
+        {(compare ? [config.live, config.draft] : [shown]).map((limits, index) => (
+          <EcDimension
+            key={index}
+            from={at(config.now)}
+            to={at(limits.high)}
+            top={compare && index === 1 ? draftTop - 40 : liveTop + 40}
+            accent={(limits.high - config.now) / span < 0.01}
+            side="before"
+            label={`Margin ${formatNumber(limits.high - config.now, config.decimals)} ${config.unit}`}
+          />
+        ))}
+
+        <span
+          className="absolute w-px"
+          style={{
+            left: `${at(config.now)}%`,
+            top: 16,
+            bottom: 34,
+            background: 'repeating-linear-gradient(var(--kit-text) 0 9px, transparent 9px 12px, var(--kit-text) 12px 14px, transparent 14px 17px)',
+          }}
+        />
+        <span
+          className="absolute top-0 -translate-x-1/2 bg-[var(--kit-text)] px-1.5 py-0.5 text-sm leading-4 font-semibold whitespace-nowrap text-[var(--kit-halo)] tabular-nums"
+          style={{ left: `${at(config.now)}%` }}
+        >
+          Now {formatNumber(config.now, config.decimals)}
+        </span>
+
+        <div className="absolute inset-x-0 bottom-0 h-8 border-t border-[var(--kit-text)]">
+          {ticks.map((tick) => (
+            <span key={tick} className="absolute top-0 h-1.5 w-px bg-[var(--kit-text)]" style={{ left: `${at(tick)}%` }}>
+              <span className="absolute top-2.5 left-0 -translate-x-1/2 text-xs text-[var(--kit-text-2)] tabular-nums">{formatNumber(tick)}</span>
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="absolute bottom-0 left-0 w-24 text-xs leading-4 text-[var(--kit-text-2)]">
+        Scale, {config.unit}
+        {offScale.length > 0 ? ` · ${offScale.map((key) => `${EC_LIMIT_LETTER[key]} ${formatNumber(shown[key], config.decimals)}`).join(', ')} off scale` : ''}
       </p>
-      <div className="flex shrink-0 items-center gap-2">
-        <Button variant="ghost" size="sm" disabled={changes.length === 0} onClick={discard}>
-          Discard all
-        </Button>
-        <Button size="sm" disabled={blocked} onClick={submit}>
-          <IconSend /> Submit for approval
-        </Button>
+    </div>
+  );
+}
+
+const EC_DIFF_COLUMNS: DataTableColumn<EcDiffRow>[] = [
+  {
+    id: 'property',
+    header: 'Property',
+    nowrap: true,
+    cell: (row) => <span className={row.changed ? 'font-semibold' : ''}>{row.property}</span>,
+  },
+  {
+    id: 'live',
+    header: 'Live · rev C',
+    numeric: true,
+    nowrap: true,
+    cell: (row) => (row.changed ? <span className="line-through">{row.live}</span> : row.live),
+  },
+  {
+    id: 'draft',
+    header: 'Draft · rev D',
+    numeric: true,
+    nowrap: true,
+    cell: (row) => <span className={row.changed ? 'font-semibold' : ''}>{row.draft}</span>,
+  },
+  {
+    id: 'delta',
+    header: 'Change',
+    numeric: true,
+    nowrap: true,
+    cell: (row) =>
+      row.changed ? (
+        <span className="font-semibold" style={{ color: EC_ACCENT }}>
+          {row.delta === '—' ? 'Changed' : row.delta}
+        </span>
+      ) : (
+        <span className="text-[var(--kit-text-3)]">None</span>
+      ),
+  },
+];
+
+function EcDiffTable({ config }: { config: EcConfig }) {
+  return (
+    <DataTable
+      label={`Live and draft properties of ${config.tag}`}
+      columns={EC_DIFF_COLUMNS}
+      rows={ecDiff(config)}
+      rowKey={(row) => row.id}
+      rowTone={(row) => (row.changed ? 'warning' : undefined)}
+    />
+  );
+}
+
+/** The configuration tree: areas and equipment as headings, tags as rows that carry their change count. */
+function EcTree({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+  return (
+    <ul className="@container flex flex-1 flex-col" aria-label="Configuration tree">
+      {EC_TREE.map((row) => {
+        const config = row.configId ? ecConfig(row.configId) : null;
+        const changes = config ? ecChangeCount(config) : 0;
+        const active = config !== null && config.id === selected;
+        const guides = Array.from({ length: row.depth }, (_, index) => (
+          <span key={index} aria-hidden="true" className="w-3 shrink-0 self-stretch border-l border-dashed border-[var(--kit-rule)] @[15rem]:w-4" />
+        ));
+        if (!config) {
+          return (
+            <li key={row.id} className="flex items-center pl-1">
+              {guides}
+              <span className={`flex-1 py-1.5 leading-5 ${row.depth < 2 ? 'text-sm font-semibold' : 'text-sm font-medium'}`}>
+                {row.label} <span className="font-normal whitespace-nowrap text-[var(--kit-text-3)] tabular-nums">{row.tag}</span>
+              </span>
+            </li>
+          );
+        }
+        return (
+          <li key={row.id} className="flex items-stretch pl-1">
+            {guides}
+            <button
+              type="button"
+              aria-current={active ? 'true' : undefined}
+              onClick={() => onSelect(config.id)}
+              className={`flex min-w-0 flex-1 items-center justify-between gap-2 px-2 py-1.5 text-left hover:bg-[color-mix(in_oklab,var(--kit-text)_8%,transparent)] ${active ? 'bg-[var(--kit-text)] text-[var(--kit-halo)] hover:bg-[var(--kit-text)]' : ''}`}
+            >
+              <span className="min-w-0">
+                <span className="block text-sm leading-5 font-semibold whitespace-nowrap tabular-nums">{row.tag}</span>
+                <span className={`block text-xs leading-4 ${active ? '' : 'text-[var(--kit-text-2)]'}`}>{row.label}</span>
+              </span>
+              {changes > 0 ? (
+                <span
+                  aria-label={`${changes} ${changes === 1 ? 'change' : 'changes'} in draft`}
+                  className="shrink-0 border px-1.5 text-xs leading-5 font-semibold whitespace-nowrap"
+                  style={active ? { borderColor: 'currentColor' } : { borderColor: EC_ACCENT, color: EC_ACCENT }}
+                >
+                  <span aria-hidden="true" className="@[15rem]:hidden">
+                    Δ {changes}
+                  </span>
+                  <span className="hidden @[15rem]:inline">
+                    {changes} {changes === 1 ? 'change' : 'changes'}
+                  </span>
+                </span>
+              ) : null}
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function EcSheetRow({ label, children, changed = false }: { label: string; children: ReactNode; changed?: boolean }) {
+  return (
+    <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-baseline gap-2 border-b border-dashed border-[var(--kit-rule)] py-1.5">
+      <dt className="text-xs text-[var(--kit-text-2)]">{label}</dt>
+      <dd className="text-sm font-medium tabular-nums" style={changed ? { color: EC_ACCENT } : undefined}>
+        {children}
+      </dd>
+    </div>
+  );
+}
+
+function EcCheckList({ config }: { config: EcConfig }) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {ecChecks(config).map((check) => (
+        <li key={check.id} className="flex items-start gap-2.5">
+          <span
+            className="mt-0.5 flex size-5 shrink-0 items-center justify-center border [&>svg]:size-3.5"
+            style={check.pass ? undefined : { borderColor: EC_ACCENT, color: EC_ACCENT }}
+          >
+            {check.pass ? <IconCheck aria-hidden="true" /> : <IconAlertTriangle aria-hidden="true" />}
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm leading-5 font-semibold">{check.label}</span>
+            <span className="block text-xs leading-4" style={{ color: check.pass ? 'var(--kit-text-2)' : EC_ACCENT }}>
+              {check.pass ? 'Passed' : 'Warning'} · {check.detail}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Every property of the selected tag as a sheet; fields the draft changes are drawn in the accent. */
+function EcPropertySheet({ config, mode }: { config: EcConfig; mode: EcMode }) {
+  const limits = mode === 'live' ? config.live : config.draft;
+  const mark = (changed: boolean) => changed && mode !== 'live';
+  const figure = (value: number) => `${formatNumber(value, config.decimals)} ${config.unit}`;
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <dl>
+        <EcSheetRow label="Tag">
+          <span className="whitespace-nowrap">{config.tag}</span>
+        </EcSheetRow>
+        <EcSheetRow label="Description">{config.name}</EcSheetRow>
+        <EcSheetRow label="Equipment">{config.asset}</EcSheetRow>
+        <EcSheetRow label="Range">
+          {formatNumber(config.range[0])} to {formatNumber(config.range[1])} {config.unit}
+        </EcSheetRow>
+        <EcSheetRow label="Low alarm" changed={mark(config.live.low !== config.draft.low)}>
+          {figure(limits.low)}
+        </EcSheetRow>
+        <EcSheetRow label="High alarm" changed={mark(config.live.high !== config.draft.high)}>
+          {figure(limits.high)}
+        </EcSheetRow>
+        <EcSheetRow label="High-high trip" changed={mark(config.live.trip !== config.draft.trip)}>
+          {figure(limits.trip)}
+        </EcSheetRow>
+        <EcSheetRow label="Deadband" changed={mark(config.live.deadband !== config.draft.deadband)}>
+          {figure(limits.deadband)}
+        </EcSheetRow>
+        <EcSheetRow label="On-delay" changed={mark(config.live.delay !== config.draft.delay)}>
+          {limits.delay} s
+        </EcSheetRow>
+        <EcSheetRow label="Priority">{limits.priority}</EcSheetRow>
+        <EcSheetRow label="Owner">{config.owner}</EcSheetRow>
+      </dl>
+      <div>
+        <p className="text-xs text-[var(--kit-text-2)]">Reason for change</p>
+        <p className="mt-1 text-sm leading-5">{config.reason}</p>
+      </div>
+      <div className="mt-auto border-t border-[var(--kit-text)] pt-3">
+        <p className="mb-2 text-xs text-[var(--kit-text-2)]">Checks on the draft</p>
+        <EcCheckList config={config} />
       </div>
     </div>
   );
 }
 
-function EngConfigHistoryPanel({ history }: Pick<EngConfigState, 'history'>) {
+/** The controls of the drawing, floating over it: which revision to show, and what to do with the draft. */
+function EcToolbar({ mode, onMode, sent, onSend }: { mode: EcMode; onMode: (mode: EcMode) => void; sent: boolean; onSend: () => void }) {
   return (
-    <DashboardPanel title="Change history" description="Latest change sets on the Nordkapp baseline, newest first">
-      <ol className="grid w-full grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">
-        {history.slice(0, 5).map((item) => (
-          <li key={item.id} className="flex min-w-0 flex-col gap-1 border-t border-emphasized pt-3">
-            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-              <span className="font-mono text-xs text-base-foreground">{item.id}</span>
-              <StatusIndicator {...ENG_CONFIG_HISTORY_STATE[item.state]} size="sm" />
-            </div>
-            <p className="line-clamp-2 text-sm text-base-foreground">{item.title}</p>
-            <p className="text-xs text-muted-foreground">
-              {item.by} · {item.date}
-            </p>
-          </li>
-        ))}
-      </ol>
-    </DashboardPanel>
-  );
-}
-
-/**
- * Archetype: split screen with a diff — the baseline on the left, the proposed change on the right.
- * Dominant element: the editable limit table that fills the left half.
- * Interaction: editing a cell on the left adds a before and after pair on the right, re-runs the
- * limit order check and unlocks or blocks the submit bar; submitting moves the set into the history strip.
- */
-function EngConfigDashboard() {
-  const state = useEngConfigState(ENG_CONFIG_SEED_EDITS);
-  const pending = state.changes.length;
-
-  return (
-    <DashboardFrame
-      title="Engineering configuration"
-      subtitle="Alarm limits · Nordkapp gas processing plant · baseline of 11 Mar 2026"
-      status={
-        pending > 0 ? (
-          <StatusIndicator tone="info" shape="ring" label={`${pending} ${pending === 1 ? 'tag' : 'tags'} with pending changes`} />
-        ) : (
-          <StatusIndicator tone="neutral" label="No pending changes" />
-        )
-      }
-      actions={
-        <Button variant="outline" size="sm">
-          <IconDownload /> Export baseline
-        </Button>
-      }
+    <div
+      role="toolbar"
+      aria-label="Revision"
+      className="flex items-center gap-3 border border-[var(--kit-text)] bg-[var(--kit-halo)] p-2 shadow-[5px_5px_0_color-mix(in_oklab,var(--kit-text)_22%,transparent)]"
     >
-      <DashboardGrid>
-        <DashboardCell span={6}>
-          <EngConfigTablePanel edits={state.edits} setField={state.setField} />
-        </DashboardCell>
-        <DashboardCell span={6}>
-          <div className="flex flex-col gap-4 [&>*:first-child]:flex-1">
-            <EngConfigPendingPanel changes={state.changes} revertTag={state.revertTag} />
-            <EngConfigValidationPanel changes={state.changes} />
-            <EngConfigSubmitBar
-              changes={state.changes}
-              submittedId={state.submittedId}
-              discard={state.discard}
-              submit={state.submit}
-            />
+      <SegmentedControl value={mode} onValueChange={(next) => onMode(next === 'live' ? 'live' : next === 'draft' ? 'draft' : 'compare')}>
+        <SegmentedControlList size="small" aria-label="Revision shown">
+          <SegmentedControlButton value="live">Live</SegmentedControlButton>
+          <SegmentedControlButton value="draft">Draft</SegmentedControlButton>
+          <SegmentedControlButton value="compare">Compare</SegmentedControlButton>
+        </SegmentedControlList>
+      </SegmentedControl>
+      <span aria-hidden="true" className="h-6 w-px bg-[var(--kit-rule)]" />
+      <Button variant="ghost" size="sm">
+        <IconArrowBackUp /> Revert
+      </Button>
+      <Button size="sm" onClick={onSend}>
+        {sent ? <IconCheck /> : <IconSend />} {sent ? 'Sent for approval' : `Send ${EC_TOTAL_CHANGES} changes`}
+      </Button>
+    </div>
+  );
+}
+
+function EcTitleBlock({ revision = 'C live · D draft', status }: { revision?: string; status: string }) {
+  return (
+    <>
+      <div>
+        <p className="text-xs">Drawing</p>
+        <p className="text-sm font-semibold">NK-CFG-023</p>
+      </div>
+      <div>
+        <p className="text-xs">Revision</p>
+        <p className="text-sm font-semibold">{revision}</p>
+      </div>
+      <div>
+        <p className="text-xs">Status</p>
+        <p className="text-sm font-semibold">{status}</p>
+      </div>
+    </>
+  );
+}
+
+function EngineeringConfigSignature() {
+  const [selected, setSelected] = useState('tt-92532');
+  const [mode, setMode] = useState<EcMode>('compare');
+  const [sent, setSent] = useState(false);
+  const config = ecConfig(selected);
+  const changes = ecChangeCount(config);
+  return (
+    <LookScope look="blueprint">
+      <AppFrame
+        brand={{
+          name: 'Alarm limits',
+          detail: 'Nordkapp configuration',
+          mark: <IconSettings />,
+        }}
+        tools={<EcTitleBlock status={sent ? 'Awaiting approval' : `${EC_TOTAL_CHANGES} changes in draft`} />}
+      >
+        <div className="relative">
+          <Grid className="min-h-[55rem] pb-20">
+            <Panel className="col-span-3" title="Tree" subtitle="6 tags" icon={<IconBinaryTree className="size-4" />} padding="tight">
+              <EcTree selected={selected} onSelect={setSelected} />
+            </Panel>
+            <Panel
+              className="col-span-6"
+              title={`${config.tag} · ${config.name}`}
+              subtitle={mode === 'compare' ? `${changes} ${changes === 1 ? 'change' : 'changes'}` : mode === 'live' ? 'Live' : 'Draft'}
+              icon={<IconGitCompare className="size-4" />}
+            >
+              <div className="flex flex-1 flex-col justify-between gap-6">
+                <EcLadder config={config} mode={mode} />
+                <EcDiffTable config={config} />
+              </div>
+            </Panel>
+            <Panel className="col-span-3" title="Properties" subtitle={mode === 'live' ? 'Rev C' : 'Rev D'} icon={<IconTable className="size-4" />}>
+              <EcPropertySheet config={config} mode={mode} />
+            </Panel>
+          </Grid>
+          <div className="absolute inset-x-0 bottom-3 flex justify-center">
+            <EcToolbar mode={mode} onMode={setMode} sent={sent} onSend={() => setSent((before) => !before)} />
           </div>
-        </DashboardCell>
-        <DashboardCell span={12}>
-          <EngConfigHistoryPanel history={state.history} />
-        </DashboardCell>
-      </DashboardGrid>
-    </DashboardFrame>
+        </div>
+      </AppFrame>
+    </LookScope>
   );
 }
 
-function EngConfigDashSignature() {
+const EC_CHANGED = EC_CONFIGS.filter((config) => ecChangeCount(config) > 0);
+
+type EcVerdict = 'accepted' | 'rejected';
+
+function EngineeringConfigChangeSet() {
+  const [verdicts, setVerdicts] = useState<Record<string, EcVerdict>>({
+    'tt-91141': 'accepted',
+    'lt-10012': 'accepted',
+  });
+  const decide = (id: string, verdict: EcVerdict) => setVerdicts((before) => ({ ...before, [id]: verdict }));
+  const accepted = EC_CHANGED.filter((config) => verdicts[config.id] === 'accepted').length;
+  const decided = EC_CHANGED.filter((config) => verdicts[config.id] !== undefined).length;
   return (
-    <ThemeScope preset="schematic" className="w-full">
-      <EngConfigDashboard />
-    </ThemeScope>
+    <LookScope look="blueprint">
+      <AppFrame
+        brand={{
+          name: 'Alarm limits',
+          detail: 'Review of revision D',
+          mark: <IconSettings />,
+        }}
+        tools={<EcTitleBlock revision="D draft" status={`${decided} of ${EC_CHANGED.length} reviewed`} />}
+      >
+        <Grid>
+          <div className="col-span-9 flex flex-col gap-[var(--kit-gap)]">
+            {EC_CHANGED.map((config) => {
+              const verdict = verdicts[config.id];
+              const rows = ecDiff(config).filter((row) => row.changed);
+              return (
+                <Panel
+                  key={config.id}
+                  title={`${config.tag} · ${config.name}`}
+                  subtitle={verdict === 'accepted' ? 'Accepted' : verdict === 'rejected' ? 'Rejected' : 'To review'}
+                  icon={<IconRuler2 className="size-4" />}
+                >
+                  <div className="grid grid-cols-[minmax(0,1fr)_15rem] items-center gap-6">
+                    <div>
+                      <ul className="flex flex-wrap gap-x-6 gap-y-1">
+                        {rows.map((row) => (
+                          <li key={row.id} className="text-sm">
+                            <span className="text-[var(--kit-text-2)]">{row.property}</span> <span className="line-through tabular-nums">{row.live}</span>{' '}
+                            <span className="font-semibold tabular-nums" style={{ color: EC_ACCENT }}>
+                              {row.draft}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-sm leading-5 text-[var(--kit-text-2)]">{config.reason}</p>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {ecChecks(config).some((check) => !check.pass) ? (
+                        <StatusPill tone="warning" icon={<IconAlertTriangle />}>
+                          1 check warns
+                        </StatusPill>
+                      ) : (
+                        <StatusPill tone="success" icon={<IconCheck />}>
+                          4 checks passed
+                        </StatusPill>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant={verdict === 'accepted' ? 'default' : 'outline'}
+                          aria-pressed={verdict === 'accepted'}
+                          onClick={() => decide(config.id, 'accepted')}
+                        >
+                          <IconCheck /> Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={verdict === 'rejected' ? 'default' : 'outline'}
+                          aria-pressed={verdict === 'rejected'}
+                          onClick={() => decide(config.id, 'rejected')}
+                        >
+                          <IconX /> Reject
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </Panel>
+              );
+            })}
+          </div>
+          <Panel className="col-span-3" title="Approval" subtitle="Rev D" icon={<IconListCheck className="size-4" />}>
+            <div className="flex flex-1 flex-col gap-4">
+              <div>
+                <p className="text-6xl leading-none font-medium tracking-tight tabular-nums">
+                  {accepted}
+                  <span className="text-2xl text-[var(--kit-text-2)]"> / {EC_CHANGED.length}</span>
+                </p>
+                <p className="mt-1 text-sm text-[var(--kit-text-2)]">tags accepted</p>
+              </div>
+              <dl>
+                <EcSheetRow label="Prepared">Aisha Khan · 11 Mar</EcSheetRow>
+                <EcSheetRow label="Checked">Magnus Solberg · 12 Mar</EcSheetRow>
+                <EcSheetRow label="Approved" changed={decided < EC_CHANGED.length}>
+                  {decided < EC_CHANGED.length ? 'Open' : 'Liv Wold · today'}
+                </EcSheetRow>
+                <EcSheetRow label="Applies">Next shift change, 19:00</EcSheetRow>
+              </dl>
+              <p className="text-sm leading-5 text-[var(--kit-text-2)]">
+                Rejected tags stay on revision C. Accepted limits download to the control system at the next shift change.
+              </p>
+              <Button size="sm" className="mt-auto w-full" disabled={decided < EC_CHANGED.length}>
+                Approve revision D
+              </Button>
+              <p className="text-xs text-[var(--kit-text-2)]">
+                {decided < EC_CHANGED.length ? `Review the remaining ${EC_CHANGED.length - decided} to approve.` : 'Every tag has a verdict.'}
+              </p>
+            </div>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
   );
 }
 
-function EngConfigDashAura() {
+const EC_REVISIONS = [
+  {
+    rev: 'D',
+    date: 'Draft',
+    by: 'Aisha Khan',
+    note: 'Seal upgrade and summer cooling water limits',
+    changes: 7,
+    alarms: 0,
+  },
+  {
+    rev: 'C',
+    date: '14 Jan 2026',
+    by: 'Magnus Solberg',
+    note: 'Recompressor vibration trip after bearing change',
+    changes: 3,
+    alarms: 61,
+  },
+  {
+    rev: 'B',
+    date: '2 Oct 2025',
+    by: 'Aisha Khan',
+    note: 'Alarm rationalisation, compression area',
+    changes: 41,
+    alarms: 74,
+  },
+  {
+    rev: 'A',
+    date: '18 Jun 2025',
+    by: 'Ingrid Haugen',
+    note: 'As commissioned',
+    changes: 212,
+    alarms: 138,
+  },
+];
+
+const EC_ALARM_WEEKS = [142, 136, 139, 131, 128, 133, 90, 78, 81, 74, 70, 76, 72, 69, 73, 66, 62, 64, 59, 61, 63, 60, 58, 61];
+
+function EngineeringConfigRevisions() {
+  const [selected, setSelected] = useState('C');
+  const revision = EC_REVISIONS.find((entry) => entry.rev === selected) ?? EC_REVISIONS[1];
   return (
-    <ThemeScope preset="aura" className="w-full">
-      <EngConfigDashboard />
-    </ThemeScope>
+    <LookScope look="blueprint">
+      <AppFrame
+        brand={{
+          name: 'Alarm limits',
+          detail: 'Revision history',
+          mark: <IconSettings />,
+        }}
+        tools={<EcTitleBlock revision={`${revision.rev} selected`} status={revision.date === 'Draft' ? 'Not applied' : `Applied ${revision.date}`} />}
+      >
+        <Grid>
+          <Panel className="col-span-7" title="Alarms per week" subtitle="Compression area · 24 weeks" icon={<IconHistory className="size-4" />}>
+            <TrendLine
+              label="Alarms per week in the compression area across revisions A to C"
+              labels={EC_ALARM_WEEKS.map((_, index) => `W${index + 34 > 52 ? index + 34 - 52 : index + 34}`)}
+              decimals={0}
+              height={300}
+              showLegend={false}
+              series={[
+                {
+                  id: 'alarms',
+                  label: 'Alarms per week',
+                  values: EC_ALARM_WEEKS,
+                  tone: 'accent',
+                },
+              ]}
+              limits={[{ value: 70, label: 'Target', tone: 'warning' }]}
+              notes={
+                <p className="text-sm text-[var(--kit-text-2)]">
+                  Revision B, applied in week 40, removed 41 nuisance limits; the weekly alarm load has nearly halved since.
+                </p>
+              }
+            />
+          </Panel>
+          <Panel className="col-span-5" title="Revision table" subtitle="NK-CFG-023" icon={<IconTable className="size-4" />}>
+            <div className="flex flex-1 flex-col justify-between gap-4">
+              <DataTable
+                label="Revisions of the alarm limit configuration"
+                columns={[
+                  {
+                    id: 'rev',
+                    header: 'Rev',
+                    nowrap: true,
+                    cell: (row) => (
+                      <button
+                        type="button"
+                        aria-pressed={row.rev === selected}
+                        onClick={() => setSelected(row.rev)}
+                        className={`px-2 py-0.5 font-semibold ${row.rev === selected ? 'bg-[var(--kit-text)] text-[var(--kit-halo)]' : 'underline underline-offset-2'}`}
+                      >
+                        {row.rev}
+                      </button>
+                    ),
+                  },
+                  {
+                    id: 'date',
+                    header: 'Applied',
+                    nowrap: true,
+                    cell: (row) => row.date,
+                  },
+                  {
+                    id: 'by',
+                    header: 'By',
+                    nowrap: true,
+                    cell: (row) => row.by,
+                  },
+                  {
+                    id: 'changes',
+                    header: 'Changes',
+                    numeric: true,
+                    cell: (row) => row.changes,
+                  },
+                ]}
+                rows={EC_REVISIONS}
+                rowKey={(row) => row.rev}
+                rowTone={(row) => (row.date === 'Draft' ? 'warning' : undefined)}
+              />
+              <div className="border border-[var(--kit-text)] p-3">
+                <p className="text-xs text-[var(--kit-text-2)]">Revision {revision.rev}</p>
+                <p className="mt-1 text-lg leading-6 font-semibold">{revision.note}</p>
+                <p className="mt-2 text-sm text-[var(--kit-text-2)]">
+                  {revision.changes} limits changed by {revision.by}
+                  {revision.alarms > 0 ? `. ${revision.alarms} alarms per week while it was live.` : '. Not applied yet.'}
+                </p>
+              </div>
+            </div>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
   );
 }
 
-function EngConfigDashBlueprint() {
+function EngineeringConfigLadder() {
+  const [mode, setMode] = useState<EcMode>('compare');
+  const config = ecConfig('tt-91141');
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <EngConfigDashboard />
-    </ThemeScope>
+    <LookScope look="blueprint" className="w-full">
+      <Canvas className="h-full">
+        <Panel
+          title={`${config.tag} · ${config.name}`}
+          subtitle="Limit ladder"
+          icon={<IconRuler2 className="size-4" />}
+          actions={
+            <SegmentedControl value={mode} onValueChange={(next) => setMode(next === 'live' ? 'live' : next === 'draft' ? 'draft' : 'compare')}>
+              <SegmentedControlList size="small" aria-label="Revision shown">
+                <SegmentedControlButton value="live">Live</SegmentedControlButton>
+                <SegmentedControlButton value="draft">Draft</SegmentedControlButton>
+                <SegmentedControlButton value="compare">Compare</SegmentedControlButton>
+              </SegmentedControlList>
+            </SegmentedControl>
+          }
+        >
+          <EcLadder config={config} mode={mode} />
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function EngConfigDashTerminal() {
+function EngineeringConfigTree() {
+  const [selected, setSelected] = useState('vt-92540');
   return (
-    <ThemeScope preset="terminal" className="w-full">
-      <EngConfigDashboard />
-    </ThemeScope>
+    <LookScope look="blueprint" className="w-full">
+      <Canvas className="h-full">
+        <Panel title="Tree" subtitle="6 tags" icon={<IconBinaryTree className="size-4" />} padding="tight">
+          <EcTree selected={selected} onSelect={setSelected} />
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function EngConfigDashLimitTable() {
-  const state = useEngConfigState({ 'pt-92531': { h: 51 } });
-  return <EngConfigTablePanel edits={state.edits} setField={state.setField} />;
+function EngineeringConfigDiffTable() {
+  const config = ecConfig('tt-92532');
+  return (
+    <LookScope look="blueprint" className="w-full">
+      <Canvas className="h-full">
+        <Panel title="Property diff" subtitle={config.tag} icon={<IconGitCompare className="size-4" />}>
+          <EcDiffTable config={config} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function EngConfigDashPending() {
-  const state = useEngConfigState({ 'tt-92532': { h: 148, hh: 158 }, 'lt-10012': { deadband: 3 } });
-  return <EngConfigPendingPanel changes={state.changes} revertTag={state.revertTag} />;
+function EngineeringConfigPropertySheet() {
+  return (
+    <LookScope look="blueprint" className="w-full">
+      <Canvas className="h-full">
+        <Panel title="Property sheet" subtitle="Rev D" icon={<IconTable className="size-4" />}>
+          <EcPropertySheet config={ecConfig('lt-10012')} mode="draft" />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function EngConfigDashValidation() {
-  const state = useEngConfigState({ 'tt-92532': { h: 148 }, 'vt-92540': { hh: 6.5 }, 'pt-10010': { deadband: 4 } });
-  return <EngConfigValidationPanel changes={state.changes} />;
+function EngineeringConfigDimensions() {
+  return (
+    <LookScope look="blueprint" className="w-full">
+      <Canvas className="h-full">
+        <Panel title="Dimension lines" subtitle="Annotation" icon={<IconRuler2 className="size-4" />}>
+          <div className="relative h-44">
+            <EcDimension from={6} to={62} top={40} label="Normal band 52.0 °C" />
+            <EcDimension from={62} to={90} top={40} label="+3.0 °C" accent />
+            <EcDimension from={14} to={20} top={110} label="Margin 0.8 °C" accent side="after" />
+            <span className="absolute top-6 bottom-6 left-[6%] w-px bg-[var(--kit-text)]" />
+            <span className="absolute top-6 bottom-6 left-[62%] w-px bg-[var(--kit-text)]" />
+            <span className="absolute top-6 bottom-20 left-[90%] w-px" style={{ background: EC_ACCENT }} />
+          </div>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function EngConfigDashSubmitReady() {
-  const state = useEngConfigState({ 'tt-92532': { h: 148 } });
-  return <EngConfigSubmitBar changes={state.changes} submittedId={state.submittedId} discard={state.discard} submit={state.submit} />;
-}
-
-function EngConfigDashSubmitBlocked() {
-  const state = useEngConfigState({ 'vt-92540': { hh: 6.5 } });
-  return <EngConfigSubmitBar changes={state.changes} submittedId={state.submittedId} discard={state.discard} submit={state.submit} />;
-}
-
-function EngConfigDashFilter() {
-  const [query, setQuery] = useState('92');
-  const [area, setArea] = useState('23');
-  return <EngConfigFilter query={query} area={area} onQueryChange={setQuery} onAreaChange={setArea} />;
-}
-
-function EngConfigDashHistory() {
-  return <EngConfigHistoryPanel history={ENG_CONFIG_HISTORY} />;
+function EngineeringConfigToolbar() {
+  const [mode, setMode] = useState<EcMode>('draft');
+  const [sent, setSent] = useState(false);
+  return (
+    <LookScope look="blueprint" className="w-full">
+      <Canvas className="flex h-full items-center justify-center">
+        <EcToolbar mode={mode} onMode={setMode} sent={sent} onSend={() => setSent((before) => !before)} />
+      </Canvas>
+    </LookScope>
+  );
 }
 
 export default definePage({
   id: 'engineering-config',
   title: 'Engineering configuration',
   summary:
-    'Change alarm limits without losing track of what changed: the baseline is edited in place on the left, and the right half shows the change set as before and after, checks it and sends it for approval.',
+    'Alarm limits as an engineering drawing: a configuration tree, the selected tag with live and draft limits drawn to scale and every change dimensioned between them, a property sheet with checks, and a floating toolbar that switches revision.',
   guidance: {
     use: [
-      'For limits, setpoints and other configuration that needs review before it applies.',
-      'When the person editing must see the whole proposal, not only the cell in front of them.',
-      'Check the rules on every edit and say which pair of limits clashes.',
-      'Keep the history in view, so a new change is read against the last few.',
+      'For changes that are reviewed before they reach the control system: limits, setpoints, parameters.',
+      'Draw the change to scale; a table says what changed, a dimension says how much it matters.',
+      'One accent for everything that differs between live and draft, and nothing else.',
     ],
     avoid: [
-      'Saving each cell on its own when the limits of a tag only make sense together.',
-      'Blocking the cell on an order error; let it through and block the submit with the reason.',
-      'Marking edited cells by colour alone.',
-      'Hiding who approves: say it beside the submit button.',
+      'Editing live values in place with no draft and no revision.',
+      'Status colours for change: a change is not an alarm.',
+      'Hiding the current reading; a new limit is judged by its margin to it.',
     ],
   },
   source,
@@ -603,141 +1300,120 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Shown in the Schematic theme. Edit a limit on the left and follow it on the right.',
+      description: 'Select a tag in the tree. The toolbar switches the drawing between the live revision, the draft, and both with dimensions.',
       specimens: [
         {
-          id: 'EngConfigDashSignature',
-          title: 'Engineering configuration',
-          note: 'Pick it for a limit, setpoint or tag configuration tool with an approval step.',
+          id: 'EngineeringConfigSignature',
+          title: 'Tree, diff and property sheet',
+          note: 'Pick it for a configuration tool where an engineer prepares a revision and has to see what each change does.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'dashboards/DashboardGrid.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'dashboards/panels/engineering-config/limitOrder.ts',
-            'patterns/data-entry/EditableCell.tsx',
-            'patterns/collaboration/ChangeDiff.tsx',
-            'industrial/StatusIndicator.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: EngConfigDashSignature,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/Grid.tsx', 'kit/tones.ts', 'looks/LookScope.tsx'],
+          Component: EngineeringConfigSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same dashboard, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The review of the whole change set, and the revision history with its effect on alarm load.',
       specimens: [
         {
-          id: 'EngConfigDashAura',
-          title: 'Aura',
-          note: 'Pick it when configuration is one page of a product in the default theme.',
+          id: 'EngineeringConfigChangeSet',
+          title: 'Change set review',
+          note: 'Pick it for the approver: every changed tag with its reason and checks, and a verdict per tag.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: EngConfigDashAura,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: EngineeringConfigChangeSet,
         },
         {
-          id: 'EngConfigDashBlueprint',
-          title: 'Blueprint',
-          note: 'Pick it for engineering users who prefer proportional type and blue-tinted panels.',
+          id: 'EngineeringConfigRevisions',
+          title: 'Revision history',
+          note: 'Pick it to show what earlier revisions did: a revision table beside the measure they were meant to move.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: EngConfigDashBlueprint,
-        },
-        {
-          id: 'EngConfigDashTerminal',
-          title: 'Terminal',
-          note: 'Pick it for a dark, monospaced configuration console.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: EngConfigDashTerminal,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/TrendLine.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: EngineeringConfigRevisions,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Panels',
-      description: 'Each part on its own, ready to drop into another dashboard.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The panels of the drawing on their own.',
       specimens: [
         {
-          id: 'EngConfigDashLimitTable',
-          title: 'Editable limit table',
-          note: 'Pick it when a handful of numeric columns are edited in place across many tags.',
+          id: 'EngineeringConfigLadder',
+          title: 'Limit ladder',
+          note: 'Pick it to compare two sets of limits on one scale, with the current reading drawn through both.',
+          origin: 'custom',
+          size: 'lg',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/tones.ts'],
+          Component: EngineeringConfigLadder,
+        },
+        {
+          id: 'EngineeringConfigTree',
+          title: 'Configuration tree',
+          note: 'Pick it to find a tag by where it sits in the plant, with change counts on the rows.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx'],
+          Component: EngineeringConfigTree,
+        },
+        {
+          id: 'EngineeringConfigDiffTable',
+          title: 'Property diff',
+          note: 'Pick it for the exact before and after of every property, changed rows first to the eye.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'patterns/data-entry/EditableCell.tsx', 'dashboards/panels/engineering-config/limitOrder.ts'],
-          Component: EngConfigDashLimitTable,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/DataTable.tsx'],
+          Component: EngineeringConfigDiffTable,
         },
         {
-          id: 'EngConfigDashPending',
-          title: 'Pending changes',
-          note: 'Pick it to show a change set as before and after pairs with a way back per item.',
+          id: 'EngineeringConfigPropertySheet',
+          title: 'Property sheet',
+          note: 'Pick it as the full record of one tag, with the checks a draft has to pass.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'patterns/collaboration/ChangeDiff.tsx'],
-          Component: EngConfigDashPending,
+          bleed: true,
+          uses: ['kit/Panel.tsx'],
+          Component: EngineeringConfigPropertySheet,
         },
         {
-          id: 'EngConfigDashValidation',
-          title: 'Validation results',
-          note: 'Pick it to list which changed items pass the rules and exactly why the others fail.',
+          id: 'EngineeringConfigDimensions',
+          title: 'Dimension lines',
+          note: 'Pick it to write a measure onto a chart the way a drawing does: between two arrowheads.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'dashboards/panels/engineering-config/limitOrder.ts'],
-          Component: EngConfigDashValidation,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/tones.ts'],
+          Component: EngineeringConfigDimensions,
         },
         {
-          id: 'EngConfigDashSubmitBlocked',
-          title: 'Submit bar, blocked',
-          note: 'Pick it when a failed check must stop the submission and say so beside the button.',
+          id: 'EngineeringConfigToolbar',
+          title: 'Floating toolbar',
+          note: 'Pick it when the controls belong to the canvas, not to a panel: revision switch and the one commit action.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          Component: EngConfigDashSubmitBlocked,
-        },
-        {
-          id: 'EngConfigDashSubmitReady',
-          title: 'Submit bar, ready',
-          note: 'Pick it under a change set that passed: it names the approver and offers the one action.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: EngConfigDashSubmitReady,
-        },
-        {
-          id: 'EngConfigDashFilter',
-          title: 'Tag filter',
-          note: 'Pick it above a configuration table: free text for the tag, a switch for the area.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          Component: EngConfigDashFilter,
-        },
-        {
-          id: 'EngConfigDashHistory',
-          title: 'Change history strip',
-          note: 'Pick it along the bottom of a configuration screen to keep the last five changes in view.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: EngConfigDashHistory,
+          bleed: true,
+          uses: ['kit/Canvas.tsx'],
+          Component: EngineeringConfigToolbar,
         },
       ],
     },

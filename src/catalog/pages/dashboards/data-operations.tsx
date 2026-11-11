@@ -1,842 +1,1423 @@
 import { Button } from '@cognite/aura/components/button';
-import { IconAlertTriangle, IconClock, IconPlayerPlay, IconPlayerStop, IconRefresh } from '@cognite/aura/icons';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
+import {
+  IconAlertOctagon,
+  IconAlertTriangle,
+  IconCalendarRepeat,
+  IconCircleCheck,
+  IconClock,
+  IconDatabase,
+  IconFileText,
+  IconHistory,
+  IconMathFunction,
+  IconPlayerPlay,
+  IconPlugConnected,
+  IconReload,
+  IconRoute,
+  IconSchema,
+  IconSettings,
+  IconShieldCheck,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { TONE_TEXT } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { RunHistoryStrip } from '../../../library/industrial/workflows/RunHistoryStrip';
-import type { RunStatus } from '../../../library/industrial/workflows/workflow';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { makeValues } from '../../data/series';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Donut } from '../../../library/kit/Donut';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip, type HeatRow } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Legend } from '../../../library/kit/Legend';
+import { Panel } from '../../../library/kit/Panel';
+import { Stat } from '../../../library/kit/Stat';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { formatNumber, toneLine, type Tone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
+import { MINUTE, REFERENCE_NOW, formatTime, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './data-operations.tsx?raw';
 
-type DataOpsState = 'ok' | 'failed' | 'stale' | 'running';
+type DoLane = 'source' | 'extractor' | 'transform' | 'model';
 
-type DataOpsLogLine = { time: string; level: 'INFO' | 'WARN' | 'ERROR'; text: string };
+type DoState = 'healthy' | 'late' | 'failed';
 
-type DataOpsNode = {
+type DoNode = {
   id: string;
-  /** 0 sources, 1 extractors, 2 raw, 3 transformations, 4 data model. */
-  column: number;
+  lane: DoLane;
   row: number;
   name: string;
-  detail: string;
-  state: DataOpsState;
-  /** Age of the newest data, as shown on the node. */
+  /** What it is, in the words of the team that owns it. */
+  kind: string;
+  state: DoState;
+  /** The line under the name on the map. */
+  meta: string;
+  throughput: string;
+  throughputUnit: string;
   freshness: string;
-  schedule: string;
-  rows: string;
-  latency: string;
-  duration: string;
-  /** Last 14 runs, oldest first: s success, f failed, k skipped. */
-  history: string;
-  error?: { time: string; text: string };
-  logs: readonly DataOpsLogLine[];
+  success: number;
+  /** Typical run time in seconds. */
+  seconds: number;
+  rows: number;
   seed: number;
+  note: string;
 };
 
-const DATA_OPS_COLUMNS = ['Sources', 'Extractors', 'Raw', 'Transformations', 'Data model'] as const;
+type DoEdge = {
+  from: string;
+  to: string;
+  label: string;
+  weight: number;
+  at?: number;
+};
 
-const DATA_OPS_KIND = ['Source system', 'Extractor', 'Raw table', 'Transformation', 'Data model view'] as const;
-
-const DATA_OPS_NODES: readonly DataOpsNode[] = [
+const DO_LANES: {
+  id: DoLane;
+  label: string;
+  unit: string;
+  tone: Tone;
+  icon: ReactNode;
+}[] = [
   {
-    id: 'src-opcua',
-    column: 0,
+    id: 'source',
+    label: 'Sources',
+    unit: 'systems',
+    tone: 'blue',
+    icon: <IconDatabase />,
+  },
+  {
+    id: 'extractor',
+    label: 'Extractors',
+    unit: 'running',
+    tone: 'teal',
+    icon: <IconPlugConnected />,
+  },
+  {
+    id: 'transform',
+    label: 'Transformations',
+    unit: 'jobs',
+    tone: 'purple',
+    icon: <IconMathFunction />,
+  },
+  {
+    id: 'model',
+    label: 'Data models',
+    unit: 'views',
+    tone: 'amber',
+    icon: <IconSchema />,
+  },
+];
+
+const DO_NODES: DoNode[] = [
+  {
+    id: 's-sap',
+    lane: 'source',
     row: 0,
-    name: 'OPC UA',
-    detail: 'Compression area PLCs, 1 840 nodes',
-    state: 'ok',
-    freshness: '4 s',
-    schedule: 'Subscription',
-    rows: '1 840 nodes',
-    latency: '0.4 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:59:58', level: 'INFO', text: 'session keep-alive ok, 1 840 monitored items' },
-      { time: '13:59:28', level: 'INFO', text: 'publish interval 1 000 ms, queue depth 0' },
-      { time: '13:44:10', level: 'INFO', text: 'certificate valid for 212 days' },
-      { time: '13:30:02', level: 'INFO', text: 'namespace ns=3 browsed, no new nodes' },
-    ],
-    seed: 201,
-  },
-  {
-    id: 'src-pi',
-    column: 0,
-    row: 1,
-    name: 'PI archive',
-    detail: 'Plant historian, 12 400 tags',
-    state: 'ok',
-    freshness: '1 min',
-    schedule: 'Always on',
-    rows: '12 400 tags',
-    latency: '1.1 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:59:40', level: 'INFO', text: 'archive nk-pi-01 reachable, snapshot lag 1.1 s' },
-      { time: '13:45:00', level: 'INFO', text: 'tag count 12 400, 0 new since 13:30' },
-      { time: '13:30:00', level: 'INFO', text: 'backfill window closed, 0 gaps' },
-      { time: '13:15:00', level: 'INFO', text: 'archive nk-pi-01 reachable, snapshot lag 0.9 s' },
-    ],
-    seed: 202,
-  },
-  {
-    id: 'src-sap',
-    column: 0,
-    row: 2,
     name: 'SAP PM',
-    detail: 'Work orders and notifications',
-    state: 'ok',
-    freshness: '2 min',
-    schedule: 'Always on',
-    rows: '48 200 orders',
-    latency: '2.8 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:58:12', level: 'INFO', text: 'OData service PM_ORDER_SRV responds in 2.8 s' },
-      { time: '13:40:00', level: 'INFO', text: 'service user CDF_EXTRACT password changed by SAP basis' },
-      { time: '13:30:00', level: 'INFO', text: '14 orders changed since 13:00' },
-      { time: '13:00:00', level: 'INFO', text: '9 orders changed since 12:30' },
-    ],
-    seed: 203,
+    kind: 'Maintenance system',
+    state: 'healthy',
+    meta: 'Work orders',
+    throughput: '18.2',
+    throughputUnit: 'k rows/h',
+    freshness: '4 min',
+    success: 100,
+    seconds: 12,
+    rows: 6100,
+    seed: 71,
+    note: 'Read through the OData gateway with a service account. Change pointers keep the load incremental.',
   },
   {
-    id: 'ext-opcua',
-    column: 1,
-    row: 0,
-    name: 'opcua-nk23',
-    detail: 'OPC UA extractor 2.31 on nk-edge-02',
-    state: 'ok',
-    freshness: '6 s',
-    schedule: 'Streaming',
-    rows: '412 000 points',
-    latency: '1.2 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:59:57', level: 'INFO', text: 'pushed 6 870 datapoints in 1.2 s' },
-      { time: '13:59:47', level: 'INFO', text: 'pushed 6 902 datapoints in 1.1 s' },
-      { time: '13:59:37', level: 'INFO', text: 'pushed 6 855 datapoints in 1.3 s' },
-      { time: '13:52:04', level: 'WARN', text: 'node 23-VT-92740 reported bad quality, forwarded' },
-    ],
-    seed: 204,
-  },
-  {
-    id: 'ext-pi',
-    column: 1,
+    id: 's-pi',
+    lane: 'source',
     row: 1,
-    name: 'pi-nk-af',
-    detail: 'PI extractor 3.4 on nk-edge-01',
-    state: 'ok',
-    freshness: '2 min',
-    schedule: 'Every 1 min',
-    rows: '186 000 points',
-    latency: '9 s',
-    duration: '14 s',
-    history: 'ssssssssskssss',
-    logs: [
-      { time: '13:59:00', level: 'INFO', text: 'run finished, 186 000 points, 14 s' },
-      { time: '13:58:00', level: 'INFO', text: 'run finished, 185 400 points, 13 s' },
-      { time: '13:57:00', level: 'INFO', text: 'run finished, 186 300 points, 14 s' },
-      { time: '13:49:00', level: 'WARN', text: 'run skipped, previous run still active' },
-    ],
-    seed: 205,
+    name: 'PI historian',
+    kind: 'Process historian',
+    state: 'healthy',
+    meta: '48 200 tags',
+    throughput: '1.9',
+    throughputUnit: 'M points/h',
+    freshness: '20 s',
+    success: 100,
+    seconds: 6,
+    rows: 640000,
+    seed: 72,
+    note: 'Snapshot and archive values for every tag with a point source of Nordkapp.',
   },
   {
-    id: 'ext-sap',
-    column: 1,
+    id: 's-opc',
+    lane: 'source',
     row: 2,
-    name: 'sap-odata',
-    detail: 'SAP OData extractor 1.9 on nk-edge-01',
+    name: 'OPC UA gateway',
+    kind: 'Control system gateway',
+    state: 'late',
+    meta: 'Lag 14 min',
+    throughput: '420',
+    throughputUnit: 'k points/h',
+    freshness: '14 min',
+    success: 96.4,
+    seconds: 9,
+    rows: 140000,
+    seed: 73,
+    note: 'The gateway in the compression area has answered slowly since the recompressor trip at 13:46.',
+  },
+  {
+    id: 's-doc',
+    lane: 'source',
+    row: 3,
+    name: 'Document archive',
+    kind: 'File share',
+    state: 'healthy',
+    meta: 'Drawings, manuals',
+    throughput: '310',
+    throughputUnit: 'files/h',
+    freshness: '22 min',
+    success: 99.2,
+    seconds: 40,
+    rows: 105,
+    seed: 74,
+    note: 'Engineering drawings, datasheets and vendor manuals, crawled by modified date.',
+  },
+  {
+    id: 'e-sap',
+    lane: 'extractor',
+    row: 0,
+    name: 'SAP extractor',
+    kind: 'Extractor',
+    state: 'healthy',
+    meta: 'Every 5 min',
+    throughput: '18.2',
+    throughputUnit: 'k rows/h',
+    freshness: '4 min',
+    success: 99.8,
+    seconds: 48,
+    rows: 1520,
+    seed: 75,
+    note: 'Writes orders, operations and notifications to the raw database sap_pm.',
+  },
+  {
+    id: 'e-pi',
+    lane: 'extractor',
+    row: 1,
+    name: 'PI extractor',
+    kind: 'Extractor',
+    state: 'healthy',
+    meta: 'Streaming',
+    throughput: '1.9',
+    throughputUnit: 'M points/h',
+    freshness: '20 s',
+    success: 99.9,
+    seconds: 5,
+    rows: 640000,
+    seed: 76,
+    note: 'Streams data points straight to time series; backfills gaps after a restart.',
+  },
+  {
+    id: 'e-opc',
+    lane: 'extractor',
+    row: 2,
+    name: 'OPC UA extractor',
+    kind: 'Extractor',
+    state: 'late',
+    meta: 'Lag 14 min',
+    throughput: '420',
+    throughputUnit: 'k points/h',
+    freshness: '14 min',
+    success: 96.4,
+    seconds: 64,
+    rows: 140000,
+    seed: 77,
+    note: 'Buffering on disk while the gateway is slow. Nothing is lost; values arrive late.',
+  },
+  {
+    id: 'e-doc',
+    lane: 'extractor',
+    row: 3,
+    name: 'File extractor',
+    kind: 'Extractor',
+    state: 'healthy',
+    meta: 'Every 20 min',
+    throughput: '310',
+    throughputUnit: 'files/h',
+    freshness: '22 min',
+    success: 99.2,
+    seconds: 95,
+    rows: 105,
+    seed: 78,
+    note: 'Uploads new and changed files with their folder path as metadata.',
+  },
+  {
+    id: 't-wo',
+    lane: 'transform',
+    row: 0,
+    name: 'Clean work orders',
+    kind: 'Transformation',
+    state: 'healthy',
+    meta: 'Every 20 min',
+    throughput: '17.6',
+    throughputUnit: 'k rows/h',
+    freshness: '11 min',
+    success: 99.6,
+    seconds: 74,
+    rows: 5870,
+    seed: 79,
+    note: 'Deduplicates orders, maps status codes and links each order to its asset.',
+  },
+  {
+    id: 't-match',
+    lane: 'transform',
+    row: 1,
+    name: 'Match tags',
+    kind: 'Transformation',
+    state: 'healthy',
+    meta: 'Every 20 min',
+    throughput: '2.3',
+    throughputUnit: 'M rows/h',
+    freshness: '9 min',
+    success: 98.9,
+    seconds: 212,
+    rows: 767000,
+    seed: 80,
+    note: 'Matches historian and control system tags to assets by naming rules and reviewed suggestions.',
+  },
+  {
+    id: 't-tree',
+    lane: 'transform',
+    row: 2,
+    name: 'Build hierarchy',
+    kind: 'Transformation',
+    state: 'healthy',
+    meta: 'Hourly',
+    throughput: '2.1',
+    throughputUnit: 'k rows/h',
+    freshness: '38 min',
+    success: 100,
+    seconds: 131,
+    rows: 2100,
+    seed: 81,
+    note: 'Rebuilds the asset tree from functional locations and equipment records.',
+  },
+  {
+    id: 't-doc',
+    lane: 'transform',
+    row: 3,
+    name: 'Classify documents',
+    kind: 'Transformation',
     state: 'failed',
-    freshness: '6 h 12 min',
-    schedule: 'Every 30 min',
-    rows: '0 rows',
-    latency: 'No data',
-    duration: '3 s',
-    history: 'ssffffffffffff',
-    error: {
-      time: '13:30:03',
-      text: '401 Unauthorized from PM_ORDER_SRV: credentials for service user CDF_EXTRACT were rejected',
-    },
-    logs: [
-      { time: '13:30:03', level: 'ERROR', text: '401 Unauthorized from PM_ORDER_SRV, run aborted' },
-      { time: '13:30:00', level: 'INFO', text: 'run started, cursor 2026-03-12T07:48:00Z' },
-      { time: '13:00:03', level: 'ERROR', text: '401 Unauthorized from PM_ORDER_SRV, run aborted' },
-      { time: '12:30:03', level: 'ERROR', text: '401 Unauthorized from PM_ORDER_SRV, run aborted' },
-      { time: '07:48:11', level: 'INFO', text: 'run finished, 14 rows, 11 s' },
-    ],
-    seed: 206,
+    meta: 'Failed 12:40',
+    throughput: '0',
+    throughputUnit: 'files/h',
+    freshness: '1 h 40 min',
+    success: 81.3,
+    seconds: 160,
+    rows: 105,
+    seed: 82,
+    note: 'Schema drift: column doc_class is missing in raw table documents.files since the 12:40 run.',
   },
   {
-    id: 'raw-opcua',
-    column: 2,
+    id: 'm-wo',
+    lane: 'model',
     row: 0,
-    name: 'opcua.points',
-    detail: 'Datapoints staging, 7 day retention',
-    state: 'ok',
-    freshness: '8 s',
-    schedule: 'On write',
-    rows: '248 M rows',
-    latency: '2 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:59:58', level: 'INFO', text: 'ingested 6 870 rows, table size 248 M' },
-      { time: '13:59:48', level: 'INFO', text: 'ingested 6 902 rows' },
-      { time: '13:00:00', level: 'INFO', text: 'retention removed 41 M rows older than 7 d' },
-      { time: '12:59:58', level: 'INFO', text: 'ingested 6 811 rows' },
-    ],
-    seed: 207,
+    name: 'Work order',
+    kind: 'Data model view',
+    state: 'healthy',
+    meta: '1.24 M instances',
+    throughput: '17.6',
+    throughputUnit: 'k rows/h',
+    freshness: '11 min',
+    success: 99.6,
+    seconds: 8,
+    rows: 5870,
+    seed: 83,
+    note: 'Read by the maintenance planner and the plant overview.',
   },
   {
-    id: 'raw-pi',
-    column: 2,
+    id: 'm-ts',
+    lane: 'model',
     row: 1,
-    name: 'pi.tags',
-    detail: 'Tag metadata and AF paths',
-    state: 'ok',
-    freshness: '2 min',
-    schedule: 'On write',
-    rows: '12 400 rows',
-    latency: '3 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:59:02', level: 'INFO', text: 'upserted 0 rows, 12 400 unchanged' },
-      { time: '13:30:02', level: 'INFO', text: 'upserted 3 rows, descriptions changed' },
-      { time: '13:00:02', level: 'INFO', text: 'upserted 0 rows, 12 400 unchanged' },
-      { time: '12:30:02', level: 'INFO', text: 'upserted 0 rows, 12 400 unchanged' },
-    ],
-    seed: 208,
+    name: 'Time series',
+    kind: 'Data model view',
+    state: 'healthy',
+    meta: '48 200 instances',
+    throughput: '2.3',
+    throughputUnit: 'M rows/h',
+    freshness: '9 min',
+    success: 98.9,
+    seconds: 6,
+    rows: 767000,
+    seed: 84,
+    note: 'Read by trends, the control room console and the anomaly models.',
   },
   {
-    id: 'raw-sap',
-    column: 2,
+    id: 'm-asset',
+    lane: 'model',
     row: 2,
-    name: 'sap.orders',
-    detail: 'Work orders staging',
-    state: 'stale',
-    freshness: '6 h 12 min',
-    schedule: 'On write',
-    rows: '48 186 rows',
-    latency: 'No writes',
-    duration: 'Idle',
-    history: 'sskkkkkkkkkkkk',
-    logs: [
-      { time: '13:30:04', level: 'WARN', text: 'no writes for 5 h 42 min, expected every 30 min' },
-      { time: '13:00:04', level: 'WARN', text: 'no writes for 5 h 12 min, expected every 30 min' },
-      { time: '08:30:04', level: 'WARN', text: 'freshness target of 45 min missed' },
-      { time: '07:48:11', level: 'INFO', text: 'upserted 14 rows' },
-    ],
-    seed: 209,
-  },
-  {
-    id: 'tr-ts',
-    column: 3,
-    row: 0,
-    name: 'ts-context',
-    detail: 'Links time series to assets by tag',
-    state: 'running',
-    freshness: '3 min',
-    schedule: 'Every 5 min',
-    rows: '1 840 rows',
-    latency: '38 s',
-    duration: '41 s',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '14:00:00', level: 'INFO', text: 'run started, 1 840 candidates' },
-      { time: '13:55:41', level: 'INFO', text: 'run finished, 1 838 matched, 2 unmatched, 41 s' },
-      { time: '13:55:40', level: 'WARN', text: 'no asset for 23-VT-92741 and 23-VT-92742' },
-      { time: '13:50:39', level: 'INFO', text: 'run finished, 1 838 matched, 2 unmatched, 39 s' },
-    ],
-    seed: 210,
-  },
-  {
-    id: 'tr-asset',
-    column: 3,
-    row: 1,
-    name: 'asset-tree',
-    detail: 'Builds the hierarchy from AF and SAP locations',
-    state: 'ok',
-    freshness: '22 min',
-    schedule: 'Every 30 min',
-    rows: '6 214 rows',
-    latency: '1 min 4 s',
-    duration: '1 min 12 s',
-    history: 'sssssssfssssss',
-    logs: [
-      { time: '13:31:12', level: 'INFO', text: 'run finished, 6 214 assets, 0 created, 3 updated' },
-      { time: '13:31:10', level: 'WARN', text: 'sap.orders is stale, kept last known functional locations' },
-      { time: '13:01:09', level: 'INFO', text: 'run finished, 6 214 assets, 0 created, 0 updated' },
-      { time: '12:31:14', level: 'INFO', text: 'run finished, 6 214 assets, 0 created, 1 updated' },
-    ],
-    seed: 211,
-  },
-  {
-    id: 'tr-wo',
-    column: 3,
-    row: 2,
-    name: 'wo-sync',
-    detail: 'Maps SAP orders to the work order view',
-    state: 'stale',
-    freshness: '6 h 10 min',
-    schedule: 'After sap.orders',
-    rows: '0 rows',
-    latency: 'Not run',
-    duration: 'Skipped',
-    history: 'sskkkkkkkkkkkk',
-    logs: [
-      { time: '13:30:05', level: 'WARN', text: 'skipped, upstream sap.orders has no new rows' },
-      { time: '13:00:05', level: 'WARN', text: 'skipped, upstream sap.orders has no new rows' },
-      { time: '12:30:05', level: 'WARN', text: 'skipped, upstream sap.orders has no new rows' },
-      { time: '07:50:02', level: 'INFO', text: 'run finished, 14 rows, 9 s' },
-    ],
-    seed: 212,
-  },
-  {
-    id: 'dm-ts',
-    column: 4,
-    row: 0,
-    name: 'TimeSeries',
-    detail: 'nordkapp:TimeSeries v4',
-    state: 'ok',
-    freshness: '3 min',
-    schedule: 'On transform',
-    rows: '14 240 instances',
-    latency: '4 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:55:42', level: 'INFO', text: 'applied 1 838 edges to Asset' },
-      { time: '13:50:40', level: 'INFO', text: 'applied 1 838 edges to Asset' },
-      { time: '13:45:41', level: 'INFO', text: 'applied 1 838 edges to Asset' },
-      { time: '13:40:40', level: 'INFO', text: 'applied 1 837 edges to Asset' },
-    ],
-    seed: 213,
-  },
-  {
-    id: 'dm-asset',
-    column: 4,
-    row: 1,
     name: 'Asset',
-    detail: 'nordkapp:Asset v7',
-    state: 'ok',
-    freshness: '22 min',
-    schedule: 'On transform',
-    rows: '6 214 instances',
-    latency: '6 s',
-    duration: 'Continuous',
-    history: 'ssssssssssssss',
-    logs: [
-      { time: '13:31:13', level: 'INFO', text: 'applied 3 updates, 6 214 instances' },
-      { time: '13:01:10', level: 'INFO', text: 'no changes, 6 214 instances' },
-      { time: '12:31:15', level: 'INFO', text: 'applied 1 update, 6 214 instances' },
-      { time: '12:01:11', level: 'INFO', text: 'no changes, 6 214 instances' },
-    ],
-    seed: 214,
+    kind: 'Data model view',
+    state: 'healthy',
+    meta: '86 400 instances',
+    throughput: '2.1',
+    throughputUnit: 'k rows/h',
+    freshness: '38 min',
+    success: 100,
+    seconds: 7,
+    rows: 2100,
+    seed: 85,
+    note: 'The hierarchy every other view links to.',
   },
   {
-    id: 'dm-wo',
-    column: 4,
-    row: 2,
-    name: 'WorkOrder',
-    detail: 'nordkapp:WorkOrder v3',
-    state: 'stale',
-    freshness: '6 h 10 min',
-    schedule: 'On transform',
-    rows: '48 186 instances',
-    latency: 'No writes',
-    duration: 'Idle',
-    history: 'sskkkkkkkkkkkk',
-    logs: [
-      { time: '13:30:06', level: 'WARN', text: 'freshness target of 1 h missed by 5 h 10 min' },
-      { time: '08:50:06', level: 'WARN', text: 'freshness target of 1 h missed' },
-      { time: '07:50:03', level: 'INFO', text: 'applied 14 updates, 48 186 instances' },
-      { time: '07:20:02', level: 'INFO', text: 'applied 6 updates, 48 186 instances' },
-    ],
-    seed: 215,
+    id: 'm-doc',
+    lane: 'model',
+    row: 3,
+    name: 'Document',
+    kind: 'Data model view',
+    state: 'failed',
+    meta: 'Stale 1 h 40 min',
+    throughput: '0',
+    throughputUnit: 'files/h',
+    freshness: '1 h 40 min',
+    success: 81.3,
+    seconds: 9,
+    rows: 0,
+    seed: 86,
+    note: 'No new documents since 12:20. Search and the field app show the last good version.',
   },
 ];
 
-const DATA_OPS_EDGES: readonly (readonly [string, string])[] = [
-  ['src-opcua', 'ext-opcua'],
-  ['src-pi', 'ext-pi'],
-  ['src-sap', 'ext-sap'],
-  ['ext-opcua', 'raw-opcua'],
-  ['ext-pi', 'raw-pi'],
-  ['ext-sap', 'raw-sap'],
-  ['raw-opcua', 'tr-ts'],
-  ['raw-pi', 'tr-ts'],
-  ['raw-pi', 'tr-asset'],
-  ['raw-sap', 'tr-asset'],
-  ['raw-sap', 'tr-wo'],
-  ['tr-ts', 'dm-ts'],
-  ['tr-asset', 'dm-asset'],
-  ['tr-wo', 'dm-wo'],
+const DO_EDGES: DoEdge[] = [
+  { from: 's-sap', to: 'e-sap', label: '18.2 k/h', weight: 2 },
+  { from: 's-pi', to: 'e-pi', label: '1.9 M/h', weight: 4 },
+  { from: 's-opc', to: 'e-opc', label: '420 k/h', weight: 3 },
+  { from: 's-doc', to: 'e-doc', label: '310/h', weight: 1 },
+  { from: 'e-sap', to: 't-wo', label: '18.2 k/h', weight: 2 },
+  { from: 'e-sap', to: 't-tree', label: '2.1 k/h', weight: 1, at: 0.3 },
+  { from: 'e-pi', to: 't-match', label: '1.9 M/h', weight: 4 },
+  { from: 'e-opc', to: 't-match', label: '420 k/h', weight: 3, at: 0.3 },
+  { from: 'e-doc', to: 't-doc', label: '310/h', weight: 1 },
+  { from: 't-wo', to: 'm-wo', label: '17.6 k/h', weight: 2 },
+  { from: 't-match', to: 'm-ts', label: '2.3 M/h', weight: 4 },
+  { from: 't-match', to: 'm-asset', label: '86 k/h', weight: 2 },
+  { from: 't-tree', to: 'm-asset', label: '2.1 k/h', weight: 1, at: 0.3 },
+  { from: 't-doc', to: 'm-doc', label: 'Stopped', weight: 1 },
 ];
 
-const DATA_OPS_STATE: Record<DataOpsState, { label: string; tone: Tone }> = {
-  ok: { label: 'Healthy', tone: 'neutral' },
-  failed: { label: 'Failed', tone: 'critical' },
-  stale: { label: 'Stale', tone: 'warning' },
-  running: { label: 'Running', tone: 'info' },
+const DO_STATE_TONE: Record<DoState, Tone> = {
+  healthy: 'success',
+  late: 'warning',
+  failed: 'critical',
 };
 
-const DATA_OPS_RUN: Record<string, RunStatus> = { s: 'success', f: 'failed', k: 'skipped' };
+const DO_STATE_LABEL: Record<DoState, string> = {
+  healthy: 'Healthy',
+  late: 'Running late',
+  failed: 'Failing',
+};
 
-const DATA_OPS_GRID_COLUMNS = { gridTemplateColumns: 'repeat(4, minmax(0, 1fr) minmax(0, 0.28fr)) minmax(0, 1fr)' };
+const DO_LANE_INDEX: Record<DoLane, number> = {
+  source: 0,
+  extractor: 1,
+  transform: 2,
+  model: 3,
+};
 
-function dataOpsNode(id: string): DataOpsNode {
-  return DATA_OPS_NODES.find((node) => node.id === id) ?? DATA_OPS_NODES[0];
+const DO_NODE_WIDTH = 18;
+
+const DO_NODE_HEIGHT = 62;
+
+const DO_MAP_HEIGHT = 424;
+
+const DO_NAV: AppFrameNavItem[] = [
+  { id: 'pipelines', label: 'Pipelines', icon: <IconRoute /> },
+  { id: 'runs', label: 'Runs', icon: <IconHistory /> },
+  { id: 'quality', label: 'Freshness', icon: <IconShieldCheck /> },
+  { id: 'schedules', label: 'Schedules', icon: <IconCalendarRepeat /> },
+  { id: 'settings', label: 'Settings', icon: <IconSettings /> },
+];
+
+function doNode(id: string): DoNode {
+  return DO_NODES.find((node) => node.id === id) ?? DO_NODES[0];
 }
 
-/** The selected node with everything upstream and downstream of it. */
-function dataOpsLineage(id: string): ReadonlySet<string> {
-  const found = new Set<string>([id]);
-  const walk = (from: string, direction: 0 | 1) => {
-    for (const edge of DATA_OPS_EDGES) {
-      const next = edge[direction] === from ? edge[1 - direction] : undefined;
-      if (next !== undefined && !found.has(next)) {
-        found.add(next);
-        walk(next, direction);
+function doLeft(node: DoNode): number {
+  return 1 + DO_LANE_INDEX[node.lane] * ((98 - DO_NODE_WIDTH) / 3);
+}
+
+function doTop(node: DoNode): number {
+  return 58 + node.row * 90;
+}
+
+function doEdgeState(edge: DoEdge): DoState {
+  const from = doNode(edge.from);
+  const to = doNode(edge.to);
+  if (from.state === 'failed') return 'failed';
+  if (from.state === 'late' && to.state !== 'failed') return 'late';
+  return 'healthy';
+}
+
+/** Everything that feeds a node and everything it feeds, including itself. */
+function doLineage(id: string): Set<string> {
+  const seen = new Set<string>([id]);
+  const walk = (start: string, forward: boolean) => {
+    for (const edge of DO_EDGES) {
+      const next = forward ? (edge.from === start ? edge.to : null) : edge.to === start ? edge.from : null;
+      if (next && !seen.has(next)) {
+        seen.add(next);
+        walk(next, forward);
       }
     }
   };
-  walk(id, 0);
-  walk(id, 1);
-  return found;
+  walk(id, true);
+  walk(id, false);
+  return seen;
 }
 
-function dataOpsRuns(node: DataOpsNode, manualRun: boolean) {
-  const runs = [...node.history].map((letter, index) => ({ id: `${node.id}-${index}`, status: DATA_OPS_RUN[letter] ?? 'success' }));
-  if (node.state === 'running' || manualRun) runs.push({ id: `${node.id}-now`, status: 'running' });
-  return runs;
+function DoStateIcon({ state }: { state: DoState }) {
+  if (state === 'healthy') return <IconCircleCheck aria-hidden="true" />;
+  if (state === 'late') return <IconAlertTriangle aria-hidden="true" />;
+  return <IconAlertOctagon aria-hidden="true" />;
 }
 
-/** Rows per run: a seeded figure for every run that succeeded, nothing for a failed or skipped one. */
-function dataOpsRowsPerRun(node: DataOpsNode): number[] {
-  const values = makeValues({ seed: node.seed, points: node.history.length, base: 60, amplitude: 8, noise: 6, min: 30, max: 100 });
-  return values.map((value, index) => (node.history[index] === 's' ? value : 0));
-}
-
-function DataOpsStateLabel({ state }: { state: DataOpsState }) {
-  const { label, tone } = DATA_OPS_STATE[state];
-  if (state === 'ok') return <span className="text-xs text-muted-foreground">{label}</span>;
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs font-medium ${TONE_TEXT[tone]}`}>
-      {state === 'failed' ? <IconAlertTriangle aria-hidden="true" className="size-3.5 shrink-0" /> : null}
-      {state === 'stale' ? <IconClock aria-hidden="true" className="size-3.5 shrink-0" /> : null}
-      {state === 'running' ? <IconPlayerPlay aria-hidden="true" className="size-3.5 shrink-0" /> : null}
-      {label}
-    </span>
-  );
-}
-
-type DataOpsNodeButtonProps = {
-  node: DataOpsNode;
-  selected: boolean;
-  related: boolean;
-  onSelect: (id: string) => void;
-};
-
-function DataOpsNodeButton({ node, selected, related, onSelect }: DataOpsNodeButtonProps) {
+/** One system, job or view on the map: name, the line that matters now, and its state on the edge. */
+function DoNodeCard({ node, selected, dimmed, onSelect }: { node: DoNode; selected: boolean; dimmed: boolean; onSelect?: (id: string) => void }) {
+  const tone = DO_STATE_TONE[node.state];
   return (
     <button
       type="button"
       aria-pressed={selected}
-      aria-label={`${node.name}, ${DATA_OPS_KIND[node.column]}, ${DATA_OPS_STATE[node.state].label}, data ${node.freshness} old`}
-      className={`flex h-full w-full min-w-0 cursor-pointer flex-col gap-1 rounded-lg border p-2 text-left outline-none focus-visible:shadow-focus-ring ${
-        selected
-          ? 'border-emphasized bg-medium-background'
-          : `border-default bg-base-background hover:bg-muted-background ${related ? '' : 'opacity-70'}`
+      aria-label={`${node.name}, ${node.kind}, ${DO_STATE_LABEL[node.state]}`}
+      onClick={() => onSelect?.(node.id)}
+      className={`kit-tone-${tone} @container flex h-full w-full items-center gap-2 rounded-xl border bg-base-background py-2 pr-2 pl-3.5 text-left ${
+        selected ? 'border-transparent outline-2 outline-offset-1 outline-[var(--kit-accent)]' : 'border-default hover:border-emphasized'
       }`}
-      onClick={() => onSelect(node.id)}
+      style={{
+        boxShadow: `inset 4px 0 0 var(--t-line), ${selected ? '0 12px 24px -12px var(--effect-shadow-xl)' : dimmed ? '0 0 0 transparent' : '0 1px 2px var(--effect-shadow-md), 0 8px 16px -12px var(--effect-shadow-xl)'}`,
+      }}
     >
-      <span className="break-words font-mono text-xs font-medium text-base-foreground">{node.name}</span>
-      <DataOpsStateLabel state={node.state} />
-      <span className="text-xs tabular-nums text-muted-foreground">{node.freshness} old</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm leading-4.5 font-semibold text-base-foreground">{node.name}</span>
+        <span
+          className={`mt-0.5 block text-xs leading-4 ${node.state === 'healthy' ? 'text-medium-foreground' : 'font-semibold'}`}
+          style={node.state === 'healthy' ? undefined : { color: 'var(--t-ink)' }}
+        >
+          {node.meta}
+        </span>
+      </span>
+      <span className="hidden shrink-0 @[10.5rem]:block [&>svg]:size-4.5" style={{ color: 'var(--t-ink)' }}>
+        <DoStateIcon state={node.state} />
+      </span>
     </button>
   );
 }
 
-type DataOpsLinksProps = { gap: number; lineage: ReadonlySet<string> };
-
-/** The connector lines between two neighbouring columns. Rows are equal height, so a row centre is 50, 150 or 250. */
-function DataOpsLinks({ gap, lineage }: DataOpsLinksProps) {
-  const edges = DATA_OPS_EDGES.map(([from, to]) => ({ from: dataOpsNode(from), to: dataOpsNode(to) })).filter(
-    (edge) => edge.from.column === gap
-  );
+/** Sources to data models, left to right: lanes, nodes, and edges that carry their throughput. */
+function DoMap({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
+  const lineage = doLineage(selected);
   return (
-    <div aria-hidden="true" className="relative row-span-3 row-start-2" style={{ gridColumnStart: gap * 2 + 2 }}>
-      <svg viewBox="0 0 100 300" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
-        {edges.map((edge) => {
-          const y1 = edge.from.row * 100 + 50;
-          const y2 = edge.to.row * 100 + 50;
-          const blocked = edge.from.state === 'failed' || edge.from.state === 'stale';
-          const active = lineage.has(edge.from.id) && lineage.has(edge.to.id);
+    <div className="relative" style={{ height: DO_MAP_HEIGHT }}>
+      {DO_LANES.map((lane, index) => (
+        <div
+          key={lane.id}
+          className={`kit-tone-${lane.tone} absolute inset-y-0 rounded-2xl`}
+          style={{
+            left: `${index * ((98 - DO_NODE_WIDTH) / 3)}%`,
+            width: `${DO_NODE_WIDTH + 2}%`,
+            background: 'color-mix(in oklab, var(--t-line) 8%, transparent)',
+          }}
+        >
+          <div className="flex items-center gap-2 px-3 pt-3">
+            <IconChip tone={lane.tone} size="sm">
+              {lane.icon}
+            </IconChip>
+            <span className="text-sm font-semibold text-base-foreground">{lane.label}</span>
+            <span
+              className="ml-auto text-xs font-medium text-medium-foreground tabular-nums"
+              aria-label={`${DO_NODES.filter((node) => node.lane === lane.id).length} ${lane.unit}`}
+            >
+              {DO_NODES.filter((node) => node.lane === lane.id).length}
+            </span>
+          </div>
+        </div>
+      ))}
+
+      <svg viewBox={`0 0 100 ${DO_MAP_HEIGHT}`} preserveAspectRatio="none" className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+        {DO_EDGES.map((edge) => {
+          const from = doNode(edge.from);
+          const to = doNode(edge.to);
+          const x1 = doLeft(from) + DO_NODE_WIDTH;
+          const x2 = doLeft(to);
+          const y1 = doTop(from) + DO_NODE_HEIGHT / 2;
+          const y2 = doTop(to) + DO_NODE_HEIGHT / 2;
+          const bend = (x2 - x1) / 2;
+          const state = doEdgeState(edge);
+          const lit = lineage.has(edge.from) && lineage.has(edge.to);
           return (
             <path
-              key={`${edge.from.id}-${edge.to.id}`}
-              d={`M 0 ${y1} C 50 ${y1}, 50 ${y2}, 100 ${y2}`}
+              key={`${edge.from}-${edge.to}`}
+              d={`M${x1},${y1} C${x1 + bend},${y1} ${x2 - bend},${y2} ${x2},${y2}`}
               fill="none"
-              stroke="currentColor"
-              strokeWidth={active ? 2 : 1.25}
-              strokeDasharray={blocked ? '5 4' : undefined}
+              stroke={state === 'healthy' ? toneLine('accent') : toneLine(DO_STATE_TONE[state])}
+              strokeWidth={1.5 + edge.weight * 1.25}
+              strokeDasharray={state === 'failed' ? '6 6' : undefined}
+              strokeLinecap="round"
+              opacity={lit ? (state === 'healthy' ? 0.8 : 1) : 0.32}
               vectorEffect="non-scaling-stroke"
-              className={active ? 'text-base-foreground' : 'text-muted-foreground opacity-50'}
             />
           );
         })}
       </svg>
-    </div>
-  );
-}
 
-type DataOpsSelectionProps = { selectedId: string; onSelect: (id: string) => void };
-
-/** The dominant element: five stages left to right, every node a button, every dependency a line. */
-function DataOpsLineagePanel({ selectedId, onSelect }: DataOpsSelectionProps) {
-  const lineage = dataOpsLineage(selectedId);
-  return (
-    <DashboardPanel
-      title="Pipeline lineage"
-      description="From source system to data model, left to right"
-      footnote="Solid lines carry data. Dashed lines are blocked by a failed or stale node upstream. Faded nodes are outside the selected lineage."
-    >
-      <div
-        role="group"
-        aria-label="Pipeline lineage: 15 nodes in five stages. The SAP OData extractor is failing, which leaves three downstream nodes stale."
-        className="grid w-full grid-rows-[auto_repeat(3,minmax(0,1fr))] gap-y-2"
-        style={DATA_OPS_GRID_COLUMNS}
-      >
-        {DATA_OPS_COLUMNS.map((column, index) => (
-          <p
-            key={column}
-            className="row-start-1 pb-1 text-xs font-medium text-muted-foreground"
-            style={{ gridColumnStart: index * 2 + 1 }}
+      {DO_EDGES.map((edge) => {
+        const from = doNode(edge.from);
+        const to = doNode(edge.to);
+        const t = edge.at ?? 0.5;
+        const x1 = doLeft(from) + DO_NODE_WIDTH;
+        const x2 = doLeft(to);
+        const y1 = doTop(from) + DO_NODE_HEIGHT / 2;
+        const y2 = doTop(to) + DO_NODE_HEIGHT / 2;
+        const ease = 3 * t * t - 2 * t * t * t;
+        const along = 1.5 * (1 - t) * (1 - t) * t + 1.5 * (1 - t) * t * t + t * t * t;
+        const state = doEdgeState(edge);
+        const lit = lineage.has(edge.from) && lineage.has(edge.to);
+        return (
+          <span
+            key={`${edge.from}-${edge.to}`}
+            className={`kit-tone-${DO_STATE_TONE[state]} absolute -translate-x-1/2 -translate-y-1/2 rounded-full border bg-base-background px-1.5 py-px text-xs font-semibold whitespace-nowrap tabular-nums ${lit ? '' : 'opacity-40'} ${state === 'healthy' ? 'border-default text-base-foreground' : 'border-transparent'}`}
+            style={{
+              left: `${x1 + (x2 - x1) * along}%`,
+              top: y1 + (y2 - y1) * ease,
+              ...(state === 'healthy' ? {} : { background: 'var(--t-soft)', color: 'var(--t-on-soft)' }),
+            }}
           >
-            {column}
-          </p>
-        ))}
-        {DATA_OPS_NODES.map((node) => (
-          <div key={node.id} style={{ gridColumnStart: node.column * 2 + 1, gridRowStart: node.row + 2 }}>
-            <DataOpsNodeButton
-              node={node}
-              selected={node.id === selectedId}
-              related={lineage.has(node.id)}
-              onSelect={onSelect}
-            />
-          </div>
-        ))}
-        {[0, 1, 2, 3].map((gap) => (
-          <DataOpsLinks key={gap} gap={gap} lineage={lineage} />
-        ))}
-      </div>
-    </DashboardPanel>
-  );
-}
+            {edge.label}
+          </span>
+        );
+      })}
 
-type DataOpsNodeProps = { nodeId: string; manualRun: boolean };
-
-function DataOpsLogPanel({ nodeId, manualRun }: DataOpsNodeProps) {
-  const node = dataOpsNode(nodeId);
-  const lines: readonly DataOpsLogLine[] = manualRun
-    ? [{ time: '14:00:07', level: 'INFO', text: 'manual run started by ingrid.haugen' }, ...node.logs]
-    : node.logs;
-  return (
-    <DashboardPanel title="Log tail" description={`${node.name} · newest first`} footnote="Follows the selected node.">
-      <ol
-        aria-label={`Latest log lines for ${node.name}`}
-        className="flex w-full flex-col gap-2 rounded-lg bg-muted-background p-3 font-mono text-xs"
-      >
-        {lines.slice(0, 5).map((line) => (
-          <li key={`${line.time}-${line.text}`} className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex items-center gap-2 tabular-nums text-muted-foreground">
-              {line.time}
-              <span
-                className={
-                  line.level === 'ERROR'
-                    ? 'font-semibold text-critical-foreground-strong'
-                    : line.level === 'WARN'
-                      ? 'font-semibold text-warning-foreground-strong'
-                      : ''
-                }
-              >
-                {line.level}
-              </span>
-            </span>
-            <span className="break-words text-base-foreground">{line.text}</span>
-          </li>
-        ))}
-      </ol>
-    </DashboardPanel>
-  );
-}
-
-function DataOpsRunHistoryBlock({ nodeId, manualRun }: DataOpsNodeProps) {
-  const node = dataOpsNode(nodeId);
-  return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <p className="text-xs font-medium text-muted-foreground">Run history</p>
-      <RunHistoryStrip runs={dataOpsRuns(node, manualRun)} label={`${node.name}, latest runs`} showSummary />
-      <p className="text-xs text-muted-foreground">Oldest to newest · {node.schedule.toLowerCase()}</p>
-    </div>
-  );
-}
-
-function DataOpsThroughputBlock({ nodeId }: { nodeId: string }) {
-  const node = dataOpsNode(nodeId);
-  const figures = [
-    { label: 'Rows, last run', value: node.rows },
-    { label: 'Latency', value: node.latency },
-    { label: 'Duration', value: node.duration },
-    { label: 'Schedule', value: node.schedule },
-  ];
-  return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <p className="text-xs font-medium text-muted-foreground">Rows and latency</p>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2">
-        {figures.map((figure) => (
-          <div key={figure.label} className="min-w-0">
-            <dt className="text-xs text-muted-foreground">{figure.label}</dt>
-            <dd className="text-sm font-medium tabular-nums text-base-foreground">{figure.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <Sparkline
-        values={dataOpsRowsPerRun(node)}
-        label={`${node.name}, rows per run over the latest runs`}
-        variant="bar"
-        height={32}
-      />
-    </div>
-  );
-}
-
-function DataOpsLastErrorBlock({ nodeId }: { nodeId: string }) {
-  const node = dataOpsNode(nodeId);
-  return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <p className="text-xs font-medium text-muted-foreground">Last error</p>
-      {node.error ? (
-        <div className="flex flex-col gap-1 rounded-lg bg-critical-background p-3 text-critical-foreground">
-          <p className="flex items-center gap-1.5 text-xs font-medium">
-            <IconAlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />
-            Failed at {node.error.time} UTC
-          </p>
-          <p className="break-words font-mono text-xs">{node.error.text}</p>
-        </div>
-      ) : (
-        <p className="text-sm text-medium-foreground">
-          {node.state === 'stale'
-            ? 'No error on this node. It is waiting for sap-odata upstream.'
-            : 'No errors in the latest 14 runs.'}
-        </p>
-      )}
-    </div>
-  );
-}
-
-type DataOpsInspectorProps = DataOpsNodeProps & { onToggleRun: (id: string) => void };
-
-/** The drawer under the graph: everything about the selected node, and the one action on it. */
-function DataOpsInspectorPanel({ nodeId, manualRun, onToggleRun }: DataOpsInspectorProps) {
-  const node = dataOpsNode(nodeId);
-  return (
-    <DashboardPanel
-      title={node.name}
-      description={`${DATA_OPS_KIND[node.column]} · ${node.detail}`}
-      actions={
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          <DataOpsStateLabel state={manualRun ? 'running' : node.state} />
-          {manualRun ? (
-            <Button variant="outline" size="sm" onClick={() => onToggleRun(node.id)}>
-              <IconPlayerStop /> Cancel run
-            </Button>
-          ) : (
-            <Button size="sm" onClick={() => onToggleRun(node.id)}>
-              <IconPlayerPlay /> Run now
-            </Button>
-          )}
-        </div>
-      }
-    >
-      <div className="grid w-full grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-3">
-        <DataOpsRunHistoryBlock nodeId={nodeId} manualRun={manualRun} />
-        <DataOpsThroughputBlock nodeId={nodeId} />
-        <DataOpsLastErrorBlock nodeId={nodeId} />
-      </div>
-    </DashboardPanel>
-  );
-}
-
-function DataOpsSummaryStrip() {
-  const figures = [
-    { label: 'Healthy nodes', value: '11 of 15' },
-    { label: 'Failing', value: '1 extractor' },
-    { label: 'Oldest data', value: '6 h 12 min' },
-    { label: 'Rows today', value: '18.4 M' },
-  ];
-  return (
-    <dl className="flex w-full flex-wrap gap-x-8 gap-y-2">
-      {figures.map((figure) => (
-        <div key={figure.label} className="flex items-baseline gap-2">
-          <dt className="text-xs text-muted-foreground">{figure.label}</dt>
-          <dd className="text-sm font-medium tabular-nums text-base-foreground">{figure.value}</dd>
+      {DO_NODES.map((node) => (
+        <div
+          key={node.id}
+          className="absolute"
+          style={{
+            left: `${doLeft(node)}%`,
+            top: doTop(node),
+            width: `${DO_NODE_WIDTH}%`,
+            height: DO_NODE_HEIGHT,
+          }}
+        >
+          <DoNodeCard node={node} selected={node.id === selected} dimmed={!lineage.has(node.id)} onSelect={onSelect} />
         </div>
       ))}
-    </dl>
+    </div>
   );
 }
 
-function useDataOpsSelection(initialId: string) {
-  const [selectedId, setSelectedId] = useState(initialId);
-  const [manualRuns, setManualRuns] = useState<readonly string[]>([]);
-  const toggleRun = (id: string) =>
-    setManualRuns((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
-  return { selectedId, setSelectedId, manualRun: manualRuns.includes(selectedId), toggleRun };
+function DoMapLegend() {
+  return (
+    <Legend
+      items={[
+        { label: 'Flowing, width by volume', tone: 'accent', mark: 'line' },
+        { label: 'Running late', tone: 'warning', mark: 'line' },
+        { label: 'Stopped', tone: 'critical', mark: 'dashed' },
+      ]}
+    />
+  );
 }
 
-/**
- * Archetype: diagram-first lineage graph with a log rail and a full-width bottom drawer.
- * Dominant element: the left-to-right node and edge graph of the pipeline, sources to data model.
- * Interaction: selecting a node highlights its lineage, fills the drawer (run history, rows and
- * latency, last error, Run now) and points the log tail at that node; Run now adds a running run.
- */
-function DataOpsDashboard() {
-  const { selectedId, setSelectedId, manualRun, toggleRun } = useDataOpsSelection('ext-sap');
+type DoRun = {
+  id: number;
+  started: string;
+  seconds: number;
+  rows: number;
+  result: DoState;
+};
 
+function doRuns(node: DoNode): DoRun[] {
+  const durations = makeValues({
+    seed: node.seed,
+    points: 12,
+    base: node.seconds,
+    noise: node.seconds * 0.14,
+    min: 1,
+    decimals: 0,
+  });
+  return durations.map((seconds, index) => {
+    const fromEnd = 11 - index;
+    const result: DoState = node.state === 'failed' && fromEnd < 5 ? 'failed' : node.state === 'late' && fromEnd < 3 ? 'late' : 'healthy';
+    return {
+      id: 4816 - fromEnd,
+      started: formatTime(REFERENCE_NOW - fromEnd * 20 * MINUTE),
+      seconds: result === 'failed' ? Math.max(2, Math.round(seconds * 0.22)) : result === 'late' ? Math.round(seconds * 1.9) : seconds,
+      rows: result === 'failed' ? 0 : Math.round(node.rows * (0.9 + (index % 4) * 0.05)),
+      result,
+    };
+  });
+}
+
+function doCompact(rows: number): string {
+  if (rows >= 1_000_000) return `${formatNumber(rows / 1_000_000, 2)} M`;
+  if (rows >= 10_000) return `${formatNumber(rows / 1000, 0)} k`;
+  return formatNumber(rows);
+}
+
+const DO_RESULT_LABEL: Record<DoState, string> = {
+  healthy: 'Succeeded',
+  late: 'Slow',
+  failed: 'Failed',
+};
+
+function DoRunBars({ node, height = 190 }: { node: DoNode; height?: number }) {
+  const runs = doRuns(node);
   return (
-    <DashboardFrame
-      title="Data operations"
-      subtitle="Nordkapp · project nordkapp-prod · updated 14:00 UTC"
-      status={<StatusIndicator tone="critical" shape="diamond" label="1 pipeline failing" detail="work orders 6 h old" />}
-      actions={
-        <Button variant="outline" size="sm">
-          <IconRefresh /> Refresh
-        </Button>
+    <Bars
+      label={`Duration of the last twelve runs of ${node.name}, coloured by result`}
+      categories={runs.map((run) => run.started)}
+      series={[
+        {
+          id: 'seconds',
+          label: 'Duration',
+          values: runs.map((run) => run.seconds),
+          tone: 'success',
+        },
+      ]}
+      tones={runs.map((run) => DO_STATE_TONE[run.result])}
+      unit="s"
+      height={height}
+      limit={{
+        value: Math.round(node.seconds * 1.6),
+        label: 'Slow above',
+        tone: 'warning',
+      }}
+      headline={
+        <Legend
+          items={[
+            { label: 'Succeeded', tone: 'success' },
+            { label: 'Slow', tone: 'warning' },
+            { label: 'Failed', tone: 'critical' },
+          ]}
+        />
       }
-      toolbar={<DataOpsSummaryStrip />}
-    >
-      <DashboardGrid>
-        <DashboardCell span={9}>
-          <DataOpsLineagePanel selectedId={selectedId} onSelect={setSelectedId} />
-        </DashboardCell>
-        <DashboardCell span={3}>
-          <DataOpsLogPanel nodeId={selectedId} manualRun={manualRun} />
-        </DashboardCell>
-        <DashboardCell span={12}>
-          <DataOpsInspectorPanel nodeId={selectedId} manualRun={manualRun} onToggleRun={toggleRun} />
-        </DashboardCell>
-      </DashboardGrid>
-    </DashboardFrame>
+    />
   );
 }
 
-function DataOpsDashSignature() {
+const DO_RUN_COLUMNS: DataTableColumn<DoRun>[] = [
+  {
+    id: 'run',
+    header: 'Run',
+    nowrap: true,
+    cell: (run) => <span className="font-medium tabular-nums">Run {run.id}</span>,
+  },
+  {
+    id: 'started',
+    header: 'Started',
+    nowrap: true,
+    numeric: true,
+    cell: (run) => run.started,
+  },
+  {
+    id: 'duration',
+    header: 'Duration',
+    nowrap: true,
+    numeric: true,
+    cell: (run) => `${run.seconds} s`,
+  },
+  {
+    id: 'rows',
+    header: 'Written',
+    nowrap: true,
+    numeric: true,
+    cell: (run) => doCompact(run.rows),
+  },
+  {
+    id: 'result',
+    header: 'Result',
+    nowrap: true,
+    cell: (run) => <StatusPill tone={DO_STATE_TONE[run.result]}>{DO_RESULT_LABEL[run.result]}</StatusPill>,
+  },
+];
+
+function DoRunTable({ node, limit = 4 }: { node: DoNode; limit?: number }) {
   return (
-    <ThemeScope preset="terminal" className="w-full">
-      <DataOpsDashboard />
-    </ThemeScope>
+    <DataTable
+      label={`Latest runs of ${node.name}`}
+      flush
+      density="default"
+      columns={DO_RUN_COLUMNS}
+      rows={doRuns(node).slice(-limit).reverse()}
+      rowKey={(run) => String(run.id)}
+      rowTone={(run) => (run.result === 'healthy' ? undefined : DO_STATE_TONE[run.result])}
+    />
   );
 }
 
-function DataOpsDashAura() {
+function doNames(ids: string[]): string {
+  return ids.length > 0 ? ids.map((id) => doNode(id).name).join(', ') : 'Nothing';
+}
+
+/** The selected node in words and three figures, with the one action it needs. */
+function DoNodeSummary({ node }: { node: DoNode }) {
+  const lane = DO_LANES[DO_LANE_INDEX[node.lane]];
+  const reads = DO_EDGES.filter((edge) => edge.to === node.id).map((edge) => edge.from);
+  const writes = DO_EDGES.filter((edge) => edge.from === node.id).map((edge) => edge.to);
+  const tone = DO_STATE_TONE[node.state];
   return (
-    <ThemeScope preset="aura" className="w-full">
-      <DataOpsDashboard />
-    </ThemeScope>
-  );
-}
-
-function DataOpsDashDenseData() {
-  return (
-    <ThemeScope preset="dense-data" className="w-full">
-      <DataOpsDashboard />
-    </ThemeScope>
-  );
-}
-
-function DataOpsDashNightVision() {
-  return (
-    <ThemeScope preset="night-vision" className="w-full">
-      <DataOpsDashboard />
-    </ThemeScope>
-  );
-}
-
-function DataOpsDashLineage() {
-  const [selectedId, setSelectedId] = useState('tr-asset');
-  return <DataOpsLineagePanel selectedId={selectedId} onSelect={setSelectedId} />;
-}
-
-function DataOpsDashInspector() {
-  const { selectedId, manualRun, toggleRun } = useDataOpsSelection('ext-sap');
-  return <DataOpsInspectorPanel nodeId={selectedId} manualRun={manualRun} onToggleRun={toggleRun} />;
-}
-
-function DataOpsDashLogTail() {
-  return <DataOpsLogPanel nodeId="ext-sap" manualRun={false} />;
-}
-
-function DataOpsDashRunHistory() {
-  return (
-    <div className="flex w-full flex-col gap-6">
-      <DataOpsRunHistoryBlock nodeId="ext-pi" manualRun={false} />
-      <DataOpsRunHistoryBlock nodeId="ext-sap" manualRun={false} />
+    <div className="flex flex-1 flex-col gap-4">
+      <div className="flex items-start gap-3">
+        <IconChip tone={lane.tone} size="lg">
+          {lane.icon}
+        </IconChip>
+        <div className="min-w-0 flex-1">
+          <p className="text-lg leading-6 font-semibold text-base-foreground">{node.name}</p>
+          <p className="text-sm text-medium-foreground">{node.kind}</p>
+        </div>
+        <StatusPill tone={tone} icon={<DoStateIcon state={node.state} />}>
+          {DO_STATE_LABEL[node.state]}
+        </StatusPill>
+      </div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <Stat variant="plain" size="sm" label="Throughput" value={node.throughput} unit={node.throughputUnit} />
+        <Stat variant="plain" size="sm" label="Data age" value={node.freshness} tone={node.state === 'healthy' ? 'neutral' : tone} />
+        <Stat variant="plain" size="sm" label="Success, 7 days" value={node.success} decimals={1} unit="%" />
+        <Stat variant="plain" size="sm" label="Typical run" value={node.seconds} unit="s" />
+      </div>
+      <p
+        className={`kit-tone-${tone} rounded-xl px-3.5 py-3 text-sm leading-5`}
+        style={node.state === 'healthy' ? { background: 'var(--kit-well)' } : { background: 'var(--t-soft)', color: 'var(--t-on-soft)' }}
+      >
+        {node.note}
+      </p>
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
+        <dt className="text-medium-foreground">Reads from</dt>
+        <dd className="font-medium text-base-foreground">{doNames(reads)}</dd>
+        <dt className="text-medium-foreground">Writes to</dt>
+        <dd className="font-medium text-base-foreground">{doNames(writes)}</dd>
+      </dl>
+      <div className="mt-auto flex gap-2">
+        <Button size="sm">
+          {node.state === 'failed' ? <IconReload /> : <IconPlayerPlay />} {node.state === 'failed' ? 'Retry run' : 'Run now'}
+        </Button>
+        <Button size="sm" variant="outline">
+          <IconFileText /> Open logs
+        </Button>
+      </div>
     </div>
   );
 }
 
-function DataOpsDashThroughput() {
+function DoRange() {
+  const [range, setRange] = useState('4h');
   return (
-    <div className="w-full">
-      <DataOpsThroughputBlock nodeId="ext-opcua" />
-    </div>
+    <SegmentedControl value={range} onValueChange={(next) => setRange(String(next))}>
+      <SegmentedControlList size="small" aria-label="Time range">
+        <SegmentedControlButton value="4h">4 h</SegmentedControlButton>
+        <SegmentedControlButton value="24h">24 h</SegmentedControlButton>
+        <SegmentedControlButton value="7d">7 d</SegmentedControlButton>
+      </SegmentedControlList>
+    </SegmentedControl>
   );
 }
 
-function DataOpsDashLastError() {
+function DataOperationsSignature() {
+  const [selected, setSelected] = useState('t-doc');
+  const node = doNode(selected);
   return (
-    <div className="flex w-full flex-col gap-6">
-      <DataOpsLastErrorBlock nodeId="ext-sap" />
-      <DataOpsLastErrorBlock nodeId="raw-sap" />
-    </div>
+    <LookScope look="studio">
+      <AppFrame
+        variant="rail"
+        brand={{ name: 'Nordkapp data', mark: <IconDatabase /> }}
+        nav={DO_NAV}
+        current="pipelines"
+        title="Data operations"
+        subtitle="16 nodes, 14 healthy. 4.6 M rows moved in the last hour. Documents stopped at 12:40; control system data is 14 min late."
+        status={
+          <StatusPill tone="critical" size="lg" icon={<IconAlertOctagon />}>
+            1 failing
+          </StatusPill>
+        }
+        actions={<DoRange />}
+      >
+        <Grid>
+          <Panel className="col-span-12" title="Pipeline map" subtitle="Select a node to see its runs. Edges carry rows per hour." actions={<DoMapLegend />}>
+            <DoMap selected={selected} onSelect={setSelected} />
+          </Panel>
+          <Panel className="col-span-8" title={`Run history · ${node.name}`} subtitle="Last 12 runs, duration in seconds" padding="none">
+            <div className="px-5 pt-1 pb-3">
+              <DoRunBars node={node} height={170} />
+            </div>
+            <DoRunTable node={node} limit={4} />
+          </Panel>
+          <Panel className="col-span-4" tone={node.state === 'healthy' ? 'neutral' : DO_STATE_TONE[node.state]}>
+            <DoNodeSummary node={node} />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
   );
 }
 
-function DataOpsDashSummary() {
-  return <DataOpsSummaryStrip />;
+const DO_STEPS = [
+  {
+    id: 'queue',
+    label: 'Wait for worker',
+    start: 0,
+    seconds: 4,
+    state: 'healthy',
+    detail: 'Picked up by worker 3',
+  },
+  {
+    id: 'read',
+    label: 'Read raw table documents.files',
+    start: 4,
+    seconds: 11,
+    state: 'healthy',
+    detail: '105 rows read',
+  },
+  {
+    id: 'validate',
+    label: 'Validate against expected schema',
+    start: 15,
+    seconds: 3,
+    state: 'failed',
+    detail: 'Column doc_class not found',
+  },
+  {
+    id: 'classify',
+    label: 'Classify by title and content',
+    start: 18,
+    seconds: 96,
+    state: 'late',
+    detail: 'Not started',
+  },
+  {
+    id: 'write',
+    label: 'Write to view Document',
+    start: 114,
+    seconds: 22,
+    state: 'late',
+    detail: 'Not started',
+  },
+] satisfies ReadonlyArray<{
+  id: string;
+  label: string;
+  start: number;
+  seconds: number;
+  state: DoState;
+  detail: string;
+}>;
+
+const DO_LOG = [
+  {
+    time: '12:40:02',
+    level: 'Info',
+    text: 'Run 4812 started by schedule every 20 minutes.',
+  },
+  {
+    time: '12:40:06',
+    level: 'Info',
+    text: 'Reading documents.files, cursor at 12:20:00.',
+  },
+  { time: '12:40:17', level: 'Info', text: '105 rows read in 11 s.' },
+  {
+    time: '12:40:20',
+    level: 'Error',
+    text: 'Schema check failed: expected column doc_class (string), found doc_category.',
+  },
+  {
+    time: '12:40:20',
+    level: 'Info',
+    text: 'Nothing written. The view Document keeps its 12:20 version.',
+  },
+];
+
+/** The steps of one run on a shared time axis: where the time went and where it stopped. */
+function DoWaterfall() {
+  const total = 136;
+  return (
+    <ol className="flex flex-1 flex-col justify-between gap-3">
+      {DO_STEPS.map((step) => {
+        const pending = step.state === 'late';
+        const tone: Tone = pending ? 'neutral' : DO_STATE_TONE[step.state];
+        const late = (step.start + step.seconds) / total > 0.8;
+        return (
+          <li key={step.id} className="grid grid-cols-[minmax(0,15rem)_minmax(0,1fr)] items-center gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-base-foreground">{step.label}</p>
+              <p className="text-xs text-medium-foreground">{step.detail}</p>
+            </div>
+            <div className="relative h-8 rounded-lg bg-muted-background">
+              <div
+                className={`kit-tone-${tone} absolute inset-y-0 rounded-lg`}
+                style={{
+                  left: `${(step.start / total) * 100}%`,
+                  width: `${Math.max((step.seconds / total) * 100, 2)}%`,
+                  background: pending ? 'transparent' : 'var(--t-vivid)',
+                  border: pending ? '1.5px dashed var(--kit-rule-strong)' : undefined,
+                }}
+              />
+              <span
+                className="absolute top-1/2 -translate-y-1/2 text-xs font-semibold whitespace-nowrap text-base-foreground tabular-nums"
+                style={
+                  late
+                    ? {
+                        right: `calc(${100 - (step.start / total) * 100}% + 8px)`,
+                      }
+                    : {
+                        left: `calc(${((step.start + step.seconds) / total) * 100}% + 8px)`,
+                      }
+                }
+              >
+                {pending ? `planned ${step.seconds} s` : `${step.seconds} s`}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function DataOperationsRunDetail() {
+  const node = doNode('t-doc');
+  return (
+    <LookScope look="studio">
+      <AppFrame
+        variant="rail"
+        brand={{ name: 'Nordkapp data', mark: <IconDatabase /> }}
+        nav={DO_NAV}
+        current="runs"
+        title="Run 4812 · Classify documents"
+        subtitle="Started 12:40:02 by schedule. Stopped after 18 seconds at the schema check; four runs since have failed the same way."
+        status={
+          <StatusPill tone="critical" size="lg" icon={<IconAlertOctagon />}>
+            Failed
+          </StatusPill>
+        }
+        actions={
+          <>
+            <Button variant="outline" size="sm">
+              <IconFileText /> Download log
+            </Button>
+            <Button size="sm">
+              <IconReload /> Retry run
+            </Button>
+          </>
+        }
+      >
+        <Grid>
+          <Panel
+            className="col-span-8"
+            title="Steps"
+            subtitle="Planned 136 s, stopped at 18 s"
+            icon={
+              <IconChip tone="purple">
+                <IconClock />
+              </IconChip>
+            }
+          >
+            <DoWaterfall />
+          </Panel>
+          <Panel className="col-span-4" tone="critical" title="What went wrong" subtitle="First error of the run">
+            <div className="flex flex-1 flex-col gap-3">
+              <p className="text-xl leading-7 font-semibold text-base-foreground">The source renamed a column.</p>
+              <p className="text-sm leading-5 text-medium-foreground">
+                The file extractor started writing doc_category at 12:22 after the archive was upgraded. The transformation still reads doc_class.
+              </p>
+              <div className="mt-auto grid grid-cols-2 gap-3">
+                <Stat variant="plain" size="sm" label="Documents waiting" value={517} />
+                <Stat variant="plain" size="sm" label="Stale for" value="1 h 40" unit="min" tone="critical" />
+              </div>
+              <Button variant="outline" size="sm">
+                Map doc_category to doc_class
+              </Button>
+            </div>
+          </Panel>
+          <Panel className="col-span-7" title="Log" subtitle="5 lines" padding="none">
+            <DataTable
+              label="Log lines of run 4812"
+              flush
+              columns={[
+                {
+                  id: 'time',
+                  header: 'Time',
+                  nowrap: true,
+                  cell: (line) => line.time,
+                },
+                {
+                  id: 'level',
+                  header: 'Level',
+                  nowrap: true,
+                  cell: (line) => <StatusPill tone={line.level === 'Error' ? 'critical' : 'neutral'}>{line.level}</StatusPill>,
+                },
+                { id: 'text', header: 'Message', cell: (line) => line.text },
+              ]}
+              rows={DO_LOG}
+              rowKey={(line) => `${line.time}-${line.text}`}
+              rowTone={(line) => (line.level === 'Error' ? 'critical' : undefined)}
+            />
+          </Panel>
+          <Panel className="col-span-5" title="Recent runs" subtitle={node.name} padding="none">
+            <DoRunTable node={node} limit={5} />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
+  );
+}
+
+/** Age of the newest data per hour, as a percentage of the freshness each view promises. */
+function doShareOfPromise(minutes: number[], promised: number): number[] {
+  return minutes.map((age) => Math.round((age / promised) * 100));
+}
+
+const DO_FRESHNESS: HeatRow[] = [
+  {
+    label: 'Work order',
+    values: doShareOfPromise(
+      makeValues({
+        seed: 91,
+        points: 24,
+        base: 11,
+        noise: 4,
+        min: 3,
+        decimals: 0,
+      }),
+      30
+    ),
+    tone: 'success',
+  },
+  {
+    label: 'Time series',
+    values: doShareOfPromise(
+      [
+        ...makeValues({
+          seed: 92,
+          points: 20,
+          base: 6,
+          noise: 2,
+          min: 2,
+          decimals: 0,
+        }),
+        9,
+        12,
+        14,
+        14,
+      ],
+      10
+    ),
+    tone: 'warning',
+  },
+  {
+    label: 'Asset',
+    values: doShareOfPromise(
+      makeValues({
+        seed: 93,
+        points: 24,
+        base: 40,
+        noise: 14,
+        min: 10,
+        decimals: 0,
+      }),
+      120
+    ),
+    tone: 'success',
+  },
+  {
+    label: 'Document',
+    values: doShareOfPromise(
+      [
+        ...makeValues({
+          seed: 94,
+          points: 19,
+          base: 20,
+          noise: 6,
+          min: 6,
+          decimals: 0,
+        }),
+        40,
+        60,
+        80,
+        100,
+        100,
+      ],
+      60
+    ),
+    tone: 'critical',
+  },
+];
+
+const DO_SLA = [
+  {
+    view: 'Work order',
+    target: '30 min',
+    now: '11 min',
+    met: 99.6,
+    state: 'healthy',
+  },
+  {
+    view: 'Time series',
+    target: '10 min',
+    now: '14 min',
+    met: 97.1,
+    state: 'late',
+  },
+  { view: 'Asset', target: '2 h', now: '38 min', met: 100, state: 'healthy' },
+  {
+    view: 'Document',
+    target: '1 h',
+    now: '1 h 40 min',
+    met: 91.4,
+    state: 'failed',
+  },
+] satisfies ReadonlyArray<{
+  view: string;
+  target: string;
+  now: string;
+  met: number;
+  state: DoState;
+}>;
+
+function DataOperationsFreshness() {
+  return (
+    <LookScope look="studio">
+      <AppFrame
+        variant="rail"
+        brand={{ name: 'Nordkapp data', mark: <IconDatabase /> }}
+        nav={DO_NAV}
+        current="quality"
+        title="Freshness"
+        subtitle="How old the newest data in each view is, against what its readers were promised."
+        status={
+          <StatusPill tone="warning" size="lg" icon={<IconAlertTriangle />}>
+            2 of 4 outside target
+          </StatusPill>
+        }
+        actions={<DoRange />}
+      >
+        <Grid>
+          <Panel
+            className="col-span-8"
+            title="Age of newest data"
+            subtitle="Per hour, as a share of the promised freshness. Darker is closer to the promise, or past it."
+            icon={
+              <IconChip tone="teal">
+                <IconClock />
+              </IconChip>
+            }
+          >
+            <div className="flex flex-1 flex-col justify-center">
+              <HeatStrip
+                label="Age of the newest data per view and hour over the last 24 hours"
+                rows={DO_FRESHNESS}
+                axis={['24 h ago', 'Now']}
+                size="lg"
+                max={150}
+              />
+            </div>
+          </Panel>
+          <Panel
+            className="col-span-4"
+            title="Nodes by state"
+            subtitle="All 16 nodes"
+            icon={
+              <IconChip tone="blue">
+                <IconRoute />
+              </IconChip>
+            }
+          >
+            <div className="flex flex-1 items-center">
+              <Donut
+                label="Pipeline nodes by state"
+                centerCaption="nodes"
+                size={140}
+                legend="bottom"
+                className="w-full"
+                segments={[
+                  { label: 'Healthy', value: 12, tone: 'success' },
+                  { label: 'Running late', value: 2, tone: 'warning' },
+                  { label: 'Failing', value: 2, tone: 'critical' },
+                ]}
+              />
+            </div>
+          </Panel>
+          <Panel className="col-span-12" title="Promises to readers" subtitle="Freshness targets per view, last 7 days" padding="none">
+            <DataTable
+              label="Freshness targets per data model view"
+              flush
+              columns={[
+                {
+                  id: 'view',
+                  header: 'View',
+                  cell: (row) => <span className="font-semibold">{row.view}</span>,
+                },
+                {
+                  id: 'target',
+                  header: 'Promised',
+                  numeric: true,
+                  nowrap: true,
+                  cell: (row) => row.target,
+                },
+                {
+                  id: 'now',
+                  header: 'Now',
+                  numeric: true,
+                  nowrap: true,
+                  cell: (row) => row.now,
+                },
+                {
+                  id: 'met',
+                  header: 'Met, 7 d',
+                  numeric: true,
+                  nowrap: true,
+                  cell: (row) => `${formatNumber(row.met, 1)} %`,
+                },
+                {
+                  id: 'state',
+                  header: 'State',
+                  nowrap: true,
+                  cell: (row) => (
+                    <StatusPill tone={DO_STATE_TONE[row.state]}>
+                      {row.state === 'healthy' ? 'Within target' : row.state === 'late' ? 'Late' : 'Stale'}
+                    </StatusPill>
+                  ),
+                },
+              ]}
+              rows={DO_SLA}
+              rowKey={(row) => row.view}
+              rowTone={(row) => (row.state === 'healthy' ? undefined : DO_STATE_TONE[row.state])}
+            />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
+  );
+}
+
+function DataOperationsNodeSummary() {
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="h-full">
+        <Panel tone="warning">
+          <DoNodeSummary node={doNode('e-opc')} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function DataOperationsRunBars() {
+  const node = doNode('e-opc');
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="h-full">
+        <Panel title={`Run history · ${node.name}`} subtitle="Last 12 runs, duration in seconds">
+          <DoRunBars node={node} height={250} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function DataOperationsRuns() {
+  const node = doNode('t-match');
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="h-full">
+        <Panel title="Latest runs" subtitle={node.name} padding="none">
+          <DoRunTable node={node} limit={6} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function DataOperationsWaterfall() {
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="h-full">
+        <Panel title="Steps of a run" subtitle="Run 4812 · stopped at the schema check">
+          <DoWaterfall />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function DataOperationsNodes() {
+  const [selected, setSelected] = useState('s-pi');
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="flex h-full flex-col justify-center gap-3">
+        {['s-pi', 'e-opc', 't-doc'].map((id) => (
+          <div key={id} style={{ height: DO_NODE_HEIGHT }}>
+            <DoNodeCard node={doNode(id)} selected={id === selected} dimmed={false} onSelect={setSelected} />
+          </div>
+        ))}
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function DataOperationsLaneHeaders() {
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="flex h-full flex-col justify-center gap-3">
+        {DO_LANES.map((lane) => (
+          <div
+            key={lane.id}
+            className={`kit-tone-${lane.tone} flex items-center gap-2.5 rounded-2xl px-3 py-3`}
+            style={{
+              background: 'color-mix(in oklab, var(--t-line) 9%, transparent)',
+            }}
+          >
+            <IconChip tone={lane.tone} size="sm">
+              {lane.icon}
+            </IconChip>
+            <span className="text-sm font-semibold text-base-foreground">{lane.label}</span>
+            <span className="ml-auto text-xs text-medium-foreground">4 {lane.unit}</span>
+          </div>
+        ))}
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function DataOperationsFreshnessStrip() {
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="h-full">
+        <Panel title="Age of newest data" subtitle="Last 24 hours">
+          <div className="flex flex-1 flex-col justify-center gap-4">
+            <HeatStrip label="Age of the newest data per view and hour" rows={DO_FRESHNESS.slice(1)} axis={['24 h ago', 'Now']} max={150} />
+            <Legend
+              items={[
+                { label: 'Within promise', tone: 'success' },
+                { label: 'Late', tone: 'warning' },
+                { label: 'Stale', tone: 'critical' },
+              ]}
+            />
+          </div>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
 }
 
 export default definePage({
   id: 'data-operations',
   title: 'Data operations',
   summary:
-    'Where the data comes from and where it is stuck: every source, extractor, raw table, transformation and data model view as one lineage graph, with the runs, logs and one action for the node you select.',
+    'Where the data comes from and where it is stuck: sources, extractors, transformations and data model views drawn as lanes from left to right, with rows per hour on every edge and the run history of the node you select.',
   guidance: {
     use: [
-      'For the people who keep extractors and transformations running.',
-      'When a stale figure downstream has to be traced back to the node that broke.',
-      'Keep the graph to stages people recognise and at most three lanes.',
-      'Say failed and stale in words with an icon, and dash the lines they block.',
+      'For the team that keeps data flowing into a data model and is asked "why is this stale".',
+      'Read it left to right: a red node dims everything that does not depend on it.',
+      'Put the figures in the sentence under the title; the map is the dashboard.',
     ],
     avoid: [
-      'Showing every table and job of the project; group them or filter to one data product.',
-      'Status by colour alone on the nodes or the lines.',
-      'A log that does not follow the selection: one node, one tail.',
-      'Run buttons on nodes you cannot trigger, such as source systems you do not own.',
+      'A table of pipelines as the first screen; lineage is lost in rows.',
+      'Colouring healthy edges by lane: colour on an edge means late or stopped.',
+      'More than about twenty nodes per map; split by domain before it becomes a hairball.',
     ],
   },
   source,
@@ -844,141 +1425,131 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Shown in the Terminal theme. Select a node to follow its lineage, runs and log.',
+      description: 'Select any node on the map: its lineage lights up, and the run history and summary below follow.',
       specimens: [
         {
-          id: 'DataOpsDashSignature',
-          title: 'Data operations',
-          note: 'Pick it as the home screen of a data engineering or integration team.',
+          id: 'DataOperationsSignature',
+          title: 'Pipeline lanes',
+          note: 'Pick it as the home of a data operations team that owns the path from source systems to a data model.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'dashboards/DashboardGrid.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/workflows/RunHistoryStrip.tsx',
-            'industrial/Sparkline.tsx',
-            'industrial/StatusIndicator.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: DataOpsDashSignature,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/Panel.tsx', 'kit/Bars.tsx', 'kit/DataTable.tsx', 'kit/Stat.tsx', 'kit/IconChip.tsx', 'looks/LookScope.tsx'],
+          Component: DataOperationsSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same dashboard, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'One failed run opened up, and the freshness board the readers of the data care about.',
       specimens: [
         {
-          id: 'DataOpsDashAura',
-          title: 'Aura',
-          note: 'Pick it when data operations is one page of a wider product in the default theme.',
+          id: 'DataOperationsRunDetail',
+          title: 'Run detail',
+          note: 'Pick it for the page behind a failed run: the steps on a time axis, the first error in words and the log.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: DataOpsDashAura,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: DataOperationsRunDetail,
         },
         {
-          id: 'DataOpsDashDenseData',
-          title: 'Dense data',
-          note: 'Pick it for a light, compact console that sits beside tables and query tools.',
+          id: 'DataOperationsFreshness',
+          title: 'Freshness board',
+          note: 'Pick it to report against freshness targets: age per hour as a heat strip and the promise per view.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: DataOpsDashDenseData,
-        },
-        {
-          id: 'DataOpsDashNightVision',
-          title: 'Night vision',
-          note: 'Pick it for a monitoring wall that stays on all night.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: DataOpsDashNightVision,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/HeatStrip.tsx', 'kit/Donut.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: DataOperationsFreshness,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Panels',
-      description: 'Each part on its own, ready to drop into another dashboard.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The panels around the map on their own.',
       specimens: [
         {
-          id: 'DataOpsDashSummary',
-          title: 'Summary strip',
-          note: 'Pick it under the header when four plain figures say enough about the whole pipeline.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          Component: DataOpsDashSummary,
-        },
-        {
-          id: 'DataOpsDashLineage',
-          title: 'Lineage graph',
-          note: 'Pick it when people have to see what feeds what before they act.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: DataOpsDashLineage,
-        },
-        {
-          id: 'DataOpsDashInspector',
-          title: 'Node inspector',
-          note: 'Pick it as the drawer under a graph or table: one selected job, its runs, figures and action.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/workflows/RunHistoryStrip.tsx', 'industrial/Sparkline.tsx'],
-          Component: DataOpsDashInspector,
-        },
-        {
-          id: 'DataOpsDashLogTail',
-          title: 'Log tail',
-          note: 'Pick it beside a selection when the last few lines usually explain the state.',
+          id: 'DataOperationsNodeSummary',
+          title: 'Node summary',
+          note: 'Pick it beside a map or a list to describe the selected job in words, three figures and one action.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: DataOpsDashLogTail,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Stat.tsx', 'kit/StatusPill.tsx', 'kit/IconChip.tsx'],
+          Component: DataOperationsNodeSummary,
         },
         {
-          id: 'DataOpsDashRunHistory',
-          title: 'Run history',
-          note: 'Pick it to show whether a job fails now and then or has been failing since a point in time.',
+          id: 'DataOperationsRunBars',
+          title: 'Run history bars',
+          note: 'Pick it to show when a job turned slow or started failing: one bar per run, coloured by result.',
+          origin: 'custom',
+          size: 'lg',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Bars.tsx', 'kit/Legend.tsx'],
+          Component: DataOperationsRunBars,
+        },
+        {
+          id: 'DataOperationsWaterfall',
+          title: 'Run steps',
+          note: 'Pick it to show where the time of one run went and which step stopped it.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/tones.ts'],
+          Component: DataOperationsWaterfall,
+        },
+        {
+          id: 'DataOperationsRuns',
+          title: 'Run table',
+          note: 'Pick it for the exact figures of the latest runs under a chart.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/StatusPill.tsx'],
+          Component: DataOperationsRuns,
+        },
+        {
+          id: 'DataOperationsNodes',
+          title: 'Map nodes',
+          note: 'Pick the node card for any graph of jobs: state on the edge, the line that matters under the name.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['industrial/workflows/RunHistoryStrip.tsx'],
-          Component: DataOpsDashRunHistory,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/tones.ts'],
+          Component: DataOperationsNodes,
         },
         {
-          id: 'DataOpsDashThroughput',
-          title: 'Rows and latency',
-          note: 'Pick it for the four figures of one job with the rows per run as bars.',
+          id: 'DataOperationsLaneHeaders',
+          title: 'Lane headers',
+          note: 'Pick a decorative family per lane so the stages of a flow can be told apart without a legend.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: DataOpsDashThroughput,
+          bleed: true,
+          uses: ['kit/IconChip.tsx', 'kit/tones.ts'],
+          Component: DataOperationsLaneHeaders,
         },
         {
-          id: 'DataOpsDashLastError',
-          title: 'Last error',
-          note: 'Pick it to separate a node that failed from one that only waits for a failure upstream.',
+          id: 'DataOperationsFreshnessStrip',
+          title: 'Freshness strip',
+          note: 'Pick it as a compact answer to "has this been late before" for a few views.',
           origin: 'custom',
-          size: 'full',
+          size: 'sm',
           align: 'stretch',
-          Component: DataOpsDashLastError,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/HeatStrip.tsx', 'kit/Legend.tsx'],
+          Component: DataOperationsFreshnessStrip,
         },
       ],
     },

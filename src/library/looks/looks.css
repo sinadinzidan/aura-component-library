@@ -20,7 +20,8 @@
   --kit-well: var(--muted-background);
   --kit-rule: var(--default);
   --kit-rule-strong: var(--emphasized);
-  --kit-canvas-bg: color-mix(in oklab, var(--kit-accent) 5%, var(--medium-background));
+  --kit-canvas-bg: color-mix(in oklab, var(--kit-accent) 7%, color-mix(in oklab, var(--secondary-background) 60%, var(--medium-background)));
+  --kit-grid: color-mix(in oklab, var(--kit-text) 13%, transparent);
   --kit-pad: calc(var(--spacing) * 6);
   --kit-gap: calc(var(--spacing) * 4);
   --kit-radius: calc(var(--radius-xl) + 2px);
@@ -28,8 +29,8 @@
   --kit-panel-pad: calc(var(--spacing) * 5);
   --kit-panel-bg: var(--kit-surface);
   --kit-panel-border: 1px solid var(--kit-rule);
-  --kit-panel-shadow: 0 1px 2px var(--effect-shadow-md), 0 14px 28px -18px var(--effect-shadow-xl);
-  --kit-title-size: 0.9375rem;
+  --kit-panel-shadow: 0 1px 2px var(--effect-shadow-xl), 0 14px 28px -16px var(--effect-shadow-xl);
+  --kit-title-size: 1rem;
   --kit-title-weight: 600;
   --kit-figure-scale: 1;
   --kit-figure-weight: 600;
@@ -82,6 +83,7 @@
 }
 
 [data-look='console'] {
+  --kit-grid: var(--mountain-600);
   --kit-halo: var(--base-background);
   --kit-surface: var(--base-background);
   --kit-well: var(--mountain-black);
@@ -137,6 +139,7 @@
 }
 
 [data-look='glass'] {
+  --kit-grid: color-mix(in oklab, var(--mountain-white) 16%, transparent);
   --kit-halo: var(--mountain-950);
   --kit-surface: color-mix(in oklab, var(--mountain-white) 7%, transparent);
   --kit-well: color-mix(in oklab, var(--mountain-black) 30%, transparent);
@@ -200,6 +203,7 @@
 }
 
 [data-look='blueprint'] {
+  --kit-grid: color-mix(in oklab, var(--kit-ink) 30%, transparent);
   --kit-halo: var(--base-background);
   --kit-ink: var(--primary-background);
   --kit-text: var(--kit-ink);
@@ -1186,6 +1190,10 @@
   color: var(--kit-text-3);
 }
 
+.kit-stat-target {
+  flex-basis: 100%;
+}
+
 .kit-stat-spark {
   grid-area: spark;
   align-self: end;
@@ -1310,6 +1318,10 @@
     width: 100%;
     max-width: none;
   }
+}
+
+.kit-stat[data-look='editorial'] .kit-stat-meta > .kit-delta {
+  flex-basis: 100%;
 }
 
 .kit-stat[data-look='editorial'][data-variant='tile'] {
@@ -1733,7 +1745,7 @@
   line-height: 1.125rem;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
+  letter-spacing: 0;
   white-space: nowrap;
   color: var(--kit-text-2);
 }
@@ -1861,6 +1873,17 @@
   margin-left: -1px;
   background: var(--kit-text);
   border-radius: 1px;
+}
+
+.kit-meter[data-size='lg'] {
+  .kit-meter-value {
+    font-size: 1.375rem;
+    line-height: 1.5rem;
+    letter-spacing: var(--kit-figure-tracking);
+  }
+  .kit-meter-track {
+    height: calc(var(--kit-track-h) * 1.25);
+  }
 }
 
 .kit-meter-scale {
@@ -2324,14 +2347,19 @@
   white-space: nowrap;
 }
 
-.kit-row[data-look='studio']:not([data-tone='neutral'])::before,
-.kit-row[data-look='glass']:not([data-tone='neutral'])::before {
+.kit-row[data-look='studio'][data-tone]::before,
+.kit-row[data-look='glass'][data-tone]::before {
   content: '';
   align-self: stretch;
   width: 3px;
   border-radius: 3px;
   background: var(--t-line);
   flex-shrink: 0;
+}
+
+/* a row without a state keeps the same indent: its bar is simply invisible */
+.kit-row:is([data-look='studio'], [data-look='glass'])[data-tone='neutral']::before {
+  background: transparent;
 }
 
 .kit-row[data-look='glass']:not([data-tone='neutral'])::before {
@@ -2408,7 +2436,7 @@
   border-top: 1px dashed var(--kit-rule);
 }
 
-.kit-row[data-look='blueprint']:not([data-tone='neutral'])::before {
+.kit-row[data-look='blueprint'][data-tone]::before {
   content: '';
   width: 9px;
   height: 9px;
@@ -2556,6 +2584,16 @@
   position: relative;
   min-width: 0;
   flex: 1 0 auto;
+}
+
+.kit-chart-unit {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  color: var(--kit-text-2);
 }
 
 .kit-chart-notes {
@@ -2819,6 +2857,39 @@
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   color: var(--kit-text-3);
+}
+
+.kit-heat-scale {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  margin-top: calc(var(--spacing) * 1);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--kit-text-2);
+}
+
+.kit-heat-scale-end {
+  font-variant-numeric: tabular-nums;
+}
+
+.kit-heat-scale > :first-child {
+  margin-right: auto;
+}
+
+.kit-heat-scale-steps {
+  display: flex;
+  gap: var(--kit-heat-gap);
+}
+
+.kit-heat-scale-steps .kit-heat-cell {
+  flex: none;
+  width: calc(var(--spacing) * 5);
+  height: calc(var(--spacing) * 3);
+}
+
+.kit-heat-axis {
+  color: var(--kit-text-2);
 }
 
 .kit-heat:is([data-look='console'], [data-look='poster'], [data-look='blueprint'], [data-look='editorial']) {

@@ -1,577 +1,733 @@
-import { Button } from '@cognite/aura/components/button';
-import { IconArrowDown, IconArrowUp, IconShip, IconTruck } from '@cognite/aura/icons';
+import { IconAlertOctagon, IconAlertTriangle, IconArrowDown, IconArrowUp, IconMinus } from '@cognite/aura/icons';
 import { useState } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { DaysOfCover } from '../../../library/industrial/domains/DaysOfCover';
-import { daysOfCover, fillPercent, ullage } from '../../../library/industrial/domains/inventory';
-import { ShareBarList } from '../../../library/industrial/domains/ShareBarList';
-import { formatReading, formatValue, toneFromLimits } from '../../../library/industrial/status';
-import type { StatusDescriptor } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { DAY, HOUR, REFERENCE_NOW, formatDate, formatDateTime } from '../../data/series';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
+import { HOUR, REFERENCE_NOW } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './tank-farm-logistics.tsx?raw';
 
-type TankFarmTank = {
+type TflProduct = 'crude' | 'condensate' | 'diesel' | 'water';
+
+type TflTank = {
   id: string;
-  /** Tank tag. */
-  tag: string;
-  product: string;
-  /** Shell capacity and current volume in m³. */
+  product: TflProduct;
+  /** Shell capacity in m³. */
   capacity: number;
-  volume: number;
-  /** Operating band in percent of capacity. */
-  minPercent: number;
-  maxPercent: number;
-  /** Average offtake in m³ per day. */
-  dailyUse: number;
-  /** Days from ordering a cargo to having it in the tank. */
-  leadTimeDays: number;
+  /** Fill in percent of capacity. */
+  level: number;
+  /** m³ per hour; positive fills the tank. */
+  rate: number;
+  /** Drawn height in px and relative width: the crude tanks are the big ones. */
+  height: number;
+  weight: number;
+  /** Crude sits under a floating roof; the others have a fixed dome. */
+  roof: 'floating' | 'dome';
 };
 
-const TANK_FARM_TANKS: readonly TankFarmTank[] = [
-  { id: 't-101', tag: '61-TA-101', product: 'Marine gas oil', capacity: 15000, volume: 11250, minPercent: 15, maxPercent: 90, dailyUse: 620, leadTimeDays: 6 },
-  { id: 't-102', tag: '61-TA-102', product: 'Diesel', capacity: 8000, volume: 3120, minPercent: 15, maxPercent: 90, dailyUse: 340, leadTimeDays: 5 },
-  { id: 't-103', tag: '61-TA-103', product: 'Monoethylene glycol', capacity: 5000, volume: 610, minPercent: 15, maxPercent: 90, dailyUse: 150, leadTimeDays: 5 },
-  { id: 't-104', tag: '61-TA-104', product: 'Methanol', capacity: 3000, volume: 2610, minPercent: 15, maxPercent: 90, dailyUse: 45, leadTimeDays: 10 },
-  { id: 't-105', tag: '61-TA-105', product: 'Jet A-1', capacity: 4000, volume: 2240, minPercent: 20, maxPercent: 90, dailyUse: 110, leadTimeDays: 7 },
-];
-
-/** Midnight UTC before the reference time: the left edge of the schedule. */
-const TANK_FARM_DAY_ZERO = REFERENCE_NOW - 14 * HOUR;
-
-const TANK_FARM_DAYS = [0, 1, 2, 3, 4].map((offset) => formatDate(TANK_FARM_DAY_ZERO + offset * DAY));
-
-const TANK_FARM_NOW = (REFERENCE_NOW - TANK_FARM_DAY_ZERO) / DAY;
-
-type TankFarmMovement = {
+type TflMovement = {
   id: string;
-  carrier: 'ship' | 'truck';
-  name: string;
-  berth: string;
-  tankId: string;
-  /** `in` discharges into the tank; `out` loads from it. */
-  direction: 'in' | 'out';
-  /** Volume in m³. */
-  volume: number;
-  /** Start and end in days from the left edge of the schedule. */
+  lane: string;
+  label: string;
+  detail: string;
+  product: TflProduct;
+  tanks: readonly string[];
+  /** Hours from now. */
   start: number;
   end: number;
-  alongside?: boolean;
-};
-
-const TANK_FARM_MOVEMENTS: readonly TankFarmMovement[] = [
-  { id: 'mv-0318', carrier: 'ship', name: 'PSV Stril Polar', berth: 'Jetty 2', tankId: 't-101', direction: 'out', volume: 1800, start: 0.42, end: 0.8, alongside: true },
-  { id: 'mv-0319', carrier: 'ship', name: 'PSV Havila Borg', berth: 'Jetty 2', tankId: 't-103', direction: 'out', volume: 450, start: 1.05, end: 1.45 },
-  { id: 'mv-0320', carrier: 'truck', name: 'Road tanker HF-2', berth: 'Truck rack', tankId: 't-105', direction: 'out', volume: 180, start: 1.3, end: 1.5 },
-  { id: 'mv-0321', carrier: 'ship', name: 'MT Bow Fjord', berth: 'Jetty 1', tankId: 't-103', direction: 'in', volume: 2800, start: 1.7, end: 2.45 },
-  { id: 'mv-0322', carrier: 'ship', name: 'MS Island Crown', berth: 'Jetty 2', tankId: 't-101', direction: 'out', volume: 2400, start: 2.5, end: 3.05 },
-  { id: 'mv-0323', carrier: 'ship', name: 'MT Nordic Tern', berth: 'Jetty 1', tankId: 't-102', direction: 'in', volume: 4200, start: 3.2, end: 4.1 },
-];
-
-type TankFarmLedgerEntry = {
-  id: string;
-  at: number;
-  counterparty: string;
-  tankId: string;
-  direction: 'in' | 'out';
   volume: number;
-  done: boolean;
+  direction: 'in' | 'out';
 };
 
-const TANK_FARM_LEDGER: readonly TankFarmLedgerEntry[] = [
-  { id: 'MV-0318', at: REFERENCE_NOW - 4 * HOUR, counterparty: 'PSV Stril Polar', tankId: 't-101', direction: 'out', volume: 1800, done: false },
-  { id: 'MV-0317', at: REFERENCE_NOW - 8 * HOUR, counterparty: 'Road tanker NK-7', tankId: 't-103', direction: 'out', volume: 60, done: true },
-  { id: 'MV-0316', at: REFERENCE_NOW - 18.5 * HOUR, counterparty: 'MT Nordic Tern', tankId: 't-101', direction: 'in', volume: 5200, done: true },
-  { id: 'MV-0315', at: REFERENCE_NOW - 24 * HOUR, counterparty: 'Road tanker HF-2', tankId: 't-105', direction: 'out', volume: 90, done: true },
-  { id: 'MV-0314', at: REFERENCE_NOW - 29 * HOUR, counterparty: 'PSV Havila Borg', tankId: 't-103', direction: 'out', volume: 420, done: true },
-  { id: 'MV-0313', at: REFERENCE_NOW - 45.5 * HOUR, counterparty: 'MT Bow Fjord', tankId: 't-104', direction: 'in', volume: 1100, done: true },
-];
-
-const TANK_FARM_THROUGHPUT = [
-  { id: 't-101', label: 'Marine gas oil', value: 9400 },
-  { id: 't-102', label: 'Diesel', value: 2380 },
-  { id: 't-103', label: 'Monoethylene glycol', value: 1050 },
-  { id: 't-105', label: 'Jet A-1', value: 770 },
-  { id: 't-104', label: 'Methanol', value: 315 },
-];
-
-function tankFarmTank(tankId: string): TankFarmTank {
-  return TANK_FARM_TANKS.find((tank) => tank.id === tankId) ?? TANK_FARM_TANKS[0];
-}
-
-const tankFarmShortTag = (tank: TankFarmTank): string => tank.tag.slice(-6);
-
-function tankFarmStatus(tank: TankFarmTank): StatusDescriptor | undefined {
-  const level = fillPercent(tank.volume, tank.capacity);
-  const tone = toneFromLimits(level, { low: tank.minPercent, high: tank.maxPercent });
-  if (tone === 'neutral') return undefined;
-  return { tone, label: level < tank.minPercent ? 'Below minimum' : 'Above maximum', shape: 'square' };
-}
-
-const tankFarmSigned = (direction: 'in' | 'out', volume: number): string => `${direction === 'in' ? '+' : '−'}${formatValue(volume, 0)}`;
-
-const tankFarmDayTime = (dayOffset: number): string => formatDateTime(TANK_FARM_DAY_ZERO + dayOffset * DAY);
-
-/** Body of the drawn tank in the 120 × 150 viewBox: where 0% and 100% sit. */
-const TANK_FARM_BODY = { top: 30, bottom: 140, left: 10, right: 110 } as const;
-
-const tankFarmLevelY = (percent: number): number => TANK_FARM_BODY.bottom - (percent / 100) * (TANK_FARM_BODY.bottom - TANK_FARM_BODY.top);
-
-type TankFarmVesselProps = {
-  tank: TankFarmTank;
-  selected: boolean;
-  onSelect: (tankId: string) => void;
+const TFL_PRODUCTS: Record<TflProduct, { label: string; tone: Tone }> = {
+  crude: { label: 'Crude oil', tone: 'pink' },
+  condensate: { label: 'Condensate', tone: 'amber' },
+  diesel: { label: 'Diesel', tone: 'blue' },
+  water: { label: 'Slop water', tone: 'teal' },
 };
 
-/** One tank drawn to scale: liquid to its real level, minimum and maximum marked on the shell. */
-function TankFarmVessel({ tank, selected, onSelect }: TankFarmVesselProps) {
-  const level = fillPercent(tank.volume, tank.capacity);
-  const status = tankFarmStatus(tank);
-  const surface = tankFarmLevelY(level);
-  const marks = [
-    { key: 'max', percent: tank.maxPercent },
-    { key: 'min', percent: tank.minPercent },
-  ];
-  const liquid = status ? (status.tone === 'critical' ? 'fill-chart-critical-300' : 'fill-chart-warning-300') : 'fill-chart-1-300';
+const TFL_HIGH = 90;
 
+const TFL_LOW = 10;
+
+const TFL_TANKS: readonly TflTank[] = [
+  { id: 'T-101', product: 'crude', capacity: 60000, level: 72, rate: 620, height: 250, weight: 1.35, roof: 'floating' },
+  { id: 'T-102', product: 'crude', capacity: 60000, level: 41, rate: 0, height: 250, weight: 1.35, roof: 'floating' },
+  { id: 'T-103', product: 'crude', capacity: 60000, level: 88, rate: 0, height: 250, weight: 1.35, roof: 'floating' },
+  { id: 'T-104', product: 'crude', capacity: 60000, level: 24, rate: -1800, height: 250, weight: 1.35, roof: 'floating' },
+  { id: 'T-201', product: 'condensate', capacity: 30000, level: 64, rate: -40, height: 214, weight: 1.1, roof: 'dome' },
+  { id: 'T-202', product: 'condensate', capacity: 30000, level: 9, rate: 90, height: 214, weight: 1.1, roof: 'dome' },
+  { id: 'T-301', product: 'diesel', capacity: 15000, level: 55, rate: -60, height: 168, weight: 1, roof: 'dome' },
+  { id: 'T-401', product: 'water', capacity: 15000, level: 47, rate: 25, height: 168, weight: 1, roof: 'dome' },
+];
+
+const TFL_LANES = ['Jetty 1', 'Jetty 2', 'Crude line', 'Condensate line', 'Truck rack'];
+
+const TFL_MOVEMENTS: readonly TflMovement[] = [
+  { id: 'm1', lane: 'Jetty 1', label: 'Nordic Sky', detail: 'MT Nordic Sky loads crude', product: 'crude', tanks: ['T-104', 'T-103'], start: -10, end: 12, volume: 62000, direction: 'out' },
+  { id: 'm2', lane: 'Jetty 1', label: 'Barents Star', detail: 'MT Barents Star loads crude', product: 'crude', tanks: ['T-103', 'T-101'], start: 40, end: 64, volume: 80000, direction: 'out' },
+  { id: 'm3', lane: 'Jetty 2', label: 'Fjordgas', detail: 'MT Fjordgas loads condensate', product: 'condensate', tanks: ['T-201'], start: 18, end: 36, volume: 18000, direction: 'out' },
+  { id: 'm4', lane: 'Jetty 2', label: 'Lofoten', detail: 'MT Lofoten discharges diesel', product: 'diesel', tanks: ['T-301'], start: 60, end: 76, volume: 6000, direction: 'in' },
+  { id: 'm5', lane: 'Crude line', label: 'Into T-101', detail: 'Crude rundown from the plant', product: 'crude', tanks: ['T-101'], start: -12, end: 17, volume: 18000, direction: 'in' },
+  { id: 'm6', lane: 'Crude line', label: 'Into T-102', detail: 'Crude rundown from the plant', product: 'crude', tanks: ['T-102'], start: 17, end: 66, volume: 30400, direction: 'in' },
+  { id: 'm7', lane: 'Crude line', label: 'Into T-104', detail: 'Crude rundown from the plant', product: 'crude', tanks: ['T-104'], start: 66, end: 84, volume: 11200, direction: 'in' },
+  { id: 'm8', lane: 'Condensate line', label: 'Into T-202', detail: 'Condensate rundown from the plant', product: 'condensate', tanks: ['T-202'], start: -12, end: 84, volume: 8600, direction: 'in' },
+  { id: 'm9', lane: 'Truck rack', label: 'Diesel', detail: 'Diesel road tankers', product: 'diesel', tanks: ['T-301'], start: -8, end: 4, volume: 600, direction: 'out' },
+  { id: 'm10', lane: 'Truck rack', label: 'Diesel', detail: 'Diesel road tankers', product: 'diesel', tanks: ['T-301'], start: 16, end: 28, volume: 600, direction: 'out' },
+  { id: 'm11', lane: 'Truck rack', label: 'Water', detail: 'Produced water to disposal', product: 'water', tanks: ['T-401'], start: 30, end: 42, volume: 900, direction: 'out' },
+  { id: 'm12', lane: 'Truck rack', label: 'Diesel', detail: 'Diesel road tankers', product: 'diesel', tanks: ['T-301'], start: 44, end: 56, volume: 600, direction: 'out' },
+  { id: 'm13', lane: 'Truck rack', label: 'Diesel', detail: 'Diesel road tankers', product: 'diesel', tanks: ['T-301'], start: 64, end: 76, volume: 600, direction: 'out' },
+];
+
+const TFL_WINDOW = { start: -12, end: 84 };
+
+const TFL_DAYS = [
+  { at: -12, label: 'Thu 12' },
+  { at: 10, label: 'Fri 13' },
+  { at: 34, label: 'Sat 14' },
+  { at: 58, label: 'Sun 15' },
+  { at: 82, label: '' },
+];
+
+const TFL_STOCK = TFL_TANKS.reduce((sum, tank) => sum + (tank.capacity * tank.level) / 100, 0);
+
+const TFL_CAPACITY = TFL_TANKS.reduce((sum, tank) => sum + tank.capacity, 0);
+
+const TFL_NAV: AppFrameNavItem[] = [
+  { id: 'tanks', label: 'Tanks' },
+  { id: 'jetties', label: 'Jetties', badge: '1' },
+  { id: 'lines', label: 'Pipelines' },
+  { id: 'trucks', label: 'Truck rack' },
+  { id: 'books', label: 'Stock books' },
+];
+
+const TFL_WHEN = new Intl.DateTimeFormat('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+
+/** "Fri 07:00" for a number of hours from now. */
+function tflWhen(hours: number): string {
+  return TFL_WHEN.format(REFERENCE_NOW + hours * HOUR).replace(',', '');
+}
+
+function tflFind(id: string): TflTank {
+  return TFL_TANKS.find((tank) => tank.id === id) ?? TFL_TANKS[0];
+}
+
+function tflStock(tank: TflTank): number {
+  return (tank.capacity * tank.level) / 100;
+}
+
+/** Room left before the high-high alarm, in m³. */
+function tflUllage(tank: TflTank): number {
+  return Math.max(0, (tank.capacity * (TFL_HIGH - tank.level)) / 100);
+}
+
+/** Stock above the low-low alarm: what the pumps can actually take, in m³. */
+function tflPumpable(tank: TflTank): number {
+  return Math.max(0, (tank.capacity * (tank.level - TFL_LOW)) / 100);
+}
+
+function tflAlarm(tank: TflTank): { word: string; tone: Tone } | null {
+  if (tank.level < TFL_LOW) return { word: 'Low low', tone: 'critical' };
+  if (tank.level >= TFL_HIGH - 3) return { word: 'High', tone: 'warning' };
+  return null;
+}
+
+/** What happens next at the current rate, as a sentence. */
+function tflOutlook(tank: TflTank): string {
+  if (tank.rate > 0) {
+    const hours = Math.round(tflUllage(tank) / tank.rate);
+    return `Reaches high-high in ${hours} h, ${tflWhen(hours)}`;
+  }
+  if (tank.rate < 0) {
+    const hours = Math.round(tflPumpable(tank) / -tank.rate);
+    return `Reaches low-low in ${hours} h, ${tflWhen(hours)}`;
+  }
+  return 'Static: no movement lined up on this tank now';
+}
+
+function TflRate({ rate }: { rate: number }) {
   return (
-    <li className="flex min-w-0 flex-col gap-3">
-      <button
-        type="button"
-        aria-pressed={selected}
-        aria-label={`${tank.product}, tank ${tank.tag}: ${formatValue(level, 0)}% full, ${formatValue(tank.volume, 0)} m³${status ? `, ${status.label.toLowerCase()}` : ''}`}
-        onClick={() => onSelect(tank.id)}
-        className={`group flex w-full cursor-pointer items-stretch gap-2 rounded-lg p-2 outline-none focus-visible:shadow-focus-ring ${selected ? 'bg-card-background-hover' : 'hover:bg-card-background-hover'}`}
+    <span className="flex items-center gap-1 text-sm font-bold whitespace-nowrap tabular-nums [&>svg]:size-4">
+      {rate > 0 ? <IconArrowUp aria-hidden="true" stroke={3} /> : rate < 0 ? <IconArrowDown aria-hidden="true" stroke={3} /> : <IconMinus aria-hidden="true" stroke={3} />}
+      {rate === 0 ? 'Static' : `${formatNumber(Math.abs(rate))} m³/h`}
+    </span>
+  );
+}
+
+/** One tank as a filled silhouette. The numeral sits in the liquid when there is room for it. */
+function TflTankFigure({ tank, selected = false, onSelect, height }: { tank: TflTank; selected?: boolean; onSelect?: (id: string) => void; height?: number }) {
+  const product = TFL_PRODUCTS[tank.product];
+  const alarm = tflAlarm(tank);
+  const inside = tank.level >= 45;
+  const bodyHeight = height ?? tank.height;
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      aria-label={`${tank.id}, ${product.label}, ${tank.level} percent full`}
+      onClick={() => onSelect?.(tank.id)}
+      data-tone={product.tone}
+      style={{ flexGrow: tank.weight }}
+      className="group flex min-w-0 basis-0 cursor-pointer flex-col text-left text-[var(--kit-text)] outline-none"
+    >
+      <span className="mb-2 flex h-7 items-center justify-center">
+        {alarm ? (
+          <StatusPill tone={alarm.tone} icon={alarm.tone === 'critical' ? <IconAlertOctagon /> : <IconAlertTriangle />}>
+            {alarm.word}
+          </StatusPill>
+        ) : (
+          <TflRate rate={tank.rate} />
+        )}
+      </span>
+      <span
+        className={`flex flex-col transition-transform group-focus-visible:-translate-y-1 ${selected ? '-translate-y-2 drop-shadow-[7px_7px_0_var(--kit-text)]' : 'group-hover:-translate-y-1'}`}
       >
-        <span className="relative block h-44 min-w-0 flex-1">
-          <svg aria-hidden="true" viewBox="0 0 120 150" preserveAspectRatio="none" className="absolute inset-0 size-full">
-            <path d="M 10 30 Q 60 6 110 30 L 110 140 L 10 140 Z" className="fill-base-background" />
-            <rect x={TANK_FARM_BODY.left} y={surface} width={100} height={TANK_FARM_BODY.bottom - surface} className={liquid} />
-            <line x1={TANK_FARM_BODY.left} x2={TANK_FARM_BODY.right} y1={surface} y2={surface} strokeWidth={1.5} vectorEffect="non-scaling-stroke" className={status ? 'stroke-base-foreground' : 'stroke-chart-1-450'} />
-            {marks.map((mark) => (
-              <line key={mark.key} x1={TANK_FARM_BODY.left} x2={118} y1={tankFarmLevelY(mark.percent)} y2={tankFarmLevelY(mark.percent)} strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" className="stroke-muted-foreground" />
-            ))}
-            <path
-              d="M 10 30 Q 60 6 110 30 L 110 140 L 10 140 Z"
-              fill="none"
-              strokeWidth={selected ? 3 : 1.5}
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-              className={selected ? 'stroke-base-foreground' : 'stroke-emphasized group-hover:stroke-muted-foreground'}
-            />
-            <line x1={2} x2={118} y1={146} y2={146} strokeWidth={1.5} vectorEffect="non-scaling-stroke" className="stroke-emphasized" />
-            <line x1={60} x2={60} y1={8} y2={18} strokeWidth={4} vectorEffect="non-scaling-stroke" className="stroke-emphasized" />
-          </svg>
-          <span className="absolute inset-x-0 top-[38%] flex justify-center">
-            <span className="rounded-md bg-base-background px-2 py-1 text-2xl font-semibold tabular-nums leading-none text-base-foreground">{formatValue(level, 0)}%</span>
+        {tank.roof === 'dome' ? <span className="h-6 rounded-t-[50%_100%] border-2 border-b-0 border-[var(--kit-rule-strong)] bg-[var(--kit-surface)]" /> : <span className="h-6" />}
+        <span className="relative block overflow-hidden border-2 border-[var(--kit-rule-strong)] bg-[var(--kit-surface)]" style={{ height: bodyHeight }}>
+          <span className="absolute inset-x-0 bottom-0 border-t-[6px] border-[var(--kit-rule-strong)] bg-[var(--t-pop)]" style={{ height: `${tank.level}%` }} />
+          <span className="absolute inset-x-0 border-t-2 border-dashed border-[var(--kit-rule-strong)]" style={{ bottom: `${TFL_HIGH}%` }} />
+          <span className="absolute inset-x-0 border-t-2 border-dashed border-[var(--kit-rule-strong)]" style={{ bottom: `${TFL_LOW}%` }} />
+          <span
+            className={`absolute inset-x-0 flex items-baseline justify-center gap-0.5 leading-none font-extrabold tracking-tighter tabular-nums ${inside ? 'text-[var(--t-on-pop)]' : ''}`}
+            style={inside ? { top: `calc(${100 - tank.level}% + 20px)` } : { bottom: `calc(${tank.level}% + 14px)` }}
+          >
+            <span className={tank.weight > 1.2 ? 'text-6xl' : 'text-5xl'}>{tank.level}</span>
+            <span className="text-lg">%</span>
           </span>
         </span>
-        <span aria-hidden="true" className="relative block w-9 shrink-0">
-          {marks.map((mark) => (
-            <span
-              key={mark.key}
-              className="absolute left-0 -translate-y-1/2 whitespace-nowrap text-xs tabular-nums leading-none text-muted-foreground"
-              style={{ top: `${(tankFarmLevelY(mark.percent) / 150) * 100}%` }}
-            >
-              {mark.percent}%
-            </span>
-          ))}
-        </span>
-      </button>
-      <div className="flex min-w-0 flex-col gap-2 px-2">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className={`text-sm text-base-foreground ${selected ? 'font-semibold' : 'font-medium'}`}>{tank.product}</span>
-          <span className="font-mono text-xs text-muted-foreground">{tank.tag}</span>
-        </div>
-        <dl className="flex flex-col gap-1 text-xs">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-            <dt className="text-muted-foreground">Volume</dt>
-            <dd className="tabular-nums text-base-foreground">{formatReading(tank.volume, 'm³', 0)}</dd>
-          </div>
-          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-            <dt className="text-muted-foreground">Ullage</dt>
-            <dd className="tabular-nums text-base-foreground">{formatReading(ullage(tank.capacity, tank.volume), 'm³', 0)}</dd>
-          </div>
-        </dl>
-        {status ? <StatusIndicator {...status} size="sm" /> : <span className="text-xs text-muted-foreground">Inside operating band</span>}
-      </div>
-    </li>
+      </span>
+      <span className="h-1.5 bg-[var(--kit-rule-strong)]" />
+      <span className={`mt-3 self-start py-0.5 text-base font-extrabold tabular-nums ${selected ? 'bg-[var(--kit-text)] px-1.5 text-[var(--kit-surface)]' : ''}`}>{tank.id}</span>
+      <span className="mt-1 text-sm font-semibold whitespace-nowrap">{product.label}</span>
+      <span className="text-sm whitespace-nowrap tabular-nums">{formatNumber(tflStock(tank))} m³</span>
+    </button>
   );
 }
 
-type TankFarmSelectionProps = {
-  selectedTankId: string | null;
-  onSelectTank: (tankId: string) => void;
-};
-
-/** The dominant element: the tank farm as a row of vessels, each one selectable. */
-function TankFarmTanksPanel({ selectedTankId, onSelectTank }: TankFarmSelectionProps) {
-  const total = TANK_FARM_TANKS.reduce((sum, tank) => sum + tank.volume, 0);
-  const capacity = TANK_FARM_TANKS.reduce((sum, tank) => sum + tank.capacity, 0);
-
+function TflTankRow({ selected, onSelect }: { selected: string; onSelect: (id: string) => void }) {
   return (
-    <DashboardPanel
-      title="Tanks"
-      description="Level against the operating band; dashed lines mark minimum and maximum. Select a tank to follow its cargoes."
-      footnote={`${formatValue(total, 0)} m³ in store across five tanks, ${formatValue((total / capacity) * 100, 0)}% of shell capacity. Only the glycol tank is outside its band.`}
-    >
-      <ul aria-label="Tanks" className="grid w-full grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-3 xl:grid-cols-5">
-        {TANK_FARM_TANKS.map((tank) => (
-          <TankFarmVessel key={tank.id} tank={tank} selected={tank.id === selectedTankId} onSelect={onSelectTank} />
+    <div className="flex items-end gap-4">
+      {TFL_TANKS.map((tank) => (
+        <TflTankFigure key={tank.id} tank={tank} selected={tank.id === selected} onSelect={onSelect} />
+      ))}
+    </div>
+  );
+}
+
+function TflProductKey() {
+  return (
+    <ul className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
+      {(['crude', 'condensate', 'diesel', 'water'] as const).map((id) => {
+        const stock = TFL_TANKS.filter((tank) => tank.product === id).reduce((sum, tank) => sum + tflStock(tank), 0);
+        return (
+          <li key={id} data-tone={TFL_PRODUCTS[id].tone} className="flex items-center gap-2">
+            <span className="size-4 border-2 border-[var(--kit-rule-strong)] bg-[var(--t-pop)]" />
+            {TFL_PRODUCTS[id].label}
+            <span className="tabular-nums">{formatNumber(stock)} m³</span>
+          </li>
+        );
+      })}
+      <li className="flex items-center gap-2">
+        <span className="w-6 border-t-2 border-dashed border-[var(--kit-rule-strong)]" />
+        High-high 90 % and low-low 10 %
+      </li>
+    </ul>
+  );
+}
+
+function tflPosition(hours: number): number {
+  return ((hours - TFL_WINDOW.start) / (TFL_WINDOW.end - TFL_WINDOW.start)) * 100;
+}
+
+/** Four days of movements by berth and line. Blocks that touch the selected tank are filled. */
+function TflTimeline({ selected }: { selected: string }) {
+  return (
+    <div role="img" aria-label={`Movements for the next four days; those on ${selected} are filled`} className="grid grid-cols-[7.5rem_minmax(0,1fr)] text-sm">
+      <span />
+      <div className="relative h-8 border-b-2 border-[var(--kit-rule-strong)]">
+        {TFL_DAYS.filter((day) => day.label).map((day) => (
+          <span key={day.at} className="absolute top-0 pl-2 font-bold" style={{ left: `${tflPosition(day.at)}%` }}>
+            {day.label}
+          </span>
         ))}
-      </ul>
-    </DashboardPanel>
-  );
-}
-
-type TankFarmScheduleProps = TankFarmSelectionProps & {
-  selectedMovementId: string | null;
-  onSelectMovement: (movementId: string) => void;
-};
-
-/** Ships and road tankers over the next five days: one row per call, one bar per stay at the berth. */
-function TankFarmSchedulePanel({ selectedTankId, selectedMovementId, onSelectMovement }: Omit<TankFarmScheduleProps, 'onSelectTank'>) {
-  const related = TANK_FARM_MOVEMENTS.filter((movement) => movement.tankId === selectedTankId).length;
-
-  return (
-    <DashboardPanel
-      title="Berth and loading schedule"
-      description={
-        selectedTankId === null
-          ? 'Next five days, by arrival. Select a call to see its tank.'
-          : `${related} of ${TANK_FARM_MOVEMENTS.length} calls move ${tankFarmTank(selectedTankId).product.toLowerCase()}; the others are dimmed.`
-      }
-      footnote="Six calls in five days: Jetty 2 is busy today and Saturday, Jetty 1 from Friday night. The line marks 14:00 today."
-    >
-      <div role="group" aria-label="Berth and loading schedule, next five days" className="grid w-full min-w-0 grid-cols-[minmax(9rem,13rem)_minmax(0,1fr)] gap-x-4">
-        <span />
-        <div aria-hidden="true" className="grid grid-cols-5 pb-2">
-          {TANK_FARM_DAYS.map((day) => (
-            <span key={day} className="text-xs tabular-nums text-muted-foreground">
-              {day}
-            </span>
-          ))}
-        </div>
-        {TANK_FARM_MOVEMENTS.map((movement) => {
-          const tank = tankFarmTank(movement.tankId);
-          const isRelated = selectedTankId === null || movement.tankId === selectedTankId;
-          const isSelected = movement.id === selectedMovementId;
-          const Carrier = movement.carrier === 'ship' ? IconShip : IconTruck;
-          const Direction = movement.direction === 'in' ? IconArrowDown : IconArrowUp;
-          const action = movement.direction === 'in' ? 'discharges' : 'loads';
-          return (
-            <div key={movement.id} className="col-span-2 grid grid-cols-subgrid items-center border-t border-default py-3">
-              <div className={`flex min-w-0 items-start gap-2 ${isRelated ? '' : 'opacity-50'}`}>
-                <Carrier aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0">
-                  <p className={`text-sm text-base-foreground ${isSelected ? 'font-semibold' : ''}`}>{movement.name}</p>
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    {movement.berth} · {tankFarmSigned(movement.direction, movement.volume)} m³ <span className="font-mono">{tankFarmShortTag(tank)}</span>
-                  </p>
-                </div>
-              </div>
-              <div className="relative h-10 min-w-0">
-                <div aria-hidden="true" className="absolute inset-0 grid grid-cols-5">
-                  {TANK_FARM_DAYS.map((day) => (
-                    <span key={day} className="border-l border-default" />
-                  ))}
-                </div>
-                <span aria-hidden="true" className="absolute inset-y-0 w-px bg-base-foreground" style={{ left: `${(TANK_FARM_NOW / 5) * 100}%` }} />
-                <button
-                  type="button"
-                  aria-pressed={isSelected}
-                  aria-label={`${movement.name} ${action} ${formatValue(movement.volume, 0)} m³ of ${tank.product.toLowerCase()} at ${movement.berth}, ${tankFarmDayTime(movement.start)} to ${tankFarmDayTime(movement.end)}${movement.alongside ? ', alongside now' : ''}`}
-                  onClick={() => onSelectMovement(movement.id)}
-                  className={`absolute inset-y-1 flex min-w-6 cursor-pointer items-center justify-center rounded-md outline-none focus-visible:shadow-focus-ring ${
-                    isRelated ? 'bg-chart-1-450 text-base-background' : 'bg-chart-neutral-200 text-muted-foreground'
-                  } ${isSelected ? 'ring-2 ring-base-foreground ring-offset-2 ring-offset-card-background' : ''}`}
-                  style={{ left: `${(movement.start / 5) * 100}%`, width: `${((movement.end - movement.start) / 5) * 100}%` }}
-                >
-                  <Direction aria-hidden className="size-3.5" />
-                </button>
-              </div>
-            </div>
-          );
-        })}
       </div>
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <IconArrowDown aria-hidden className="size-3.5" /> Discharge into tank
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <IconArrowUp aria-hidden className="size-3.5" /> Load from tank
-        </span>
-      </p>
-    </DashboardPanel>
-  );
-}
-
-/** What the selection means for stock: days of cover and where the planned cargoes leave the tank. */
-function TankFarmCoverPanel({ selectedTankId, selectedMovementId }: { selectedTankId: string | null; selectedMovementId: string | null }) {
-  if (selectedTankId === null) {
-    return (
-      <DashboardPanel title="Days of cover" description="Every tank at today's offtake, shortest first">
-        <ul className="flex w-full flex-col gap-3">
-          {[...TANK_FARM_TANKS]
-            .sort((a, b) => (daysOfCover(a.volume, a.dailyUse) ?? 0) - (daysOfCover(b.volume, b.dailyUse) ?? 0))
-            .map((tank) => (
-              <li key={tank.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="min-w-0 text-sm text-base-foreground">{tank.product}</span>
-                <DaysOfCover variant="inline" label={tank.product} onHand={tank.volume} dailyUse={tank.dailyUse} leadTimeDays={tank.leadTimeDays} />
-              </li>
+      {TFL_LANES.map((lane) => (
+        <div key={lane} className="col-span-2 grid grid-cols-subgrid border-b-2 border-[var(--kit-rule-strong)] last:border-b-0">
+          <span className="flex items-center font-bold">{lane}</span>
+          <div className="relative h-12">
+            {TFL_DAYS.slice(1).map((day) => (
+              <span key={day.at} className="absolute inset-y-0 border-l-2 border-dotted border-[var(--kit-rule-strong)] opacity-40" style={{ left: `${tflPosition(day.at)}%` }} />
             ))}
-        </ul>
-      </DashboardPanel>
-    );
-  }
-
-  const tank = tankFarmTank(selectedTankId);
-  const planned = TANK_FARM_MOVEMENTS.filter((movement) => movement.tankId === tank.id);
-  const steps = planned.reduce<{ movement: TankFarmMovement; after: number }[]>((list, movement) => {
-    const before = list.length === 0 ? tank.volume : list[list.length - 1].after;
-    return [...list, { movement, after: before + (movement.direction === 'in' ? movement.volume : -movement.volume) }];
-  }, []);
-
-  return (
-    <DashboardPanel title="Days of cover" description={`${tank.product} · ${formatReading(tank.dailyUse, 'm³/d', 0)} offtake`}>
-      <DaysOfCover label={`Stock in ${tankFarmShortTag(tank)}`} onHand={tank.volume} dailyUse={tank.dailyUse} leadTimeDays={tank.leadTimeDays} />
-      <div className="flex flex-col gap-2 border-t border-default pt-3">
-        <p className="text-xs font-medium text-muted-foreground">Stock after planned calls</p>
-        {steps.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No calls planned for this tank in the next five days.</p>
-        ) : (
-          <ol className="flex flex-col gap-2">
-            {steps.map(({ movement, after }) => {
-              const percent = fillPercent(after, tank.capacity);
-              const outside = percent < tank.minPercent || percent > tank.maxPercent;
+            {TFL_MOVEMENTS.filter((movement) => movement.lane === lane).map((movement) => {
+              const related = movement.tanks.includes(selected);
               return (
-                <li key={movement.id} className={`flex flex-wrap items-baseline justify-between gap-x-3 rounded-md text-sm ${movement.id === selectedMovementId ? 'font-semibold' : ''}`}>
-                  <span className="min-w-0 text-base-foreground">
-                    {movement.name} <span className="text-xs font-normal tabular-nums text-muted-foreground">{tankFarmSigned(movement.direction, movement.volume)} m³</span>
-                  </span>
-                  <ValueReadout size="xs" value={after} unit={`m³ · ${formatValue(percent, 0)}%`} tone={outside ? 'warning' : 'neutral'} />
-                </li>
+                <span
+                  key={movement.id}
+                  data-tone={TFL_PRODUCTS[movement.product].tone}
+                  title={`${movement.detail}, ${formatNumber(movement.volume)} m³, ${tflWhen(movement.start)} to ${tflWhen(movement.end)}`}
+                  className={`absolute inset-y-2 z-10 flex items-center overflow-hidden border-2 border-[var(--kit-rule-strong)] px-1.5 text-[0.8125rem] font-bold whitespace-nowrap ${
+                    related ? 'bg-[var(--t-pop)] text-[var(--t-on-pop)] shadow-[3px_3px_0_var(--kit-text)]' : 'bg-[var(--kit-surface)]'
+                  }`}
+                  style={{ left: `${tflPosition(movement.start)}%`, width: `${tflPosition(movement.end) - tflPosition(movement.start)}%` }}
+                >
+                  {movement.label}
+                </span>
               );
             })}
-          </ol>
-        )}
+          </div>
+        </div>
+      ))}
+      <span />
+      <div className="relative h-0">
+        <span className="absolute bottom-0 w-0.5 bg-[var(--kit-line-critical)]" style={{ left: `${tflPosition(0)}%`, height: `${TFL_LANES.length * 50 + 8}px` }} />
+        <span
+          className="absolute top-0 z-10 -translate-x-1/2 bg-[var(--kit-line-critical)] px-1.5 text-xs font-bold text-[var(--kit-surface)]"
+          style={{ left: `${tflPosition(0)}%` }}
+        >
+          Now
+        </span>
       </div>
-    </DashboardPanel>
+    </div>
   );
 }
 
-/** Custody transfers already measured: what left and entered which tank. */
-function TankFarmLedgerPanel({ selectedTankId }: { selectedTankId: string | null }) {
+/** The selected tank as one solid block: room left, what is pumpable, what comes next. */
+function TflUllage({ tank }: { tank: TflTank }) {
+  const product = TFL_PRODUCTS[tank.product];
+  const next = TFL_MOVEMENTS.filter((movement) => movement.tanks.includes(tank.id) && movement.end > 0).slice(0, 2);
+  const heel = TFL_LOW;
+  const stock = Math.max(0, tank.level - TFL_LOW);
+  const room = Math.max(0, TFL_HIGH - Math.max(tank.level, TFL_LOW));
   return (
-    <DashboardPanel title="Movements ledger" description="Measured transfers, newest first">
-      <table className="w-full table-fixed text-left text-sm">
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="w-28 pb-2 pr-3 font-medium">
-              Ticket
-            </th>
-            <th scope="col" className="pb-2 pr-3 font-medium">
-              Carrier
-            </th>
-            <th scope="col" className="w-32 pb-2 pr-3 font-medium">
-              Tank
-            </th>
-            <th scope="col" className="w-24 pb-2 pr-3 text-right font-medium">
-              Volume, m³
-            </th>
-            <th scope="col" className="w-28 pb-2 font-medium">
-              State
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {TANK_FARM_LEDGER.map((entry) => {
-            const related = selectedTankId === null || entry.tankId === selectedTankId;
-            const marked = selectedTankId !== null && related;
-            return (
-              <tr key={entry.id} aria-current={marked ? 'true' : undefined} className={`border-t border-default align-top ${related ? '' : 'opacity-50'} ${marked ? 'bg-card-background-hover' : ''}`}>
-                <td className={`border-l-2 py-2 pl-2 pr-3 ${marked ? 'border-l-base-foreground' : 'border-l-transparent'}`}>
-                  <p className="font-mono text-xs text-base-foreground">{entry.id}</p>
-                  <p className="text-xs tabular-nums text-muted-foreground">{formatDateTime(entry.at)}</p>
-                </td>
-                <td className="py-2 pr-3 text-base-foreground">{entry.counterparty}</td>
-                <td className="py-2 pr-3 font-mono text-xs text-medium-foreground">{tankFarmShortTag(tankFarmTank(entry.tankId))}</td>
-                <td className="py-2 pr-3 text-right tabular-nums text-base-foreground">{tankFarmSigned(entry.direction, entry.volume)}</td>
-                <td className="py-2">
-                  <StatusIndicator size="sm" tone={entry.done ? 'neutral' : 'info'} shape={entry.done ? 'dot' : 'ring'} label={entry.done ? 'Measured' : 'Loading'} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </DashboardPanel>
-  );
-}
-
-function TankFarmThroughputPanel() {
-  return (
-    <DashboardPanel title="Throughput" description="Volume moved per product, last seven days">
-      <ShareBarList label="Volume moved per product, last seven days" items={TANK_FARM_THROUGHPUT} unit="m³" showShare />
-    </DashboardPanel>
-  );
-}
-
-/*
- * Archetype: diagram-first — the tank farm drawn as a row of vessels, with the plan and the
- * books hanging under it.
- * Dominant element: the row of tank graphics with real fill levels and min/max marks.
- * Interaction: selecting a tank outlines it, highlights its calls in the schedule and its
- * ledger lines, and turns the cover panel into that tank's days of cover and projected stock;
- * selecting a call in the schedule selects its tank and marks the call.
- */
-function TankFarmDashboard() {
-  const [tankId, setTankId] = useState<string | null>('t-103');
-  const [movementId, setMovementId] = useState<string | null>(null);
-
-  const selectTank = (next: string) => {
-    setTankId((current) => (current === next ? null : next));
-    setMovementId(null);
-  };
-  const selectMovement = (next: string) => {
-    const movement = TANK_FARM_MOVEMENTS.find((candidate) => candidate.id === next);
-    if (!movement) return;
-    setMovementId((current) => (current === next ? null : next));
-    setTankId(movement.tankId);
-  };
-
-  return (
-    <DashboardFrame
-      title="Tank farm and logistics"
-      subtitle="Stord terminal · five tanks, two jetties, one truck rack · updated 14:00 UTC"
-      status={<StatusIndicator tone="warning" shape="square" label="Glycol below minimum" detail="cargo due Friday" />}
-      actions={
-        tankId === null ? null : (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setTankId(null);
-              setMovementId(null);
-            }}
-          >
-            Show all tanks
-          </Button>
-        )
-      }
+    <section
+      aria-label={`Ullage of ${tank.id}`}
+      data-tone={product.tone}
+      className="flex h-full flex-col gap-4 border-2 border-[var(--kit-rule-strong)] bg-[var(--t-pop)] p-5 text-[var(--t-on-pop)] shadow-[5px_5px_0_var(--kit-text)]"
     >
-      <div className="flex flex-col gap-4">
-        <TankFarmTanksPanel selectedTankId={tankId} onSelectTank={selectTank} />
-        <DashboardGrid>
-          <DashboardCell span={8}>
-            <TankFarmSchedulePanel selectedTankId={tankId} selectedMovementId={movementId} onSelectMovement={selectMovement} />
-          </DashboardCell>
-          <DashboardCell span={4}>
-            <div className="flex flex-col gap-4 [&>*]:flex-1">
-              <TankFarmCoverPanel selectedTankId={tankId} selectedMovementId={movementId} />
-              <TankFarmThroughputPanel />
-            </div>
-          </DashboardCell>
-          <DashboardCell span={12}>
-            <TankFarmLedgerPanel selectedTankId={tankId} />
-          </DashboardCell>
-        </DashboardGrid>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-lg font-extrabold">
+          {tank.id} · {product.label}
+        </h3>
+        <TflRate rate={tank.rate} />
       </div>
-    </DashboardFrame>
+      <div>
+        <p className="text-7xl leading-none font-extrabold tracking-tighter tabular-nums">{formatNumber(tflUllage(tank))}</p>
+        <p className="mt-1 text-base font-bold">m³ of ullage to high-high</p>
+      </div>
+      <div>
+        <div className="flex h-7 border-2 border-[var(--t-on-pop)]" aria-hidden="true">
+          <span className="bg-[var(--t-on-pop)] opacity-45" style={{ width: `${heel}%` }} />
+          <span className="bg-[var(--t-on-pop)]" style={{ width: `${stock}%` }} />
+          <span className="bg-[var(--kit-surface)]" style={{ width: `${room}%` }} />
+        </div>
+        <p className="mt-1.5 flex justify-between text-sm font-semibold tabular-nums">
+          <span>Pumpable {formatNumber(tflPumpable(tank))}</span>
+          <span>Shell {formatNumber(tank.capacity)}</span>
+        </p>
+      </div>
+      <p className="text-base font-bold">{tflOutlook(tank)}.</p>
+      <ul className="mt-auto border-t-2 border-[var(--t-on-pop)] text-sm font-semibold">
+        {next.length === 0 ? <li className="py-2">Nothing scheduled in the next four days.</li> : null}
+        {next.map((movement) => (
+          <li key={movement.id} className="flex items-baseline justify-between gap-3 border-b-2 border-[var(--t-on-pop)] py-2 last:border-b-0">
+            <span>
+              {movement.detail}, {formatNumber(movement.volume)} m³ {movement.direction === 'in' ? 'in' : 'out'}
+            </span>
+            <span className="whitespace-nowrap tabular-nums">{movement.start <= 0 ? `until ${tflWhen(movement.end)}` : tflWhen(movement.start)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
-function TankFarmDashSignature() {
+function TflMovementSummary({ tank }: { tank: TflTank }) {
+  const touching = TFL_MOVEMENTS.filter((movement) => movement.tanks.includes(tank.id));
+  const volume = (direction: TflMovement['direction']) => touching.filter((movement) => movement.direction === direction).reduce((sum, movement) => sum + movement.volume, 0);
   return (
-    <ThemeScope preset="sandstone" className="w-full">
-      <TankFarmDashboard />
-    </ThemeScope>
+    <p className="tabular-nums">
+      {touching.length} {touching.length === 1 ? 'movement touches' : 'movements touch'} {tank.id}: {formatNumber(volume('in'))} m³ in, {formatNumber(volume('out'))} m³ out.
+    </p>
   );
 }
 
-function TankFarmDashAura() {
+function TflMasthead({ current }: { current: string }) {
   return (
-    <ThemeScope preset="aura" className="w-full">
-      <TankFarmDashboard />
-    </ThemeScope>
+    <nav aria-label="Nordkapp terminal" className="flex items-stretch bg-[var(--kit-text)] text-[var(--kit-surface)]">
+      <span className="flex items-center px-5 text-base font-extrabold">Nordkapp terminal</span>
+      <ul className="flex">
+        {TFL_NAV.map((item) => (
+          <li key={item.id}>
+            <span
+              aria-current={item.id === current ? 'page' : undefined}
+              className={`flex h-12 items-center gap-2 px-4 text-sm font-bold ${item.id === current ? 'bg-[var(--kit-surface)] text-[var(--kit-text)]' : ''}`}
+            >
+              {item.label}
+              {item.badge ? <span className="bg-[var(--kit-line-pink)] px-1.5 text-[var(--kit-text)]">{item.badge}</span> : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <span className="ml-auto flex items-center px-5 text-sm font-bold tabular-nums">Thu 12 March · 14:00 UTC</span>
+    </nav>
   );
 }
 
-function TankFarmDashBlueprint() {
+function TankFarmLogisticsSignature() {
+  const [selected, setSelected] = useState('T-101');
+  const tank = tflFind(selected);
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <TankFarmDashboard />
-    </ThemeScope>
+    <LookScope look="poster">
+      <TflMasthead current="tanks" />
+      <Canvas className="flex min-h-[760px] flex-col gap-7">
+        <header className="flex flex-col gap-4">
+          <h2 className="text-6xl leading-[0.95] font-extrabold tracking-tighter text-[var(--kit-text)]">
+            {Math.round((TFL_STOCK / TFL_CAPACITY) * 100)} % full. Two ships load before Sunday.
+          </h2>
+          <p className="max-w-4xl text-base font-semibold text-[var(--kit-text)]">
+            {formatNumber(TFL_STOCK)} m³ in eight tanks. T-103 sits 2 % under its high alarm until Barents Star arrives, and T-202 is below low-low with rundown refilling it.
+          </p>
+          <TflProductKey />
+        </header>
+
+        <TflTankRow selected={selected} onSelect={setSelected} />
+
+        <div className="grid grid-cols-12 gap-5">
+          <div className="col-span-4">
+            <TflUllage tank={tank} />
+          </div>
+          <Panel
+            className="col-span-8"
+            title={`Movements on ${tank.id}`}
+            subtitle="Next four days by berth and line; filled blocks touch this tank"
+            footer={<TflMovementSummary tank={tank} />}
+          >
+            <div className="flex flex-1 flex-col justify-center pb-3">
+              <TflTimeline selected={selected} />
+            </div>
+          </Panel>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function TankFarmDashNordicNight() {
+const TFL_T103_WEEK = [61, 66, 71, 75, 79, 84, 88];
+
+const TFL_T103_DAYS = ['Fri 6', 'Sat 7', 'Sun 8', 'Mon 9', 'Tue 10', 'Wed 11', 'Thu 12'];
+
+type TflLedgerRow = { id: string; when: string; movement: string; direction: 'in' | 'out'; volume: number; after: number };
+
+const TFL_LEDGER: readonly TflLedgerRow[] = [
+  { id: 'l1', when: 'Thu 12, 06:10', movement: 'Topped up for Nordic Sky second parcel', direction: 'in', volume: 2400, after: 88 },
+  { id: 'l2', when: 'Wed 11, 02:00', movement: 'Plant rundown, crude line', direction: 'in', volume: 14900, after: 84 },
+  { id: 'l3', when: 'Mon 9, 18:30', movement: 'Plant rundown, crude line', direction: 'in', volume: 14200, after: 75 },
+  { id: 'l4', when: 'Sat 7, 11:00', movement: 'Water draw-off to T-401', direction: 'out', volume: 310, after: 66 },
+  { id: 'l5', when: 'Fri 6, 04:45', movement: 'MT Hammerfest lifted crude, jetty 1', direction: 'out', volume: 21800, after: 61 },
+];
+
+const TFL_LEDGER_COLUMNS: DataTableColumn<TflLedgerRow>[] = [
+  { id: 'when', header: 'When', nowrap: true, cell: (row) => row.when },
+  { id: 'movement', header: 'Movement', cell: (row) => row.movement },
+  { id: 'direction', header: 'Direction', nowrap: true, cell: (row) => <StatusPill tone={row.direction === 'in' ? 'pink' : 'neutral'}>{row.direction === 'in' ? 'Received' : 'Shipped'}</StatusPill> },
+  { id: 'volume', header: 'Volume, m³', numeric: true, cell: (row) => formatNumber(row.volume) },
+  { id: 'after', header: 'Level after', numeric: true, cell: (row) => `${row.after} %` },
+];
+
+const TFL_MARKS = [
+  { at: 95, label: 'Overfill 95 %' },
+  { at: TFL_HIGH, label: 'High-high 90 %' },
+  { at: 85, label: 'High 85 %' },
+  { at: 20, label: 'Low 20 %' },
+  { at: TFL_LOW, label: 'Low-low 10 %' },
+];
+
+/** One tank drawn large with its alarm ladder: the gauge an operator reads before lining up. */
+function TflGaugeTank({ tank }: { tank: TflTank }) {
+  const product = TFL_PRODUCTS[tank.product];
   return (
-    <ThemeScope preset="nordic-night" className="w-full">
-      <TankFarmDashboard />
-    </ThemeScope>
+    <div data-tone={product.tone} className="grid h-full min-h-[420px] grid-cols-[minmax(0,1fr)_7.75rem] gap-3 text-[var(--kit-text)]" role="img" aria-label={`${tank.id} at ${tank.level} percent with its alarm levels`}>
+      <div className="@container relative border-2 border-[var(--kit-rule-strong)] bg-[var(--kit-surface)]">
+        <span className="absolute inset-x-0 bottom-0 border-t-[8px] border-[var(--kit-rule-strong)] bg-[var(--t-pop)]" style={{ height: `${tank.level}%` }} />
+        <span className="absolute inset-x-0 flex flex-col items-center gap-2 text-[var(--t-on-pop)]" style={{ top: `calc(${100 - tank.level}% + 28px)` }}>
+          <span className="flex items-baseline leading-none font-extrabold tracking-tighter tabular-nums">
+            <span className="text-[length:min(6rem,44cqw)]">{tank.level}</span>
+            <span className="text-[length:min(1.875rem,15cqw)]">%</span>
+          </span>
+          <span className="bg-[var(--t-pop)] px-1 text-center text-sm font-bold tabular-nums">{formatNumber(tflStock(tank))} m³</span>
+        </span>
+        {TFL_MARKS.map((mark) => (
+          <span key={mark.at} className="absolute inset-x-0 border-t-2 border-dashed border-[var(--kit-rule-strong)]" style={{ bottom: `${mark.at}%` }} />
+        ))}
+      </div>
+      <div className="relative text-sm font-bold">
+        {TFL_MARKS.map((mark) => (
+          <span key={mark.at} className="absolute left-0 translate-y-1/2 whitespace-nowrap" style={{ bottom: `${mark.at === 95 ? 97.5 : mark.at === 85 ? 82.5 : mark.at === 20 ? 21.5 : mark.at === TFL_LOW ? 6.5 : mark.at}%` }}>
+            {mark.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
-function TankFarmDashTanks() {
-  const [tankId, setTankId] = useState<string | null>(null);
-  return <TankFarmTanksPanel selectedTankId={tankId} onSelectTank={(next) => setTankId((current) => (current === next ? null : next))} />;
+function TankFarmLogisticsTankSheet() {
+  const tank = tflFind('T-103');
+  return (
+    <LookScope look="poster">
+      <AppFrame
+        variant="masthead"
+        brand={{ name: 'Nordkapp terminal' }}
+        nav={TFL_NAV}
+        current="tanks"
+        title="T-103 is 2 % under its high alarm."
+        subtitle="Crude oil, 60,000 m³ floating roof. It has been filling for a week and waits for MT Barents Star on Saturday 06:00."
+      >
+        <Grid>
+          <Panel className="col-span-4 row-span-2" title="Gauge" subtitle="Radar level, 14:00 UTC" tone="pink">
+            <TflGaugeTank tank={tank} />
+          </Panel>
+          <Panel className="col-span-8" title="Seven days of filling" subtitle="Level at midnight, percent of capacity">
+            <Bars
+              label="Level of T-103 at midnight for the last seven days against the high-high alarm"
+              categories={TFL_T103_DAYS}
+              series={[{ id: 'level', label: 'Level', values: TFL_T103_WEEK, tone: 'pink' }]}
+              tones={['pink', 'pink', 'pink', 'pink', 'pink', 'pink', 'warning']}
+              unit="%"
+              showValues
+              height={230}
+              limit={{ value: TFL_HIGH, label: 'High-high', tone: 'accent' }}
+            />
+          </Panel>
+          <Panel className="col-span-8" title="Ledger" subtitle="Last five movements on this tank" padding="none">
+            <DataTable label="Movements on T-103" flush columns={TFL_LEDGER_COLUMNS} rows={TFL_LEDGER} rowKey={(row) => row.id} />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </LookScope>
+  );
 }
 
-function TankFarmDashSchedule() {
-  const [movementId, setMovementId] = useState<string | null>('mv-0321');
-  return <TankFarmSchedulePanel selectedTankId={null} selectedMovementId={movementId} onSelectMovement={(next) => setMovementId((current) => (current === next ? null : next))} />;
+type TflBerth = { id: string; ship: string; cargo: string; product: TflProduct; loaded: number; total: number; completes: string; laytime: { used: number; allowed: number }; from: string };
+
+const TFL_BERTHS: readonly TflBerth[] = [
+  { id: 'Jetty 1', ship: 'Nordic Sky', cargo: 'Loading crude oil', product: 'crude', loaded: 27600, total: 62000, completes: 'Fri 00:00', laytime: { used: 14, allowed: 36 }, from: 'T-104' },
+  { id: 'Jetty 2', ship: 'Fjordgas', cargo: 'Due for condensate', product: 'condensate', loaded: 0, total: 18000, completes: 'Sat 00:00', laytime: { used: 0, allowed: 24 }, from: 'T-201' },
+];
+
+/** A tanker in profile; cargo tanks fill from the bow as the parcel goes aboard. */
+function TflShip({ share }: { share: number }) {
+  const tanks = 6;
+  return (
+    <svg viewBox="0 0 420 120" aria-hidden="true" className="w-full">
+      <path d="M 8 62 L 412 62 L 392 108 L 34 108 Z" fill="var(--t-on-pop)" />
+      <rect x="318" y="14" width="58" height="48" fill="var(--kit-surface)" stroke="var(--t-on-pop)" strokeWidth="4" />
+      <rect x="338" y="0" width="16" height="16" fill="var(--t-on-pop)" />
+      <line x1="326" y1="32" x2="368" y2="32" stroke="var(--t-on-pop)" strokeWidth="4" />
+      {Array.from({ length: tanks }, (_, index) => (
+        <rect
+          key={index}
+          x={40 + index * 45}
+          y="34"
+          width="38"
+          height="28"
+          fill={index < Math.round(share * tanks) ? 'var(--t-on-pop)' : 'var(--kit-surface)'}
+          stroke="var(--t-on-pop)"
+          strokeWidth="4"
+        />
+      ))}
+    </svg>
+  );
 }
 
-function TankFarmDashScheduleFiltered() {
-  const [movementId, setMovementId] = useState<string | null>(null);
-  return <TankFarmSchedulePanel selectedTankId="t-101" selectedMovementId={movementId} onSelectMovement={(next) => setMovementId((current) => (current === next ? null : next))} />;
+function TflBerthBlock({ berth }: { berth: TflBerth }) {
+  const share = berth.loaded / berth.total;
+  return (
+    <section
+      aria-label={`${berth.id}: ${berth.ship}`}
+      data-tone={TFL_PRODUCTS[berth.product].tone}
+      className="flex h-full flex-col gap-4 border-2 border-[var(--kit-rule-strong)] bg-[var(--t-pop)] p-6 text-[var(--t-on-pop)] shadow-[5px_5px_0_var(--kit-text)]"
+    >
+      <div className="flex items-baseline justify-between gap-3 text-base font-bold">
+        <span>{berth.id}</span>
+        <span>{berth.cargo}</span>
+      </div>
+      <h3 className="text-6xl leading-none font-extrabold tracking-tighter">{berth.ship}</h3>
+      <TflShip share={share} />
+      <div className="flex items-end justify-between gap-4">
+        <p>
+          <span className="text-5xl leading-none font-extrabold tracking-tighter tabular-nums">{Math.round(share * 100)} %</span>
+          <span className="mt-1 block text-sm font-bold tabular-nums">
+            {formatNumber(berth.loaded)} of {formatNumber(berth.total)} m³ from {berth.from}
+          </span>
+        </p>
+        <p className="text-right text-sm font-bold">
+          Completes
+          <span className="block text-2xl font-extrabold tabular-nums">{berth.completes}</span>
+        </p>
+      </div>
+      <p className="mt-auto border-t-2 border-[var(--t-on-pop)] pt-3 text-sm font-bold tabular-nums">
+        Laytime {berth.laytime.used} of {berth.laytime.allowed} h used
+      </p>
+    </section>
+  );
 }
 
-function TankFarmDashCoverAll() {
-  return <TankFarmCoverPanel selectedTankId={null} selectedMovementId={null} />;
+type TflArrival = { id: string; ship: string; cargo: string; berth: string; eta: string; state: string; tone: Tone };
+
+const TFL_ARRIVALS: readonly TflArrival[] = [
+  { id: 'a1', ship: 'MT Fjordgas', cargo: '18,000 m³ condensate out', berth: 'Jetty 2', eta: 'Fri 08:00', state: 'Pilot booked', tone: 'success' },
+  { id: 'a2', ship: 'MT Barents Star', cargo: '80,000 m³ crude out', berth: 'Jetty 1', eta: 'Sat 06:00', state: 'On passage', tone: 'info' },
+  { id: 'a3', ship: 'MT Lofoten', cargo: '6,000 m³ diesel in', berth: 'Jetty 2', eta: 'Sun 02:00', state: 'Weather watch', tone: 'warning' },
+];
+
+const TFL_ARRIVAL_COLUMNS: DataTableColumn<TflArrival>[] = [
+  { id: 'ship', header: 'Ship', nowrap: true, cell: (row) => row.ship },
+  { id: 'cargo', header: 'Parcel', cell: (row) => row.cargo },
+  { id: 'berth', header: 'Berth', nowrap: true, cell: (row) => row.berth },
+  { id: 'eta', header: 'Arrives', nowrap: true, numeric: true, cell: (row) => row.eta },
+  { id: 'state', header: 'State', nowrap: true, cell: (row) => <StatusPill tone={row.tone}>{row.state}</StatusPill> },
+];
+
+function TankFarmLogisticsJetties() {
+  return (
+    <LookScope look="poster">
+      <TflMasthead current="jetties" />
+      <Canvas>
+        <Grid>
+          {TFL_BERTHS.map((berth) => (
+            <div key={berth.id} className="col-span-6">
+              <TflBerthBlock berth={berth} />
+            </div>
+          ))}
+          <Panel className="col-span-8" title="Next alongside" subtitle="Three arrivals in the next four days" padding="none">
+            <DataTable label="Arrivals" flush columns={TFL_ARRIVAL_COLUMNS} rows={TFL_ARRIVALS} rowKey={(row) => row.id} />
+          </Panel>
+          <Panel className="col-span-4" title="Mooring limits" subtitle="Loading stops above the marks" tone="teal">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <Meter label="Wind at the jetty head" value={10.4} max={25} unit="m/s" decimals={1} high={15} target={{ value: 15, label: 'Stop' }} tone="teal" />
+              <Meter label="Swell" value={0.8} max={3} unit="m" decimals={1} high={1.5} target={{ value: 1.5, label: 'Stop' }} tone="teal" />
+            </div>
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function TankFarmDashCoverTank() {
-  return <TankFarmCoverPanel selectedTankId="t-103" selectedMovementId="mv-0321" />;
+function TankFarmLogisticsPartTanks() {
+  const [selected, setSelected] = useState('T-202');
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <div className="flex items-end gap-5">
+          {['T-101', 'T-202', 'T-301'].map((id) => (
+            <TflTankFigure key={id} tank={tflFind(id)} selected={id === selected} onSelect={setSelected} />
+          ))}
+        </div>
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function TankFarmDashThroughput() {
-  return <TankFarmThroughputPanel />;
+function TankFarmLogisticsPartUllage() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <TflUllage tank={tflFind('T-104')} />
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function TankFarmDashLedger() {
-  return <TankFarmLedgerPanel selectedTankId={null} />;
+function TankFarmLogisticsPartTimeline() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Panel title="Movements on T-301" subtitle="Next four days by berth and line; filled blocks touch this tank">
+          <TflTimeline selected="T-301" />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function TankFarmDashLedgerTank() {
-  return <TankFarmLedgerPanel selectedTankId="t-103" />;
+function TankFarmLogisticsPartBerth() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <TflBerthBlock berth={TFL_BERTHS[0]} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TankFarmLogisticsPartGauge() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Panel title="Gauge" subtitle="T-201 with its alarm ladder" tone="amber">
+          <TflGaugeTank tank={tflFind('T-201')} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TankFarmLogisticsPartLedger() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Panel title="Ledger" subtitle="Movements on one tank, newest first" padding="none">
+          <DataTable label="Tank ledger" flush columns={TFL_LEDGER_COLUMNS} rows={TFL_LEDGER} rowKey={(row) => row.id} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TankFarmLogisticsPartKey() {
+  return (
+    <LookScope look="poster">
+      <Canvas>
+        <Panel title="Stock by product" subtitle="One colour per product, everywhere on the screen">
+          <div className="flex flex-col gap-4">
+            <TflProductKey />
+            <p className="text-sm font-semibold">
+              Tank <TagId>T-103</TagId> and <TagId>T-202</TagId> are outside their alarm lines.
+            </p>
+          </div>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
 }
 
 export default definePage({
   id: 'tank-farm-logistics',
   title: 'Tank farm and logistics',
   summary:
-    'What is in every tank, what is coming alongside and what has already been measured out. The tanks are drawn, because how full is a question people answer by looking; the plan and the ledger sit under the picture.',
+    'A poster-style terminal board: eight tanks drawn as filled silhouettes across the full width, standing on the timeline of ships, pipelines and trucks that fill and empty them.',
   guidance: {
     use: [
-      'For terminals, tank farms and stores where level against a band is the first question.',
-      'When stock and logistics belong together: a tank, its cargoes and its ledger lines.',
-      'Let one selection run through every panel, so the screen answers one tank at a time.',
-      'Mark minimum and maximum on the drawing; the band is what makes a level good or bad.',
+      'When stock is physical: a level drawn in a tank is read faster than a percentage in a table.',
+      'One solid colour per product, carried from the tank to its movements and its ullage block.',
+      'Select a tank to answer the planner question: how much room, and what is lined up on it.',
     ],
     avoid: [
-      'Drawing more than six or seven vessels in a row — group them or switch to a table.',
-      'Colouring every tank; only a tank outside its band takes a status colour.',
-      'A schedule without a now line; nobody can tell planned from late.',
-      'Hiding unrelated rows on selection — dim them, so the plan stays whole.',
+      'Silhouettes for more than a dozen tanks; group by product or use a ranked bar chart.',
+      'Colouring tanks by alarm state: state is a word and an icon above the tank.',
+      'Movement blocks too short to read; widen the window or drop the label and keep the lane name.',
     ],
   },
   source,
@@ -579,155 +735,129 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Shown in the Sandstone theme. A diagram-first layout: the drawn tanks lead, and selecting one runs through the schedule, the cover and the ledger.',
+      description: 'The full board in the poster look. Select a tank to see its ullage and the movements that touch it.',
       specimens: [
         {
-          id: 'TankFarmDashSignature',
-          title: 'Tank farm and logistics',
-          note: 'Pick it when the physical picture of stock is the entry point to planning and bookkeeping.',
+          id: 'TankFarmLogisticsSignature',
+          title: 'Terminal board',
+          note: 'Pick it for the planner screen of a terminal, where stock, room and the next ships have to be read together.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'dashboards/DashboardGrid.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/domains/DaysOfCover.tsx',
-            'industrial/domains/ShareBarList.tsx',
-            'industrial/domains/inventory.ts',
-            'industrial/StatusIndicator.tsx',
-            'industrial/ValueReadout.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: TankFarmDashSignature,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: TankFarmLogisticsSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same dashboard, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Other screens of the same product: the sheet behind one tank, and the jetty board.',
       specimens: [
         {
-          id: 'TankFarmDashAura',
-          title: 'Aura',
-          note: 'Pick it when the terminal view lives inside a suite of standard Aura applications.',
+          id: 'TankFarmLogisticsTankSheet',
+          title: 'Tank sheet',
+          note: 'Pick it for the screen behind a tank: its gauge with the alarm ladder, a week of level and the ledger.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: TankFarmDashAura,
+          bleed: true,
+          uses: ['kit/AppFrame.tsx', 'kit/Panel.tsx', 'kit/Bars.tsx', 'kit/DataTable.tsx'],
+          Component: TankFarmLogisticsTankSheet,
         },
         {
-          id: 'TankFarmDashBlueprint',
-          title: 'Blueprint',
-          note: 'Pick it for engineering users: the drawn tanks suit sharp corners and blue line work.',
+          id: 'TankFarmLogisticsJetties',
+          title: 'Jetty board',
+          note: 'Pick it for the marine side: one block per berth with the ship alongside, how much is aboard and when it completes.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: TankFarmDashBlueprint,
-        },
-        {
-          id: 'TankFarmDashNordicNight',
-          title: 'Nordic night',
-          note: 'Pick it for the jetty office at night: dark, calm and low glare.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: TankFarmDashNordicNight,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/Grid.tsx', 'kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/Meter.tsx'],
+          Component: TankFarmLogisticsJetties,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Panels',
-      description: 'Each part on its own, with and without a tank selected.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The pieces of the board on their own.',
       specimens: [
         {
-          id: 'TankFarmDashTanks',
-          title: 'Tank row',
-          note: 'Pick it as the lead element when up to six vessels should be compared by eye.',
+          id: 'TankFarmLogisticsPartTanks',
+          title: 'Tank silhouettes',
+          note: 'Pick them to show level as a picture: floating roof or dome, alarm lines, and a state word above when one is crossed.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/StatusPill.tsx'],
+          Component: TankFarmLogisticsPartTanks,
+        },
+        {
+          id: 'TankFarmLogisticsPartBerth',
+          title: 'Berth block',
+          note: 'Pick it for a ship alongside: the name is the headline and the cargo tanks fill as the parcel goes aboard.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          Component: TankFarmLogisticsPartBerth,
+        },
+        {
+          id: 'TankFarmLogisticsPartTimeline',
+          title: 'Movements timeline',
+          note: 'Pick it to plan against berths and lines; fill only the blocks that matter to the current selection.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/domains/inventory.ts', 'industrial/StatusIndicator.tsx'],
-          Component: TankFarmDashTanks,
+          bleed: true,
+          uses: ['kit/Panel.tsx'],
+          Component: TankFarmLogisticsPartTimeline,
         },
         {
-          id: 'TankFarmDashSchedule',
-          title: 'Berth schedule',
-          note: 'Pick it to show who is alongside when: one row per call, with a line for now.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: TankFarmDashSchedule,
-        },
-        {
-          id: 'TankFarmDashCoverAll',
-          title: 'Cover, all tanks',
-          note: 'Pick it when nothing is selected: every product ranked by how long it lasts.',
+          id: 'TankFarmLogisticsPartUllage',
+          title: 'Ullage block',
+          note: 'Pick it to answer one question in a solid block: how much room is left and when it runs out.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/domains/DaysOfCover.tsx'],
-          Component: TankFarmDashCoverAll,
+          bleed: true,
+          Component: TankFarmLogisticsPartUllage,
         },
         {
-          id: 'TankFarmDashScheduleFiltered',
-          title: 'Schedule for one tank',
-          note: 'Pick it when a selection elsewhere should narrow the plan without removing the rest.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: TankFarmDashScheduleFiltered,
-        },
-        {
-          id: 'TankFarmDashCoverTank',
-          title: 'Cover, one tank',
-          note: 'Pick it to judge one product: cover against lead time, then stock after each planned call.',
+          id: 'TankFarmLogisticsPartGauge',
+          title: 'Gauge with alarm ladder',
+          note: 'Pick it when one tank needs all five alarm levels named beside the liquid.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/domains/DaysOfCover.tsx', 'industrial/ValueReadout.tsx'],
-          Component: TankFarmDashCoverTank,
+          bleed: true,
+          uses: ['kit/Panel.tsx'],
+          Component: TankFarmLogisticsPartGauge,
         },
         {
-          id: 'TankFarmDashLedger',
-          title: 'Movements ledger',
-          note: 'Pick it for measured transfers: signed volumes, right-aligned, newest first.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: TankFarmDashLedger,
-        },
-        {
-          id: 'TankFarmDashThroughput',
-          title: 'Throughput',
-          note: 'Pick it to rank products by volume moved when exact figures matter as much as order.',
+          id: 'TankFarmLogisticsPartKey',
+          title: 'Product key',
+          note: 'Pick it as the legend and the stock summary at once: each product with its colour and its volume.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/domains/ShareBarList.tsx'],
-          Component: TankFarmDashThroughput,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/TagId.tsx'],
+          Component: TankFarmLogisticsPartKey,
         },
         {
-          id: 'TankFarmDashLedgerTank',
-          title: 'Ledger for one tank',
-          note: 'Pick it when the ledger follows a selection: matching lines are marked, the rest dimmed.',
+          id: 'TankFarmLogisticsPartLedger',
+          title: 'Tank ledger',
+          note: 'Pick it for the audit trail of a tank: every receipt and shipment with the level it left behind.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: TankFarmDashLedgerTank,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/StatusPill.tsx'],
+          Component: TankFarmLogisticsPartLedger,
         },
       ],
     },

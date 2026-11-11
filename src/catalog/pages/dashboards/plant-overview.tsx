@@ -41,6 +41,7 @@ import { Meter } from '../../../library/kit/Meter';
 import { Panel } from '../../../library/kit/Panel';
 import { RingGauge } from '../../../library/kit/RingGauge';
 import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { SparkLine } from '../../../library/kit/SparkLine';
 import { Stat } from '../../../library/kit/Stat';
 import { StatGroup } from '../../../library/kit/StatGroup';
 import { StatusPill } from '../../../library/kit/StatusPill';
@@ -160,6 +161,14 @@ const PO_ALARM_LOAD: HeatRow[] = PO_AREAS.map((area, index) => ({
 
 const PO_DAY: readonly [string, string] = ['24 h ago', 'Now'];
 
+const PO_AREA_CHANGE: Record<string, number> = { 'nk-20': 1, 'nk-23': -6, 'nk-27': 0, 'nk-40': -2 };
+
+const PO_AREA_ALARMS: Record<string, number> = Object.fromEntries(
+  PO_AREAS.map((area) => [area.id, PO_OPEN_ALARMS.filter((alarm) => findAsset(alarm.assetId)?.parentId === area.id).length])
+);
+
+const PO_SIX_HOURS = ['24 h ago', '18 h', '12 h', '6 h', 'Now'];
+
 const PO_NAV: AppFrameNavItem[] = [
   { id: 'overview', label: 'Overview', icon: <IconLayoutDashboard /> },
   { id: 'alarms', label: 'Alarms', icon: <IconBell />, badge: '4' },
@@ -252,9 +261,10 @@ function PoAlarmRows({ limit = 5, chips = true, all = false }: { limit?: number;
           title={alarm.message}
           meta={
             <>
+              {chips ? <StatusPill tone={PO_SEVERITY_TONE[alarm.severity]} variant="outline">{PO_SEVERITY_LABEL[alarm.severity]}</StatusPill> : null}
               <TagId>{alarm.sensorTag}</TagId>
               <span>
-                {alarm.value} · limit {alarm.limit}
+                {alarm.value} · limit {alarm.limit.split(' ')[0]}
                 {all ? ` · ${PO_ALARM_STATE[alarm.state]}` : ''}
               </span>
             </>
@@ -266,7 +276,7 @@ function PoAlarmRows({ limit = 5, chips = true, all = false }: { limit?: number;
   );
 }
 
-function PoOrderRows({ limit = 5 }: { limit?: number }) {
+function PoOrderRows({ limit = 6 }: { limit?: number }) {
   return (
     <ul>
       {PO_OPEN_ORDERS.slice(0, limit).map((order) => (
@@ -275,14 +285,40 @@ function PoOrderRows({ limit = 5 }: { limit?: number }) {
           title={order.title}
           meta={
             <>
-              <TagId>{order.id}</TagId>
+              <StatusPill tone={PO_ORDER_TONE[order.status]}>{PO_ORDER_LABEL[order.status]}</StatusPill>
               <span>
                 {findPerson(order.assigneeId)?.name ?? 'Unassigned'} · due {formatDate(order.dueAt)}
               </span>
             </>
           }
-          trailing={<StatusPill tone={PO_ORDER_TONE[order.status]}>{PO_ORDER_LABEL[order.status]}</StatusPill>}
         />
+      ))}
+    </ul>
+  );
+}
+
+function PoAreaHealth() {
+  return (
+    <ul className="flex flex-1 flex-col justify-between gap-4">
+      {PO_AREAS.map((area) => (
+        <li key={area.id} className="flex flex-col gap-2">
+          <Meter
+            size="lg"
+            label={area.name}
+            value={area.healthScore}
+            max={100}
+            target={{ value: 85, label: 'Target' }}
+            tone={PO_HEALTH_TONE[area.health]}
+            hideScale
+          />
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-medium-foreground">
+            <StatusPill tone={PO_HEALTH_TONE[area.health]}>{PO_HEALTH_LABEL[area.health]}</StatusPill>
+            <Delta value={PO_AREA_CHANGE[area.id] ?? 0} decimals={0} />
+            <span className="ml-auto font-medium tabular-nums">
+              {PO_AREA_ALARMS[area.id] ?? 0} open {PO_AREA_ALARMS[area.id] === 1 ? 'alarm' : 'alarms'}
+            </span>
+          </div>
+        </li>
       ))}
     </ul>
   );
@@ -342,20 +378,43 @@ function PoHealthIcon({ health }: { health: Asset['health'] }) {
 function PoTrainMeters() {
   return (
     <div className="flex flex-1 flex-col justify-between gap-4">
-      {PO_TRAIN.map((sensor) => (
-        <Meter
-          key={sensor.id}
-          label={sensor.name}
-          value={sensor.value}
-          min={sensor.rangeMin}
-          max={sensor.rangeMax}
-          unit={sensor.unit}
-          decimals={sensor.decimals}
-          high={sensor.highLimit}
-          target={{ value: sensor.highLimit, label: 'High limit' }}
-          tone={sensor.value > sensor.highLimit * 0.95 ? 'warning' : 'accent'}
-        />
-      ))}
+      {PO_TRAIN.map((sensor) => {
+        const share = Math.round((sensor.value / sensor.highLimit) * 100);
+        const near = share >= 95;
+        return (
+          <div key={sensor.id} className="grid grid-cols-[minmax(0,1fr)_5rem] items-end gap-x-4 gap-y-1.5">
+            <Meter
+              className="col-span-2"
+              label={sensor.name}
+              value={sensor.value}
+              min={sensor.rangeMin}
+              max={sensor.rangeMax}
+              unit={sensor.unit}
+              decimals={sensor.decimals}
+              high={sensor.highLimit}
+              target={{ value: sensor.highLimit, label: 'High limit' }}
+              tone={near ? 'warning' : 'accent'}
+              hideScale
+            />
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-medium-foreground">
+              <StatusPill tone={near ? 'warning' : 'success'}>{near ? 'Near limit' : 'Normal'}</StatusPill>
+              <span className="tabular-nums">{share} % of limit</span>
+            </div>
+            <SparkLine
+              className="h-7"
+              label={`${sensor.name}, last 24 hours`}
+              tone={near ? 'warning' : 'accent'}
+              values={makeValues({ seed: sensor.seed, points: 24, base: sensor.value * 0.96, amplitude: sensor.value * 0.02, noise: sensor.value * 0.012, drift: sensor.value * 0.04 })}
+            />
+          </div>
+        );
+      })}
+      <Legend
+        items={[
+          { label: 'Reading', tone: 'accent' },
+          { label: 'Above the high limit', tone: 'critical' },
+        ]}
+      />
     </div>
   );
 }
@@ -370,11 +429,6 @@ function PlantOverviewSignature() {
         tools={<PoShift />}
         title="Plant overview"
         subtitle="Thursday 12 March · updated 14:00 UTC"
-        status={
-          <StatusPill tone="warning" size="lg" icon={<IconAlertTriangle />}>
-            Reduced capacity
-          </StatusPill>
-        }
         actions={
           <>
             <PoRange />
@@ -385,6 +439,29 @@ function PlantOverviewSignature() {
         }
       >
         <Grid>
+          <Panel className="col-span-12" tone="warning" padding="tight">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+              <IconChip tone="warning" size="lg">
+                <IconAlertTriangle />
+              </IconChip>
+              <div className="min-w-0 flex-1">
+                <p className="text-lg leading-6 font-semibold">Reduced capacity</p>
+                <p className="text-sm text-medium-foreground">
+                  Recompressor tripped at 13:46 · export at 97 % of plan
+                </p>
+              </div>
+              <StatusPill tone="critical" size="lg" icon={<IconAlertOctagon />}>
+                1 critical alarm
+              </StatusPill>
+              <StatusPill tone="success" size="lg" icon={<IconTool />}>
+                Inspection due 20:00
+              </StatusPill>
+              <Button variant="outline" size="sm">
+                Open incident
+              </Button>
+            </div>
+          </Panel>
+
           <Stat
             className="col-span-3"
             label="Gas export"
@@ -395,6 +472,7 @@ function PlantOverviewSignature() {
             tone="accent"
             emphasis="strong"
             delta={{ value: PLANT_KPIS.gasExport.value - PLANT_KPIS.gasExport.previous, decimals: 2, caption: 'vs yesterday' }}
+            target="Plan 4.50 · 97 % of plan"
             sparkline={PO_EXPORT_VALUES}
           />
           <Stat
@@ -406,6 +484,7 @@ function PlantOverviewSignature() {
             icon={<IconActivity />}
             tone="teal"
             delta={{ value: PLANT_KPIS.availability.value - PLANT_KPIS.availability.previous, caption: 'vs last week' }}
+            target="Target 97.5 % · 1.1 short"
             sparkline={PO_AVAILABILITY}
           />
           <Stat
@@ -417,6 +496,7 @@ function PlantOverviewSignature() {
             icon={<IconBolt />}
             tone="purple"
             delta={{ value: PLANT_KPIS.energyIntensity.value - PLANT_KPIS.energyIntensity.previous, good: 'down', caption: 'vs last week' }}
+            target="Target 30.0 · 1.2 over"
             sparkline={PO_ENERGY}
           />
           <Stat
@@ -426,6 +506,7 @@ function PlantOverviewSignature() {
             icon={<IconBell />}
             tone="critical"
             delta={{ value: PLANT_KPIS.activeAlarms.value - PLANT_KPIS.activeAlarms.previous, decimals: 0, good: 'down', caption: 'vs yesterday' }}
+            target="1 critical · 2 high"
             sparkline={PO_ALARM_COUNT}
           />
 
@@ -439,23 +520,14 @@ function PlantOverviewSignature() {
               }
             />
           </Panel>
-          <Panel className="col-span-5" title="Area health" subtitle="Condition score per area">
-            <ul className="flex flex-1 flex-col justify-between">
-              {PO_AREAS.map((area) => (
-                <ListRow
-                  key={area.id}
-                  leading={<RingGauge label={`${area.name} health`} value={area.healthScore} unit="" size={48} tone={PO_HEALTH_TONE[area.health]} hideLabel />}
-                  title={area.name}
-                  meta={<TagId>{area.tag}</TagId>}
-                  trailing={<StatusPill tone={PO_HEALTH_TONE[area.health]}>{PO_HEALTH_LABEL[area.health]}</StatusPill>}
-                />
-              ))}
-            </ul>
+          <Panel className="col-span-5" title="Area health" subtitle="Score out of 100, target 85">
+            <PoAreaHealth />
           </Panel>
 
           <Panel
-            className="col-span-6"
+            className="col-span-7"
             title="Open alarms"
+            footer="3 more cleared and 1 shelved in the last three days"
             subtitle="5 open, most severe first"
             actions={
               <Button variant="ghost" size="sm">
@@ -466,9 +538,9 @@ function PlantOverviewSignature() {
             <PoAlarmRows />
           </Panel>
           <Panel
-            className="col-span-6"
+            className="col-span-5"
             title="Work orders"
-            subtitle="Open and planned, by due date"
+            subtitle="6 open, by due date"
             actions={
               <Button variant="ghost" size="sm">
                 Open planner
@@ -478,17 +550,23 @@ function PlantOverviewSignature() {
             <PoOrderRows />
           </Panel>
 
-          <Panel className="col-span-4" title="Compression train" subtitle="1st stage compressor, live" icon={<IconChip tone="blue"><IconGauge /></IconChip>}>
+          <Panel className="col-span-4" title="Compression train" subtitle="23-KA-9101, live" icon={<IconChip tone="blue"><IconGauge /></IconChip>}>
             <PoTrainMeters />
           </Panel>
           <Panel className="col-span-5" title="Alarm load" subtitle="Alarms per hour, last 24 hours" icon={<IconChip tone="amber"><IconBell /></IconChip>}>
             <div className="flex flex-1 flex-col justify-between gap-5">
-              <div className="flex gap-8">
-                <Stat variant="plain" size="sm" label="Raised" value={71} />
-                <Stat variant="plain" size="sm" label="Peak hour" value="9" unit="at 13:00" />
-                <Stat variant="plain" size="sm" label="Compression" value={62} unit="%" />
+              <div className="grid grid-cols-3 gap-4">
+                <Stat variant="plain" size="sm" label="Raised in 24 h" value={71} unit="alarms" />
+                <Stat variant="plain" size="sm" label="Busiest hour" value="9" unit="at 13:00" />
+                <Stat variant="plain" size="sm" label="Compression share" value={62} unit="%" />
               </div>
-              <HeatStrip label="Alarms per hour by area over the last 24 hours" rows={PO_ALARM_LOAD} axis={PO_DAY} size="lg" />
+              <HeatStrip
+                label="Alarms per hour by area over the last 24 hours"
+                rows={PO_ALARM_LOAD}
+                ticks={PO_SIX_HOURS}
+                scale={{ label: 'Alarms per hour', low: '0', high: '9' }}
+                size="lg"
+              />
             </div>
           </Panel>
           <Panel className="col-span-3" title="Order mix" subtitle="Open, by type" icon={<IconChip tone="pink"><IconTool /></IconChip>}>
@@ -545,8 +623,18 @@ function PlantOverviewConsole() {
 
           <Panel className="col-span-4 row-span-2" title="Alarms" subtitle="8 in the last 3 days, 5 open" padding="none" tone="critical">
             <PoAlarmRows chips={false} all limit={8} />
-            <div className="mt-auto border-t border-default p-3.5">
-              <HeatStrip label="Alarms per hour by area over the last 24 hours" rows={PO_ALARM_LOAD} axis={PO_DAY} />
+            <div className="mt-auto flex flex-col gap-4 border-t border-default p-3.5">
+              <div className="grid grid-cols-3 gap-3">
+                <Stat variant="plain" size="sm" label="Raised in 24 h" value={71} />
+                <Stat variant="plain" size="sm" label="Busiest hour" value="9" unit="at 13:00" />
+                <Stat variant="plain" size="sm" label="From compression" value={62} unit="%" />
+              </div>
+              <HeatStrip
+                label="Alarms per hour by area over the last 24 hours"
+                rows={PO_ALARM_LOAD}
+                ticks={PO_SIX_HOURS}
+                scale={{ label: 'Alarms per hour', low: '0', high: '9' }}
+              />
             </div>
           </Panel>
           <Panel className="col-span-8" title="Gas export" subtitle="MSm³/d · last 24 h · plan 4.50">
@@ -563,12 +651,12 @@ function PlantOverviewConsole() {
               limits={[{ value: PLANT_KPIS.gasExport.target, label: 'Plan', tone: 'warning' }]}
             />
           </Panel>
-          <Panel className="col-span-5" title="Equipment" subtitle="9 units" padding="none">
+          <Panel className="col-span-5" title="Equipment" subtitle="11 units" padding="none" footer="8 running · 1 standby · 1 tripped · 1 in maintenance">
             <DataTable
               label="Equipment run state"
               flush
               columns={PO_UNIT_COLUMNS}
-              rows={PO_UNITS.slice(2)}
+              rows={PO_UNITS}
               rowKey={(unit) => unit.id}
               rowTone={(unit) => (unit.state === 'running' ? undefined : PO_STATE_TONE[unit.state])}
             />
@@ -701,7 +789,7 @@ function PlantOverviewPoster() {
           <Panel className="col-span-6" title="What is wrong" subtitle="Five open alarms" tone="critical">
             <PoAlarmRows />
           </Panel>
-          <Panel className="col-span-6" title="Who is on it" subtitle="Open work orders" tone="amber" padding="none">
+          <Panel className="col-span-6" title="Who is on it" subtitle="Open work orders" tone="amber" padding="none" footer="1 in progress · 2 planned · 1 waiting · 2 open">
             <DataTable label="Work orders" flush columns={PO_ORDER_COLUMNS_SHORT} rows={PO_OPEN_ORDERS} rowKey={(order) => order.id} />
           </Panel>
         </Grid>
@@ -731,8 +819,17 @@ function PlantOverviewGlass() {
             <PoExportChart height={300} headline={<PoExportHeadline />} />
           </Panel>
           <div className="col-span-4 flex flex-col gap-4">
-            <Panel title="Area health" subtitle="Condition score per area">
-              <PoAreaRings size={84} />
+            <Panel className="h-auto flex-1" title="Area health" subtitle="Condition score per area">
+              <div className="grid flex-1 grid-cols-4 place-items-start gap-2">
+                {PO_AREAS.map((area) => (
+                  <RingGauge key={area.id} label={area.name} value={area.healthScore} unit="" size={64} tone={PO_HEALTH_TONE[area.health]} />
+                ))}
+              </div>
+            </Panel>
+            <Panel className="h-auto flex-1" title="Order mix" subtitle="Open work orders by type">
+              <div className="flex flex-1 items-center">
+                <Donut label="Open work orders by type" segments={PO_ORDER_MIX} centerCaption="open" size={116} className="w-full" />
+              </div>
             </Panel>
           </div>
 
@@ -779,16 +876,11 @@ function PlantOverviewGlass() {
             sparkline={PO_ALARM_COUNT}
           />
 
-          <Panel className="col-span-5" title="Open alarms" subtitle="Most severe first">
+          <Panel className="col-span-7" title="Open alarms" subtitle="Most severe first">
             <PoAlarmRows limit={4} />
           </Panel>
-          <Panel className="col-span-4" title="Compression train" subtitle="1st stage compressor, live">
+          <Panel className="col-span-5" title="Compression train" subtitle="1st stage compressor, live">
             <PoTrainMeters />
-          </Panel>
-          <Panel className="col-span-3" title="Order mix" subtitle="Open, by type">
-            <div className="flex flex-1 items-center">
-              <Donut label="Open work orders by type" segments={PO_ORDER_MIX} centerCaption="open" size={124} legend="bottom" className="w-full" />
-            </div>
           </Panel>
         </Grid>
       </AppFrame>
@@ -1010,8 +1102,8 @@ function PlantOverviewBlueprint() {
             />
           </Panel>
 
-          <Panel className="col-span-7" title="Equipment register" subtitle="9 units" icon={<IconTopologyStar3 className="size-4" />}>
-            <DataTable label="Equipment register" columns={PO_UNIT_COLUMNS} rows={PO_UNITS.slice(2)} rowKey={(unit) => unit.id} />
+          <Panel className="col-span-7" title="Equipment register" subtitle="11 units" icon={<IconTopologyStar3 className="size-4" />}>
+            <DataTable label="Equipment register" columns={PO_UNIT_COLUMNS} rows={PO_UNITS} rowKey={(unit) => unit.id} />
           </Panel>
           <Grid stack className="col-span-5">
             <Panel title="1st stage compressor" subtitle="23-KA-9101" icon={<IconGauge className="size-4" />}>

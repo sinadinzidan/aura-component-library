@@ -12,6 +12,10 @@ type HeatStripProps = {
   rows: readonly HeatRow[];
   /** Captions under the first and last cell: `['Mon', 'Sun']`. */
   axis?: readonly [string, string];
+  /** Evenly spaced captions under the cells, for example every six hours. Used instead of `axis`. */
+  ticks?: readonly string[];
+  /** A colour scale under the strip: what the intensity measures, with the ends named. */
+  scale?: { label: string; low: string; high: string };
   /** Value that maps to the strongest colour. Defaults to the largest value in all rows. */
   max?: number;
   tone?: Tone;
@@ -24,7 +28,7 @@ type HeatStripProps = {
  * Intensity over time as rows of cells: when something happens and how much, at a glance. Cell
  * colour is one tone mixed toward the track, so it stays readable in every look and mode.
  */
-export function HeatStrip({ label, rows, axis, max, tone = 'accent', size = 'md', className }: HeatStripProps) {
+export function HeatStrip({ label, rows, axis, ticks, scale, max, tone = 'accent', size = 'md', className }: HeatStripProps) {
   const look = useLook();
   const top = max ?? Math.max(1, ...rows.flatMap((row) => row.values));
   const hasLabels = rows.some((row) => row.label !== '');
@@ -43,13 +47,27 @@ export function HeatStrip({ label, rows, axis, max, tone = 'accent', size = 'md'
           </div>
         </div>
       ))}
-      {axis ? (
+      {ticks ?? axis ? (
         <div className="kit-heat-row">
           {hasLabels ? <span className="kit-heat-label" /> : null}
           <div className="kit-heat-axis kit-heat-cells">
-            <span>{axis[0]}</span>
-            <span>{axis[1]}</span>
+            {(ticks ?? axis ?? []).map((caption) => (
+              <span key={caption}>{caption}</span>
+            ))}
           </div>
+        </div>
+      ) : null}
+      {scale ? (
+        <div data-tone={tone} className="kit-heat-scale">
+          <span>{scale.label}</span>
+          <span className="kit-heat-scale-end">{scale.low}</span>
+          <span aria-hidden="true" className="kit-heat-scale-steps">
+            {[8, 30, 55, 78, 100].map((level) => {
+              const style: CSSProperties & Record<'--kit-heat-level', string> = { '--kit-heat-level': `${level}%` };
+              return <span key={level} className="kit-heat-cell" style={style} />;
+            })}
+          </span>
+          <span className="kit-heat-scale-end">{scale.high}</span>
         </div>
       ) : null}
     </div>

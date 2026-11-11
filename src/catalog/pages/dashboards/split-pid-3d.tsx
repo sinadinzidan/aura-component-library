@@ -1,319 +1,587 @@
 import { Button } from '@cognite/aura/components/button';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import { Switch } from '@cognite/aura/components/switch';
-import { IconAlertTriangle } from '@cognite/aura/icons';
+import { IconArrowsLeftRight, IconCheck, IconCube, IconLink, IconSchema, IconX } from '@cognite/aura/icons';
 import { useReducer, useState } from 'react';
-import type { KeyboardEvent } from 'react';
+import type { Dispatch, KeyboardEvent } from 'react';
 
-import { valvePositionStatus } from '../../../library/industrial/diagrams/symbolState';
-import { runStateStatus } from '../../../library/industrial/status';
-import type { StatusDescriptor } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { DrillBreadcrumb } from '../../../library/three/DrillBreadcrumb';
-import { COMPRESSION_INFO, COMPRESSION_LINKS, drawingTags, sceneTags } from '../../../library/three/fields/compressionArea';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import {
+  COMPRESSION_SHEET,
+  COMPRESSION_SHEET_ALARMS,
+  COMPRESSION_SHEET_READINGS,
+  pinsForTags,
+  sheetElementOfTag,
+  tagOfSheetElement,
+} from '../../../library/kit/split-pid-3d/compressionSheet';
+import { PidSheet } from '../../../library/kit/split-pid-3d/PidSheet';
+import { LINK_STATUS_LABEL, LINK_STATUS_TONE, reconcile, settledCount, settledPercent, type ReconciliationRow } from '../../../library/kit/split-pid-3d/reconciliation';
+import { Stat } from '../../../library/kit/Stat';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
+import { COMPRESSION_INFO, COMPRESSION_LINKS } from '../../../library/three/fields/compressionArea';
 import { INITIAL_LINKED_SELECTION, hoverTagOn, linkedSelectionReducer, primaryTag } from '../../../library/three/fields/linkedSelection';
 import type { LinkedSelectionAction, LinkedSelectionState } from '../../../library/three/fields/linkedSelection';
 import { LinkedSplit } from '../../../library/three/fields/LinkedSplit';
-import { diffTagSets, matchRate, modelCheckFindings } from '../../../library/three/fields/modelCheck';
-import { PidDrawing } from '../../../library/three/fields/PidDrawing';
-import type { PidInstrument } from '../../../library/three/fields/PidDrawing';
 import { SplitScene } from '../../../library/three/fields/SplitScene';
-import { idForTag } from '../../../library/three/fields/tagMapping';
+import { linkForTag } from '../../../library/three/fields/tagMapping';
 import { SceneCanvas } from '../../../library/three/SceneCanvas';
-import { SceneLegend } from '../../../library/three/SceneLegend';
 import { StillScene } from '../../../library/three/scenes/StillScene';
-import { SENSORS } from '../../data/plant';
+import type { PidSelection } from '../../../library/tools/pid/pidReducer';
 import { definePage } from '../../types';
 
 import source from './split-pid-3d.tsx?raw';
 
-const SPLITPID_DIFF = diffTagSets(drawingTags(), sceneTags());
-const SPLITPID_FINDINGS = modelCheckFindings(SPLITPID_DIFF);
-const SPLITPID_MISSING_IN_MODEL = SPLITPID_DIFF.drawingOnly;
+const SPLITPID_ROWS = reconcile(COMPRESSION_LINKS);
 
-const SPLITPID_GLASS = 'border border-default bg-[color-mix(in_oklab,var(--card-background)_80%,transparent)] backdrop-blur-md';
-const SPLITPID_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
+const SPLITPID_MISMATCHES = SPLITPID_ROWS.filter((row) => row.status !== 'matched');
 
-function splitPidSensor(id: string) {
-  return SENSORS.find((sensor) => sensor.id === id);
-}
+const SPLITPID_NOT_IN_MODEL = SPLITPID_ROWS.filter((row) => row.status === 'missing-in-model').map((row) => row.tag);
 
-const SPLITPID_PT = splitPidSensor('pt-92531');
-const SPLITPID_TT = splitPidSensor('tt-91141');
+/** A numbered pin on the drawing over every symbol the 3D model does not have. */
+const SPLITPID_PINS = pinsForTags(COMPRESSION_SHEET, SPLITPID_NOT_IN_MODEL, 'Not in the 3D model');
 
-const SPLITPID_INSTRUMENTS: readonly PidInstrument[] = [
-  { id: 'pt-92531', letters: 'PT', loop: '92531', tag: '23-KA-9101', value: SPLITPID_PT?.value ?? null, unit: SPLITPID_PT?.unit ?? 'barg', decimals: 1 },
-  { id: 'tt-91141', letters: 'TT', loop: '91141', tag: '23-HA-9114', value: SPLITPID_TT?.value ?? null, unit: SPLITPID_TT?.unit ?? '°C', decimals: 1, flag: 'U' },
-  { id: 'pt-92631', letters: 'PT', loop: '92631', tag: '23-KA-9102', value: 96.2, unit: 'barg', decimals: 1 },
-];
+/** Scene labels come from the shared 3D library; here they are set in the UI sans like everything else. */
+const SPLITPID_SCENE = '[&_[data-slot=scene-label]_.font-mono]:font-sans [&_[data-slot=scene-label]_.font-mono]:tabular-nums';
 
-function splitPidState(tag: string): StatusDescriptor | null {
+const SPLITPID_FOCUS = 'outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring-default)]';
+
+type SplitPidDispatch = Dispatch<LinkedSelectionAction>;
+
+function splitPidState(tag: string): { label: string; tone: Tone } | null {
   const info = COMPRESSION_INFO[tag];
   if (!info) return null;
-  if (info.valve) return valvePositionStatus(info.valve);
-  return info.run ? runStateStatus(info.run) : null;
+  if (info.valve) return info.valve === 'open' ? { label: 'Open', tone: 'success' } : info.valve === 'closed' ? { label: 'Closed', tone: 'neutral' } : { label: 'In travel', tone: 'info' };
+  if (info.run === 'running') return { label: 'Running', tone: 'success' };
+  if (info.run === 'tripped') return { label: 'Tripped', tone: 'critical' };
+  return info.run ? { label: info.run === 'standby' ? 'Standby' : info.run === 'maintenance' ? 'Maintenance' : 'Stopped', tone: 'neutral' } : null;
 }
 
-function splitPidSide(tag: string): string {
-  const drawing = idForTag(COMPRESSION_LINKS, tag, 'drawing');
-  const scene = idForTag(COMPRESSION_LINKS, tag, 'scene');
-  if (drawing && scene) return `${drawing} on the drawing, ${scene} in the model`;
-  return drawing ? `${drawing} on the drawing only` : `${scene} in the model only`;
+function splitPidSheetSelection(state: LinkedSelectionState, lineId: string | null): PidSelection {
+  const element = sheetElementOfTag(COMPRESSION_SHEET, state.selected.drawing);
+  if (element) return { kind: 'tag', id: element };
+  return lineId ? { kind: 'line', id: lineId } : null;
 }
 
-function SplitPidSelectionBar({ state, dispatch }: { state: LinkedSelectionState; dispatch: (action: LinkedSelectionAction) => void }) {
-  const tag = primaryTag(state);
-  const info = tag ? COMPRESSION_INFO[tag] : undefined;
-  const status = tag ? splitPidState(tag) : null;
-  const crumbs = [
-    { id: 'plant', label: 'Nordkapp', kind: 'Plant' },
-    { id: 'area', label: 'Gas compression', kind: 'Area' },
-    ...(tag ? [{ id: tag, label: tag }] : []),
-  ];
+/** The drawing half: the P&ID tool's sheet in a card. Picking a symbol, a bubble or a flagged pin selects its tag. */
+function SplitPidDrawingPane({ state, dispatch, lineId, onLine }: { state: LinkedSelectionState; dispatch: SplitPidDispatch; lineId: string | null; onLine: (id: string | null) => void }) {
+  const select = (selection: NonNullable<PidSelection>) => {
+    if (selection.kind === 'line') {
+      dispatch({ type: 'clear' });
+      onLine(selection.id === lineId ? null : selection.id);
+      return;
+    }
+    const tag = selection.kind === 'pin' ? (SPLITPID_NOT_IN_MODEL[SPLITPID_PINS.findIndex((pin) => pin.id === selection.id)] ?? null) : tagOfSheetElement(COMPRESSION_SHEET, selection.id);
+    onLine(null);
+    if (tag) dispatch({ type: 'select', side: 'drawing', tag });
+  };
 
   return (
-    <header className="flex shrink-0 flex-col gap-3 border-b border-default bg-card-background px-4 py-3">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <DrillBreadcrumb crumbs={crumbs} onNavigate={() => dispatch({ type: 'clear' })} onUp={() => dispatch({ type: 'clear' })} label="Selection" />
-        {tag && info ? (
-          <>
-            <div className="flex min-w-0 flex-col">
-              <span className="text-sm text-base-foreground">{info.name}</span>
-              <span className="text-xs text-muted-foreground">{splitPidSide(tag)}</span>
-            </div>
-            {status ? <StatusIndicator {...status} size="sm" /> : null}
-            <dl className="flex flex-wrap items-end gap-x-6 gap-y-2">
-              {info.readings.map((reading) => (
-                <div key={reading.label} className="flex min-w-0 flex-col gap-0.5">
-                  <dt className="text-xs text-muted-foreground">{reading.label}</dt>
-                  <dd>
-                    <ValueReadout value={reading.value} unit={reading.unit} decimals={reading.decimals ?? 0} size="sm" />
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          </>
-        ) : (
-          <p className="text-sm text-muted-foreground">Select a symbol on the drawing or a machine in the 3D model. The other side follows.</p>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-        <Switch label="Sync views" checked={state.sync} onCheckedChange={(value) => dispatch({ type: 'setSync', value })} />
-        <Switch label="Follow selection" checked={state.follow} onCheckedChange={(value) => dispatch({ type: 'setFollow', value })} />
-        <Switch label="Show in 3D only what is on this drawing" checked={state.drawingOnly} onCheckedChange={(value) => dispatch({ type: 'setDrawingOnly', value })} />
-      </div>
-    </header>
-  );
-}
-
-function SplitPidModelCheck({ onSelect }: { onSelect?: (tag: string, side: 'drawing' | 'scene') => void }) {
-  return (
-    <section aria-label="Model check" className="flex shrink-0 flex-col gap-1 border-t border-default bg-card-background px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          <IconAlertTriangle aria-hidden="true" className="size-3.5" />
-          Model check
-        </h3>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {SPLITPID_DIFF.matched.length} of {SPLITPID_DIFF.matched.length + SPLITPID_DIFF.drawingOnly.length + SPLITPID_DIFF.modelOnly.length} tags match ({Math.round(matchRate(SPLITPID_DIFF) * 100)} percent)
+    <Panel
+      className="h-full"
+      padding="none"
+      icon={
+        <IconChip tone="blue" size="sm">
+          <IconSchema />
+        </IconChip>
+      }
+      title="P&ID"
+      subtitle={`${COMPRESSION_SHEET.number} · rev ${COMPRESSION_SHEET.revision} · ${COMPRESSION_SHEET.status.toLowerCase()}`}
+      footer={
+        <span className="flex items-center justify-between gap-4 text-sm text-medium-foreground">
+          <span className="truncate">6 tags, 2 instruments</span>
+          <span className="truncate">Pin 1: not in the model</span>
         </span>
-      </div>
-      <ul className="flex flex-col">
-        {SPLITPID_FINDINGS.map((finding) => {
-          const side = finding.kind === 'missing-in-model' ? 'drawing' : 'scene';
-          const body = (
-            <>
-              <StatusIndicator tone="warning" shape={finding.kind === 'missing-in-model' ? 'square' : 'diamond'} label={finding.message} size="sm" />
-              <span className="font-mono text-xs text-base-foreground">{finding.tag}</span>
-            </>
-          );
-          return (
-            <li key={finding.tag}>
-              {onSelect ? (
-                <button type="button" onClick={() => onSelect(finding.tag, side)} className={`-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between gap-3 rounded-md px-1.5 py-1 text-left hover:bg-secondary-background ${SPLITPID_FOCUS}`}>
-                  {body}
-                </button>
-              ) : (
-                <div className="flex items-center justify-between gap-3 py-1">{body}</div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+      }
+    >
+      <PidSheet
+        drawing={COMPRESSION_SHEET}
+        readings={COMPRESSION_SHEET_READINGS}
+        alarms={COMPRESSION_SHEET_ALARMS}
+        selection={splitPidSheetSelection(state, lineId)}
+        pins={SPLITPID_PINS}
+        onSelect={select}
+        className="flex-1 px-3 pb-3"
+      />
+    </Panel>
   );
 }
 
 function SplitPidFallback() {
   return (
-    <ul className="flex flex-col gap-1.5 rounded-lg border border-default bg-card-background p-3 text-sm">
-      {sceneTags().map((tag) => (
-        <li key={tag} className="flex items-center justify-between gap-3">
-          <span className="font-mono text-xs">{tag}</span>
-          <span className="text-muted-foreground">{COMPRESSION_INFO[tag]?.name}</span>
+    <ul className="flex flex-col gap-1.5 p-3 text-sm">
+      {COMPRESSION_LINKS.filter((link) => link.sceneId !== null).map((link) => (
+        <li key={link.tag} className="flex items-center justify-between gap-3">
+          <TagId>{link.tag}</TagId>
+          <span className="text-medium-foreground">{COMPRESSION_INFO[link.tag]?.name}</span>
         </li>
       ))}
     </ul>
   );
 }
 
-function SplitPidViews({ state, dispatch }: { state: LinkedSelectionState; dispatch: (action: LinkedSelectionAction) => void }) {
+/** The model half: the compression area in 3D in a card, with a key for what selection and ghosting look like. */
+function SplitPidScenePane({ state, dispatch, still, onPick }: { state: LinkedSelectionState; dispatch: SplitPidDispatch; still: boolean; onPick?: () => void }) {
   return (
-    <>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden">
-        <p className="shrink-0 px-4 pb-1 pt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">Drawing 23-PID-1004, compression</p>
-        <div className="flex min-h-0 flex-1 items-center overflow-auto px-3 pb-3">
-          <PidDrawing
-            links={COMPRESSION_LINKS}
-            selectedTag={state.selected.drawing}
-            hoverTag={hoverTagOn(state, 'drawing')}
-            onSelect={(tag) => dispatch({ type: 'select', side: 'drawing', tag })}
-            onHover={(tag) => dispatch({ type: 'hover', side: 'drawing', tag })}
-            instruments={SPLITPID_INSTRUMENTS}
-            missingTags={SPLITPID_MISSING_IN_MODEL}
-          />
-        </div>
-        <SplitPidModelCheck onSelect={(tag, side) => dispatch({ type: 'select', side, tag })} />
+    <Panel
+      className="h-full"
+      padding="none"
+      icon={
+        <IconChip tone="purple" size="sm">
+          <IconCube />
+        </IconChip>
+      }
+      title="3D model"
+      subtitle="NK-23 gas compression · rev 12 · 7 objects"
+      footer={
+        <ul aria-label="Scene key" className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-medium-foreground">
+          <li className="flex items-center gap-2">
+            <span aria-hidden="true" className="size-3 rounded-full border-2 border-[var(--kit-accent)]" /> Selected
+          </li>
+          <li className="flex items-center gap-2">
+            <span aria-hidden="true" className="size-3 rounded-sm border border-dashed border-[var(--kit-rule-strong)] bg-[var(--kit-track)]" /> Ghosted: not on the drawing
+          </li>
+        </ul>
+      }
+    >
+      <div className={`relative min-h-0 flex-1 bg-[radial-gradient(ellipse_at_50%_30%,color-mix(in_oklab,var(--kit-line-purple)_10%,transparent),transparent_70%)] ${SPLITPID_SCENE}`}>
+        <SceneCanvas
+          label={`3D model of the compression area${state.selected.scene ? `, ${state.selected.scene} selected` : ''}${state.drawingOnly ? ', showing only what is on the drawing' : ''}`}
+          fallback={<SplitPidFallback />}
+          onPointerMissed={() => dispatch({ type: 'clear' })}
+        >
+          <StillScene still={still}>
+            <SplitScene
+              links={COMPRESSION_LINKS}
+              selectedTag={state.selected.scene}
+              hoverTag={hoverTagOn(state, 'scene')}
+              focusTag={state.focusTag}
+              drawingOnly={state.drawingOnly}
+              onSelect={(tag) => {
+                onPick?.();
+                dispatch({ type: 'select', side: 'scene', tag });
+              }}
+              onHover={(tag) => dispatch({ type: 'hover', side: 'scene', tag })}
+            />
+          </StillScene>
+        </SceneCanvas>
       </div>
-    </>
+    </Panel>
   );
 }
 
-function SplitPidScenePane({ state, dispatch, still }: { state: LinkedSelectionState; dispatch: (action: LinkedSelectionAction) => void; still: boolean }) {
+/** The floating toolbar: what is open on each side and how the two views are tied together. */
+function SplitPidToolbar({ state, dispatch }: { state: LinkedSelectionState; dispatch: SplitPidDispatch }) {
   return (
-    <div className="relative h-full min-h-0 bg-[radial-gradient(ellipse_at_50%_35%,color-mix(in_oklab,var(--primary-background)_12%,transparent),transparent_70%)]">
-      <SceneCanvas label={`3D model of the compression area${state.selected.scene ? `, ${state.selected.scene} selected` : ''}${state.drawingOnly ? ', showing only what is on the drawing' : ''}`} fallback={<SplitPidFallback />} onPointerMissed={() => dispatch({ type: 'clear' })}>
-        <StillScene still={still}>
-          <SplitScene
-            links={COMPRESSION_LINKS}
-            selectedTag={state.selected.scene}
-            hoverTag={hoverTagOn(state, 'scene')}
-            focusTag={state.focusTag}
-            drawingOnly={state.drawingOnly}
-            onSelect={(tag) => dispatch({ type: 'select', side: 'scene', tag })}
-            onHover={(tag) => dispatch({ type: 'hover', side: 'scene', tag })}
-          />
-        </StillScene>
-      </SceneCanvas>
-      <p className="pointer-events-none absolute left-4 top-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">3D model</p>
-      <div className={`pointer-events-auto absolute bottom-3 left-3 rounded-lg px-3 py-2 ${SPLITPID_GLASS}`}>
-        <SceneLegend
-          items={[
-            { kind: 'selection', label: 'Selected' },
-            { kind: 'status', label: 'Ghosted: not on the drawing', tone: 'neutral' },
-          ]}
-        />
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-[var(--kit-radius)] border border-[var(--kit-rule)] bg-[var(--kit-surface)] px-4 py-3 shadow-[var(--kit-panel-shadow)]">
+      <div className="flex min-w-0 items-center gap-3">
+        <IconChip tone="accent">
+          <IconLink />
+        </IconChip>
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-6 tracking-tight text-base-foreground">Gas compression</h2>
+          <p className="text-sm text-medium-foreground">Drawing and model, side by side</p>
+        </div>
+      </div>
+      <StatusPill tone={state.sync ? 'success' : 'neutral'} size="lg" icon={<IconArrowsLeftRight />}>
+        {state.sync ? 'Views linked' : 'Views independent'}
+      </StatusPill>
+      <div className="ml-auto flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Switch label="Link selection" checked={state.sync} onCheckedChange={(value) => dispatch({ type: 'setSync', value })} />
+        <Switch label="Fly to selection" checked={state.follow} onCheckedChange={(value) => dispatch({ type: 'setFollow', value })} />
+        <Switch label="Ghost what the drawing lacks" checked={state.drawingOnly} onCheckedChange={(value) => dispatch({ type: 'setDrawingOnly', value })} />
       </div>
     </div>
   );
 }
 
-function SplitPidField({ initial = INITIAL_LINKED_SELECTION, initialRatio = 54, still = false }: { initial?: LinkedSelectionState; initialRatio?: number; still?: boolean }) {
+/** One side's id for the selected tag, or a flag when that side does not have it. */
+function SplitPidSideId({ side, id }: { side: 'Drawing' | 'Model'; id: string | null }) {
+  return (
+    <span className="flex items-center gap-2 text-sm">
+      <span className="text-medium-foreground">{side}</span>
+      {id ? <TagId variant="chip">{id}</TagId> : <StatusPill tone="warning">Missing</StatusPill>}
+    </span>
+  );
+}
+
+/** What is selected, once, for both views: the tag, its state, each side's own id and the three figures that matter. */
+function SplitPidSelection({ state, dispatch, lineId = null }: { state: LinkedSelectionState; dispatch: SplitPidDispatch; lineId?: string | null }) {
+  const tag = primaryTag(state);
+  const info = tag ? COMPRESSION_INFO[tag] : undefined;
+  const link = linkForTag(COMPRESSION_LINKS, tag);
+  const status = tag ? splitPidState(tag) : null;
+  const line = COMPRESSION_SHEET.lines.find((candidate) => candidate.id === lineId);
+
+  if (!tag || !info) {
+    return (
+      <Panel className="h-full" title={line ? 'Process line' : 'Nothing selected'} subtitle={line ? 'Lines live on the drawing only' : 'Pick on either side; the other follows'}>
+        {line ? (
+          <div className="flex flex-1 flex-col justify-center gap-1">
+            <p className="text-2xl font-semibold tracking-tight tabular-nums text-base-foreground">{line.number}</p>
+            <p className="text-sm text-medium-foreground">{line.service}. The 3D model carries pipe geometry without line numbers, so there is nothing to select on the other side.</p>
+          </div>
+        ) : (
+          <div className="flex flex-1 flex-col justify-center gap-3">
+            <p className="text-sm text-medium-foreground">Click a symbol on the P&ID or a machine in the 3D model. Start with one of these:</p>
+            <div className="flex flex-wrap gap-2">
+              {['23-KA-9101', '23-HA-9114', '23-HV-9162'].map((quick) => (
+                <Button key={quick} variant="outline" size="sm" onClick={() => dispatch({ type: 'select', side: 'drawing', tag: quick })}>
+                  {quick}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel
+      className="h-full"
+      title={info.name}
+      subtitle={state.origin === 'scene' ? 'Picked in the 3D model' : 'Picked on the drawing'}
+      actions={
+        <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'clear' })}>
+          <IconX /> Clear
+        </Button>
+      }
+    >
+      <div className="flex flex-1 flex-wrap content-center items-center gap-x-8 gap-y-4">
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-3xl font-semibold leading-none tracking-tight tabular-nums text-base-foreground">{tag}</span>
+            {status ? <StatusPill tone={status.tone}>{status.label}</StatusPill> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <SplitPidSideId side="Drawing" id={link?.drawingId ?? null} />
+            <IconArrowsLeftRight aria-hidden="true" className="size-4 text-muted-foreground" />
+            <SplitPidSideId side="Model" id={link?.sceneId ?? null} />
+          </div>
+        </div>
+        <div className="grid min-w-[19rem] flex-1 grid-cols-3 gap-4">
+          {info.readings.map((reading) => (
+            <Stat key={reading.label} variant="plain" size="sm" label={reading.label} value={reading.value} unit={reading.unit} decimals={reading.decimals ?? 0} />
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/** The model check: how much of the two sides agrees, and the tags that do not, each a button that selects it. */
+function SplitPidModelCheck({ onSelect }: { onSelect?: (row: ReconciliationRow) => void }) {
+  const matched = settledCount(SPLITPID_ROWS, []);
+
+  return (
+    <Panel className="h-full" title="Model check" subtitle={`${matched} of ${SPLITPID_ROWS.length} tags on both sides`}>
+      <div className="flex flex-1 items-center gap-5">
+        <RingGauge label="Tags matched" value={settledPercent(SPLITPID_ROWS, [])} tone="warning" size={104} hideLabel />
+        <ul className="flex min-w-0 flex-1 flex-col">
+          {SPLITPID_MISMATCHES.map((row) => (
+            <li key={row.tag} className="border-b border-[var(--kit-rule)] last:border-b-0">
+              <button
+                type="button"
+                disabled={!onSelect}
+                onClick={() => onSelect?.(row)}
+                className={`flex w-full items-center justify-between gap-3 rounded-[var(--kit-radius-sm)] py-2 text-left ${SPLITPID_FOCUS} ${onSelect ? 'cursor-pointer hover:bg-[var(--kit-well)]' : ''}`}
+              >
+                <TagId>{row.tag}</TagId>
+                <StatusPill tone={LINK_STATUS_TONE[row.status]}>{LINK_STATUS_LABEL[row.status]}</StatusPill>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Panel>
+  );
+}
+
+function SplitPidWorkspace({ initial = INITIAL_LINKED_SELECTION, initialRatio = 50, still = false }: { initial?: LinkedSelectionState; initialRatio?: number; still?: boolean }) {
+  // Archetype: a split workspace. The P&ID and the 3D model are two cards either side of a
+  //   divider that drags; a floating toolbar ties them together; one selection card under both
+  //   says what is picked, whichever side it was picked on.
+  // Interaction: click a symbol, an instrument bubble or a pin on the drawing, or a machine in
+  //   the model. The other side selects the same tag and the camera flies to it. Escape clears.
   const [state, dispatch] = useReducer(linkedSelectionReducer, initial);
   const [ratio, setRatio] = useState(initialRatio);
+  const [lineId, setLineId] = useState<string | null>(null);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape' && primaryTag(state) !== null) {
+    if (event.key === 'Escape' && (primaryTag(state) !== null || lineId !== null)) {
       event.preventDefault();
+      setLineId(null);
       dispatch({ type: 'clear' });
     }
   };
 
   return (
-    <div
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      onPointerDownCapture={(event) => {
-        // Orbit controls swallow the pointer event, so take focus by hand to keep Escape working.
-        if (event.target instanceof HTMLCanvasElement) event.currentTarget.focus({ preventScroll: true });
-      }}
-      className="flex h-[46rem] w-full flex-col overflow-hidden rounded-xl border border-default bg-base-background outline-none"
-    >
-      <SplitPidSelectionBar state={state} dispatch={dispatch} />
-      <LinkedSplit
-        startLabel="Drawing"
-        endLabel="3D model"
-        ratio={ratio}
-        onRatioChange={setRatio}
-        start={<SplitPidViews state={state} dispatch={dispatch} />}
-        end={<SplitPidScenePane state={state} dispatch={dispatch} still={still} />}
-      />
-    </div>
+    <Canvas className="h-[59.5rem]">
+      <div
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        onPointerDownCapture={(event) => {
+          // Orbit controls swallow the pointer event, so take focus by hand to keep Escape working.
+          if (event.target instanceof HTMLCanvasElement) event.currentTarget.focus({ preventScroll: true });
+        }}
+        className="flex h-full min-h-0 flex-col gap-4 outline-none"
+      >
+        <SplitPidToolbar state={state} dispatch={dispatch} />
+        <LinkedSplit
+          startLabel="Drawing"
+          endLabel="3D model"
+          ratio={ratio}
+          onRatioChange={setRatio}
+          limits={{ min: 44, max: 62, step: 2 }}
+          start={<SplitPidDrawingPane state={state} dispatch={dispatch} lineId={lineId} onLine={setLineId} />}
+          end={<SplitPidScenePane state={state} dispatch={dispatch} still={still} onPick={() => setLineId(null)} />}
+        />
+        <div className="grid h-60 shrink-0 grid-cols-12 gap-4">
+          <div className="col-span-7 min-w-0">
+            <SplitPidSelection state={state} dispatch={dispatch} lineId={lineId} />
+          </div>
+          <div className="col-span-5 min-w-0">
+            <SplitPidModelCheck
+              onSelect={(row) => {
+                setLineId(null);
+                dispatch({ type: 'select', side: row.status === 'missing-in-model' ? 'drawing' : 'scene', tag: row.tag });
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </Canvas>
+  );
+}
+
+function SplitPidSignature() {
+  return (
+    <LookScope look="studio">
+      <SplitPidWorkspace />
+    </LookScope>
   );
 }
 
 const SPLITPID_SELECTED: LinkedSelectionState = { ...INITIAL_LINKED_SELECTION, selected: { drawing: '23-KA-9102', scene: '23-KA-9102' }, focusTag: '23-KA-9102', origin: 'drawing' };
+
 const SPLITPID_GHOSTED: LinkedSelectionState = { ...INITIAL_LINKED_SELECTION, drawingOnly: true, selected: { drawing: '23-HA-9114', scene: '23-HA-9114' }, focusTag: '23-HA-9114', origin: 'scene' };
 
-function SplitPidFieldBlueprint() {
+const SPLITPID_ACTION: Readonly<Record<ReconciliationRow['status'], string>> = {
+  matched: 'Nothing to do',
+  'missing-in-model': 'Add to the model backlog',
+  'missing-on-drawing': 'Raise a drawing change',
+};
+
+function SplitPidReview() {
+  // A different screen of the same product: the model check as a review. The table leads; the
+  // model, ghosted to what the drawing shows, is the evidence; resolving a row moves the ring.
+  const [tag, setTag] = useState('23-XV-9171');
+  const [resolved, setResolved] = useState<readonly string[]>([]);
+  const row = SPLITPID_ROWS.find((candidate) => candidate.tag === tag) ?? SPLITPID_ROWS[0];
+  const sceneTag = row && row.sceneId !== null ? row.tag : null;
+  const scene: LinkedSelectionState = { ...INITIAL_LINKED_SELECTION, drawingOnly: true, selected: { drawing: null, scene: sceneTag }, focusTag: sceneTag };
+  const done = row ? row.status === 'matched' || resolved.includes(row.tag) : true;
+  const columns: DataTableColumn<ReconciliationRow>[] = [
+    {
+      id: 'tag',
+      header: 'Tag',
+      cell: (entry) => (
+        <button type="button" aria-pressed={entry.tag === tag} onClick={() => setTag(entry.tag)} className={`flex cursor-pointer flex-col rounded-[var(--kit-radius-sm)] text-left ${SPLITPID_FOCUS}`}>
+          <TagId>{entry.tag}</TagId>
+          <span className="text-sm text-medium-foreground">{COMPRESSION_INFO[entry.tag]?.name}</span>
+        </button>
+      ),
+    },
+    { id: 'drawing', header: 'Drawing id', cell: (entry) => entry.drawingId ?? '—', muted: true, nowrap: true },
+    { id: 'model', header: 'Model id', cell: (entry) => entry.sceneId ?? '—', muted: true, nowrap: true },
+    {
+      id: 'status',
+      header: 'Check',
+      nowrap: true,
+      cell: (entry) =>
+        resolved.includes(entry.tag) ? (
+          <StatusPill tone="info" icon={<IconCheck />}>
+            Resolved
+          </StatusPill>
+        ) : (
+          <StatusPill tone={LINK_STATUS_TONE[entry.status]}>{LINK_STATUS_LABEL[entry.status]}</StatusPill>
+        ),
+    },
+  ];
+
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <SplitPidField />
-    </ThemeScope>
+    <LookScope look="studio">
+      <Canvas className="grid h-[41rem] grid-cols-12 grid-rows-[minmax(0,1fr)] gap-4">
+        <Panel
+          className="col-span-7 min-h-0 overflow-y-auto"
+          padding="none"
+          title="Model check review"
+          subtitle={`${COMPRESSION_SHEET.number} against model NK-23 · ${settledCount(SPLITPID_ROWS, resolved)} of ${SPLITPID_ROWS.length} tags settled`}
+          actions={<RingGauge label="Tags settled" value={settledPercent(SPLITPID_ROWS, resolved)} tone={settledPercent(SPLITPID_ROWS, resolved) === 100 ? 'success' : 'warning'} size={56} hideLabel />}
+        >
+          <DataTable
+            label="Tags on the drawing and in the model"
+            flush
+            columns={columns}
+            rows={SPLITPID_ROWS}
+            rowKey={(entry) => entry.tag}
+            rowTone={(entry) => (entry.tag === tag ? 'accent' : entry.status !== 'matched' && !resolved.includes(entry.tag) ? 'warning' : undefined)}
+          />
+        </Panel>
+        <div className="col-span-5 flex min-h-0 flex-col gap-4">
+          <div className="min-h-0 flex-1">
+            <SplitPidScenePane state={scene} dispatch={() => undefined} still />
+          </div>
+          {row ? (
+            <Panel
+              className="h-auto shrink-0"
+              title={COMPRESSION_INFO[row.tag]?.name ?? row.tag}
+              subtitle={row.tag}
+              actions={resolved.includes(row.tag) ? <StatusPill tone="info">Resolved</StatusPill> : <StatusPill tone={LINK_STATUS_TONE[row.status]}>{LINK_STATUS_LABEL[row.status]}</StatusPill>}
+            >
+              <p className="text-sm text-medium-foreground">
+                {row.status === 'matched'
+                  ? 'The drawing and the model agree on this tag. Selecting it on either side finds it on the other.'
+                  : row.status === 'missing-in-model'
+                    ? 'The drawing shows this valve on the recycle line, but nothing in the model carries its tag. It was most likely added after the last laser scan.'
+                    : 'The model has this object, but revision C of the drawing does not show it. Either the drawing is behind or the object belongs to another sheet.'}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" disabled={done} onClick={() => setResolved([...resolved, row.tag])}>
+                  {SPLITPID_ACTION[row.status]}
+                </Button>
+                <Button variant="outline" size="sm" disabled={!resolved.includes(row.tag)} onClick={() => setResolved(resolved.filter((entry) => entry !== row.tag))}>
+                  Reopen
+                </Button>
+              </div>
+            </Panel>
+          ) : null}
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function SplitPidFieldHologram() {
+function SplitPidTablet() {
+  // The same linked selection at tablet width: no room for two panes, so one is shown at a time
+  // and the selection card under it carries the pick across when the view is switched.
+  const [state, dispatch] = useReducer(linkedSelectionReducer, SPLITPID_SELECTED);
+  const [view, setView] = useState('drawing');
+  const [lineId, setLineId] = useState<string | null>(null);
+
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <SplitPidField still initial={SPLITPID_SELECTED} initialRatio={44} />
-    </ThemeScope>
+    <LookScope look="studio">
+      <Canvas className="flex justify-center">
+        <div className="flex w-full max-w-[46rem] flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--kit-radius)] border border-[var(--kit-rule)] bg-[var(--kit-surface)] px-4 py-3 shadow-[var(--kit-panel-shadow)]">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold leading-6 tracking-tight text-base-foreground">Gas compression</h2>
+              <p className="text-sm text-medium-foreground">The selection stays when you switch view</p>
+            </div>
+            <SegmentedControl value={view} onValueChange={(next) => setView(String(next))}>
+              <SegmentedControlList aria-label="View">
+                <SegmentedControlButton value="drawing">P&ID</SegmentedControlButton>
+                <SegmentedControlButton value="model">3D model</SegmentedControlButton>
+              </SegmentedControlList>
+            </SegmentedControl>
+          </div>
+          <div className="h-[36rem]">
+            {view === 'drawing' ? <SplitPidDrawingPane state={state} dispatch={dispatch} lineId={lineId} onLine={setLineId} /> : <SplitPidScenePane state={state} dispatch={dispatch} still onPick={() => setLineId(null)} />}
+          </div>
+          <div className="h-60">
+            <SplitPidSelection state={state} dispatch={dispatch} lineId={lineId} />
+          </div>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function SplitPidFieldControlRoom() {
+function SplitPidPartToolbar() {
+  const [state, dispatch] = useReducer(linkedSelectionReducer, INITIAL_LINKED_SELECTION);
+
   return (
-    <ThemeScope preset="control-room" className="w-full">
-      <SplitPidField still initial={SPLITPID_GHOSTED} initialRatio={56} />
-    </ThemeScope>
+    <LookScope look="studio">
+      <Canvas>
+        <SplitPidToolbar state={state} dispatch={dispatch} />
+      </Canvas>
+    </LookScope>
   );
 }
 
 function SplitPidPartDrawing() {
-  const [selected, setSelected] = useState<string | null>('23-KA-9101');
-  const [hover, setHover] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(linkedSelectionReducer, { ...INITIAL_LINKED_SELECTION, selected: { drawing: '23-KA-9101', scene: '23-KA-9101' }, origin: 'drawing' });
+  const [lineId, setLineId] = useState<string | null>(null);
 
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex w-full items-center rounded-xl border border-default bg-base-background p-4">
-        <PidDrawing
-          links={COMPRESSION_LINKS}
-          selectedTag={selected}
-          hoverTag={hover}
-          onSelect={(tag) => setSelected(tag === selected ? null : tag)}
-          onHover={setHover}
-          instruments={SPLITPID_INSTRUMENTS}
-          missingTags={SPLITPID_MISSING_IN_MODEL}
-        />
-      </div>
-    </ThemeScope>
+    <LookScope look="studio">
+      <Canvas>
+        <div className="h-[36rem]">
+          <SplitPidDrawingPane state={state} dispatch={dispatch} lineId={lineId} onLine={setLineId} />
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
 function SplitPidPartScene() {
-  const [state, dispatch] = useReducer(linkedSelectionReducer, SPLITPID_SELECTED);
+  const [state, dispatch] = useReducer(linkedSelectionReducer, SPLITPID_GHOSTED);
 
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="h-80 w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <SplitPidScenePane state={state} dispatch={dispatch} still />
-      </div>
-    </ThemeScope>
+    <LookScope look="studio">
+      <Canvas className="flex flex-col gap-4">
+        <div className="h-[28rem]">
+          <SplitPidScenePane state={state} dispatch={dispatch} still />
+        </div>
+        <Switch label="Ghost what the drawing lacks" checked={state.drawingOnly} onCheckedChange={(value) => dispatch({ type: 'setDrawingOnly', value })} />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function SplitPidPartGhost() {
-  const [state, dispatch] = useReducer(linkedSelectionReducer, { ...SPLITPID_GHOSTED, focusTag: null, selected: { drawing: null, scene: null } });
+function SplitPidPartSelection() {
+  const [state, dispatch] = useReducer(linkedSelectionReducer, SPLITPID_SELECTED);
 
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-3">
-        <Switch label="Show in 3D only what is on this drawing" checked={state.drawingOnly} onCheckedChange={(value) => dispatch({ type: 'setDrawingOnly', value })} />
-        <div className="h-72 w-full overflow-hidden rounded-lg border border-default">
-          <SplitPidScenePane state={state} dispatch={dispatch} still />
+    <LookScope look="studio">
+      <Canvas>
+        <div className="h-60">
+          <SplitPidSelection state={state} dispatch={dispatch} />
         </div>
-      </div>
-    </ThemeScope>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SplitPidPartMissing() {
+  const [state, dispatch] = useReducer(linkedSelectionReducer, { ...INITIAL_LINKED_SELECTION, selected: { drawing: '23-HV-9162', scene: '23-HV-9162' }, origin: 'drawing' });
+
+  return (
+    <LookScope look="studio">
+      <Canvas>
+        <div className="h-60">
+          <SplitPidSelection state={state} dispatch={dispatch} />
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function SplitPidPartModelCheck() {
+  return (
+    <LookScope look="studio">
+      <Canvas>
+        <div className="h-60">
+          <SplitPidModelCheck />
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -321,106 +589,28 @@ function SplitPidPartDivider() {
   const [ratio, setRatio] = useState(40);
 
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex h-48 w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <LinkedSplit
-          startLabel="Drawing"
-          endLabel="3D model"
-          ratio={ratio}
-          onRatioChange={setRatio}
-          start={
-            <div className="flex h-full flex-col justify-center gap-1 px-4">
-              <span className="text-sm font-medium text-base-foreground">Drawing</span>
-              <span className="text-xs tabular-nums text-muted-foreground">{Math.round(ratio)} percent</span>
-            </div>
-          }
-          end={
-            <div className="flex h-full flex-col justify-center gap-1 px-4">
-              <span className="text-sm font-medium text-base-foreground">3D model</span>
-              <span className="text-xs tabular-nums text-muted-foreground">{100 - Math.round(ratio)} percent</span>
-              <span className="text-xs text-muted-foreground">Drag the divider, or focus it and use the arrow keys.</span>
-            </div>
-          }
-        />
-      </div>
-    </ThemeScope>
-  );
-}
-
-function SplitPidPartSelectionBar() {
-  const [state, dispatch] = useReducer(linkedSelectionReducer, SPLITPID_SELECTED);
-
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <SplitPidSelectionBar state={state} dispatch={dispatch} />
-      </div>
-    </ThemeScope>
-  );
-}
-
-function SplitPidPartModelCheck() {
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <SplitPidModelCheck />
-      </div>
-    </ThemeScope>
-  );
-}
-
-function SplitPidPartMapping() {
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="w-full overflow-x-auto rounded-xl border border-default bg-base-background p-4">
-        <table className="w-full text-left text-sm">
-          <caption className="pb-2 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Mapping between drawing ids and scene ids</caption>
-          <thead>
-            <tr className="text-xs text-muted-foreground">
-              <th scope="col" className="pb-1 pr-4 font-medium">Tag</th>
-              <th scope="col" className="pb-1 pr-4 font-medium">Drawing id</th>
-              <th scope="col" className="pb-1 font-medium">Scene id</th>
-            </tr>
-          </thead>
-          <tbody>
-            {COMPRESSION_LINKS.map((link) => (
-              <tr key={link.tag}>
-                <th scope="row" className="py-1 pr-4 font-mono text-xs font-normal text-base-foreground">{link.tag}</th>
-                <td className="py-1 pr-4 font-mono text-xs tabular-nums text-medium-foreground">{link.drawingId ?? 'missing'}</td>
-                <td className="py-1 font-mono text-xs tabular-nums text-medium-foreground">{link.sceneId ?? 'missing'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function SplitPidPartClear() {
-  const [state, dispatch] = useReducer(linkedSelectionReducer, SPLITPID_SELECTED);
-  const tag = primaryTag(state);
-
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex w-full flex-col items-start gap-3 rounded-xl border border-default bg-base-background p-4">
-        <p className="text-sm text-base-foreground">
-          Selected: <span className="font-mono">{tag ?? 'nothing'}</span>
-        </p>
-        <p className="text-xs text-muted-foreground">Hover on either side is mirrored to the other while views are synced; selecting the selected tag again clears it.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'select', side: 'scene', tag: '23-HA-9114' })}>
-            Select cooler in 3D
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'select', side: 'drawing', tag: '23-VA-9120' })}>
-            Select scrubber on drawing
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'clear' })}>
-            Clear selection
-          </Button>
+    <LookScope look="studio">
+      <Canvas>
+        <div className="flex h-44">
+          <LinkedSplit
+            startLabel="Drawing"
+            endLabel="3D model"
+            ratio={ratio}
+            onRatioChange={setRatio}
+            start={
+              <Panel className="h-full" title="P&ID">
+                <p className="text-3xl font-semibold tabular-nums text-base-foreground">{Math.round(ratio)}%</p>
+              </Panel>
+            }
+            end={
+              <Panel className="h-full" title="3D model" subtitle="Drag the divider, or focus it and use the arrow keys">
+                <p className="text-3xl font-semibold tabular-nums text-base-foreground">{100 - Math.round(ratio)}%</p>
+              </Panel>
+            }
+          />
         </div>
-      </div>
-    </ThemeScope>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -428,169 +618,159 @@ export default definePage({
   id: 'split-pid-3d',
   title: 'P&ID beside 3D',
   summary:
-    'A drawing and a 3D model of the same compression area side by side and linked by tag. Select a symbol and the camera flies to the machine; select a machine and the symbol lights up. A model check lists the valves that exist on only one side.',
+    'A split workspace that ties a P&ID to the 3D model of the same area by functional location tag: pick a symbol or a machine and the other side selects it, a card under both says what it is, and a model check lists the tags only one side has.',
   guidance: {
     use: [
-      'When engineers cross-check a drawing against a model: a digital twin is only as good as the match between the two.',
-      'With one mapping table keyed by functional location tag, so neither side needs the other\'s ids.',
-      'With a model check beside the drawing. A mismatch you can see is one you can fix.',
-      'With a divider that can be dragged and moved from the keyboard, because the right balance depends on the task.',
+      'When engineers move between a drawing and the physical layout and need to keep their place in both.',
+      'Key the link on the tag, not on either side’s own id, and show both ids so a mismatch can be traced.',
+      'Say what is selected once, outside the two views, so it reads the same whichever side it came from.',
     ],
     avoid: [
-      'Linking by position or by name. Tags are the key; names drift.',
-      'Syncing by default with no way out. Sync and follow are switches so people can compare two places at once.',
-      'Hiding items that are on one side only. Flag them and ghost them instead.',
-      'Colour as the only sign of a mismatch. The model check says what is missing in words and shape.',
+      'Linking that cannot be switched off: sometimes the two views are needed independently.',
+      'Hiding what one side lacks — flag it on the drawing, ghost it in the model and list it in the check.',
+      'Shrinking the drawing until its text is unreadable; let the pane scroll instead.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'Click a symbol on the drawing, or a machine in the 3D view: the other side highlights it and the camera flies there. Hovering mirrors across. Drag the divider, or focus it and use the arrow keys, to give one side more room. Turn off Sync views to compare two items, Follow selection to keep the camera still, and use the filter to ghost what the drawing does not show.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'Click a symbol, an instrument bubble or the pin on the drawing, or a machine in the model: the other side follows and the camera flies in. Drag the divider, switch linking off in the toolbar, press Escape to clear.',
       specimens: [
         {
-          id: 'SplitPidFieldBlueprint',
-          title: 'P&ID beside 3D',
-          note: 'Pick it for quality work on a digital twin: two views of one asset that must agree, linked by tag.',
+          id: 'SplitPidSignature',
+          title: 'Linked workspace',
+          note: 'Pick it when a drawing and a model of the same area are read together and selection has to carry across.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'three/fields/LinkedSplit.tsx',
-            'three/fields/PidDrawing.tsx',
+            'kit/split-pid-3d/PidSheet.tsx',
+            'kit/split-pid-3d/compressionSheet.ts',
+            'kit/split-pid-3d/reconciliation.ts',
+            'tools/pid/PidCanvas.tsx',
             'three/fields/SplitScene.tsx',
-            'three/fields/tagMapping.ts',
-            'three/fields/modelCheck.ts',
+            'three/fields/LinkedSplit.tsx',
             'three/fields/linkedSelection.ts',
-            'three/fields/splitRatio.ts',
-            'three/fields/compressionArea.ts',
-            'industrial/diagrams/EquipmentSymbol.tsx',
-            'industrial/diagrams/ValveSymbol.tsx',
-            'industrial/diagrams/DiagramHotspot.tsx',
-            'three/DrillBreadcrumb.tsx',
-            'themes/ThemeScope.tsx',
+            'kit/Panel.tsx',
+            'kit/Stat.tsx',
           ],
-          Component: SplitPidFieldBlueprint,
+          Component: SplitPidSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same split in a dark teal preset with a machine selected, and in a dense control-room preset with the 3D view ghosting what the drawing does not show.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The model check as a review that is worked through row by row, and the linked selection at tablet width with one view at a time.',
       specimens: [
         {
-          id: 'SplitPidFieldHologram',
-          title: 'Hologram, machine selected',
-          note: 'Pick it for a presentation where the drawing and the model are shown to a room.',
+          id: 'SplitPidReview',
+          title: 'Model check review',
+          note: 'Pick it for the person who keeps the twin honest: every tag in a table, the evidence beside it and an action per mismatch.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['three/fields/LinkedSplit.tsx', 'three/fields/SplitScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: SplitPidFieldHologram,
+          bleed: true,
+          uses: ['kit/split-pid-3d/reconciliation.ts', 'kit/DataTable.tsx', 'kit/RingGauge.tsx', 'three/fields/SplitScene.tsx'],
+          Component: SplitPidReview,
         },
         {
-          id: 'SplitPidFieldControlRoom',
-          title: 'Control room, drawing only',
-          note: 'Pick it for a dense operator workstation: sharp corners, and everything the drawing lacks ghosted in 3D.',
+          id: 'SplitPidTablet',
+          title: 'One view at a time',
+          note: 'Pick it where two panes do not fit: the selection card carries the pick from the drawing to the model and back.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['three/fields/LinkedSplit.tsx', 'three/fields/SplitScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: SplitPidFieldControlRoom,
+          bleed: true,
+          uses: ['kit/split-pid-3d/PidSheet.tsx', 'three/fields/SplitScene.tsx', 'three/fields/linkedSelection.ts'],
+          Component: SplitPidTablet,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The drawing, the scene, the divider, the shared selection bar, the model check and the mapping table, each on its own.',
+      description: 'The cards of the workspace on their own.',
       specimens: [
         {
-          id: 'SplitPidPartDrawing',
-          title: 'P&ID drawing',
-          note: 'Pick it for a drawing whose symbols are selectable by tag, with live values on the instrument bubbles.',
+          id: 'SplitPidPartToolbar',
+          title: 'Link toolbar',
+          note: 'Pick it above two linked views: what is open and the three ways the views are tied together.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['three/fields/PidDrawing.tsx', 'industrial/diagrams/EquipmentSymbol.tsx', 'industrial/diagrams/InstrumentBubble.tsx', 'industrial/diagrams/ValueTag.tsx'],
+          bleed: true,
+          uses: ['kit/IconChip.tsx', 'kit/StatusPill.tsx', 'three/fields/linkedSelection.ts'],
+          Component: SplitPidPartToolbar,
+        },
+        {
+          id: 'SplitPidPartDrawing',
+          title: 'P&ID card',
+          note: 'Pick it to show a sheet from the P&ID tool at a readable size, with live values, an alarm and a flagged symbol.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/split-pid-3d/PidSheet.tsx', 'kit/split-pid-3d/compressionSheet.ts', 'tools/pid/PidCanvas.tsx'],
           Component: SplitPidPartDrawing,
         },
         {
           id: 'SplitPidPartScene',
-          title: 'Linked 3D scene',
-          note: 'Pick it for the model side: it reports clicks and hover as tags, and flies to whichever tag is in focus.',
+          title: '3D card with ghosting',
+          note: 'Pick it to show which objects of a model a drawing covers: the rest fades back and cannot be selected.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['three/fields/SplitScene.tsx', 'three/fields/compressionArea.ts', 'three/Selectable.tsx'],
+          bleed: true,
+          uses: ['three/fields/SplitScene.tsx', 'three/SceneCanvas.tsx'],
           Component: SplitPidPartScene,
         },
         {
-          id: 'SplitPidPartGhost',
-          title: 'Ghost what is not on the drawing',
-          note: 'Pick it to see the difference between the two sources: the turbine and the export valve fade when the filter is on.',
+          id: 'SplitPidPartSelection',
+          title: 'Selection card',
+          note: 'Pick it under two linked views: the tag once, each side’s own id and the figures that matter.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['three/fields/SplitScene.tsx', 'three/fields/tagMapping.ts'],
-          Component: SplitPidPartGhost,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Stat.tsx', 'kit/TagId.tsx', 'three/fields/tagMapping.ts'],
+          Component: SplitPidPartSelection,
         },
         {
-          id: 'SplitPidPartDivider',
-          title: 'Resizable divider',
-          note: 'Pick it for any split view: pointer and keyboard resize, limits, and a spoken result.',
+          id: 'SplitPidPartMissing',
+          title: 'Selection missing on one side',
+          note: 'Pick it for the case the link cannot be followed: the side without the tag is flagged instead of left blank.',
           origin: 'custom',
-          size: 'sm',
+          size: 'md',
           align: 'stretch',
-          uses: ['three/fields/LinkedSplit.tsx', 'three/fields/splitRatio.ts'],
-          Component: SplitPidPartDivider,
-        },
-        {
-          id: 'SplitPidPartSelectionBar',
-          title: 'Shared selection bar',
-          note: 'Pick it to say what is selected, in what state and with which three readings, above both views.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['three/DrillBreadcrumb.tsx', 'three/fields/linkedSelection.ts', 'industrial/ValueReadout.tsx'],
-          Component: SplitPidPartSelectionBar,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx'],
+          Component: SplitPidPartMissing,
         },
         {
           id: 'SplitPidPartModelCheck',
-          title: 'Model check',
-          note: 'Pick it for a quality list: tags that exist on only one side, with the rate of agreement.',
+          title: 'Model check card',
+          note: 'Pick it to keep the mismatch between drawing and model in view while working in either.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['three/fields/modelCheck.ts', 'industrial/StatusIndicator.tsx'],
+          bleed: true,
+          uses: ['kit/split-pid-3d/reconciliation.ts', 'kit/RingGauge.tsx'],
           Component: SplitPidPartModelCheck,
         },
         {
-          id: 'SplitPidPartMapping',
-          title: 'Mapping table',
-          note: 'Pick it as the single source of truth between the two id spaces: one row per tag, a gap where a side lacks it.',
+          id: 'SplitPidPartDivider',
+          title: 'Split divider',
+          note: 'Pick it between two views that share a width: it drags, takes arrow keys and announces the new share.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['three/fields/tagMapping.ts', 'three/fields/compressionArea.ts'],
-          Component: SplitPidPartMapping,
-        },
-        {
-          id: 'SplitPidPartClear',
-          title: 'Selection from either side',
-          note: 'Pick it to see the rules without the views: selecting from either side lands on both, and again clears it.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/fields/linkedSelection.ts'],
-          Component: SplitPidPartClear,
+          bleed: true,
+          uses: ['three/fields/LinkedSplit.tsx', 'three/fields/splitRatio.ts'],
+          Component: SplitPidPartDivider,
         },
       ],
     },

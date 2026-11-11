@@ -1,592 +1,708 @@
+import { Button } from '@cognite/aura/components/button';
+import {
+  SegmentedControl,
+  SegmentedControlButton,
+  SegmentedControlList,
+} from '@cognite/aura/components/segmented-control';
+import {
+  IconAlertOctagon,
+  IconAlertTriangle,
+  IconBell,
+  IconBellOff,
+  IconBellRinging,
+  IconCheck,
+  IconCircleCheck,
+  IconInfoCircle,
+  IconPlayerPause,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { CategoryChart } from '../../../library/industrial/charts/CategoryChart';
-import { DistributionBar } from '../../../library/industrial/operations/DistributionBar';
-import { SeverityBadge } from '../../../library/industrial/operations/SeverityBadge';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { formatValue, severityStatus } from '../../../library/industrial/status';
-import type { Severity, Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { ALARMS, findAsset } from '../../data/plant';
-import { HOUR, REFERENCE_NOW, createRandom, formatAgo, formatTime } from '../../data/series';
+import { AlarmTable, type AlarmRowEmphasis, type AlarmTableColumn } from '../../../library/kit/alarm-management/AlarmTable';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { Panel } from '../../../library/kit/Panel';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { Stat } from '../../../library/kit/Stat';
+import { TagId } from '../../../library/kit/TagId';
+import { cx, type Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
+import type { Severity } from '../../data/plant';
+import { HOUR, MINUTE, REFERENCE_NOW, formatTime, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './alarm-management.tsx?raw';
 
-const ALARM_HOURS = 24;
+type AmState = 'unacknowledged' | 'acknowledged' | 'shelved';
 
-const ALARM_WINDOW_START = REFERENCE_NOW - ALARM_HOURS * HOUR;
+type AmArea = 'Compression' | 'Inlet' | 'Export' | 'Utilities';
 
-/** EEMUA 191 guidance for one operator, expressed per hour. */
-const ALARM_ACCEPTABLE = 6;
-
-const ALARM_MANAGEABLE = 12;
-
-type AlarmFlood = { id: string; fromHour: number; toHour: number; cause: string };
-
-/** Periods the alarm system was in flood. Hours are offsets into the 24-hour window, end exclusive. */
-const ALARM_FLOODS: readonly AlarmFlood[] = [
-  { id: 'changeover', fromHour: 5, toHour: 6, cause: 'Cooling water pump changeover' },
-  { id: 'separator', fromHour: 12, toHour: 14, cause: 'Inlet separator level upset' },
-  { id: 'trip', fromHour: 23, toHour: 24, cause: 'Recompressor trip' },
-];
-
-type AlarmActorSeed = {
-  tag: string;
-  text: string;
-  assetId: string;
+type AmAlarm = {
+  id: string;
   severity: Severity;
-  /** Typical annunciations per hour outside a flood. */
-  weight: number;
-  /** How many times the typical rate the tag reaches in each flood. */
-  floods: Readonly<Record<string, number>>;
-  seed: number;
+  tag: string;
+  message: string;
+  area: AmArea;
+  state: AmState;
+  raisedAt: number;
+  /** The reading now and the setting it crossed, in `unit`. */
+  value: number;
+  limit: number;
+  unit: string;
+  decimals: number;
+  /** `high` alarms trip above the limit, `low` below. */
+  direction: 'high' | 'low';
+  /** Where the reading sat an hour ago. */
+  from: number;
+  /** Annunciations in the last 24 hours. */
+  count: number;
+  response: string;
+  consequence: string;
   setting: string;
-  finding: string;
-  action: string;
-  /** Re-triggers in the worst ten minutes, for tags that chatter. */
-  chatter?: number;
+  seed: number;
 };
 
-const ALARM_ACTOR_SEEDS: readonly AlarmActorSeed[] = [
-  { tag: '23-TT-92532', text: 'Discharge temperature high', assetId: '23-ka-9101', severity: 'high', weight: 1.1, floods: { trip: 6 }, seed: 101, setting: 'High 145.0 °C · deadband 0.5 °C · no delay', finding: 'The reading sits within 4 °C of the limit and crosses it on every load swing.', action: 'Widen the deadband to 2 °C and add a 30 s on-delay.', chatter: 14 },
-  { tag: '23-VT-92540', text: 'Drive-end vibration approaching limit', assetId: '23-ka-9101', severity: 'high', weight: 0.8, floods: { trip: 5 }, seed: 102, setting: 'High 7.1 mm/s · deadband 0.1 mm/s · delay 5 s', finding: 'A pre-alarm with no defined operator response repeats while the bearing wears.', action: 'Replace with a rate-of-change alarm tied to the vibration survey.' },
-  { tag: '20-LT-10012', text: 'Separator level deviation', assetId: '20-va-1001', severity: 'low', weight: 0.7, floods: { separator: 12 }, seed: 103, setting: 'Deviation ±15% · deadband 1% · no delay', finding: 'Slugging moves the level across the deviation band several times a minute.', action: 'Add a 60 s on-delay and suppress while the slug catcher is draining.', chatter: 11 },
-  { tag: '23-TT-91141', text: 'Cooler outlet temperature high', assetId: '23-ha-9114', severity: 'medium', weight: 0.6, floods: { changeover: 14, trip: 3 }, seed: 104, setting: 'High 40.0 °C · deadband 0.5 °C · delay 10 s', finding: 'Fouled tubes keep the outlet close to the limit; every pump changeover trips it.', action: 'Clean the tube bundle (WO-104471), then review the limit.' },
-  { tag: '40-TT-40015', text: 'Bearing temperature signal lost', assetId: '40-pa-4001', severity: 'medium', weight: 0.5, floods: { changeover: 18 }, seed: 105, setting: 'Bad quality · no deadband · no delay', finding: 'A failing transmitter drops in and out; the alarm is shelved between bursts.', action: 'Replace the transmitter (WO-104479) and remove the shelving.', chatter: 9 },
-  { tag: '27-IT-20013', text: 'Motor current high', assetId: '27-pa-2001a', severity: 'medium', weight: 0.4, floods: { separator: 4 }, seed: 106, setting: 'High 95.0 A · deadband 1.0 A · delay 5 s', finding: 'Follows export flow during upsets; the operator cannot act on it separately.', action: 'Group under the export flow alarm during an inlet upset.' },
-  { tag: '20-PT-10010', text: 'Separator pressure low', assetId: '20-va-1001', severity: 'high', weight: 0.3, floods: { separator: 9 }, seed: 107, setting: 'Low 11.0 barg · deadband 0.2 barg · delay 5 s', finding: 'Consequential to the level upset and annunciated alongside it.', action: 'Add first-out grouping with 20-LT-10012.' },
-  { tag: '23-VT-92740', text: 'Recompressor vibration high', assetId: '23-ka-9103', severity: 'critical', weight: 0.2, floods: { trip: 14 }, seed: 108, setting: 'High-high 11.0 mm/s · deadband 0.2 mm/s · no delay', finding: 'Repeated around the trip as the machine ran down through its critical speed.', action: 'Latch after the first annunciation until the trip is reset.', chatter: 6 },
-  { tag: '27-FT-20011', text: 'Export flow low', assetId: '27-pa-2001a', severity: 'medium', weight: 0.25, floods: { separator: 5, trip: 6 }, seed: 109, setting: 'Low 300 m³/h · deadband 5 m³/h · delay 10 s', finding: 'Expected consequence of any upstream upset; tells the operator nothing new.', action: 'Suppress for 10 minutes after an upstream trip.' },
-  { tag: '23-PT-92530', text: 'Suction pressure low', assetId: '23-ka-9101', severity: 'medium', weight: 0.2, floods: { trip: 8 }, seed: 110, setting: 'Low 10.0 barg · deadband 0.2 barg · delay 5 s', finding: 'Annunciated after the recompressor trip while the train rebalanced.', action: 'Review the limit against the new minimum-flow line-up.' },
+const AM_ALARMS: readonly AmAlarm[] = [
+  { id: 'a4812', severity: 'critical', tag: '23-VT-92740', message: 'Recompressor vibration high-high', area: 'Compression', state: 'unacknowledged', raisedAt: REFERENCE_NOW - 14 * MINUTE, value: 11.6, limit: 11, unit: 'mm/s', decimals: 1, direction: 'high', from: 6.2, count: 3, response: 'Confirm the trip, keep the unit isolated and call the rotating equipment engineer before any restart.', consequence: 'Bearing damage within minutes if the machine is restarted against the trip.', setting: 'High-high 11.0 mm/s · deadband 0.2 · no delay', seed: 301 },
+  { id: 'a4813', severity: 'high', tag: '23-XS-92700', message: 'Recompressor tripped on vibration', area: 'Compression', state: 'unacknowledged', raisedAt: REFERENCE_NOW - 14 * MINUTE + 2000, value: 0, limit: 7000, unit: 'rpm', decimals: 0, direction: 'low', from: 9820, count: 1, response: 'Route flash gas to flare and reduce inlet rate to the two-stage capacity.', consequence: 'Flaring above the daily limit until the recompressor is back.', setting: 'Trip status · first-out latch', seed: 302 },
+  { id: 'a4815', severity: 'high', tag: '43-FT-4310', message: 'Flare flow high', area: 'Utilities', state: 'unacknowledged', raisedAt: REFERENCE_NOW - 13 * MINUTE, value: 18.2, limit: 15, unit: 'kSm³/d', decimals: 1, direction: 'high', from: 11.8, count: 2, response: 'Check the flash gas route and trim the inlet choke until flare flow is under 15 kSm³/d.', consequence: 'A reportable exceedance if the daily average stays above the permit.', setting: 'High 15.0 kSm³/d · deadband 0.5 · delay 30 s', seed: 303 },
+  { id: 'a4811', severity: 'high', tag: '23-TT-92532', message: 'Discharge temperature high', area: 'Compression', state: 'unacknowledged', raisedAt: REFERENCE_NOW - 38 * MINUTE, value: 146.3, limit: 145, unit: '°C', decimals: 1, direction: 'high', from: 139.4, count: 9, response: 'Open the interstage cooler bypass fully and check cooling water flow.', consequence: 'Trip at 155 °C takes the 1st stage compressor and export down.', setting: 'High 145.0 °C · deadband 0.5 · no delay', seed: 304 },
+  { id: 'a4816', severity: 'medium', tag: '23-PT-92530', message: 'Suction pressure low', area: 'Compression', state: 'unacknowledged', raisedAt: REFERENCE_NOW - 12 * MINUTE, value: 9.8, limit: 10, unit: 'barg', decimals: 1, direction: 'low', from: 12.4, count: 4, response: 'Expected after the trip. Watch the anti-surge valve and let the pressure recover.', consequence: 'Surge on the 1st stage if it falls below 8 barg.', setting: 'Low 10.0 barg · deadband 0.2 · delay 5 s', seed: 305 },
+  { id: 'a4817', severity: 'medium', tag: '27-FT-20011', message: 'Export flow low', area: 'Export', state: 'unacknowledged', raisedAt: REFERENCE_NOW - 11 * MINUTE, value: 296, limit: 300, unit: 'm³/h', decimals: 0, direction: 'low', from: 412, count: 2, response: 'A consequence of the reduced rate. No action unless it falls below 250 m³/h.', consequence: 'Minimum flow protection opens and the pump recycles.', setting: 'Low 300 m³/h · deadband 5 · delay 10 s', seed: 306 },
+  { id: 'a4818', severity: 'low', tag: '23-PDT-92512', message: 'Suction strainer pressure drop high', area: 'Compression', state: 'unacknowledged', raisedAt: REFERENCE_NOW - 9 * MINUTE, value: 0.42, limit: 0.4, unit: 'bar', decimals: 2, direction: 'high', from: 0.31, count: 1, response: 'Raise a work order to inspect the strainer at the next opportunity.', consequence: 'Reduced suction pressure margin over the coming days.', setting: 'High 0.40 bar · deadband 0.02 · delay 60 s', seed: 307 },
+  { id: 'a4809', severity: 'high', tag: '23-VT-92540', message: 'Drive-end vibration approaching limit', area: 'Compression', state: 'acknowledged', raisedAt: REFERENCE_NOW - 2 * HOUR, value: 6.8, limit: 7.1, unit: 'mm/s', decimals: 1, direction: 'high', from: 6.1, count: 6, response: 'Hold the load steady and trend the reading every 15 minutes.', consequence: 'High alarm at 7.1 mm/s, trip at 11.0 mm/s.', setting: 'Pre-alarm 6.5 mm/s · deadband 0.1 · delay 5 s', seed: 308 },
+  { id: 'a4806', severity: 'medium', tag: '23-TT-91141', message: 'Cooler outlet temperature high', area: 'Compression', state: 'acknowledged', raisedAt: REFERENCE_NOW - 5 * HOUR, value: 40.8, limit: 40, unit: '°C', decimals: 1, direction: 'high', from: 39.6, count: 14, response: 'Tube bundle is fouled. Cleaning is planned on WO-104471; keep the bypass closed.', consequence: 'Higher discharge temperature on the 2nd stage.', setting: 'High 40.0 °C · deadband 0.5 · delay 10 s', seed: 309 },
+  { id: 'a4808', severity: 'medium', tag: '20-LT-10012', message: 'Separator level deviation', area: 'Inlet', state: 'acknowledged', raisedAt: REFERENCE_NOW - 166 * MINUTE, value: 71.2, limit: 70, unit: '%', decimals: 1, direction: 'high', from: 58.4, count: 22, response: 'Slugging from the inlet. Put the level controller in slug mode until the flow settles.', consequence: 'Liquid carry-over to compression above 85 %.', setting: 'Deviation ±15 % · deadband 1 · no delay', seed: 310 },
+  { id: 'a4807', severity: 'medium', tag: '27-IT-20013', message: 'Motor current high', area: 'Export', state: 'acknowledged', raisedAt: REFERENCE_NOW - 209 * MINUTE, value: 96.4, limit: 95, unit: 'A', decimals: 1, direction: 'high', from: 86.2, count: 5, response: 'Follows export flow during upsets. Check again when the rate is steady.', consequence: 'Overload trip at 105 A.', setting: 'High 95.0 A · deadband 1.0 · delay 5 s', seed: 311 },
+  { id: 'a4805', severity: 'low', tag: '20-PT-10010', message: 'Separator pressure low', area: 'Inlet', state: 'acknowledged', raisedAt: REFERENCE_NOW - 320 * MINUTE, value: 10.9, limit: 11, unit: 'barg', decimals: 1, direction: 'low', from: 13.1, count: 9, response: 'Consequential to the level upset. No action.', consequence: 'None on its own.', setting: 'Low 11.0 barg · deadband 0.2 · delay 5 s', seed: 312 },
+  { id: 'a4804', severity: 'low', tag: '41-TT-4105', message: 'Hot oil return temperature low', area: 'Utilities', state: 'acknowledged', raisedAt: REFERENCE_NOW - 405 * MINUTE, value: 148, limit: 150, unit: '°C', decimals: 0, direction: 'low', from: 163, count: 2, response: 'Raise the heater outlet setpoint by 5 °C.', consequence: 'Poorer condensate stabilisation.', setting: 'Low 150 °C · deadband 2 · delay 60 s', seed: 313 },
+  { id: 'a4790', severity: 'low', tag: '27-PA-2001B', message: 'Export pump B standby test overdue', area: 'Export', state: 'acknowledged', raisedAt: REFERENCE_NOW - 22 * HOUR, value: 34, limit: 30, unit: 'd', decimals: 0, direction: 'high', from: 34, count: 1, response: 'Run the standby start test on WO-104458.', consequence: 'Unproven standby pump.', setting: 'Interval 30 d', seed: 314 },
+  { id: 'a4803', severity: 'medium', tag: '40-TT-40015', message: 'Bearing temperature signal lost', area: 'Utilities', state: 'shelved', raisedAt: REFERENCE_NOW - 9 * HOUR, value: 0, limit: 20, unit: '°C', decimals: 1, direction: 'low', from: 61.5, count: 31, response: 'Transmitter fails intermittently. Replacement is planned on WO-104479; shelved until 18:00.', consequence: 'No bearing protection on the cooling water pump while shelved.', setting: 'Bad quality · no deadband · no delay', seed: 315 },
+  { id: 'a4801', severity: 'low', tag: '45-LT-4502', message: 'Instrument air receiver drain level high', area: 'Utilities', state: 'shelved', raisedAt: REFERENCE_NOW - 436 * MINUTE, value: 62, limit: 60, unit: '%', decimals: 0, direction: 'high', from: 55, count: 12, response: 'Drain trap is blocked. Drain manually once per shift; shelved until the trap is replaced.', consequence: 'Water in the instrument air header.', setting: 'High 60 % · deadband 2 · delay 30 s', seed: 316 },
 ];
 
-/** The thirty-odd tags that alarm now and then, counted together. */
-const ALARM_OTHER_SEED: AlarmActorSeed = { tag: 'Other', text: 'All other tags', assetId: 'nk', severity: 'low', weight: 0.9, floods: { changeover: 6, separator: 3, trip: 4 }, seed: 199, setting: '', finding: '', action: '' };
+const AM_SEVERITY_ORDER: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-function alarmFloodAt(hour: number): AlarmFlood | undefined {
-  return ALARM_FLOODS.find((flood) => hour >= flood.fromHour && hour < flood.toHour);
+const AM_STATE_ORDER: Record<AmState, number> = { unacknowledged: 0, acknowledged: 1, shelved: 2 };
+
+const AM_SEVERITY_TONE: Record<Severity, Tone> = { critical: 'critical', high: 'warning', medium: 'info', low: 'neutral' };
+
+const AM_SEVERITY_LABEL: Record<Severity, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+
+const AM_SEVERITIES: readonly Severity[] = ['critical', 'high', 'medium', 'low'];
+
+const AM_STATE_LABEL: Record<AmState, string> = { unacknowledged: 'Unacknowledged', acknowledged: 'Acknowledged', shelved: 'Shelved' };
+
+const AM_STATE_SHORT: Record<AmState, string> = { unacknowledged: 'Waiting', acknowledged: 'Acked', shelved: 'Shelved' };
+
+const AM_EMPHASIS: Record<AmState, AlarmRowEmphasis> = { unacknowledged: 'band', acknowledged: 'edge', shelved: 'quiet' };
+
+/** Annunciations per ten minutes over the last two hours. More than ten is a flood. */
+const AM_RATE = [3, 2, 4, 3, 5, 4, 3, 6, 5, 4, 9, 14];
+
+const AM_FLOOD_LIMIT = 10;
+
+function AmSeverityIcon({ severity }: { severity: Severity }) {
+  if (severity === 'critical') return <IconAlertOctagon aria-hidden="true" />;
+  if (severity === 'high') return <IconAlertTriangle aria-hidden="true" />;
+  if (severity === 'medium') return <IconInfoCircle aria-hidden="true" />;
+  return <IconBell aria-hidden="true" />;
 }
 
-/** Annunciations per hour for one tag: its typical rate, lifted during the floods it takes part in. */
-function alarmHourly(actor: AlarmActorSeed): number[] {
-  const random = createRandom(actor.seed);
-  return Array.from({ length: ALARM_HOURS }, (_, hour) => {
-    const flood = alarmFloodAt(hour);
-    const lift = flood ? (actor.floods[flood.id] ?? 1) : 1;
-    return Math.round(actor.weight * lift * (0.5 + random()));
-  });
+function AmStateIcon({ state }: { state: AmState }) {
+  if (state === 'unacknowledged') return <IconBellRinging />;
+  if (state === 'acknowledged') return <IconCheck />;
+  return <IconBellOff />;
 }
 
-type AlarmActor = AlarmActorSeed & { hourly: readonly number[] };
+const amStanding = (alarm: AmAlarm): string => {
+  const minutes = Math.round((REFERENCE_NOW - alarm.raisedAt) / MINUTE);
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`;
+};
 
-const ALARM_ACTORS: readonly AlarmActor[] = ALARM_ACTOR_SEEDS.map((actor) => ({ ...actor, hourly: alarmHourly(actor) }));
+const amFigure = (alarm: AmAlarm, value: number): string => value.toLocaleString('en-GB', { minimumFractionDigits: alarm.decimals, maximumFractionDigits: alarm.decimals });
 
-const ALARM_OTHER: AlarmActor = { ...ALARM_OTHER_SEED, hourly: alarmHourly(ALARM_OTHER_SEED) };
-
-const ALARM_RATE: readonly number[] = Array.from({ length: ALARM_HOURS }, (_, hour) =>
-  [...ALARM_ACTORS, ALARM_OTHER].reduce((sum, actor) => sum + actor.hourly[hour], 0)
-);
-
-const ALARM_TOTAL = ALARM_RATE.reduce((sum, rate) => sum + rate, 0);
-
-const ALARM_FLOOD_HOURS = ALARM_FLOODS.reduce((sum, flood) => sum + flood.toHour - flood.fromHour, 0);
-
-const ALARM_CHART_ROWS = ALARM_RATE.map((rate, hour) => ({ category: formatTime(ALARM_WINDOW_START + hour * HOUR), rate, hour }));
-
-const ALARM_OPEN = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged');
-
-const ALARM_SHELVED = ALARMS.filter((alarm) => alarm.state === 'shelved');
-
-const ALARM_CHATTERING = ALARM_ACTORS.filter((actor) => actor.chatter !== undefined);
-
-const ALARM_WARNING_BAR = 'var(--color-chart-warning-450)';
-
-const ALARM_MUTED_BAR = 'var(--color-chart-neutral-300)';
-
-const ALARM_FOCUS = 'focus-visible:shadow-focus-ring focus-visible:outline-none';
-
-/** `all` is the whole 24-hour window; otherwise the id of a flood period. */
-type AlarmPeriod = string;
-
-function alarmPeriodHours(period: AlarmPeriod): readonly [number, number] {
-  const flood = ALARM_FLOODS.find((candidate) => candidate.id === period);
-  return flood ? [flood.fromHour, flood.toHour] : [0, ALARM_HOURS];
-}
-
-function alarmPeriodLabel(period: AlarmPeriod): string {
-  const flood = ALARM_FLOODS.find((candidate) => candidate.id === period);
-  if (!flood) return 'Last 24 hours';
-  return `${formatTime(ALARM_WINDOW_START + flood.fromHour * HOUR)}–${formatTime(ALARM_WINDOW_START + flood.toHour * HOUR)}`;
-}
-
-function alarmCount(actor: AlarmActor, period: AlarmPeriod): number {
-  const [from, to] = alarmPeriodHours(period);
-  return actor.hourly.slice(from, to).reduce((sum, count) => sum + count, 0);
-}
-
-function alarmPeriodTotal(period: AlarmPeriod): number {
-  const [from, to] = alarmPeriodHours(period);
-  return ALARM_RATE.slice(from, to).reduce((sum, rate) => sum + rate, 0);
-}
-
-function alarmRanking(period: AlarmPeriod): AlarmActor[] {
-  return [...ALARM_ACTORS].sort((a, b) => alarmCount(b, period) - alarmCount(a, period) || a.tag.localeCompare(b.tag));
-}
-
-function alarmShare(count: number, total: number): string {
-  return total > 0 ? `${formatValue((count / total) * 100, 0)}%` : '0%';
-}
-
-function alarmRateJudgement(rate: number): { tone: Tone; label: string } {
-  if (rate <= ALARM_ACCEPTABLE) return { tone: 'neutral', label: 'Acceptable' };
-  if (rate <= ALARM_MANAGEABLE) return { tone: 'warning', label: 'Manageable' };
-  return { tone: 'critical', label: 'Overloaded' };
-}
-
-function isHourRow(row: Record<string, unknown>): row is { hour: number; rate: number } {
-  return typeof row.hour === 'number' && typeof row.rate === 'number';
-}
-
-function AlarmRatePanel({ period, onPeriodChange }: { period: AlarmPeriod; onPeriodChange: (period: AlarmPeriod) => void }) {
-  const [from, to] = alarmPeriodHours(period);
-  const overloaded = ALARM_RATE.filter((rate) => rate > ALARM_MANAGEABLE).length;
-  const acceptable = ALARM_RATE.filter((rate) => rate <= ALARM_ACCEPTABLE).length;
-  const periods = [{ id: 'all', cause: 'Every hour, floods included' }, ...ALARM_FLOODS];
-
-  return (
-    <DashboardPanel
-      title="Alarm rate"
-      description="Annunciated alarms per hour for one operator, against the EEMUA 191 bands"
-      footnote={`${acceptable} of 24 hours were in the acceptable band and ${overloaded} were above manageable. All ${overloaded} fall inside the ${ALARM_FLOODS.length} flood periods.`}
-    >
-      <CategoryChart
-        label={`Alarms per hour over the last 24 hours against the acceptable limit of ${ALARM_ACCEPTABLE} and the manageable limit of ${ALARM_MANAGEABLE}; ${overloaded} hours are above manageable`}
-        rows={ALARM_CHART_ROWS}
-        series={[{ key: 'rate', label: 'Alarms per hour' }]}
-        references={[
-          { value: ALARM_ACCEPTABLE, label: `Acceptable, up to ${ALARM_ACCEPTABLE}`, align: 'left' },
-          { value: ALARM_MANAGEABLE, label: `Manageable, up to ${ALARM_MANAGEABLE}`, tone: 'warning', align: 'left' },
-        ]}
-        colorOf={(row) => {
-          if (!isHourRow(row)) return undefined;
-          if (row.hour < from || row.hour >= to) return ALARM_MUTED_BAR;
-          return row.rate > ALARM_MANAGEABLE ? ALARM_WARNING_BAR : undefined;
-        }}
-        domain={[0, 30]}
-        ticks={[0, 6, 12, 18, 24, 30]}
-        labelEvery={3}
-        heightClassName="h-80"
-      />
-      <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium text-muted-foreground">Flood periods</p>
-        <div
-          role="img"
-          aria-label={`Flood periods across the 24 hours: ${ALARM_FLOODS.map((flood) => `${alarmPeriodLabel(flood.id)}, ${flood.cause}`).join('; ')}`}
-          className="relative h-2.5 w-full overflow-hidden rounded-full bg-chart-neutral-100"
-        >
-          {ALARM_FLOODS.map((flood) => (
-            <span
-              key={flood.id}
-              className={`absolute inset-y-0 ${period === 'all' || period === flood.id ? 'bg-chart-warning-450' : 'bg-chart-neutral-300'}`}
-              style={{ left: `${(flood.fromHour / ALARM_HOURS) * 100}%`, width: `${((flood.toHour - flood.fromHour) / ALARM_HOURS) * 100}%` }}
-            />
-          ))}
-        </div>
-        <ul aria-label="Period shown" className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {periods.map((entry) => {
-            const selected = entry.id === period;
-            const [entryFrom, entryTo] = alarmPeriodHours(entry.id);
-            const peak = Math.max(...ALARM_RATE.slice(entryFrom, entryTo));
-            return (
-              <li key={entry.id} className="flex">
-                <button
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => onPeriodChange(entry.id)}
-                  className={`flex w-full flex-col gap-1 rounded-lg border p-3 text-left ${ALARM_FOCUS} ${
-                    selected ? 'border-emphasized bg-base-background' : 'border-default hover:bg-muted-background'
-                  }`}
-                >
-                  <span className="text-sm font-medium tabular-nums text-base-foreground">{alarmPeriodLabel(entry.id)}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {alarmPeriodTotal(entry.id)} alarms · peak {peak} per hour
-                  </span>
-                  <span className="text-xs text-muted-foreground">{entry.cause}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </DashboardPanel>
+function amSort(alarms: readonly AmAlarm[]): AmAlarm[] {
+  return [...alarms].sort(
+    (a, b) => AM_STATE_ORDER[a.state] - AM_STATE_ORDER[b.state] || AM_SEVERITY_ORDER[a.severity] - AM_SEVERITY_ORDER[b.severity] || b.raisedAt - a.raisedAt
   );
 }
 
-type AlarmFigure = { label: string; value: number; unit?: string; decimals: number; tone: Tone; judgement: string; target: string };
-
-const ALARM_FIGURES: readonly AlarmFigure[] = [
-  { label: 'Alarms per operator hour', value: ALARM_TOTAL / ALARM_HOURS, decimals: 1, ...judgementOf(ALARM_TOTAL / ALARM_HOURS), target: `Target ${ALARM_ACCEPTABLE} or fewer` },
-  { label: 'Standing alarms', value: ALARM_OPEN.length, decimals: 0, tone: 'neutral', judgement: 'On target', target: 'Target under 10' },
-  { label: 'Shelved alarms', value: ALARM_SHELVED.length, decimals: 0, tone: 'neutral', judgement: 'Reviewed this shift', target: 'Review due 18:00' },
-  { label: 'Average time to acknowledge', value: 3.2, unit: 'min', decimals: 1, tone: 'neutral', judgement: 'On target', target: 'Target 5 min or less' },
-  { label: 'Time in flood', value: (ALARM_FLOOD_HOURS / ALARM_HOURS) * 100, unit: '%', decimals: 0, tone: 'critical', judgement: 'Above target', target: 'Target under 1%' },
+const AM_COLUMNS: AlarmTableColumn<AmAlarm>[] = [
+  { id: 'time', header: 'Raised', numeric: true, cell: (alarm) => formatTime(alarm.raisedAt) },
+  { id: 'tag', header: 'Tag', cell: (alarm) => <TagId>{alarm.tag}</TagId> },
+  { id: 'message', header: 'Alarm', fill: true, cell: (alarm) => alarm.message },
+  { id: 'value', header: 'Value / limit', numeric: true, cell: (alarm) => `${amFigure(alarm, alarm.value)} / ${amFigure(alarm, alarm.limit)} ${alarm.unit}` },
+  {
+    id: 'state',
+    header: 'State',
+    optional: true,
+    cell: (alarm) => (
+      <span className="inline-flex items-center gap-1.5 [&>svg]:size-4">
+        <AmStateIcon state={alarm.state} />
+        {AM_STATE_SHORT[alarm.state]}
+      </span>
+    ),
+  },
 ];
 
-function judgementOf(rate: number): { tone: Tone; judgement: string } {
-  const { tone, label } = alarmRateJudgement(rate);
-  return { tone, judgement: label };
-}
+const AM_COLUMNS_SHORT = AM_COLUMNS.filter((column) => column.id !== 'value');
 
-function AlarmFiguresPanel() {
+function AmList({
+  alarms,
+  selected,
+  onSelect,
+  columns = AM_COLUMNS,
+  className,
+}: {
+  alarms: readonly AmAlarm[];
+  selected?: string;
+  onSelect?: (id: string) => void;
+  columns?: readonly AlarmTableColumn<AmAlarm>[];
+  className?: string;
+}) {
   return (
-    <DashboardPanel title="System performance" description="Last 24 hours, one operator">
-      <dl className="flex w-full flex-col">
-        {ALARM_FIGURES.map((figure) => (
-          <div key={figure.label} className="flex flex-col gap-1.5 border-b border-default py-3 first:pt-0 last:border-b-0 last:pb-0">
-            <dt className="text-xs text-muted-foreground">{figure.label}</dt>
-            <dd className="flex flex-col gap-1.5">
-              <ValueReadout value={figure.value} unit={figure.unit} decimals={figure.decimals} size="md" tone={figure.tone} />
-              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <StatusIndicator tone={figure.tone} label={figure.judgement} shape={figure.tone === 'neutral' ? 'ring' : 'diamond'} size="sm" />
-                <span className="text-xs tabular-nums text-muted-foreground">{figure.target}</span>
-              </span>
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </DashboardPanel>
+    <AlarmTable
+      label="Standing alarms"
+      className={className}
+      columns={columns}
+      rows={alarms}
+      rowKey={(alarm) => alarm.id}
+      rowTone={(alarm) => AM_SEVERITY_TONE[alarm.severity]}
+      rowEmphasis={(alarm) => AM_EMPHASIS[alarm.state]}
+      rowBadge={(alarm) => (
+        <>
+          <AmSeverityIcon severity={alarm.severity} />
+          {AM_SEVERITY_LABEL[alarm.severity]}
+        </>
+      )}
+      selected={selected}
+      onSelect={onSelect}
+      empty="No alarms match this filter."
+    />
   );
 }
 
-const ALARM_SEVERITY_TONE: Record<Severity, Tone> = { critical: 'critical', high: 'warning', medium: 'info', low: 'neutral' };
-
-const ALARM_SEVERITIES: readonly { id: Severity; label: string }[] = [
-  { id: 'critical', label: 'Critical' },
-  { id: 'high', label: 'High' },
-  { id: 'medium', label: 'Medium' },
-  { id: 'low', label: 'Low' },
-];
-
-function AlarmSeverityPanel({ period }: { period: AlarmPeriod }) {
-  const segments = ALARM_SEVERITIES.map((severity) => ({
-    id: severity.id,
-    label: severity.label,
-    tone: ALARM_SEVERITY_TONE[severity.id],
-    value: [...ALARM_ACTORS, ALARM_OTHER]
-      .filter((actor) => actor.severity === severity.id)
-      .reduce((sum, actor) => sum + alarmCount(actor, period), 0),
-  }));
-  return (
-    <DashboardPanel
-      title="Alarms by severity"
-      description={alarmPeriodLabel(period)}
-      footnote="Guidance is about 5% critical, 15% high and 80% medium or low."
-    >
-      <DistributionBar label={`Annunciated alarms by severity, ${alarmPeriodLabel(period)}`} segments={segments} />
-    </DashboardPanel>
-  );
+function AmCell({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cx('flex min-w-0 flex-col justify-center bg-base-background px-4 py-3', className)}>{children}</div>;
 }
 
-function AlarmBadActorsPanel({ period, selectedTag, onSelect }: { period: AlarmPeriod; selectedTag: string; onSelect: (tag: string) => void }) {
-  const total = alarmPeriodTotal(period);
-  const ranking = alarmRanking(period);
-  const top = ranking.reduce((sum, actor) => sum + alarmCount(actor, period), 0);
+function AmSummary({ alarms, severity, onSeverity }: { alarms: readonly AmAlarm[]; severity: Severity | null; onSeverity: (severity: Severity | null) => void }) {
+  const waiting = alarms.filter((alarm) => alarm.state === 'unacknowledged');
+  const worst = AM_SEVERITIES.find((level) => waiting.some((alarm) => alarm.severity === level));
+  const shelved = alarms.filter((alarm) => alarm.state === 'shelved').length;
+  const rate = AM_RATE[AM_RATE.length - 1] ?? 0;
   return (
-    <DashboardPanel
-      title="Bad actors"
-      description={`Top 10 tags by annunciations, ${alarmPeriodLabel(period).toLowerCase()} · select a row to inspect it`}
-      footnote={`The ten tags account for ${alarmShare(top, total)} of the ${total} alarms in the period.`}
-    >
-      <table className="w-full table-fixed text-left text-sm">
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="w-8 pb-2 font-medium">
-              #
-            </th>
-            <th scope="col" className="pb-2 pr-3 font-medium">
-              Tag and alarm
-            </th>
-            <th scope="col" className="w-16 pb-2 text-right font-medium">
-              Count
-            </th>
-            <th scope="col" className="w-16 pb-2 text-right font-medium">
-              Share
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {ranking.map((actor, index) => {
-            const selected = actor.tag === selectedTag;
-            const count = alarmCount(actor, period);
-            return (
-              <tr
-                key={actor.tag}
-                data-selected={selected ? 'true' : undefined}
-                onClick={() => onSelect(actor.tag)}
-                className={`cursor-pointer border-t border-default align-top ${selected ? 'bg-base-background' : 'hover:bg-muted-background'}`}
-              >
-                <td className="py-1.5 pl-1 tabular-nums text-muted-foreground">{index + 1}</td>
-                <td className="py-1.5 pr-3">
-                  <button
-                    type="button"
-                    aria-pressed={selected}
-                    className={`rounded-xs text-left font-mono text-xs ${ALARM_FOCUS} ${selected ? 'font-medium text-base-foreground' : 'text-medium-foreground'}`}
-                  >
-                    {actor.tag}
-                  </button>
-                  <p className="line-clamp-2 text-base-foreground">{actor.text}</p>
-                </td>
-                <td className="py-1.5 text-right tabular-nums text-base-foreground">{count}</td>
-                <td className="py-1.5 pr-1 text-right tabular-nums text-muted-foreground">{alarmShare(count, total)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </DashboardPanel>
-  );
-}
-
-function AlarmInspectorPanel({ period, tag }: { period: AlarmPeriod; tag: string }) {
-  const actor = ALARM_ACTORS.find((candidate) => candidate.tag === tag) ?? ALARM_ACTORS[0];
-  const count = alarmCount(actor, period);
-  const dayCount = alarmCount(actor, 'all');
-  const peakHour = actor.hourly.indexOf(Math.max(...actor.hourly));
-  const facts = [
-    { label: 'In the period', value: `${count} of ${alarmPeriodTotal(period)} alarms · ${alarmShare(count, alarmPeriodTotal(period))}` },
-    { label: 'Last 24 hours', value: `${dayCount} alarms · ${formatValue(dayCount / ALARM_HOURS, 1)} per hour` },
-    { label: 'Busiest hour', value: `${formatTime(ALARM_WINDOW_START + peakHour * HOUR)} · ${actor.hourly[peakHour]} alarms` },
-    { label: 'Setting', value: actor.setting },
-  ];
-  return (
-    <DashboardPanel title="Alarm inspector" description="Follows the row selected in the table">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="font-mono text-sm text-base-foreground">{actor.tag}</span>
-          <SeverityBadge severity={actor.severity} />
-        </div>
-        <p className="text-base font-medium text-base-foreground">{actor.text}</p>
-        <p className="text-xs text-muted-foreground">{findAsset(actor.assetId)?.name}</p>
+    <div className="@container flex items-stretch gap-px">
+      <div
+        data-tone={worst ? AM_SEVERITY_TONE[worst] : 'success'}
+        className="flex w-64 shrink-0 items-center gap-4 bg-[var(--t-solid)] px-4 py-3 text-[var(--t-on-solid)] @max-[1050px]:w-52"
+      >
+        <span className="text-6xl font-semibold leading-none tabular-nums">{waiting.length}</span>
+        <span className="text-sm font-semibold leading-tight">
+          {waiting.length === 0 ? 'All alarms acknowledged' : 'unacknowledged'}
+          <span className="block font-medium opacity-80">{worst ? `worst is ${AM_SEVERITY_LABEL[worst].toLowerCase()}` : 'nothing waiting'}</span>
+        </span>
       </div>
-      <Sparkline
-        values={actor.hourly}
-        label={`${actor.tag} annunciations per hour, last 24 hours`}
-        variant="bar"
-        height={56}
-        decimals={0}
-        className="w-full"
-      />
-      <dl className="flex w-full flex-col">
-        {facts.map((fact) => (
-          <div key={fact.label} className="flex flex-col gap-0.5 border-t border-default py-2">
-            <dt className="text-xs text-muted-foreground">{fact.label}</dt>
-            <dd className="text-sm tabular-nums text-base-foreground">{fact.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="flex flex-col gap-1 border-t border-default pt-2">
-        <p className="text-xs text-muted-foreground">Finding</p>
-        <p className="text-sm text-base-foreground">{actor.finding}</p>
-      </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-xs text-muted-foreground">Recommended action</p>
-        <p className="text-sm text-base-foreground">{actor.action}</p>
-      </div>
-    </DashboardPanel>
-  );
-}
-
-function AlarmChatteringPanel({ selectedTag, onSelect }: { selectedTag: string; onSelect: (tag: string) => void }) {
-  return (
-    <DashboardPanel title="Chattering alarms" description="Three or more re-triggers inside ten minutes">
-      <ul className="flex w-full flex-col gap-1">
-        {ALARM_CHATTERING.map((actor) => {
-          const selected = actor.tag === selectedTag;
+      <div role="group" aria-label="Filter by priority" className="flex flex-1 gap-px">
+        {AM_SEVERITIES.map((level) => {
+          const standing = alarms.filter((alarm) => alarm.severity === level && alarm.state !== 'shelved');
+          const pending = standing.filter((alarm) => alarm.state === 'unacknowledged').length;
+          const active = severity === level;
           return (
-            <li key={actor.tag}>
-              <button
-                type="button"
-                aria-pressed={selected}
-                onClick={() => onSelect(actor.tag)}
-                className={`flex w-full items-start justify-between gap-3 rounded-lg border p-2 text-left ${ALARM_FOCUS} ${
-                  selected ? 'border-emphasized bg-base-background' : 'border-transparent hover:bg-muted-background'
-                }`}
-              >
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-sm text-base-foreground">{actor.text}</span>
-                  <span className="font-mono text-xs text-muted-foreground">{actor.tag}</span>
+            <button
+              key={level}
+              type="button"
+              data-tone={AM_SEVERITY_TONE[level]}
+              aria-pressed={active}
+              onClick={() => onSeverity(active ? null : level)}
+              className={cx(
+                'flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3.5 py-3 text-left outline-none transition-colors [box-shadow:inset_0_4px_0_var(--t-line)] focus-visible:[box-shadow:inset_0_0_0_2px_var(--kit-accent)]',
+                active ? 'bg-[color-mix(in_oklab,var(--t-line)_26%,var(--base-background))]' : 'bg-base-background hover:bg-medium-background'
+              )}
+            >
+              <span className="text-4xl font-medium leading-none tabular-nums text-base-foreground">{standing.length}</span>
+              <span className="min-w-0 text-sm leading-tight">
+                <span className="flex items-center gap-1.5 font-semibold text-[var(--t-ink)] [&>svg]:size-4">
+                  <AmSeverityIcon severity={level} />
+                  {AM_SEVERITY_LABEL[level]}
                 </span>
-                <span className="flex shrink-0 flex-col items-end gap-0.5">
-                  <span className="text-sm font-medium tabular-nums text-base-foreground">{actor.chatter}×</span>
-                  <span className="text-xs text-muted-foreground">in 10 min</span>
-                </span>
-              </button>
-            </li>
+                <span className="block text-xs text-medium-foreground">{pending === 0 ? 'none waiting' : `${pending} waiting`}</span>
+              </span>
+            </button>
           );
         })}
-      </ul>
-    </DashboardPanel>
+      </div>
+      <AmCell className="w-60 shrink-0 @max-[1050px]:w-36">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="whitespace-nowrap text-xs text-medium-foreground">Alarms in 10 min</p>
+            <p className="text-3xl font-medium leading-tight tabular-nums text-base-foreground">
+              {rate} <span className={cx('text-sm font-semibold', rate > AM_FLOOD_LIMIT ? 'text-warning-foreground-strong' : 'text-success-foreground-strong')}>{rate > AM_FLOOD_LIMIT ? 'Flood' : 'Normal'}</span>
+            </p>
+          </div>
+          <span className="@max-[1050px]:hidden">
+            <SparkLine values={AM_RATE} label="Alarms per ten minutes over the last two hours" tone="warning" variant="bars" className="h-10 w-24" />
+          </span>
+        </div>
+      </AmCell>
+      <AmCell className="w-28 shrink-0 @max-[1050px]:w-24">
+        <p className="text-xs text-medium-foreground">Shelved</p>
+        <p className="text-3xl font-medium leading-tight tabular-nums text-base-foreground">{shelved}</p>
+      </AmCell>
+    </div>
   );
 }
 
-function AlarmOpenPanel() {
+function amTrend(alarm: AmAlarm): number[] {
+  const values = makeValues({ seed: alarm.seed, points: 13, base: alarm.from, drift: alarm.value - alarm.from, noise: Math.abs(alarm.value - alarm.from) * 0.06, decimals: Math.max(alarm.decimals, 1) });
+  return [...values.slice(0, -1), alarm.value];
+}
+
+const AM_TREND_LABELS = Array.from({ length: 13 }, (_, index) => formatTime(REFERENCE_NOW - (12 - index) * 5 * MINUTE));
+
+function AmTrend({ alarm, height = 190 }: { alarm: AmAlarm; height?: number }) {
   return (
-    <DashboardPanel title="Open alarms" description={`${ALARM_OPEN.length} standing now, most severe first`}>
-      <ul className="flex w-full flex-col gap-4">
-        {ALARM_OPEN.map((alarm) => (
-          <li key={alarm.id} className="flex min-w-0 flex-col gap-1">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <StatusIndicator {...severityStatus(alarm.severity)} size="sm" detail={alarm.state === 'active' ? 'unacknowledged' : 'acknowledged'} />
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatAgo(alarm.raisedAt)}</span>
-            </div>
-            <p className="text-sm text-base-foreground">{alarm.message}</p>
-            <p className="text-xs text-muted-foreground">
-              <span className="font-mono">{alarm.sensorTag}</span> · {findAsset(alarm.assetId)?.name} · <span className="tabular-nums">{alarm.value}</span>
-            </p>
+    <TrendLine
+      label={`${alarm.message}: ${alarm.tag} over the last hour against its alarm limit`}
+      labels={AM_TREND_LABELS}
+      unit={alarm.unit}
+      decimals={alarm.decimals}
+      height={height}
+      showLegend={false}
+      series={[{ id: 'value', label: alarm.tag, values: amTrend(alarm), tone: AM_SEVERITY_TONE[alarm.severity] === 'neutral' ? 'accent' : AM_SEVERITY_TONE[alarm.severity] }]}
+      limits={[{ value: alarm.limit, label: alarm.direction === 'high' ? 'High limit' : 'Low limit', tone: 'neutral' }]}
+    />
+  );
+}
+
+function AmBanner({ alarm, className }: { alarm: AmAlarm; className?: string }) {
+  return (
+    <div data-tone={AM_SEVERITY_TONE[alarm.severity]} className={cx('flex flex-col gap-3 p-4', className, alarm.state === 'unacknowledged' ? 'bg-[var(--t-solid)] text-[var(--t-on-solid)]' : 'bg-medium-background [box-shadow:inset_4px_0_0_var(--t-line)]')}>
+      <div className="flex items-center justify-between gap-3 text-sm font-semibold [&_svg]:size-5">
+        <span className="flex items-center gap-2">
+          <AmSeverityIcon severity={alarm.severity} />
+          {AM_SEVERITY_LABEL[alarm.severity]} · {alarm.area}
+        </span>
+        <span className="flex items-center gap-1.5 [&_svg]:size-4">
+          <AmStateIcon state={alarm.state} />
+          {AM_STATE_LABEL[alarm.state]}
+        </span>
+      </div>
+      <p className="text-xl font-semibold leading-snug">{alarm.message}</p>
+      <div className="flex items-end justify-between gap-4">
+        <p className="text-5xl font-medium leading-none tabular-nums">
+          {amFigure(alarm, alarm.value)} <span className="text-base font-semibold">{alarm.unit}</span>
+        </p>
+        <p className="text-right text-sm font-medium leading-tight">
+          {alarm.direction === 'high' ? 'High' : 'Low'} limit {amFigure(alarm, alarm.limit)} {alarm.unit}
+          <span className="block opacity-80">
+            raised {formatTime(alarm.raisedAt)} · {alarm.count} in 24 h
+          </span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AmGuidance({ alarm }: { alarm: AmAlarm }) {
+  return (
+    <dl className="flex flex-col gap-3 text-sm">
+      <div>
+        <dt className="text-xs font-medium text-medium-foreground">Operator response</dt>
+        <dd className="mt-0.5 text-base-foreground">{alarm.response}</dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium text-medium-foreground">If nothing is done</dt>
+        <dd className="mt-0.5 text-base-foreground">{alarm.consequence}</dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium text-medium-foreground">Setting</dt>
+        <dd className="mt-0.5 text-base-foreground tabular-nums">{alarm.setting}</dd>
+      </div>
+    </dl>
+  );
+}
+
+function AmActions({ alarm, onState }: { alarm: AmAlarm; onState: (state: AmState) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      {alarm.state === 'shelved' ? (
+        <Button size="sm" className="flex-1" onClick={() => onState('acknowledged')}>
+          <IconBell /> Unshelve
+        </Button>
+      ) : (
+        <>
+          <Button size="sm" className="flex-1" disabled={alarm.state === 'acknowledged'} onClick={() => onState('acknowledged')}>
+            <IconCheck /> {alarm.state === 'acknowledged' ? 'Acknowledged' : 'Acknowledge'}
+          </Button>
+          <Button variant="outline" size="sm" className="flex-1" onClick={() => onState('shelved')}>
+            <IconPlayerPause /> Shelve for 1 h
+          </Button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AmActivity({ alarm }: { alarm: AmAlarm }) {
+  const events = [
+    { id: 'raised', time: formatTime(alarm.raisedAt), text: `Raised at ${amFigure(alarm, alarm.value)} ${alarm.unit}, standing ${amStanding(alarm)}` },
+    { id: 'count', time: '24 h', text: alarm.count === 1 ? 'First annunciation in the last 24 hours' : `Annunciated ${alarm.count} times in the last 24 hours` },
+    ...(alarm.state === 'acknowledged' ? [{ id: 'ack', time: '14:00', text: 'Acknowledged by Ingrid Haugen' }] : []),
+    ...(alarm.state === 'shelved' ? [{ id: 'shelved', time: '14:00', text: 'Shelved by Ingrid Haugen, returns at 15:00' }] : []),
+  ];
+  return (
+    <div>
+      <p className="text-xs font-medium text-medium-foreground">Activity</p>
+      <ul className="mt-1 flex flex-col gap-1 text-sm">
+        {events.map((event) => (
+          <li key={event.id} className="flex gap-3">
+            <span className="w-10 shrink-0 font-medium tabular-nums text-medium-foreground">{event.time}</span>
+            <span className="text-base-foreground">{event.text}</span>
           </li>
         ))}
       </ul>
-    </DashboardPanel>
+    </div>
   );
 }
 
-/**
- * Archetype: chart-first — a hero chart with a narrow side rail, then a table with an inspector.
- * Dominant element: the alarm-rate chart with the EEMUA bands and the flood periods under it.
- * Interaction: choosing a flood period recolours the chart and re-ranks the bad actors and the
- * severity split for that period; selecting a table row (or a chattering alarm) loads the inspector.
- */
-function AlarmDashboard() {
-  const [period, setPeriod] = useState<AlarmPeriod>('all');
-  const [tag, setTag] = useState(ALARM_ACTORS[0].tag);
-  const average = ALARM_TOTAL / ALARM_HOURS;
-
+function AmInspector({ alarm, onState }: { alarm: AmAlarm; onState: (state: AmState) => void }) {
   return (
-    <DashboardFrame
-      title="Alarm management"
-      subtitle="Nordkapp control room · last 24 hours to 14:00 UTC"
-      status={
-        <StatusIndicator
-          tone={alarmRateJudgement(average).tone}
-          shape="square"
-          label={alarmRateJudgement(average).label}
-          detail={`${formatValue(average, 1)} alarms per hour`}
-        />
+    <Panel
+      className="w-[360px] shrink-0"
+      padding="none"
+      title="Inspector"
+      subtitle={alarm.tag}
+      footer={
+        <div className="w-full">
+          <AmActions alarm={alarm} onState={onState} />
+        </div>
       }
     >
-      <DashboardGrid>
-        <DashboardCell span={9}>
-          <AlarmRatePanel period={period} onPeriodChange={setPeriod} />
-        </DashboardCell>
-        <DashboardCell span={3}>
-          <AlarmFiguresPanel />
-        </DashboardCell>
-        <DashboardCell span={7}>
-          <AlarmBadActorsPanel period={period} selectedTag={tag} onSelect={setTag} />
-        </DashboardCell>
-        <DashboardCell span={5}>
-          <AlarmInspectorPanel period={period} tag={tag} />
-        </DashboardCell>
-        <DashboardCell span={4}>
-          <AlarmChatteringPanel selectedTag={tag} onSelect={setTag} />
-        </DashboardCell>
-        <DashboardCell span={5}>
-          <AlarmOpenPanel />
-        </DashboardCell>
-        <DashboardCell span={3}>
-          <AlarmSeverityPanel period={period} />
-        </DashboardCell>
-      </DashboardGrid>
-    </DashboardFrame>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <AmBanner alarm={alarm} />
+        <div className="border-b border-[var(--kit-rule)] px-3.5 pb-3 pt-1">
+          <AmTrend alarm={alarm} />
+        </div>
+        <div className="flex flex-col gap-3 p-3.5">
+          <AmGuidance alarm={alarm} />
+          <AmActivity alarm={alarm} />
+        </div>
+      </div>
+    </Panel>
   );
 }
 
-function AlarmMgmtSignature() {
+const AM_TABS = ['Standing', 'Journal', 'Shelved', 'Suppression'];
+
+function AmTopBar({ tab = 'Standing' }: { tab?: string }) {
   return (
-    <ThemeScope preset="nordic-night" className="w-full">
-      <AlarmDashboard />
-    </ThemeScope>
+    <div className="flex h-10 shrink-0 items-stretch bg-[var(--mountain-black)] text-sm">
+      <div className="flex items-center gap-2 border-r border-[var(--kit-rule)] px-3.5">
+        <span className="flex size-6 items-center justify-center bg-[var(--kit-accent)] text-[var(--kit-on-accent)] [&>svg]:size-4">
+          <IconBellRinging aria-hidden="true" />
+        </span>
+        <span className="font-semibold text-base-foreground">Nordkapp</span>
+        <span className="text-medium-foreground">Alarm console</span>
+      </div>
+      <nav aria-label="Alarm views" className="flex items-stretch">
+        {AM_TABS.map((name) => (
+          <span
+            key={name}
+            aria-current={name === tab ? 'page' : undefined}
+            className={cx('flex items-center border-r border-[var(--kit-rule)] px-4 font-medium', name === tab ? 'bg-[var(--kit-accent)] text-[var(--kit-on-accent)]' : 'text-medium-foreground')}
+          >
+            {name}
+          </span>
+        ))}
+      </nav>
+      <div className="ml-auto flex items-stretch text-medium-foreground">
+        <span className="flex items-center border-l border-[var(--kit-rule)] px-3.5">Day shift · I. Haugen</span>
+        <span className="flex items-center border-l border-[var(--kit-rule)] px-3.5 font-medium tabular-nums text-base-foreground">14:00:00 UTC</span>
+      </div>
+    </div>
   );
 }
 
-function AlarmMgmtAura() {
+function AmConsole() {
+  const [states, setStates] = useState<Readonly<Record<string, AmState>>>({});
+  const [selected, setSelected] = useState('a4812');
+  const [severity, setSeverity] = useState<Severity | null>(null);
+  const [view, setView] = useState('all');
+
+  const alarms = amSort(AM_ALARMS.map((alarm) => ({ ...alarm, state: states[alarm.id] ?? alarm.state })));
+  const shown = alarms.filter((alarm) => (severity === null || alarm.severity === severity) && (view === 'all' || alarm.state === view));
+  const current = alarms.find((alarm) => alarm.id === selected) ?? alarms[0];
+
   return (
-    <ThemeScope preset="aura" className="w-full">
-      <AlarmDashboard />
-    </ThemeScope>
+    <LookScope look="console">
+      <Canvas padding="none" className="flex h-[860px] flex-col gap-px">
+        <AmTopBar />
+        <AmSummary alarms={alarms} severity={severity} onSeverity={setSeverity} />
+        <div className="flex min-h-0 flex-1 gap-px">
+          <Panel
+            className="min-w-0 flex-1"
+            padding="none"
+            title="Standing alarms"
+            subtitle={`${shown.length} of ${alarms.length} · waiting first`}
+            actions={
+              <SegmentedControl value={view} onValueChange={(next) => setView(String(next))}>
+                <SegmentedControlList size="small" aria-label="State filter">
+                  <SegmentedControlButton value="all">All</SegmentedControlButton>
+                  <SegmentedControlButton value="unacknowledged">To acknowledge</SegmentedControlButton>
+                  <SegmentedControlButton value="shelved">Shelved</SegmentedControlButton>
+                </SegmentedControlList>
+              </SegmentedControl>
+            }
+          >
+            <AmList alarms={shown} selected={current.id} onSelect={setSelected} className="flex-1" />
+          </Panel>
+          <AmInspector alarm={current} onState={(state) => setStates((existing) => ({ ...existing, [current.id]: state }))} />
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function AlarmMgmtControlRoom() {
+function AlarmManagementSignature() {
+  return <AmConsole />;
+}
+
+type AmFlood = { id: string; label: string; window: string; cause: string; hours: readonly number[] };
+
+/** Annunciations per hour for the last 24 hours; the last bar is the hour that has just started. */
+const AM_HOURLY = [3, 5, 4, 3, 21, 6, 4, 3, 5, 4, 6, 17, 19, 7, 5, 4, 3, 5, 4, 6, 5, 7, 26, 3];
+
+const AM_HOUR_LABELS = AM_HOURLY.map((_, index) => formatTime(REFERENCE_NOW - (23 - index) * HOUR).slice(0, 2));
+
+const AM_FLOODS: readonly AmFlood[] = [
+  { id: 'all', label: 'All 24 hours', window: '14:00 to 14:00', cause: 'Every hour, floods included', hours: AM_HOURLY.map((_, index) => index) },
+  { id: 'changeover', label: 'Flood 1', window: '19:00 to 20:00', cause: 'Cooling water pump changeover', hours: [4] },
+  { id: 'separator', label: 'Flood 2', window: '02:00 to 04:00', cause: 'Inlet separator level upset', hours: [11, 12] },
+  { id: 'trip', label: 'Flood 3', window: '13:00 to 14:00', cause: 'Recompressor trip', hours: [22] },
+];
+
+type AmActor = { tag: string; message: string; counts: Record<string, number> };
+
+const AM_ACTORS: readonly AmActor[] = [
+  { tag: '40-TT-40015', message: 'Bearing temperature signal lost', counts: { all: 31, changeover: 12, separator: 0, trip: 1 } },
+  { tag: '20-LT-10012', message: 'Separator level deviation', counts: { all: 22, changeover: 0, separator: 16, trip: 0 } },
+  { tag: '23-TT-91141', message: 'Cooler outlet temperature high', counts: { all: 14, changeover: 6, separator: 0, trip: 3 } },
+  { tag: '20-PT-10010', message: 'Separator pressure low', counts: { all: 9, changeover: 0, separator: 8, trip: 0 } },
+  { tag: '23-TT-92532', message: 'Discharge temperature high', counts: { all: 9, changeover: 0, separator: 0, trip: 6 } },
+  { tag: '23-VT-92540', message: 'Drive-end vibration approaching limit', counts: { all: 6, changeover: 0, separator: 0, trip: 4 } },
+];
+
+function AlarmManagementFloodReview() {
+  const [floodId, setFloodId] = useState('all');
+  const flood = AM_FLOODS.find((entry) => entry.id === floodId) ?? AM_FLOODS[0];
+  const total = flood.hours.reduce((sum, hour) => sum + (AM_HOURLY[hour] ?? 0), 0);
+  const actors = [...AM_ACTORS].filter((actor) => (actor.counts[flood.id] ?? 0) > 0).sort((a, b) => (b.counts[flood.id] ?? 0) - (a.counts[flood.id] ?? 0));
+  const columns: DataTableColumn<AmActor>[] = [
+    { id: 'tag', header: 'Tag', nowrap: true, cell: (actor) => <TagId>{actor.tag}</TagId> },
+    { id: 'message', header: 'Alarm', cell: (actor) => actor.message },
+    { id: 'count', header: 'Annunciations', numeric: true, cell: (actor) => actor.counts[flood.id] ?? 0 },
+    { id: 'share', header: 'Share of load', numeric: true, cell: (actor) => `${Math.round(((actor.counts[flood.id] ?? 0) / total) * 100)} %` },
+  ];
   return (
-    <ThemeScope preset="control-room" className="w-full">
-      <AlarmDashboard />
-    </ThemeScope>
+    <LookScope look="console">
+      <Canvas padding="none" className="flex flex-col gap-px">
+        <AmTopBar tab="Journal" />
+        <div className="flex gap-px">
+          <div role="group" aria-label="Period" className="flex w-72 shrink-0 flex-col gap-px">
+            {AM_FLOODS.map((entry) => {
+              const count = entry.hours.reduce((sum, hour) => sum + (AM_HOURLY[hour] ?? 0), 0);
+              const active = entry.id === flood.id;
+              return (
+                <button
+                  key={entry.id}
+                  type="button"
+                  aria-pressed={active}
+                  data-tone={entry.id === 'all' ? 'accent' : 'critical'}
+                  onClick={() => setFloodId(entry.id)}
+                  className={cx(
+                    'flex flex-1 cursor-pointer items-center gap-4 px-4 py-3 text-left outline-none focus-visible:[box-shadow:inset_0_0_0_2px_var(--kit-text)]',
+                    active ? 'bg-[var(--t-solid)] text-[var(--t-on-solid)]' : 'bg-base-background text-base-foreground [box-shadow:inset_4px_0_0_var(--t-line)] hover:bg-medium-background'
+                  )}
+                >
+                  <span className="w-16 text-4xl font-medium leading-none tabular-nums">{count}</span>
+                  <span className="min-w-0 text-sm leading-tight">
+                    <span className="block font-semibold">
+                      {entry.label} · {entry.window}
+                    </span>
+                    <span className={cx('block', active ? 'opacity-85' : 'text-medium-foreground')}>{entry.cause}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-px">
+            <Panel title="Alarm rate" subtitle="Annunciations per hour, one operator · EEMUA 191 bands">
+              <Bars
+                label="Alarm annunciations per hour over the last 24 hours against the manageable limit of twelve"
+                categories={AM_HOUR_LABELS}
+                series={[{ id: 'rate', label: 'Alarms per hour', values: AM_HOURLY }]}
+                tones={AM_HOURLY.map((count, hour) => (!flood.hours.includes(hour) ? 'neutral' : count > 12 ? 'critical' : count > 6 ? 'warning' : 'success'))}
+                height={230}
+                limit={{ value: 12, label: 'Manageable', tone: 'warning' }}
+              />
+            </Panel>
+            <Panel title="Bad actors" subtitle={`${flood.cause} · ${total} annunciations`} padding="none">
+              <DataTable label="Tags that annunciated most in the selected period" flush columns={columns} rows={actors} rowKey={(actor) => actor.tag} rowTone={(actor) => ((actor.counts[flood.id] ?? 0) / total > 0.25 ? 'critical' : undefined)} />
+            </Panel>
+          </div>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function AlarmMgmtAccessible() {
+const AM_AREAS: readonly AmArea[] = ['Compression', 'Utilities', 'Export', 'Inlet'];
+
+const AM_AREA_WORD: Record<Severity, string> = { critical: 'Act now', high: 'Attention', medium: 'Watch', low: 'Normal' };
+
+function AlarmManagementWall() {
   return (
-    <ThemeScope preset="accessible" className="w-full">
-      <AlarmDashboard />
-    </ThemeScope>
+    <LookScope look="signal">
+      <Canvas>
+        <Grid>
+          {AM_AREAS.map((area, index) => {
+            const standing = AM_ALARMS.filter((alarm) => alarm.area === area && alarm.state !== 'shelved');
+            const waiting = standing.filter((alarm) => alarm.state === 'unacknowledged');
+            const worst = AM_SEVERITIES.find((level) => waiting.some((alarm) => alarm.severity === level)) ?? 'low';
+            const first = amSort(standing)[0];
+            return (
+              <Stat
+                key={area}
+                className={index === 0 ? 'col-span-12 min-h-56' : 'col-span-4 min-h-48'}
+                size={index === 0 ? 'hero' : 'lg'}
+                tone={worst === 'low' ? 'success' : AM_SEVERITY_TONE[worst]}
+                label={area}
+                state={AM_AREA_WORD[worst]}
+                stateIcon={worst === 'low' ? <IconCircleCheck /> : <AmSeverityIcon severity={worst} />}
+                value={waiting.length}
+                unit={waiting.length === 1 ? 'alarm to acknowledge' : 'alarms to acknowledge'}
+                target={first ? `${first.message}, ${amStanding(first)}` : 'No standing alarms'}
+              />
+            );
+          })}
+        </Grid>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function AlarmMgmtRate() {
-  const [period, setPeriod] = useState<AlarmPeriod>('all');
-  return <AlarmRatePanel period={period} onPeriodChange={setPeriod} />;
+const AM_FIRST = AM_ALARMS[0];
+
+const AM_SECOND = AM_ALARMS[3];
+
+function AmPart({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <LookScope look="console" className={cx('flex flex-col', className)}>
+      <Canvas padding="none" className="flex min-h-0 flex-1 flex-col gap-px">
+        {children}
+      </Canvas>
+    </LookScope>
+  );
 }
 
-function AlarmMgmtFigures() {
-  return <AlarmFiguresPanel />;
+function AlarmManagementSummaryStrip() {
+  const [severity, setSeverity] = useState<Severity | null>('high');
+  return (
+    <AmPart>
+      <AmTopBar />
+      <AmSummary alarms={AM_ALARMS} severity={severity} onSeverity={setSeverity} />
+    </AmPart>
+  );
 }
 
-function AlarmMgmtBadActors() {
-  const [tag, setTag] = useState(ALARM_ACTORS[0].tag);
-  return <AlarmBadActorsPanel period="all" selectedTag={tag} onSelect={setTag} />;
+function AlarmManagementList() {
+  const [selected, setSelected] = useState('a4811');
+  return (
+    <AmPart className="h-[440px]">
+      <Panel title="Standing alarms" subtitle="Banded while unacknowledged" padding="none">
+        <AmList alarms={amSort(AM_ALARMS).slice(1, 11)} selected={selected} onSelect={setSelected} columns={AM_COLUMNS_SHORT} className="flex-1" />
+      </Panel>
+    </AmPart>
+  );
 }
 
-function AlarmMgmtInspector() {
-  return <AlarmInspectorPanel period="all" tag="20-LT-10012" />;
+function AlarmManagementBanner() {
+  return (
+    <AmPart className="h-[440px]">
+      <AmBanner alarm={AM_FIRST} className="flex-1 justify-center" />
+      <AmBanner alarm={{ ...AM_SECOND, state: 'acknowledged' }} className="flex-1 justify-center" />
+      <AmBanner alarm={AM_ALARMS[14]} className="flex-1 justify-center" />
+    </AmPart>
+  );
 }
 
-function AlarmMgmtSeverity() {
-  return <AlarmSeverityPanel period="all" />;
+function AlarmManagementTrend() {
+  return (
+    <AmPart className="h-[330px]">
+      <Panel title="Last hour" subtitle={`${AM_SECOND.tag} · ${AM_SECOND.message}`}>
+        <AmTrend alarm={AM_SECOND} height={230} />
+      </Panel>
+    </AmPart>
+  );
 }
 
-function AlarmMgmtChattering() {
-  const [tag, setTag] = useState(ALARM_CHATTERING[0].tag);
-  return <AlarmChatteringPanel selectedTag={tag} onSelect={setTag} />;
+function AlarmManagementResponse() {
+  const [state, setState] = useState<AmState>('unacknowledged');
+  const alarm = { ...AM_SECOND, state };
+  return (
+    <AmPart className="h-[330px]">
+      <Panel
+        title="Response"
+        subtitle={AM_STATE_LABEL[state]}
+        footer={
+          <div className="w-full">
+            <AmActions alarm={alarm} onState={setState} />
+          </div>
+        }
+      >
+        <AmGuidance alarm={alarm} />
+      </Panel>
+    </AmPart>
+  );
 }
 
-function AlarmMgmtOpen() {
-  return <AlarmOpenPanel />;
+function AlarmManagementStates() {
+  return (
+    <AmPart>
+      <Panel title="Row states" subtitle="One alarm in each state" padding="none">
+        <AmList
+          columns={AM_COLUMNS.filter((column) => column.id !== 'tag')}
+          alarms={[
+            { ...AM_SECOND, id: 's1', state: 'unacknowledged' },
+            { ...AM_SECOND, id: 's2', state: 'acknowledged' },
+            { ...AM_SECOND, id: 's3', state: 'shelved' },
+          ]}
+        />
+      </Panel>
+    </AmPart>
+  );
 }
 
 export default definePage({
   id: 'alarm-management',
   title: 'Alarm management',
   summary:
-    'How the alarm system itself is performing, in the terms of EEMUA 191: the alarm rate an operator faces hour by hour, the flood periods, and the handful of tags that cause most of the load.',
+    'The operator’s alarm console: a summary strip that counts what is waiting, the standing alarms as one dense list banded by state, and an inspector that explains the selected alarm and lets the operator acknowledge or shelve it.',
   guidance: {
     use: [
-      'For the weekly alarm review and for the engineer who owns alarm rationalisation.',
-      'Lead with the rate chart: the bands say at a glance whether the load was acceptable.',
-      'Let a flood period filter everything, so the ranking answers "what flooded us then".',
-      'Pair the ranking with an inspector, so each bad actor comes with a setting and an action.',
+      'For control rooms, where the list of standing alarms is the work and must stay on screen.',
+      'Band the rows that need action edge to edge and let acknowledged and shelved rows recede.',
+      'Give every alarm its response and consequence in the inspector, next to the trend that explains it.',
     ],
     avoid: [
-      'Using it as the operator’s live alarm list — it measures the system, it does not replace it.',
-      'Counting alarms without the operator-hour denominator; totals alone cannot be judged.',
-      'Colour on hours inside the bands; only hours above manageable are marked.',
-      'A ranking longer than ten: the point is the few tags worth fixing first.',
+      'Cards and gaps: a console wastes no pixels between panes.',
+      'A priority shown only as a coloured dot; use a filled block with the icon and the word.',
+      'Hiding shelved alarms. They stay in the list, quiet, with a count in the strip.',
     ],
   },
   source,
@@ -594,147 +710,119 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description:
-        'Shown in the Nordic night theme: teal on tinted dark surfaces. The rate chart leads; pick a flood period under it, then a row in the ranking.',
+      description: 'Console look: summary strip, alarm list and inspector with no gaps.',
       specimens: [
         {
-          id: 'AlarmMgmtSignature',
-          title: 'Alarm management',
-          note: 'Pick it to review alarm system performance against EEMUA 191 and decide which tags to fix first.',
+          id: 'AlarmManagementSignature',
+          title: 'Alarm console',
+          note: 'Pick it for the operator position that owns the alarm list during a shift.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'dashboards/DashboardGrid.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/charts/CategoryChart.tsx',
-            'industrial/operations/DistributionBar.tsx',
-            'industrial/operations/SeverityBadge.tsx',
-            'industrial/Sparkline.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/ValueReadout.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: AlarmMgmtSignature,
+          bleed: true,
+          uses: ['kit/alarm-management/AlarmTable.tsx', 'kit/Panel.tsx', 'kit/TrendLine.tsx', 'kit/SparkLine.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmManagementSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same dashboard, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Other screens of the same product.',
       specimens: [
         {
-          id: 'AlarmMgmtAura',
-          title: 'Aura',
-          note: 'Pick it for the alarm review meeting, on a projector or in a report.',
+          id: 'AlarmManagementFloodReview',
+          title: 'Flood review',
+          note: 'Pick it for the weekly alarm review: choose a flood and see which tags caused it.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: AlarmMgmtAura,
+          bleed: true,
+          uses: ['kit/Bars.tsx', 'kit/DataTable.tsx', 'kit/Panel.tsx'],
+          Component: AlarmManagementFloodReview,
         },
         {
-          id: 'AlarmMgmtControlRoom',
-          title: 'Control room',
-          note: 'Pick it when the review happens at the console: dark, compact and sharp.',
+          id: 'AlarmManagementWall',
+          title: 'Area wall',
+          note: 'Pick it for the screen above the desks: one tile per area, filled with its worst unacknowledged priority.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: AlarmMgmtControlRoom,
-        },
-        {
-          id: 'AlarmMgmtAccessible',
-          title: 'Accessible',
-          note: 'Pick it for maximum legibility: high contrast and extra space around every figure.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: AlarmMgmtAccessible,
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/Grid.tsx', 'looks/LookScope.tsx'],
+          Component: AlarmManagementWall,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Panels',
-      description: 'Each part on its own, ready to drop into another dashboard.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The panes of the console on their own.',
       specimens: [
         {
-          id: 'AlarmMgmtRate',
-          title: 'Alarm rate with flood periods',
-          note: 'Pick it as the hero when a rate must be judged against bands and its worst periods picked out.',
+          id: 'AlarmManagementSummaryStrip',
+          title: 'Summary strip',
+          note: 'Use it above any list that must be triaged: the count that needs action first, then the breakdown as filters.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/SparkLine.tsx'],
+          Component: AlarmManagementSummaryStrip,
+        },
+        {
+          id: 'AlarmManagementList',
+          title: 'Banded alarm list',
+          note: 'Use it when rows have a state that must be read from across the desk.',
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/charts/CategoryChart.tsx'],
-          Component: AlarmMgmtRate,
+          bleed: true,
+          uses: ['kit/alarm-management/AlarmTable.tsx', 'kit/TagId.tsx'],
+          Component: AlarmManagementList,
         },
         {
-          id: 'AlarmMgmtFigures',
-          title: 'Supporting figures',
-          note: 'Pick it for a narrow rail of figures that support a chart, each with its target in words.',
+          id: 'AlarmManagementBanner',
+          title: 'Alarm banner',
+          note: 'Use it as the head of an inspector: filled while the alarm waits, an edge once it is acknowledged.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx'],
-          Component: AlarmMgmtFigures,
+          bleed: true,
+          Component: AlarmManagementBanner,
         },
         {
-          id: 'AlarmMgmtBadActors',
-          title: 'Bad actors ranking',
-          note: 'Pick it to rank the ten tags behind most of the load, with rows that select.',
+          id: 'AlarmManagementTrend',
+          title: 'Trend against the limit',
+          note: 'Use it to show how the reading reached its alarm limit over the last hour.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: AlarmMgmtBadActors,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx'],
+          Component: AlarmManagementTrend,
         },
         {
-          id: 'AlarmMgmtInspector',
-          title: 'Alarm inspector',
-          note: 'Pick it beside a ranking, so the selected tag shows its setting, pattern and next action.',
+          id: 'AlarmManagementResponse',
+          title: 'Response and actions',
+          note: 'Use it so the operator reads what to do before pressing acknowledge.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/Sparkline.tsx', 'industrial/operations/SeverityBadge.tsx'],
-          Component: AlarmMgmtInspector,
+          bleed: true,
+          uses: ['kit/Panel.tsx'],
+          Component: AlarmManagementResponse,
         },
         {
-          id: 'AlarmMgmtSeverity',
-          title: 'Alarms by severity',
-          note: 'Pick it to check the priority split against the recommended distribution.',
+          id: 'AlarmManagementStates',
+          title: 'Row states',
+          note: 'Use it as the reference for how unacknowledged, acknowledged and shelved rows differ.',
           origin: 'custom',
-          size: 'sm',
+          size: 'full',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/DistributionBar.tsx'],
-          Component: AlarmMgmtSeverity,
-        },
-        {
-          id: 'AlarmMgmtChattering',
-          title: 'Chattering alarms',
-          note: 'Pick it to list the tags that re-trigger within minutes, the cheapest ones to fix.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: AlarmMgmtChattering,
-        },
-        {
-          id: 'AlarmMgmtOpen',
-          title: 'Open alarms',
-          note: 'Pick it to keep the alarms standing right now beside the statistics.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: AlarmMgmtOpen,
+          bleed: true,
+          uses: ['kit/alarm-management/AlarmTable.tsx'],
+          Component: AlarmManagementStates,
         },
       ],
     },

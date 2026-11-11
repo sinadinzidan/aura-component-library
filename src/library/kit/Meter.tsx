@@ -16,6 +16,8 @@ type MeterProps = {
   /** End of the low-limit zone: everything below is shaded as out of range. */
   low?: number;
   tone?: Tone;
+  /** `lg` enlarges the value and thickens the bar, for a row whose figure should read at a glance. */
+  size?: 'md' | 'lg';
   /** Hide the min, target and max captions under the bar. */
   hideScale?: boolean;
   className?: string;
@@ -25,14 +27,14 @@ type MeterProps = {
  * A value on its range as a bar, with the target and the limit zones drawn on the same track so
  * "how far from where it should be" is readable without the numbers.
  */
-export function Meter({ label, value, min = 0, max, unit, decimals = 0, target, high, low, tone = 'accent', hideScale = false, className }: MeterProps) {
+export function Meter({ label, value, min = 0, max, unit, decimals = 0, target, high, low, tone = 'accent', size = 'md', hideScale = false, className }: MeterProps) {
   const look = useLook();
   const span = max - min || 1;
   const position = (point: number) => `${Math.min(100, Math.max(0, ((point - min) / span) * 100))}%`;
   const text = `${formatNumber(value, decimals)}${unit ? ` ${unit}` : ''}`;
 
   return (
-    <div data-look={look} data-tone={tone} className={cx('kit-meter', className)}>
+    <div data-look={look} data-tone={tone} data-size={size} className={cx('kit-meter', className)}>
       <div className="kit-meter-head">
         <span className="kit-meter-label">{label}</span>
         <span className="kit-meter-value">

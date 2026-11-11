@@ -1,501 +1,853 @@
-import { useReducer } from 'react';
-import type { KeyboardEvent } from 'react';
+import { Button } from '@cognite/aura/components/button';
+import { IconArrowNarrowLeft, IconArrowNarrowRight, IconRoute } from '@cognite/aura/icons';
+import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { ProcessRibbon } from '../../../library/experiences/journeys/ProcessRibbon';
-import type { RibbonStation } from '../../../library/experiences/journeys/ProcessRibbon';
-import { ProfileRail } from '../../../library/experiences/journeys/ProfileRail';
-import type { ProfileSeries } from '../../../library/experiences/journeys/ProfileRail';
-import { StageStepper } from '../../../library/experiences/journeys/StageStepper';
-import { createWalk, walkActionFromKey, walkReducer } from '../../../library/experiences/journeys/walkReducer';
-import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { formatValue, runStateStatus, toneFromLimits } from '../../../library/industrial/status';
-import type { Limits, RunState, Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { makeValues } from '../../data/series';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { buildAssetTree, isAbnormal, type TreeNode, type TreeSensor } from '../../../library/kit/miller-columns/assetTree';
+import { EXTRA_SENSORS } from '../../../library/kit/miller-columns/plantFixture';
+import { Panel } from '../../../library/kit/Panel';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
+import { ALARMS, ASSETS, SENSORS } from '../../data/plant';
+import { MINUTE, formatTime, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './process-walkthrough.tsx?raw';
 
-type WalkReading = {
-  label: string;
-  tag: string;
-  value: number;
-  unit: string;
-  decimals: number;
-  min: number;
-  max: number;
-  limits: Limits;
-};
+type PwSymbolKind = 'valve' | 'separator' | 'compressor' | 'exchanger' | 'pump';
 
-type WalkStage = {
+type PwStream = { pressure: number; temperature: number };
+
+type PwStation = {
   id: string;
-  label: string;
-  tag: string;
-  /** What happens here, in one sentence. */
-  sentence: string;
-  pressure: number;
-  temperature: number;
-  readings: readonly WalkReading[];
-  trend: { label: string; unit: string; decimals: number; values: readonly number[]; limit?: number };
-  equipment: readonly { tag: string; name: string; state: RunState }[];
-  abnormal: readonly { tone: Tone; title: string; detail: string }[];
+  /** Short name on the strip. */
+  name: string;
+  assetId: string;
+  symbol: PwSymbolKind;
+  /** Metres along the train from the inlet flange. */
+  chainage: number;
+  inlet: PwStream;
+  outlet: PwStream;
+  /** Gas through the station, MSm³/d. */
+  flow: number;
+  /** The instrument an operator reads first at this station. */
+  keySensorId: string;
+  duty: string;
+  story: string;
 };
 
-const WALK_STAGES: readonly WalkStage[] = [
+/** The gas train from the inlet flange to the export header, in the order the gas meets it. */
+const PW_STATIONS: readonly PwStation[] = [
   {
     id: 'inlet',
-    label: 'Inlet',
-    tag: 'NK-20',
-    sentence: 'The well stream arrives from the subsea flowline and passes the inlet shutdown valve, which can isolate the whole plant within seconds.',
-    pressure: 14.2,
-    temperature: 31.4,
-    readings: [
-      { label: 'Inlet pressure', tag: '20-PT-10001', value: 14.2, unit: 'barg', decimals: 1, min: 8, max: 20, limits: { low: 11, high: 16 } },
-      { label: 'Inlet temperature', tag: '20-TT-10002', value: 31.4, unit: '°C', decimals: 1, min: 0, max: 60, limits: { low: 15, high: 45 } },
-      { label: 'Inlet flow', tag: '20-FT-10003', value: 196500, unit: 'Sm³/h', decimals: 0, min: 0, max: 250000, limits: { low: 120000, high: 210000 } },
-    ],
-    trend: { label: 'Inlet pressure', unit: 'barg', decimals: 1, values: makeValues({ seed: 61, points: 48, base: 14.2, amplitude: 0.4, noise: 0.12 }) },
-    equipment: [{ tag: '20-XV-1105', name: 'Inlet shutdown valve', state: 'running' }],
-    abnormal: [],
+    name: 'Inlet',
+    assetId: '20-xv-1105',
+    symbol: 'valve',
+    chainage: 0,
+    inlet: { pressure: 14.2, temperature: 42 },
+    outlet: { pressure: 13.6, temperature: 41 },
+    flow: 4.61,
+    keySensorId: 'zt-11051',
+    duty: 'Isolates the plant from the pipeline',
+    story: 'Wet gas arrives from the wells at 14 bar. The shutdown valve is the first thing it meets and the last line of defence: it closes in under four seconds on a plant trip.',
   },
   {
     id: 'separation',
-    label: 'Separation',
-    tag: '20-VA-1001',
-    sentence: 'The inlet separator splits the stream by gravity: gas leaves from the top, while condensate and water drain from the bottom.',
-    pressure: 13.1,
-    temperature: 28.2,
-    readings: [
-      { label: 'Separator level', tag: '20-LT-10012', value: 54.3, unit: '%', decimals: 1, min: 0, max: 100, limits: { low: 30, high: 70, highHigh: 85 } },
-      { label: 'Separator pressure', tag: '20-PT-10010', value: 13.1, unit: 'barg', decimals: 1, min: 8, max: 20, limits: { low: 11, high: 15 } },
-      { label: 'Gas outlet temperature', tag: '20-TT-10014', value: 28.2, unit: '°C', decimals: 1, min: 0, max: 60, limits: { low: 15, high: 40 } },
-      { label: 'Flash gas recovered', tag: '23-FT-92710', value: 0, unit: 'Sm³/h', decimals: 0, min: 0, max: 12000, limits: { low: 4000, high: 10000 } },
-    ],
-    trend: { label: 'Separator level', unit: '%', decimals: 1, values: makeValues({ seed: 17, points: 48, base: 54, amplitude: 4, noise: 1.2 }), limit: 70 },
-    equipment: [
-      { tag: '20-VA-1001', name: 'Inlet separator', state: 'running' },
-      { tag: '20-VA-1002', name: 'Test separator', state: 'standby' },
-      { tag: '23-KA-9103', name: 'Recompressor', state: 'tripped' },
-    ],
-    abnormal: [
-      { tone: 'critical', title: 'Recompressor tripped on high vibration', detail: 'Since 13:46. Flash gas goes to flare until the restart.' },
-    ],
+    name: 'Separation',
+    assetId: '20-va-1001',
+    symbol: 'separator',
+    chainage: 18,
+    inlet: { pressure: 13.6, temperature: 41 },
+    outlet: { pressure: 13.1, temperature: 38 },
+    flow: 4.52,
+    keySensorId: 'lt-10012',
+    duty: 'Knocks out water and condensate',
+    story: 'The gas slows down in the vessel and the liquids fall out. The level is held near the middle so that neither gas blows out the bottom nor liquid carries over to the compressors.',
   },
   {
     id: 'stage-1',
-    label: '1st stage compression',
-    tag: '23-KA-9101',
-    sentence: 'The 1st stage compressor, driven by the gas turbine, lifts the gas from 12 to 49 barg, and the work of compression heats it to about 140 °C.',
-    pressure: 48.6,
-    temperature: 146.3,
-    readings: [
-      { label: 'Suction pressure', tag: '23-PT-92530', value: 12.4, unit: 'barg', decimals: 1, min: 6, max: 20, limits: { low: 10, high: 15 } },
-      { label: 'Discharge pressure', tag: '23-PT-92531', value: 48.6, unit: 'barg', decimals: 1, min: 30, max: 60, limits: { low: 40, high: 52, highHigh: 55 } },
-      { label: 'Discharge temperature', tag: '23-TT-92532', value: 146.3, unit: '°C', decimals: 1, min: 60, max: 170, limits: { low: 90, high: 145, highHigh: 155 } },
-      { label: 'Drive-end vibration', tag: '23-VT-92540', value: 6.8, unit: 'mm/s', decimals: 1, min: 0, max: 15, limits: { high: 7.1, highHigh: 11 } },
-    ],
-    trend: {
-      label: 'Discharge temperature',
-      unit: '°C',
-      decimals: 1,
-      values: makeValues({ seed: 13, points: 48, base: 139, amplitude: 2.5, noise: 0.8, drift: 6.5 }),
-      limit: 145,
-    },
-    equipment: [
-      { tag: '23-KA-9101', name: '1st stage compressor', state: 'running' },
-      { tag: '23-GT-9001', name: 'Compressor gas turbine', state: 'running' },
-    ],
-    abnormal: [
-      { tone: 'warning', title: 'Discharge temperature high', detail: '146.3 °C against a 145.0 °C limit, raised 38 min ago.' },
-      { tone: 'warning', title: 'Drive-end vibration approaching limit', detail: '6.8 of 7.1 mm/s. Acknowledged, survey WO-104466 open.' },
-    ],
+    name: '1st stage',
+    assetId: '23-ka-9101',
+    symbol: 'compressor',
+    chainage: 46,
+    inlet: { pressure: 12.4, temperature: 36 },
+    outlet: { pressure: 48.6, temperature: 141.2 },
+    flow: 4.47,
+    keySensorId: 'tt-92532',
+    duty: 'Lifts the gas from 12 to 49 bar',
+    story: 'The first stage does most of the work and shows it: compression heats the gas by more than a hundred degrees. With the recompressor down it runs harder than usual, and discharge temperature is the figure to watch.',
   },
   {
     id: 'cooling',
-    label: 'Cooling',
-    tag: '23-HA-9114',
-    sentence: 'The interstage cooler takes the heat of compression out against cooling water, so the 2nd stage receives cool, dense gas.',
-    pressure: 47.9,
-    temperature: 40.8,
-    readings: [
-      { label: 'Gas inlet temperature', tag: '23-TT-91140', value: 144.9, unit: '°C', decimals: 1, min: 60, max: 170, limits: { low: 90, high: 150 } },
-      { label: 'Cooler outlet temperature', tag: '23-TT-91141', value: 40.8, unit: '°C', decimals: 1, min: 10, max: 60, limits: { low: 20, high: 40, highHigh: 45 } },
-      { label: 'Cooling water supply', tag: '40-TT-40011', value: 12.6, unit: '°C', decimals: 1, min: 0, max: 30, limits: { low: 4, high: 18 } },
-      { label: 'Gas-side pressure drop', tag: '23-PDT-91142', value: 0.7, unit: 'bar', decimals: 2, min: 0, max: 1.2, limits: { high: 0.8 } },
-    ],
-    trend: {
-      label: 'Cooler outlet temperature',
-      unit: '°C',
-      decimals: 1,
-      values: makeValues({ seed: 19, points: 48, base: 37.6, amplitude: 0.9, noise: 0.3, drift: 3 }),
-      limit: 40,
-    },
-    equipment: [
-      { tag: '23-HA-9114', name: 'Interstage cooler', state: 'running' },
-      { tag: '40-PA-4001', name: 'Cooling water pump', state: 'maintenance' },
-    ],
-    abnormal: [
-      { tone: 'warning', title: 'Cooler outlet temperature high', detail: '40.8 °C against a 40.0 °C limit. Tube bundle cleaning WO-104471 is waiting.' },
-    ],
+    name: 'Cooling',
+    assetId: '23-ha-9114',
+    symbol: 'exchanger',
+    chainage: 61,
+    inlet: { pressure: 48.6, temperature: 141.2 },
+    outlet: { pressure: 47.9, temperature: 38.9 },
+    flow: 4.47,
+    keySensorId: 'tt-91141',
+    duty: 'Takes the heat of compression out',
+    story: 'Cooling water brings the gas back under 40 °C so the second stage can compress it again. The tube bundle is fouling: the outlet temperature has drifted to within a degree of its limit.',
   },
   {
     id: 'stage-2',
-    label: '2nd stage compression',
-    tag: '23-KA-9102',
-    sentence: 'The 2nd stage compressor brings the cooled gas up to pipeline pressure, about 142 barg.',
-    pressure: 142,
-    temperature: 128.4,
-    readings: [
-      { label: 'Suction pressure', tag: '23-PT-92630', value: 47.9, unit: 'barg', decimals: 1, min: 30, max: 60, limits: { low: 40, high: 52 } },
-      { label: 'Discharge pressure', tag: '23-PT-92631', value: 142, unit: 'barg', decimals: 1, min: 100, max: 170, limits: { low: 130, high: 150, highHigh: 155 } },
-      { label: 'Discharge temperature', tag: '23-TT-92632', value: 128.4, unit: '°C', decimals: 1, min: 60, max: 170, limits: { low: 90, high: 145, highHigh: 155 } },
-      { label: 'Shaft speed', tag: '23-ST-92601', value: 10120, unit: 'rpm', decimals: 0, min: 0, max: 12000, limits: { low: 7000, high: 10500 } },
-    ],
-    trend: { label: 'Discharge pressure', unit: 'barg', decimals: 1, values: makeValues({ seed: 71, points: 48, base: 141.6, amplitude: 1.4, noise: 0.5 }), limit: 150 },
-    equipment: [{ tag: '23-KA-9102', name: '2nd stage compressor', state: 'running' }],
-    abnormal: [],
+    name: '2nd stage',
+    assetId: '23-ka-9102',
+    symbol: 'compressor',
+    chainage: 78,
+    inlet: { pressure: 47.9, temperature: 38.9 },
+    outlet: { pressure: 96.4, temperature: 128.5 },
+    flow: 4.43,
+    keySensorId: 'pt-92631',
+    duty: 'Doubles the pressure to export level',
+    story: 'The second stage takes the cooled gas to pipeline pressure. It is the healthiest machine in the train and has six bar in hand before its discharge limit.',
   },
   {
     id: 'export',
-    label: 'Export',
-    tag: 'NK-27',
-    sentence: 'Dry gas is metered and leaves through the export pipeline, while the export pumps send the condensate ashore.',
-    pressure: 139.5,
-    temperature: 42,
-    readings: [
-      { label: 'Export pressure', tag: '27-PT-20001', value: 139.5, unit: 'barg', decimals: 1, min: 100, max: 170, limits: { low: 130, high: 150 } },
-      { label: 'Gas export rate', tag: '27-FT-20002', value: 4.38, unit: 'MSm³/d', decimals: 2, min: 3, max: 5, limits: { low: 4, high: 4.8 } },
-      { label: 'Condensate export flow', tag: '27-FT-20011', value: 412, unit: 'm³/h', decimals: 0, min: 0, max: 600, limits: { low: 300, high: 480 } },
-      { label: 'Pump A motor current', tag: '27-IT-20013', value: 86.2, unit: 'A', decimals: 1, min: 0, max: 120, limits: { low: 40, high: 95, highHigh: 105 } },
-    ],
-    trend: {
-      label: 'Gas export rate',
-      unit: 'MSm³/d',
-      decimals: 2,
-      values: makeValues({ seed: 31, points: 48, base: 4.34, amplitude: 0.12, noise: 0.04, cycles: 1.2, decimals: 2 }),
-    },
-    equipment: [
-      { tag: '27-PA-2001A', name: 'Export pump A', state: 'running' },
-      { tag: '27-PA-2001B', name: 'Export pump B', state: 'standby' },
-    ],
-    abnormal: [{ tone: 'info', title: 'Export pump B standby test overdue', detail: '34 days since the last start test; the limit is 30 days.' }],
+    name: 'Export',
+    assetId: '27-pa-2001a',
+    symbol: 'pump',
+    chainage: 112,
+    inlet: { pressure: 95.8, temperature: 48 },
+    outlet: { pressure: 95.1, temperature: 47 },
+    flow: 4.38,
+    keySensorId: 'ft-20011',
+    duty: 'Meters the gas and sends condensate with it',
+    story: 'Dry gas leaves for the pipeline at 95 bar while pump A returns the recovered condensate to the export line. Pump B stands by. What passes the meter here is the number the plant is paid for.',
   },
 ];
 
-const WALK_STATIONS: readonly RibbonStation[] = WALK_STAGES.map((stage) => {
-  const worst = stage.abnormal.some((item) => item.tone === 'critical') ? 'critical' : 'warning';
-  const flagged = stage.abnormal.filter((item) => item.tone === 'critical' || item.tone === 'warning').length;
+const PW_TREE = buildAssetTree({ assets: ASSETS, sensors: [...SENSORS, ...EXTRA_SENSORS], alarms: ALARMS });
+
+/** Half the width of each symbol in its own 160 × 110 box: where the flow line meets it. */
+const PW_SYMBOL_REACH: Record<PwSymbolKind, number> = { valve: 50, separator: 72, compressor: 55, exchanger: 40, pump: 36 };
+
+const PW_SYMBOL_NAME: Record<PwSymbolKind, string> = {
+  valve: 'Shutdown valve',
+  separator: 'Separator',
+  compressor: 'Compressor',
+  exchanger: 'Cooler',
+  pump: 'Pump',
+};
+
+function pwAsset(station: PwStation): TreeNode {
+  return PW_TREE.byId.get(station.assetId) ?? PW_TREE.root;
+}
+
+function pwKeySensor(station: PwStation): { node: TreeNode; sensor: TreeSensor } | undefined {
+  const node = PW_TREE.byId.get(station.keySensorId);
+  return node?.sensor ? { node, sensor: node.sensor } : undefined;
+}
+
+/** A station's colour: ink while normal, the state colour when the unit or its key instrument is flagged. */
+function pwTone(station: PwStation): Tone {
+  const asset = pwAsset(station);
+  const key = pwKeySensor(station);
+  if (asset.tone === 'critical' || key?.node.tone === 'critical') return 'critical';
+  if (isAbnormal(asset.tone) || (key && isAbnormal(key.node.tone))) return 'warning';
+  return 'accent';
+}
+
+function pwSigned(value: number, decimals = 1): string {
+  return `${value > 0 ? '+' : value < 0 ? '−' : ''}${formatNumber(Math.abs(value), decimals)}`;
+}
+
+/** The last 24 hours of a tag, ending on its current value. */
+function pwTrend(sensor: TreeSensor): { values: number[]; labels: string[] } {
+  const band = sensor.highLimit - sensor.lowLimit;
+  const raw = makeSeries({
+    seed: sensor.seed,
+    points: 25,
+    base: sensor.value,
+    amplitude: band * 0.06,
+    noise: band * 0.025,
+    cycles: 2,
+    stepMs: 60 * MINUTE,
+    decimals: sensor.decimals,
+  });
+  const offset = sensor.value - (raw[raw.length - 1]?.v ?? sensor.value);
   return {
-    id: stage.id,
-    label: stage.label,
-    tag: stage.tag,
-    caption: `${formatValue(stage.pressure, 1)} barg · ${formatValue(stage.temperature, 0)} °C`,
-    status: flagged > 0 ? { tone: worst, label: worst === 'critical' ? 'Trip' : `${flagged} ${flagged === 1 ? 'alarm' : 'alarms'}` } : undefined,
+    values: raw.map((point) => Number(Math.max(sensor.rangeMin, point.v + offset).toFixed(sensor.decimals))),
+    labels: raw.map((point) => formatTime(point.t)),
   };
-});
+}
 
-const WALK_STOPS: readonly string[] = WALK_STAGES.map((stage) => stage.label.replace(' compression', ''));
-
-const WALK_PROFILES: readonly ProfileSeries[] = [
-  { id: 'pressure', label: 'Pressure', unit: 'barg', decimals: 1, values: WALK_STAGES.map((stage) => stage.pressure) },
-  { id: 'temperature', label: 'Temperature', unit: '°C', decimals: 0, values: WALK_STAGES.map((stage) => stage.temperature) },
-];
-
-const WALK_CARD = 'rounded-xl border border-default bg-card-background p-4';
-const WALK_EYEBROW = 'text-xs font-medium text-muted-foreground';
-
-function ProcessWalkStory({ stage, index }: { stage: WalkStage; index: number }) {
+/** The outline of one piece of equipment, drawn around the origin inside a 160 × 110 box. */
+function PwSymbolShape({ kind }: { kind: PwSymbolKind }) {
+  if (kind === 'valve') {
+    return (
+      <>
+        <path d="M -50 -30 L 50 30 L 50 -30 L -50 30 Z" />
+        <path d="M 0 0 V -40 M -20 -40 H 20 M -20 -40 A 20 14 0 0 1 20 -40" />
+      </>
+    );
+  }
+  if (kind === 'separator') {
+    return (
+      <>
+        <rect x="-72" y="-28" width="144" height="56" rx="28" />
+        <path d="M -62 6 H 62" strokeDasharray="6 4" />
+        <path d="M -40 28 V 44 M 40 28 V 44 M -52 44 H -28 M 28 44 H 52 M 30 -28 V -42 M 22 -42 H 38" />
+      </>
+    );
+  }
+  if (kind === 'compressor') {
+    return (
+      <>
+        <path d="M -55 -42 L 55 -18 L 55 18 L -55 42 Z" />
+        <path d="M -22 -35 V 35 M 14 -27 V 27" />
+        <path d="M 0 30 V 46 M -16 46 H 16" />
+      </>
+    );
+  }
+  if (kind === 'exchanger') {
+    return (
+      <>
+        <circle r="40" />
+        <path d="M -40 0 H -22 L -11 -18 L 11 18 L 22 0 H 40" />
+        <path d="M 0 -40 V -52 M 0 40 V 52" strokeDasharray="4 3" />
+      </>
+    );
+  }
   return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <div>
-        <p className={WALK_EYEBROW}>
-          Stage {index + 1} of {WALK_STAGES.length} · <span className="font-mono font-normal">{stage.tag}</span>
-        </p>
-        <h4 className="mt-1 text-xl font-semibold text-base-foreground">{stage.label}</h4>
-        <p className="mt-2 text-sm text-medium-foreground">{stage.sentence}</p>
-      </div>
-      <div>
-        <p className={WALK_EYEBROW}>Equipment involved</p>
-        <ul className="mt-2 flex flex-col gap-2">
-          {stage.equipment.map((item) => (
-            <li key={item.tag} className="flex items-center justify-between gap-3">
-              <span className="min-w-0">
-                <span className="block text-sm text-base-foreground">{item.name}</span>
-                <span className="block font-mono text-xs text-muted-foreground">{item.tag}</span>
-              </span>
-              <StatusIndicator {...runStateStatus(item.state)} size="sm" />
+    <>
+      <circle r="36" />
+      <path d="M -13 -20 L 22 0 L -13 20 Z" />
+      <path d="M -24 27 L -34 46 H 34 L 24 27" />
+    </>
+  );
+}
+
+/** A symbol on its flow line at a given pixel width: the small and medium stations of the strip. */
+function PwSymbol({ kind, tone, width }: { kind: PwSymbolKind; tone: Tone; width: number }) {
+  const reach = PW_SYMBOL_REACH[kind];
+  const flagged = tone !== 'accent';
+  return (
+    <svg data-tone={tone} viewBox="-80 -55 160 110" width={width} height={(width * 110) / 160} aria-hidden="true" className="block shrink-0">
+      <path d={`M -80 0 H ${-reach} M ${reach} 0 H 80`} stroke="var(--kit-text)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      <g fill="none" stroke={flagged ? 'var(--t-line)' : 'var(--kit-text)'} strokeWidth={flagged ? 2.5 : 1.5} strokeLinejoin="round" strokeLinecap="round">
+        <g className="[&_*]:[vector-effect:non-scaling-stroke]">
+          <PwSymbolShape kind={kind} />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * The enlarged station: the symbol at full size on the flow line, with the inlet and outlet
+ * conditions at either end, the key instrument on a leader above and the change across the
+ * station on a dimension line below.
+ */
+function PwStationDrawing({ station }: { station: PwStation }) {
+  const tone = pwTone(station);
+  const flagged = tone !== 'accent';
+  const key = pwKeySensor(station);
+  const reach = PW_SYMBOL_REACH[station.symbol] * 1.3;
+  const ink = 'var(--kit-text)';
+  const quiet = 'var(--kit-text-2)';
+  const dp = station.outlet.pressure - station.inlet.pressure;
+  const dt = station.outlet.temperature - station.inlet.temperature;
+  const letters = key ? (key.node.tag.split('-')[1] ?? '') : '';
+  const keyFlagged = key ? isAbnormal(key.node.tone) : false;
+
+  return (
+    <svg
+      data-tone={tone}
+      viewBox="0 0 420 320"
+      width="420"
+      height="320"
+      role="img"
+      aria-label={`${station.name}: ${station.inlet.pressure} barg in, ${station.outlet.pressure} barg out`}
+      className="block shrink-0 text-xs"
+    >
+      <g stroke={ink} strokeWidth="1.5" fill="none">
+        <path d={`M 0 160 H ${210 - reach} M ${210 + reach} 160 H 420`} />
+        <path d={`M ${210 - reach - 9} 155 L ${210 - reach} 160 L ${210 - reach - 9} 165 M 411 155 L 420 160 L 411 165`} />
+      </g>
+      <g transform="translate(210 160) scale(1.3)" fill="none" stroke={flagged ? 'var(--t-line)' : ink} strokeWidth={flagged ? 2 : 1.25} strokeLinejoin="round" strokeLinecap="round">
+        <PwSymbolShape kind={station.symbol} />
+      </g>
+
+      <g fill={quiet}>
+        <text x="12" y="128">In</text>
+        <text x="12" y="150" fill={ink} fontSize="15" fontWeight="600" className="tabular-nums">
+          {formatNumber(station.inlet.pressure, 1)} barg
+        </text>
+        <text x="12" y="182" className="tabular-nums">
+          {formatNumber(station.inlet.temperature, 1)} °C
+        </text>
+        <text x="408" y="128" textAnchor="end">
+          Out
+        </text>
+        <text x="408" y="150" textAnchor="end" fill={ink} fontSize="15" fontWeight="600" className="tabular-nums">
+          {formatNumber(station.outlet.pressure, 1)} barg
+        </text>
+        <text x="408" y="182" textAnchor="end" className="tabular-nums">
+          {formatNumber(station.outlet.temperature, 1)} °C
+        </text>
+      </g>
+
+      {key ? (
+        <g data-tone={keyFlagged ? key.node.tone : 'accent'}>
+          <path d="M 210 62 V 92" stroke={quiet} strokeWidth="1" strokeDasharray="3 3" />
+          <circle cx="210" cy="44" r="18" fill="var(--kit-halo)" stroke={keyFlagged ? 'var(--t-line)' : ink} strokeWidth={keyFlagged ? 2.5 : 1.25} />
+          <path d="M 192 44 H 228" stroke={keyFlagged ? 'var(--t-line)' : ink} strokeWidth="1" />
+          <text x="210" y="40" textAnchor="middle" fill={ink} fontWeight="600">
+            {letters}
+          </text>
+          <text x="238" y="34" fill={quiet} className="tabular-nums">
+            {key.node.tag}
+          </text>
+          <text x="238" y="54" fill={keyFlagged ? 'var(--t-ink)' : ink} fontSize="15" fontWeight="600" className="tabular-nums">
+            {formatNumber(key.sensor.value, key.sensor.decimals)} {key.sensor.unit}
+          </text>
+          {keyFlagged ? (
+            <text x="238" y="72" fill="var(--t-ink)" fontWeight="600">
+              {key.node.stateLabel}
+            </text>
+          ) : null}
+          <text x="182" y="38" textAnchor="end" fill={quiet}>
+            {key.node.name}
+          </text>
+          <text x="182" y="56" textAnchor="end" fill={quiet} className="tabular-nums">
+            High limit {formatNumber(key.sensor.highLimit, key.sensor.decimals)}
+          </text>
+        </g>
+      ) : null}
+
+      <g stroke={quiet} strokeWidth="1" fill="none">
+        <path d={`M ${210 - reach} 232 V 276 M ${210 + reach} 232 V 276`} />
+        <path d={`M ${210 - reach} 268 H ${210 + reach}`} />
+        <path d={`M ${210 - reach + 8} 264 L ${210 - reach} 268 L ${210 - reach + 8} 272 M ${210 + reach - 8} 264 L ${210 + reach} 268 L ${210 + reach - 8} 272`} />
+      </g>
+      <text x="210" y="296" textAnchor="middle" fill={ink} fontSize="13" fontWeight="600" className="tabular-nums">
+        Δp {pwSigned(dp)} bar · ΔT {pwSigned(dt)} °C
+      </text>
+    </svg>
+  );
+}
+
+type PwWalk = {
+  index: number;
+  station: PwStation;
+  goTo: (index: number) => void;
+  next: () => void;
+  previous: () => void;
+};
+
+function usePwWalk(initial: number): PwWalk {
+  const [index, setIndex] = useState(initial);
+  const last = PW_STATIONS.length - 1;
+  const clamp = (value: number) => Math.min(Math.max(value, 0), last);
+  return {
+    index,
+    station: PW_STATIONS[index] ?? PW_STATIONS[0] ?? PW_FALLBACK,
+    goTo: (value) => setIndex(clamp(value)),
+    next: () => setIndex((current) => clamp(current + 1)),
+    previous: () => setIndex((current) => clamp(current - 1)),
+  };
+}
+
+const PW_FALLBACK: PwStation = {
+  id: 'none',
+  name: 'No station',
+  assetId: 'nk',
+  symbol: 'valve',
+  chainage: 0,
+  inlet: { pressure: 0, temperature: 0 },
+  outlet: { pressure: 0, temperature: 0 },
+  flow: 0,
+  keySensorId: '',
+  duty: '',
+  story: '',
+};
+
+function PwStationNumber({ index, active }: { index: number; active: boolean }) {
+  return (
+    <span
+      className={`flex size-7 items-center justify-center border border-[color:var(--kit-text)] text-sm font-semibold tabular-nums ${
+        active ? 'bg-[var(--kit-text)] text-[color:var(--kit-halo)]' : 'bg-[var(--kit-halo)]'
+      }`}
+    >
+      {index + 1}
+    </span>
+  );
+}
+
+/** The whole train on one line. The current station is drawn large; the others are buttons that take you there. */
+function PwStrip({ walk }: { walk: PwWalk }) {
+  return (
+    <ol className="flex h-80 items-stretch">
+      {PW_STATIONS.map((station, index) => {
+        const tone = pwTone(station);
+        if (index === walk.index) {
+          return (
+            <li key={station.id} aria-current="step" className="relative flex shrink-0 items-center border-x border-dashed border-[color:var(--kit-rule-strong)] bg-[color-mix(in_oklab,var(--kit-text)_4%,transparent)]">
+              <div className="absolute bottom-3 left-3 flex items-center gap-2">
+                <PwStationNumber index={index} active />
+                <span className="text-sm font-semibold">{station.name}</span>
+              </div>
+              <PwStationDrawing station={station} />
             </li>
-          ))}
-        </ul>
-      </div>
+          );
+        }
+        return (
+          <li key={station.id} className="min-w-0 flex-1">
+            <button
+              type="button"
+              data-station={station.id}
+              onClick={() => walk.goTo(index)}
+              className="relative flex h-full w-full items-center outline-none hover:bg-[color-mix(in_oklab,var(--kit-text)_4%,transparent)] focus-visible:bg-[color-mix(in_oklab,var(--kit-text)_8%,transparent)]"
+            >
+              <span aria-hidden="true" className="h-0 flex-1 border-t-[1.5px] border-[color:var(--kit-text)]" />
+              <PwSymbol kind={station.symbol} tone={tone} width={68} />
+              <span aria-hidden="true" className="h-0 flex-1 border-t-[1.5px] border-[color:var(--kit-text)]" />
+              <span className="absolute inset-x-0 bottom-[calc(50%+2.25rem)] flex justify-center">
+                <PwStationNumber index={index} active={false} />
+              </span>
+              <span data-tone={tone} className="absolute inset-x-1 top-[calc(50%+2.25rem)] text-center">
+                <span className="block text-sm font-semibold leading-5">{station.name}</span>
+                <span className="block text-xs tabular-nums text-[color:var(--kit-text-2)]">{formatNumber(station.outlet.pressure, 1)} barg</span>
+                {tone === 'accent' ? null : <span className="block text-xs font-semibold text-[color:var(--t-ink)]">{pwAsset(station).stateLabel}</span>}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** A dimension line under the strip: where each station sits along the train, in metres from the inlet. */
+function PwChainage({ walk }: { walk: PwWalk }) {
+  const total = PW_STATIONS[PW_STATIONS.length - 1]?.chainage ?? 1;
+  return (
+    <div className="relative mx-6 h-12 border-t border-[color:var(--kit-text)]">
+      {PW_STATIONS.map((station, index) => {
+        const active = index === walk.index;
+        return (
+          <button
+            key={station.id}
+            type="button"
+            aria-label={`Station ${index + 1}, ${station.name}, ${station.chainage} metres`}
+            aria-current={active ? 'step' : undefined}
+            onClick={() => walk.goTo(index)}
+            style={{ left: `${(station.chainage / total) * 100}%` }}
+            className="absolute top-0 flex -translate-x-1/2 flex-col items-center outline-none focus-visible:underline"
+          >
+            <span aria-hidden="true" className={`block w-0 border-l border-[color:var(--kit-text)] ${active ? 'h-4 border-l-[3px]' : 'h-2.5'}`} />
+            <span className={`mt-1 whitespace-nowrap text-xs tabular-nums ${active ? 'font-semibold' : 'text-[color:var(--kit-text-2)]'}`}>{station.chainage} m</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function ProcessWalkReadings({ stage }: { stage: WalkStage }) {
+function PwTitleCell({ label, children, grow = false }: { label: string; children: ReactNode; grow?: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3">
-      <p className={WALK_EYEBROW}>Readings that matter here</p>
-      <ul className="flex flex-col gap-4">
-        {stage.readings.map((reading) => (
-          <li key={reading.tag} className="flex flex-col gap-1.5">
-            <div className="flex items-end justify-between gap-3">
-              <span className="min-w-0">
-                <span className="block text-sm text-base-foreground">{reading.label}</span>
-                <span className="block font-mono text-xs text-muted-foreground">{reading.tag}</span>
-              </span>
-              <ValueReadout
-                value={reading.value}
-                unit={reading.unit}
-                decimals={reading.decimals}
-                size="sm"
-                tone={toneFromLimits(reading.value, reading.limits)}
-              />
-            </div>
-            <RangeIndicator
-              label={reading.label}
-              value={reading.value}
-              min={reading.min}
-              max={reading.max}
-              limits={reading.limits}
-              unit={reading.unit}
-              decimals={reading.decimals}
-              showHeader={false}
-            />
+    <div className={`border-l border-[color:var(--kit-text)] px-4 py-2 ${grow ? 'flex-1' : ''}`}>
+      <p className="text-xs text-[color:var(--kit-text-2)]">{label}</p>
+      <p className="whitespace-nowrap text-sm font-semibold tabular-nums">{children}</p>
+    </div>
+  );
+}
+
+/** The title block of the drawing: what it is, which sheet is open, and the two figures that sum up the train. */
+function PwTitleBlock({ walk }: { walk: PwWalk }) {
+  const first = PW_STATIONS[0];
+  const last = PW_STATIONS[PW_STATIONS.length - 1];
+  return (
+    <header className="flex items-stretch border border-[color:var(--kit-text)] bg-[var(--kit-halo)]">
+      <div className="flex items-center gap-3 px-4 py-2">
+        <span className="flex size-9 items-center justify-center border border-[color:var(--kit-text)]">
+          <IconRoute aria-hidden="true" className="size-5" />
+        </span>
+        <div>
+          <h2 className="text-base font-semibold leading-5">Process walkthrough</h2>
+          <p className="text-xs text-[color:var(--kit-text-2)]">Nordkapp gas train, inlet to export</p>
+        </div>
+      </div>
+      <div className="flex-1" />
+      <PwTitleCell label="Drawing">NK-PF-001 rev C</PwTitleCell>
+      <PwTitleCell label="Station">
+        {walk.index + 1} of {PW_STATIONS.length} · {walk.station.name}
+      </PwTitleCell>
+      <PwTitleCell label="Pressure, in to out">
+        {first ? formatNumber(first.inlet.pressure, 1) : '—'} to {last ? formatNumber(last.outlet.pressure, 1) : '—'} barg
+      </PwTitleCell>
+      <PwTitleCell label="Export">{last ? formatNumber(last.flow, 2) : '—'} MSm³/d</PwTitleCell>
+    </header>
+  );
+}
+
+/** The bottom dock: one step back, one step on, and what each step leads to. */
+function PwDock({ walk }: { walk: PwWalk }) {
+  const before = PW_STATIONS[walk.index - 1];
+  const after = PW_STATIONS[walk.index + 1];
+  return (
+    <footer className="flex items-center gap-4 border border-[color:var(--kit-text)] bg-[var(--kit-halo)] px-4 py-2.5">
+      <Button variant="outline" size="sm" disabled={!before} onClick={walk.previous}>
+        <IconArrowNarrowLeft /> {before ? before.name : 'Start of train'}
+      </Button>
+      <ol aria-label="Stations" className="flex flex-1 items-center justify-center gap-1.5">
+        {PW_STATIONS.map((station, index) => (
+          <li key={station.id}>
+            <button type="button" aria-label={`Go to ${station.name}`} aria-current={index === walk.index ? 'step' : undefined} onClick={() => walk.goTo(index)}>
+              <PwStationNumber index={index} active={index === walk.index} />
+            </button>
           </li>
         ))}
-      </ul>
-    </div>
+      </ol>
+      <Button size="sm" disabled={!after} onClick={walk.next}>
+        {after ? after.name : 'End of train'} <IconArrowNarrowRight />
+      </Button>
+    </footer>
   );
 }
 
-function ProcessWalkWatch({ stage }: { stage: WalkStage }) {
-  const low = Math.min(...stage.trend.values);
-  const high = Math.max(...stage.trend.values);
+type PwStreamRow = { id: string; label: string; inlet: string; outlet: string; change: string };
 
-  return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <p className={WALK_EYEBROW}>{stage.trend.label}, last 48 hours</p>
-        <Sparkline
-          values={stage.trend.values}
-          label={`${stage.trend.label}, last 48 hours`}
-          variant="area"
-          height={72}
-          showLast
-          limit={stage.trend.limit}
-          unit={stage.trend.unit}
-          decimals={stage.trend.decimals}
-        />
-        <p className="text-xs text-muted-foreground tabular-nums">
-          Range {formatValue(low, stage.trend.decimals)}–{formatValue(high, stage.trend.decimals)} {stage.trend.unit}
-          {stage.trend.limit === undefined ? '' : ` · dashed line: limit ${formatValue(stage.trend.limit, 0)} ${stage.trend.unit}`}
-        </p>
-      </div>
-      <div>
-        <p className={WALK_EYEBROW}>Abnormal at this stage</p>
-        {stage.abnormal.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">Nothing abnormal. All readings are inside their operating bands.</p>
-        ) : (
-          <ul className="mt-2 flex flex-col gap-3">
-            {stage.abnormal.map((item) => (
-              <li key={item.title} className="flex flex-col gap-0.5">
-                <StatusIndicator
-                  tone={item.tone}
-                  label={item.title}
-                  shape={item.tone === 'critical' ? 'diamond' : item.tone === 'warning' ? 'square' : 'dot'}
-                  size="sm"
-                  className="whitespace-normal items-start [&>span:first-child]:mt-1"
-                />
-                <p className="pl-3.5 text-xs text-muted-foreground">{item.detail}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
+function pwStreamRows(station: PwStation): PwStreamRow[] {
+  return [
+    {
+      id: 'pressure',
+      label: 'Pressure, barg',
+      inlet: formatNumber(station.inlet.pressure, 1),
+      outlet: formatNumber(station.outlet.pressure, 1),
+      change: pwSigned(station.outlet.pressure - station.inlet.pressure),
+    },
+    {
+      id: 'temperature',
+      label: 'Temperature, °C',
+      inlet: formatNumber(station.inlet.temperature, 1),
+      outlet: formatNumber(station.outlet.temperature, 1),
+      change: pwSigned(station.outlet.temperature - station.inlet.temperature),
+    },
+    { id: 'flow', label: 'Flow, MSm³/d', inlet: formatNumber(station.flow, 2), outlet: formatNumber(station.flow, 2), change: '0.00' },
+  ];
 }
 
-function ProcessWalkStagePanel({ stage, index }: { stage: WalkStage; index: number }) {
-  return (
-    <div className={`${WALK_CARD} grid grid-cols-1 gap-x-8 gap-y-6 lg:grid-cols-3`}>
-      <ProcessWalkStory stage={stage} index={index} />
-      <ProcessWalkReadings stage={stage} />
-      <ProcessWalkWatch stage={stage} />
-    </div>
-  );
+const PW_STREAM_COLUMNS: DataTableColumn<PwStreamRow>[] = [
+  { id: 'label', header: 'Stream', cell: (row) => row.label, nowrap: true },
+  { id: 'in', header: 'In', numeric: true, cell: (row) => row.inlet },
+  { id: 'out', header: 'Out', numeric: true, cell: (row) => row.outlet },
+  { id: 'change', header: 'Change', numeric: true, cell: (row) => <span className="font-semibold">{row.change}</span> },
+];
+
+function PwStreamTable({ station }: { station: PwStation }) {
+  return <DataTable label={`Streams at ${station.name}`} columns={PW_STREAM_COLUMNS} rows={pwStreamRows(station)} rowKey={(row) => row.id} />;
 }
 
-function ProcessWalkExperience() {
-  // Archetype: a horizontal journey — one process line read left to right, with the detail of one
-  //   stop below it. No grid of panels, no headline tiles.
-  // Dominant element: the process ribbon, a scrolling flow line with a station per stage and a
-  //   "you are here" marker.
-  // Interaction: stepping. Next / Previous, the arrow keys (Home and End for the ends) or a click
-  //   on a station or on the profile rail moves the marker, glides the ribbon and swaps the stage
-  //   panel; the profile rail keeps the whole route in view.
-  const [walk, dispatch] = useReducer(walkReducer, createWalk(WALK_STAGES.length));
-  const stage = WALK_STAGES[walk.index] ?? WALK_STAGES[0];
-
-  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
-    const action = walkActionFromKey(event.key);
-    if (!action) return;
-    event.preventDefault();
-    dispatch(action);
-  };
-
+/** The same three streams as a narrow list: in and out on one line, the change at the end. */
+function PwStreamList({ station }: { station: PwStation }) {
   return (
-    <section
-      aria-label="Process walkthrough, inlet to export"
-      tabIndex={0}
-      onKeyDown={onKeyDown}
-      className="flex min-h-[44rem] w-full flex-col gap-4 rounded-xl bg-base-background p-6 text-base-foreground outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring-default)]"
-    >
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0">
-          <h3 className="text-2xl font-semibold text-base-foreground">Follow the gas</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Nordkapp gas processing plant · inlet to export in six stages · values at 14:00 UTC</p>
+    <dl className="flex flex-1 flex-col justify-between">
+      {pwStreamRows(station).map((row) => (
+        <div key={row.id} className="border-t border-[color:var(--kit-rule)] py-2.5 first:border-t-0 first:pt-0">
+          <dt className="text-xs text-[color:var(--kit-text-2)]">{row.label}</dt>
+          <dd className="flex items-baseline justify-between gap-3 tabular-nums">
+            <span className="whitespace-nowrap text-lg font-medium">
+              {row.inlet} <span className="text-[color:var(--kit-text-3)]">→</span> {row.outlet}
+            </span>
+            <span className="text-sm font-semibold">{row.change}</span>
+          </dd>
         </div>
-        <StageStepper
-          index={walk.index}
-          count={walk.count}
-          stageLabel={stage.label}
-          previousLabel={WALK_STAGES[walk.index - 1]?.label}
-          nextLabel={WALK_STAGES[walk.index + 1]?.label}
-          onPrevious={() => dispatch({ type: 'previous' })}
-          onNext={() => dispatch({ type: 'next' })}
-        />
-      </header>
+      ))}
+    </dl>
+  );
+}
 
-      <div className={WALK_CARD}>
-        <ProcessRibbon
-          stations={WALK_STATIONS}
-          activeIndex={walk.index}
-          onSelect={(index) => dispatch({ type: 'goTo', index })}
-          label="Gas route, inlet to export"
-        />
+/** What the station is and does, in words, with the unit's own state. */
+function PwStationSheet({ walk }: { walk: PwWalk }) {
+  const { station } = walk;
+  const asset = pwAsset(station);
+  return (
+    <div className="flex flex-1 flex-col gap-3">
+      <div className="flex items-start gap-4">
+        <span className="text-6xl font-medium leading-none tracking-tight tabular-nums">{String(walk.index + 1).padStart(2, '0')}</span>
+        <div className="min-w-0">
+          <h3 className="text-lg font-semibold leading-6">{asset.name}</h3>
+          <p className="text-sm text-[color:var(--kit-text-2)]">{station.duty}</p>
+        </div>
       </div>
-
-      <ProcessWalkStagePanel stage={stage} index={walk.index} />
-
-      <div className={WALK_CARD}>
-        <p className={`${WALK_EYEBROW} mb-2`}>Along the whole route</p>
-        <ProfileRail
-          stops={WALK_STOPS}
-          series={WALK_PROFILES}
-          activeIndex={walk.index}
-          onSelect={(index) => dispatch({ type: 'goTo', index })}
-          label="Pressure and temperature along the gas route"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <TagId variant="chip">{asset.tag}</TagId>
+        <StatusPill tone={asset.tone}>{asset.stateLabel}</StatusPill>
+        <span className="text-sm tabular-nums text-[color:var(--kit-text-2)]">Health {asset.score}</span>
       </div>
-    </section>
+      <p className="text-sm leading-6">{station.story}</p>
+    </div>
   );
 }
 
-function ProcessWalkSignature() {
+function PwKeyTrend({ station, height = 232 }: { station: PwStation; height?: number }) {
+  const key = pwKeySensor(station);
+  if (!key) return <p className="text-sm text-[color:var(--kit-text-2)]">No instrument is mapped to this station.</p>;
+  const { values, labels } = pwTrend(key.sensor);
   return (
-    <ThemeScope preset="nordic" className="w-full">
-      <ProcessWalkExperience />
-    </ThemeScope>
-  );
-}
-
-function ProcessWalkHologram() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <ProcessWalkExperience />
-    </ThemeScope>
-  );
-}
-
-function ProcessWalkEditorial() {
-  return (
-    <ThemeScope preset="editorial" className="w-full">
-      <ProcessWalkExperience />
-    </ThemeScope>
-  );
-}
-
-function ProcessWalkPartRibbon() {
-  const [walk, dispatch] = useReducer(walkReducer, createWalk(WALK_STAGES.length, 2));
-
-  return (
-    <ProcessRibbon
-      stations={WALK_STATIONS}
-      activeIndex={walk.index}
-      onSelect={(index) => dispatch({ type: 'goTo', index })}
-      label="Gas route, inlet to export"
+    <TrendLine
+      label={`${key.node.name}, ${key.node.tag}, last 24 hours`}
+      series={[{ id: 'value', label: key.node.name, values, tone: isAbnormal(key.node.tone) ? key.node.tone : 'accent' }]}
+      labels={labels}
+      unit={key.sensor.unit}
+      decimals={key.sensor.decimals}
+      limits={[{ value: key.sensor.highLimit, label: 'High limit', tone: 'warning' }]}
+      height={height}
+      showLegend={false}
     />
   );
 }
 
-function ProcessWalkPartStepper() {
-  const [walk, dispatch] = useReducer(walkReducer, createWalk(WALK_STAGES.length, 3));
-
+/** Pressure and temperature leaving every station: the shape of the whole train in two lines. */
+function PwProfile({ height = 250 }: { height?: number }) {
   return (
-    <div className="flex w-full justify-center">
-      <StageStepper
-        index={walk.index}
-        count={walk.count}
-        stageLabel={WALK_STAGES[walk.index]?.label ?? ''}
-        onPrevious={() => dispatch({ type: 'previous' })}
-        onNext={() => dispatch({ type: 'next' })}
-      />
-    </div>
-  );
-}
-
-function ProcessWalkPartRail() {
-  const [walk, dispatch] = useReducer(walkReducer, createWalk(WALK_STAGES.length, 4));
-
-  return (
-    <ProfileRail
-      stops={WALK_STOPS}
-      series={WALK_PROFILES}
-      activeIndex={walk.index}
-      onSelect={(index) => dispatch({ type: 'goTo', index })}
-      label="Pressure and temperature along the gas route"
+    <TrendLine
+      label="Pressure and temperature leaving each station"
+      series={[
+        { id: 'pressure', label: 'Pressure out, barg', values: PW_STATIONS.map((station) => station.outlet.pressure), tone: 'accent' },
+        { id: 'temperature', label: 'Temperature out, °C', values: PW_STATIONS.map((station) => station.outlet.temperature), tone: 'warning', dashed: true },
+      ]}
+      labels={PW_STATIONS.map((station) => station.name)}
+      decimals={0}
+      highlightLast={false}
+      height={height}
+      showLegend
     />
   );
 }
 
-function ProcessWalkPartStagePanel() {
-  return <ProcessWalkStagePanel stage={WALK_STAGES[2]} index={2} />;
-}
-
-function ProcessWalkPartStory() {
+function ProcessWalkthroughSignature() {
+  const walk = usePwWalk(2);
+  const key = pwKeySensor(walk.station);
   return (
-    <div className={`${WALK_CARD} w-full`}>
-      <ProcessWalkStory stage={WALK_STAGES[1]} index={1} />
-    </div>
+    <LookScope look="blueprint">
+      <Canvas className="flex flex-col gap-5">
+        <PwTitleBlock walk={walk} />
+        <Panel padding="none" title="Flow line" subtitle="Left to right · the open station is drawn at five times scale">
+          <PwStrip walk={walk} />
+          <PwChainage walk={walk} />
+        </Panel>
+        <Grid className="gap-5">
+          <Panel className="col-span-4" title="Station sheet" subtitle={`Stn ${walk.index + 1} · ${walk.station.chainage} m`}>
+            <PwStationSheet walk={walk} />
+          </Panel>
+          <Panel className="col-span-3" title="Streams" subtitle="In → out">
+            <PwStreamList station={walk.station} />
+          </Panel>
+          <Panel className="col-span-5" title={key ? key.node.name : 'Key instrument'} subtitle={key ? `${key.node.tag} · ${key.sensor.unit}` : 'None'}>
+            <PwKeyTrend station={walk.station} />
+          </Panel>
+        </Grid>
+        <PwDock walk={walk} />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function ProcessWalkPartReadings() {
+type PwSheetRow = { station: PwStation; index: number };
+
+function ProcessWalkthroughFlowSheet() {
+  const walk = usePwWalk(3);
+  const columns: DataTableColumn<PwSheetRow>[] = [
+    { id: 'stn', header: 'Stn', cell: (row) => <PwStationNumber index={row.index} active={row.index === walk.index} />, width: 'w-12' },
+    {
+      id: 'station',
+      header: 'Station',
+      cell: (row) => (
+        <button type="button" className="text-left font-semibold hover:underline" onClick={() => walk.goTo(row.index)}>
+          {pwAsset(row.station).name}
+        </button>
+      ),
+    },
+    { id: 'tag', header: 'Tag', nowrap: true, cell: (row) => <TagId>{pwAsset(row.station).tag}</TagId> },
+    { id: 'pin', header: 'p in', numeric: true, cell: (row) => formatNumber(row.station.inlet.pressure, 1) },
+    { id: 'pout', header: 'p out', numeric: true, cell: (row) => formatNumber(row.station.outlet.pressure, 1) },
+    { id: 'tin', header: 'T in', numeric: true, cell: (row) => formatNumber(row.station.inlet.temperature, 1) },
+    { id: 'tout', header: 'T out', numeric: true, cell: (row) => formatNumber(row.station.outlet.temperature, 1) },
+    { id: 'flow', header: 'Flow', numeric: true, cell: (row) => formatNumber(row.station.flow, 2) },
+    { id: 'state', header: 'State', nowrap: true, cell: (row) => <StatusPill tone={pwAsset(row.station).tone}>{pwAsset(row.station).stateLabel}</StatusPill> },
+  ];
   return (
-    <div className={`${WALK_CARD} w-full`}>
-      <ProcessWalkReadings stage={WALK_STAGES[3]} />
-    </div>
+    <LookScope look="blueprint">
+      <Canvas className="flex flex-col gap-5">
+        <PwTitleBlock walk={walk} />
+        <Panel padding="none" title="Flow sheet" subtitle="All stations at one scale">
+          <ol className="flex items-stretch">
+            {PW_STATIONS.map((station, index) => {
+              const tone = pwTone(station);
+              const active = index === walk.index;
+              return (
+                <li key={station.id} className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => walk.goTo(index)}
+                    className={`flex w-full flex-col items-center gap-2 py-5 outline-none hover:bg-[color-mix(in_oklab,var(--kit-text)_4%,transparent)] ${active ? 'bg-[color-mix(in_oklab,var(--kit-text)_7%,transparent)]' : ''}`}
+                  >
+                    <PwStationNumber index={index} active={active} />
+                    <span className="flex w-full items-center">
+                      <span aria-hidden="true" className="h-0 flex-1 border-t-[1.5px] border-[color:var(--kit-text)]" />
+                      <PwSymbol kind={station.symbol} tone={tone} width={104} />
+                      <span aria-hidden="true" className="h-0 flex-1 border-t-[1.5px] border-[color:var(--kit-text)]" />
+                    </span>
+                    <span data-tone={tone} className="text-center">
+                      <span className="block text-sm font-semibold">{station.name}</span>
+                      <span className="block text-xs tabular-nums text-[color:var(--kit-text-2)]">
+                        {formatNumber(station.inlet.pressure, 1)} to {formatNumber(station.outlet.pressure, 1)} barg
+                      </span>
+                      {tone === 'accent' ? null : <span className="block text-xs font-semibold text-[color:var(--t-ink)]">{pwAsset(station).stateLabel}</span>}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </Panel>
+        <Grid className="gap-5">
+          <Panel className="col-span-12" title="Stream table" subtitle="barg · °C · MSm³/d">
+            <DataTable
+              label="Streams at every station"
+              columns={columns}
+              rows={PW_STATIONS.map((station, index) => ({ station, index }))}
+              rowKey={(row) => row.station.id}
+              rowTone={(row) => (pwTone(row.station) === 'accent' ? undefined : pwTone(row.station))}
+            />
+          </Panel>
+          <Panel className="col-span-12" title="Profile along the train" subtitle="Leaving each station">
+            <PwProfile height={240} />
+          </Panel>
+        </Grid>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function ProcessWalkPartWatch() {
+function ProcessWalkthroughTablet() {
+  const walk = usePwWalk(1);
   return (
-    <div className={`${WALK_CARD} w-full`}>
-      <ProcessWalkWatch stage={WALK_STAGES[2]} />
-    </div>
+    <LookScope look="blueprint" className="mx-auto w-full max-w-2xl">
+      <Canvas className="flex flex-col gap-5">
+        <Panel padding="none" title="Process walkthrough" subtitle={`Stn ${walk.index + 1} of ${PW_STATIONS.length}`}>
+          <ol>
+            {PW_STATIONS.map((station, index) => {
+              const tone = pwTone(station);
+              if (index === walk.index) {
+                return (
+                  <li key={station.id} aria-current="step" className="border-y border-dashed border-[color:var(--kit-rule-strong)] bg-[color-mix(in_oklab,var(--kit-text)_4%,transparent)] p-4">
+                    <div className="flex justify-center">
+                      <PwStationDrawing station={station} />
+                    </div>
+                    <PwStationSheet walk={walk} />
+                  </li>
+                );
+              }
+              return (
+                <li key={station.id} className="border-t border-[color:var(--kit-rule)] first:border-t-0">
+                  <button type="button" onClick={() => walk.goTo(index)} className="flex w-full items-center gap-4 px-4 py-2 text-left outline-none hover:bg-[color-mix(in_oklab,var(--kit-text)_4%,transparent)]">
+                    <PwStationNumber index={index} active={false} />
+                    <PwSymbol kind={station.symbol} tone={tone} width={64} />
+                    <span data-tone={tone} className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">{pwAsset(station).name}</span>
+                      <span className="block text-xs text-[color:var(--kit-text-2)]">{station.duty}</span>
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums">{formatNumber(station.outlet.pressure, 1)} barg</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </Panel>
+        <PwDock walk={walk} />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function ProcessWalkPartQuietStage() {
+function ProcessWalkthroughStationDrawing() {
+  const station = PW_STATIONS[3] ?? PW_FALLBACK;
   return (
-    <div className={`${WALK_CARD} w-full`}>
-      <ProcessWalkWatch stage={WALK_STAGES[4]} />
-    </div>
+    <LookScope look="blueprint" className="w-full">
+      <Panel title="Station drawing" subtitle="Stn 4 · Cooling">
+        <div className="flex justify-center">
+          <PwStationDrawing station={station} />
+        </div>
+      </Panel>
+    </LookScope>
+  );
+}
+
+function ProcessWalkthroughSymbols() {
+  const kinds: readonly PwSymbolKind[] = ['valve', 'separator', 'compressor', 'exchanger', 'pump'];
+  return (
+    <LookScope look="blueprint" className="flex w-full">
+      <Panel className="flex-1" title="Symbols" subtitle="Ink is normal · colour is a flagged unit">
+        <ul className="grid flex-1 grid-cols-3 content-center gap-x-4 gap-y-6">
+          {kinds.map((kind) => (
+            <li key={kind} className="flex flex-col items-center gap-1.5">
+              <PwSymbol kind={kind} tone={kind === 'exchanger' ? 'warning' : 'accent'} width={104} />
+              <span className="text-sm font-semibold">{PW_SYMBOL_NAME[kind]}</span>
+            </li>
+          ))}
+          <li className="flex flex-col items-center gap-1.5">
+            <PwSymbol kind="compressor" tone="critical" width={104} />
+            <span data-tone="critical" className="text-sm font-semibold text-[color:var(--t-ink)]">
+              Tripped
+            </span>
+          </li>
+        </ul>
+      </Panel>
+    </LookScope>
+  );
+}
+
+function ProcessWalkthroughDock() {
+  const walk = usePwWalk(4);
+  return (
+    <LookScope look="blueprint" className="w-full space-y-4">
+      <PwDock walk={walk} />
+      <PwChainage walk={walk} />
+    </LookScope>
+  );
+}
+
+function ProcessWalkthroughStreams() {
+  const station = PW_STATIONS[2] ?? PW_FALLBACK;
+  return (
+    <LookScope look="blueprint" className="w-full">
+      <Panel title="Streams" subtitle="Stn 3 · 1st stage">
+        <PwStreamTable station={station} />
+      </Panel>
+    </LookScope>
+  );
+}
+
+function ProcessWalkthroughKeyTrend() {
+  const station = PW_STATIONS[1] ?? PW_FALLBACK;
+  return (
+    <LookScope look="blueprint" className="w-full">
+      <Panel title="Separator level" subtitle="20-LT-10012 · % · 24 h">
+        <PwKeyTrend station={station} />
+      </Panel>
+    </LookScope>
+  );
+}
+
+function ProcessWalkthroughProfile() {
+  return (
+    <LookScope look="blueprint" className="w-full">
+      <Panel title="Profile along the train" subtitle="Leaving each station">
+        <PwProfile height={232} />
+      </Panel>
+    </LookScope>
   );
 }
 
@@ -503,167 +855,137 @@ export default definePage({
   id: 'process-walkthrough',
   title: 'Process walkthrough',
   summary:
-    'A guided journey along the process: follow the gas from inlet to export, one stage at a time. Each stop says what happens there, shows the few readings that matter and flags anything abnormal, while a profile rail keeps the whole route in view.',
+    'The gas train as an engineering drawing you step through: every station sits on one flow line, and the open one is drawn large with its inlet and outlet conditions, its key instrument and the change across it.',
   guidance: {
     use: [
-      'To explain a process to someone new to the plant, or to brief a shift on where the trouble is.',
-      'When the order of the stages is the story: upstream causes, downstream effects.',
-      'Keep each stage to one sentence, three or four readings and one trend.',
-      'Show the route-wide profile so a local reading is always seen in context.',
+      'To teach or review a process in the order the fluid meets it.',
+      'When what matters at each step is the change across it: pressure, temperature, composition.',
+      'With the whole line always visible, so the open station never loses its place.',
     ],
     avoid: [
-      'Using it as a monitoring screen; nobody steps through six stages to find an alarm.',
-      'More than eight stages on one ribbon. Split the route into sections.',
-      'Hiding abnormal stages until the user reaches them; flag them on the ribbon.',
-      'Auto-advancing. The reader sets the pace.',
+      'Processes with many branches and recycles; use a P&ID or a process graph.',
+      'As a live operating display: a walkthrough shows one station at a time.',
+      'Symbols without a name underneath, or state shown by colour without its word.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'Shown in the Nordic theme. Press Next or Previous, use the left and right arrow keys, or click a station or a column of the profile rail to travel along the route.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'Step with the dock, or pick any station on the flow line or the chainage rule.',
       specimens: [
         {
-          id: 'ProcessWalkSignature',
+          id: 'ProcessWalkthroughSignature',
           title: 'Process walkthrough',
-          note: 'Pick it when people need to understand a process in order, stage by stage, with live values at every stop.',
+          note: 'Pick it to walk someone through a train station by station without losing the whole line.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'experiences/journeys/ProcessRibbon.tsx',
-            'experiences/journeys/StageStepper.tsx',
-            'experiences/journeys/ProfileRail.tsx',
-            'experiences/journeys/walkReducer.ts',
-            'experiences/journeys/profileGeometry.ts',
-            'industrial/RangeIndicator.tsx',
-            'industrial/Sparkline.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/ValueReadout.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: ProcessWalkSignature,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/Panel.tsx', 'kit/DataTable.tsx', 'kit/TrendLine.tsx', 'kit/miller-columns/assetTree.ts', 'looks/LookScope.tsx'],
+          Component: ProcessWalkthroughSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same journey, unchanged, in a dark digital-twin preset and a spacious editorial one.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Every station at one scale with the full stream table, and the walkthrough turned upright for a tablet.',
       specimens: [
         {
-          id: 'ProcessWalkHologram',
-          title: 'Hologram',
-          note: 'Pick it beside a 3D or digital-twin view, where the walkthrough should feel part of the same dark scene.',
+          id: 'ProcessWalkthroughFlowSheet',
+          title: 'Flow sheet',
+          note: 'Pick it to compare stations: nothing is enlarged, and the stream table carries every figure.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: ProcessWalkHologram,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/TrendLine.tsx', 'kit/Panel.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessWalkthroughFlowSheet,
         },
         {
-          id: 'ProcessWalkEditorial',
-          title: 'Editorial',
-          note: 'Pick it for onboarding and training material, where generous space and larger type help a first read.',
+          id: 'ProcessWalkthroughTablet',
+          title: 'Upright on a tablet',
+          note: 'Pick it in the field: the line runs top to bottom and the open station unfolds in place.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: ProcessWalkEditorial,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: ProcessWalkthroughTablet,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'Each part on its own, ready for another journey.',
+      description: 'The drawing, its symbols and the panels around it.',
       specimens: [
         {
-          id: 'ProcessWalkPartRibbon',
-          title: 'Process ribbon',
-          note: 'Pick it when a route has more stops than fit the width and the current stop must stay centred.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['experiences/journeys/ProcessRibbon.tsx', 'experiences/journeys/walkReducer.ts'],
-          Component: ProcessWalkPartRibbon,
-        },
-        {
-          id: 'ProcessWalkPartRail',
-          title: 'Profile rail',
-          note: 'Pick it to show how one or two quantities change across every stop, with the current stop marked.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['experiences/journeys/ProfileRail.tsx', 'experiences/journeys/profileGeometry.ts'],
-          Component: ProcessWalkPartRail,
-        },
-        {
-          id: 'ProcessWalkPartStory',
-          title: 'Stage story',
-          note: 'Pick it to introduce a stop: one sentence on what happens and the equipment that does it.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['industrial/StatusIndicator.tsx'],
-          Component: ProcessWalkPartStory,
-        },
-        {
-          id: 'ProcessWalkPartStepper',
-          title: 'Stage stepper',
-          note: 'Pick it as the transport of any stepped journey; it names the stage and explains a disabled end.',
+          id: 'ProcessWalkthroughStationDrawing',
+          title: 'Station drawing',
+          note: 'Inlet and outlet at the ends, the key instrument on a leader, the change on a dimension line.',
           origin: 'custom',
           size: 'md',
-          align: 'stretch',
-          uses: ['experiences/journeys/StageStepper.tsx', 'experiences/journeys/walkReducer.ts'],
-          Component: ProcessWalkPartStepper,
-        },
-        {
-          id: 'ProcessWalkPartReadings',
-          title: 'Stage readings',
-          note: 'Pick it when distance to a limit matters more than the number: each reading sits in its operating band.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/RangeIndicator.tsx', 'industrial/ValueReadout.tsx'],
-          Component: ProcessWalkPartReadings,
-        },
-        {
-          id: 'ProcessWalkPartStagePanel',
-          title: 'Stage panel',
-          note: 'Pick it as the detail of one stop: story, readings, then trend and abnormal items side by side.',
-          origin: 'custom',
-          size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['industrial/RangeIndicator.tsx', 'industrial/Sparkline.tsx', 'industrial/StatusIndicator.tsx', 'industrial/ValueReadout.tsx'],
-          Component: ProcessWalkPartStagePanel,
+          uses: ['kit/Panel.tsx'],
+          Component: ProcessWalkthroughStationDrawing,
         },
         {
-          id: 'ProcessWalkPartWatch',
-          title: 'Trend and abnormal items',
-          note: 'Pick it when a stage has open alarms: the trend shows the drift, the list says what is wrong.',
+          id: 'ProcessWalkthroughSymbols',
+          title: 'Symbols',
+          note: 'Five outlines cover the train; a flagged unit is drawn heavier in its state colour and named.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/Sparkline.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: ProcessWalkPartWatch,
+          surface: 'muted',
+          uses: ['kit/Panel.tsx'],
+          Component: ProcessWalkthroughSymbols,
         },
         {
-          id: 'ProcessWalkPartQuietStage',
-          title: 'Quiet stage',
-          note: 'Pick it for a stage with nothing abnormal; it says so in words instead of leaving a gap.',
+          id: 'ProcessWalkthroughStreams',
+          title: 'Stream table',
+          note: 'The same in, out and change for every station, so the eye learns where to look.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['industrial/Sparkline.tsx'],
-          Component: ProcessWalkPartQuietStage,
+          surface: 'muted',
+          uses: ['kit/DataTable.tsx'],
+          Component: ProcessWalkthroughStreams,
+        },
+        {
+          id: 'ProcessWalkthroughDock',
+          title: 'Dock and chainage',
+          note: 'The step buttons name where they lead; the rule shows how far along the train you are.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          surface: 'muted',
+          Component: ProcessWalkthroughDock,
+        },
+        {
+          id: 'ProcessWalkthroughKeyTrend',
+          title: 'Key instrument',
+          note: 'One trend per station: the tag an operator reads first, against its high limit.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          surface: 'muted',
+          uses: ['kit/TrendLine.tsx'],
+          Component: ProcessWalkthroughKeyTrend,
+        },
+        {
+          id: 'ProcessWalkthroughProfile',
+          title: 'Train profile',
+          note: 'Pressure and temperature leaving each station: the whole process as two lines.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          surface: 'muted',
+          uses: ['kit/TrendLine.tsx'],
+          Component: ProcessWalkthroughProfile,
         },
       ],
     },

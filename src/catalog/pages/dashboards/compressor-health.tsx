@@ -1,720 +1,544 @@
-import { Badge } from '@cognite/aura/components/badge';
-import { Button } from '@cognite/aura/components/button';
-import { IconExternalLink } from '@cognite/aura/icons';
+import {
+  SegmentedControl,
+  SegmentedControlButton,
+  SegmentedControlList,
+} from '@cognite/aura/components/segmented-control';
+import { IconAlertTriangle, IconCircleCheck, IconEngine, IconSettings, IconWind } from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { DashboardCell, DashboardGrid } from '../../../library/dashboards/DashboardGrid';
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { DiagramCanvas } from '../../../library/industrial/diagrams/DiagramCanvas';
-import { DiagramHotspot } from '../../../library/industrial/diagrams/DiagramHotspot';
-import { PipeLine } from '../../../library/industrial/diagrams/PipeLine';
-import { ValueTag } from '../../../library/industrial/diagrams/ValueTag';
-import { DueLabel } from '../../../library/industrial/operations/DueLabel';
-import { HealthBreakdown } from '../../../library/industrial/operations/HealthBreakdown';
-import { PriorityBadge } from '../../../library/industrial/operations/PriorityBadge';
-import { workOrderStatusLabel } from '../../../library/industrial/operations/workOrders';
-import { ProgressRing } from '../../../library/industrial/ProgressRing';
-import { RadialGauge } from '../../../library/industrial/RadialGauge';
-import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
-import { formatLimit, formatReading, healthStatus, runStateStatus } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { DAY, MINUTE, REFERENCE_NOW, formatDate, makeSeries } from '../../data/series';
+import { Bars } from '../../../library/kit/Bars';
+import { Canvas } from '../../../library/kit/Canvas';
+import { Spectrum, type SpectrumPeak } from '../../../library/kit/compressor-health/Spectrum';
+import { TrainSchematic, type TrainReadout, type TrainStage, type TrainStageId } from '../../../library/kit/compressor-health/TrainSchematic';
+import { HeatStrip } from '../../../library/kit/HeatStrip';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import { LookScope } from '../../../library/looks/LookScope';
+import { createRandom, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './compressor-health.tsx?raw';
 
-const COMP_ASSET = {
-  tag: '23-KA-9101',
-  name: '1st stage compressor',
-  state: 'running',
-  health: 'watch',
-  healthScore: 72,
-  criticality: 'A',
-} as const;
+type ChGauge = { label: string; value: number; min?: number; max: number; unit: string; decimals?: number; tone: Tone };
 
-type CompPoint = {
-  id: string;
-  /** Where on the machine the measurement is taken. */
-  location: string;
-  name: string;
+type ChStage = TrainStage & {
   tag: string;
-  unit: string;
-  value: number;
-  decimals: number;
-  low?: number;
-  high: number;
-  trip?: number;
-  rangeMax: number;
-  /** Y axis of the 24-hour trend. */
-  domain: readonly [number, number];
-  ticks: readonly number[];
-  /** Value 24 hours ago; the trend runs from here to `value`. */
-  dayAgo: number;
-  seed: number;
-  /** Top-left corner of the callout on the diagram, and the point it measures. */
-  x: number;
-  y: number;
-  target: { x: number; y: number };
-  finding: string;
+  state: string;
+  health: number;
+  /** One sentence a rotating equipment engineer would write. */
+  reading: string;
+  gauges: ChGauge[];
+  /** Running speed in Hz and the amplitudes of the named peaks, mm/s. */
+  spectrum: { seed: number; order: number; peaks: { multiple: number; label: string; amplitude: number }[]; alarm: number; probe: string };
+  icon: ReactNode;
 };
 
-/** Measurement points on the machine. Limits follow the plant's sensor records for 23-KA-9101. */
-const COMP_POINTS: readonly CompPoint[] = [
+const CH_STAGES: ChStage[] = [
   {
-    id: 'suction',
-    location: 'Suction nozzle',
-    name: 'Suction pressure',
-    tag: '23-PT-92530',
-    unit: 'barg',
-    value: 12.4,
-    decimals: 1,
-    low: 10,
-    high: 15,
-    rangeMax: 20,
-    domain: [8, 16],
-    ticks: [8, 10, 12, 14, 16],
-    dayAgo: 12.6,
-    seed: 12,
-    x: 196,
-    y: 84,
-    target: { x: 330, y: 110 },
-    finding: 'Steady in the middle of its band; the inlet separator is holding pressure.',
+    id: 'turbine',
+    label: 'Gas turbine',
+    tag: '23-GT-9001',
+    tone: 'success',
+    state: 'Good',
+    health: 85,
+    reading: 'Exhaust spread is even across all burners; the 1× peak is small and steady.',
+    gauges: [
+      { label: 'Load', value: 92, max: 100, unit: '%', tone: 'accent' },
+      { label: 'Exhaust temperature', value: 512, min: 300, max: 600, unit: '°C', tone: 'success' },
+      { label: 'Vibration', value: 2.4, max: 11, unit: 'mm/s', decimals: 1, tone: 'success' },
+      { label: 'Lube oil', value: 61, min: 20, max: 90, unit: '°C', tone: 'success' },
+    ],
+    spectrum: { seed: 5, order: 100, peaks: [{ multiple: 1, label: '1×', amplitude: 1.8 }, { multiple: 2, label: '2×', amplitude: 0.7 }, { multiple: 7.2, label: 'Blade pass', amplitude: 1.1 }], alarm: 7.1, probe: 'Turbine drive end' },
+    icon: <IconWind />,
   },
   {
-    id: 'discharge',
-    location: 'Discharge nozzle',
-    name: 'Discharge pressure',
-    tag: '23-PT-92531',
-    unit: 'barg',
-    value: 48.6,
-    decimals: 1,
-    low: 40,
-    high: 52,
-    trip: 55,
-    rangeMax: 60,
-    domain: [36, 56],
-    ticks: [36, 40, 44, 48, 52, 56],
-    dayAgo: 47.9,
-    seed: 11,
-    x: 502,
-    y: 84,
-    target: { x: 480, y: 110 },
-    finding: 'Inside the band with 3.4 barg left to the high limit.',
+    id: 'gearbox',
+    label: 'Gearbox',
+    tag: '23-GB-9002',
+    tone: 'success',
+    state: 'Good',
+    health: 90,
+    reading: 'Gear mesh amplitude unchanged since the last oil change; no sidebands.',
+    gauges: [
+      { label: 'Ratio load', value: 88, max: 100, unit: '%', tone: 'accent' },
+      { label: 'Oil temperature', value: 68, min: 20, max: 95, unit: '°C', tone: 'success' },
+      { label: 'Vibration', value: 1.9, max: 11, unit: 'mm/s', decimals: 1, tone: 'success' },
+      { label: 'Oil pressure', value: 2.6, max: 4, unit: 'bar', decimals: 1, tone: 'success' },
+    ],
+    spectrum: { seed: 6, order: 100, peaks: [{ multiple: 1, label: 'Input 1×', amplitude: 1.1 }, { multiple: 2.6, label: 'Output 1×', amplitude: 1.4 }, { multiple: 8.2, label: 'Gear mesh', amplitude: 1.7 }], alarm: 7.1, probe: 'Gearbox output bearing' },
+    icon: <IconSettings />,
   },
   {
-    id: 'temperature',
-    location: 'Discharge nozzle',
-    name: 'Discharge temperature',
-    tag: '23-TT-92532',
-    unit: '°C',
-    value: 141.2,
-    decimals: 1,
-    low: 90,
-    high: 145,
-    trip: 155,
-    rangeMax: 180,
-    domain: [120, 160],
-    ticks: [120, 130, 140, 150, 160],
-    dayAgo: 138.4,
-    seed: 13,
-    x: 560,
-    y: 12,
-    target: { x: 610, y: 60 },
-    finding: 'Up 2.8 °C in 24 hours and 3.8 °C under the high limit; the interstage cooler is fouling.',
+    id: 'lp',
+    label: '1st stage compressor',
+    tag: '23-KA-9101',
+    tone: 'warning',
+    state: 'Watch',
+    health: 72,
+    reading: 'A growing 1× peak with a clean 2× points to unbalance at the drive end, not misalignment.',
+    gauges: [
+      { label: 'Vibration', value: 6.8, max: 11, unit: 'mm/s', decimals: 1, tone: 'warning' },
+      { label: 'Bearing temperature', value: 86, min: 20, max: 120, unit: '°C', tone: 'success' },
+      { label: 'Efficiency', value: 79.4, min: 60, max: 90, unit: '%', decimals: 1, tone: 'accent' },
+      { label: 'Surge margin', value: 14, max: 40, unit: '%', tone: 'warning' },
+    ],
+    spectrum: { seed: 7, order: 164, peaks: [{ multiple: 1, label: '1×', amplitude: 5.9 }, { multiple: 2, label: '2×', amplitude: 1.2 }, { multiple: 5, label: 'Vane pass', amplitude: 2.1 }], alarm: 7.1, probe: 'Drive-end bearing' },
+    icon: <IconEngine />,
   },
   {
-    id: 'de-bearing',
-    location: 'Drive-end bearing',
-    name: 'Drive-end vibration',
-    tag: '23-VT-92540',
-    unit: 'mm/s',
-    value: 6.8,
-    decimals: 1,
-    high: 7.1,
-    trip: 11,
-    rangeMax: 15,
-    domain: [4, 12],
-    ticks: [4, 6, 8, 10, 12],
-    dayAgo: 5.6,
-    seed: 14,
-    x: 150,
-    y: 296,
-    target: { x: 225, y: 238 },
-    finding: 'Rising 1.2 mm/s in 24 hours at running speed and 0.3 mm/s under the high limit.',
-  },
-  {
-    id: 'seal',
-    location: 'Drive-end dry gas seal',
-    name: 'Seal leakage flow',
-    tag: '23-FT-92560',
-    unit: 'Nm³/h',
-    value: 1.8,
-    decimals: 1,
-    high: 3,
-    trip: 5,
-    rangeMax: 6,
-    domain: [0, 6],
-    ticks: [0, 2, 4, 6],
-    dayAgo: 1.7,
-    seed: 23,
-    x: 280,
-    y: 296,
-    target: { x: 265, y: 232 },
-    finding: 'Primary seal leakage is flat and well under its limit.',
-  },
-  {
-    id: 'nde-bearing',
-    location: 'Non-drive-end bearing',
-    name: 'Non-drive-end vibration',
-    tag: '23-VT-92541',
-    unit: 'mm/s',
-    value: 4.2,
-    decimals: 1,
-    high: 7.1,
-    trip: 11,
-    rangeMax: 15,
-    domain: [0, 12],
-    ticks: [0, 3, 6, 9, 12],
-    dayAgo: 4.1,
-    seed: 24,
-    x: 540,
-    y: 296,
-    target: { x: 585, y: 238 },
-    finding: 'Unchanged, which places the fault at the drive end, not across the rotor.',
-  },
-  {
-    id: 'speed',
-    location: 'Coupling',
-    name: 'Shaft speed',
-    tag: '23-ST-92501',
-    unit: 'rpm',
-    value: 9840,
-    decimals: 0,
-    low: 7000,
-    high: 10500,
-    rangeMax: 12000,
-    domain: [6000, 11000],
-    ticks: [6000, 7000, 8000, 9000, 10000, 11000],
-    dayAgo: 9790,
-    seed: 15,
-    x: 20,
-    y: 296,
-    target: { x: 175, y: 228 },
-    finding: 'Constant speed, so the vibration rise is not a load or speed effect.',
+    id: 'hp',
+    label: '2nd stage compressor',
+    tag: '23-KA-9102',
+    tone: 'success',
+    state: 'Good',
+    health: 88,
+    reading: 'All peaks under 2 mm/s. Seal oil filters were changed on Tuesday.',
+    gauges: [
+      { label: 'Vibration', value: 3.1, max: 11, unit: 'mm/s', decimals: 1, tone: 'success' },
+      { label: 'Bearing temperature', value: 74, min: 20, max: 120, unit: '°C', tone: 'success' },
+      { label: 'Efficiency', value: 82.1, min: 60, max: 90, unit: '%', decimals: 1, tone: 'accent' },
+      { label: 'Surge margin', value: 21, max: 40, unit: '%', tone: 'success' },
+    ],
+    spectrum: { seed: 8, order: 164, peaks: [{ multiple: 1, label: '1×', amplitude: 1.9 }, { multiple: 2, label: '2×', amplitude: 0.8 }, { multiple: 5, label: 'Vane pass', amplitude: 1.3 }], alarm: 7.1, probe: 'Drive-end bearing' },
+    icon: <IconEngine />,
   },
 ];
 
-/** Near a limit when less than a tenth of the band is left. */
-function compPointTone(point: CompPoint): Tone {
-  if (point.trip !== undefined && point.value >= point.trip) return 'critical';
-  if (point.value > point.high) return 'warning';
-  return (point.high - point.value) / (point.high - (point.low ?? 0)) < 0.1 ? 'warning' : 'neutral';
+const CH_READOUTS: TrainReadout[] = [
+  { id: 'exhaust', label: 'Exhaust temperature', value: '512 °C', at: [244, 150], chip: [118, 126] },
+  { id: 'suction', label: 'Suction pressure', value: '12.4 barg', at: [352, 90], chip: [290, 34] },
+  { id: 'dist', label: 'Discharge temperature', value: '141.2 °C', at: [565, 124], chip: [478, 34], tone: 'warning', state: 'Near limit' },
+  { id: 'cooler', label: 'Cooler outlet', value: '38.9 °C', at: [640, 68], chip: [668, 22], tone: 'warning', state: 'High' },
+  { id: 'disp', label: 'Discharge pressure', value: '48.6 barg', at: [870, 90], chip: [880, 150] },
+  { id: 'speed', label: 'Shaft speed', value: '9 840 rpm', at: [627, 262], chip: [615, 394] },
+  { id: 'vib1', label: 'Drive-end vibration', value: '6.8 mm/s', at: [394, 268], chip: [400, 394], tone: 'warning', state: 'Near limit' },
+  { id: 'vib2', label: '2nd stage vibration', value: '3.1 mm/s', at: [838, 268], chip: [862, 394], tone: 'success' },
+  { id: 'flow', label: 'Gas flow', value: '182 400 Sm³/h', at: [930, 90], chip: [905, 34] },
+];
+
+const CH_STATE_TONE: Record<string, Tone> = { Good: 'success', Watch: 'warning' };
+
+function chStage(id: TrainStageId): ChStage {
+  return CH_STAGES.find((stage) => stage.id === id) ?? CH_STAGES[0];
 }
 
-const compPointState = (point: CompPoint): string => (compPointTone(point) === 'neutral' ? 'Within limits' : 'Near high limit');
+const CH_MAX_HZ = 1000;
 
-/** 24 hours at 30-minute resolution, from the value a day ago to the live value. */
-function compPointTrend(point: CompPoint) {
-  const span = point.domain[1] - point.domain[0];
-  const points = makeSeries({
-    seed: point.seed,
-    points: 49,
-    base: point.dayAgo,
-    drift: point.value - point.dayAgo,
-    noise: span * 0.012,
-    stepMs: 30 * MINUTE,
-    decimals: point.decimals,
+function chBins({ seed, order, peaks }: ChStage['spectrum']): number[] {
+  const random = createRandom(seed);
+  return Array.from({ length: 201 }, (_, index) => {
+    const hz = (index / 200) * CH_MAX_HZ;
+    const floor = 0.12 + random() * 0.14 + 0.25 * Math.exp(-hz / 60);
+    const lines = peaks.reduce((sum, peak) => sum + peak.amplitude * Math.exp(-(((hz - peak.multiple * order) / 7) ** 2)), 0);
+    return Math.round((floor + lines) * 100) / 100;
   });
-  return points.map((sample, index) => ({ t: sample.t, v: index === points.length - 1 ? point.value : sample.v }));
 }
 
-function compPointLimits(point: CompPoint) {
-  const inDomain = (value: number) => value > point.domain[0] && value <= point.domain[1];
-  return [
-    ...(point.low !== undefined && inDomain(point.low)
-      ? [{ value: point.low, label: `Low ${formatLimit(point.low, point.decimals)}`, tone: 'neutral', align: 'left' } as const]
-      : []),
-    ...(inDomain(point.high)
-      ? [{ value: point.high, label: `High ${formatLimit(point.high, point.decimals)}`, tone: 'warning', align: 'left' } as const]
-      : []),
-    ...(point.trip !== undefined && inDomain(point.trip)
-      ? [{ value: point.trip, label: `Trip ${formatLimit(point.trip, point.decimals)}`, tone: 'critical', align: 'left' } as const]
-      : []),
-  ];
+function chPeaks({ order, peaks }: ChStage['spectrum']): SpectrumPeak[] {
+  return peaks.map((peak) => ({ frequency: Math.round((peak.multiple * order) / 5) * 5, label: peak.label }));
 }
 
-const COMP_FIGURES = [
-  { id: 'vibration', label: 'Drive-end vibration', value: 6.8, unit: 'mm/s', decimals: 1, caption: '+1.2 in 24 h · high 7.1' },
-  { id: 'temperature', label: 'Discharge temperature', value: 141.2, unit: '°C', decimals: 1, caption: '+2.8 in 24 h · high 145' },
-  { id: 'hours', label: 'Run hours since overhaul', value: 14620, unit: 'h', decimals: 0, caption: 'Overhaul due at 24,000 h' },
-];
-
-const COMP_INDICATORS = [
-  { id: 'vibration', label: 'Vibration', score: 61 },
-  { id: 'temperature', label: 'Temperature', score: 68 },
-  { id: 'performance', label: 'Performance', score: 84 },
-  { id: 'lubrication', label: 'Lubrication', score: 90 },
-];
-
-/** The operating point against the three edges of the compressor envelope. */
-const COMP_ENVELOPE = [
-  { id: 'flow', label: 'Inlet flow', value: 182, unit: 'kSm³/h', decimals: 0, min: 100, max: 240, low: 138, high: 221 },
-  { id: 'ratio', label: 'Pressure ratio', value: 3.7, unit: '', decimals: 1, min: 2, max: 5.5, low: 2.8, high: 4.6 },
-  { id: 'speed', label: 'Shaft speed', value: 9840, unit: 'rpm', decimals: 0, min: 6000, max: 12000, low: 7000, high: 10500 },
-];
-
-const COMP_ORDERS = [
-  { id: 'WO-104466', title: 'Vibration survey, 1st stage compressor', priority: 'P2', status: 'open', dueAt: REFERENCE_NOW + 2 * DAY },
-  { id: 'WO-104473', title: 'Replace drive-end bearing temperature probe', priority: 'P2', status: 'planned', dueAt: REFERENCE_NOW + 5 * DAY },
-  { id: 'WO-104451', title: 'Lube oil sample and analysis', priority: 'P3', status: 'open', dueAt: REFERENCE_NOW - 2 * DAY },
-  { id: 'WO-104402', title: 'Change dry gas seal filter elements', priority: 'P3', status: 'waiting', dueAt: REFERENCE_NOW + 9 * DAY },
-] as const;
-
-const COMP_EVIDENCE = [
-  { id: 'margin', label: 'Margin to high limit', value: '0.3 mm/s' },
-  { id: 'limit', label: 'Projected to reach limit', value: 'In about 6 h' },
-  { id: 'spectrum', label: 'Dominant frequency', value: '1× running speed' },
-];
-
-const COMP_IMPELLERS = [318, 362, 406, 450, 494];
-
-/** The headline figures as one calm strip in the frame toolbar, instead of a row of tiles. */
-function CompFigureStrip() {
+function ChSpectrum({ stage, height = 220 }: { stage: ChStage; height?: number }) {
   return (
-    <dl className="flex w-full flex-wrap items-start gap-x-10 gap-y-4 border-y border-default py-4">
-      <div className="flex flex-col gap-1">
-        <dt className="text-xs text-muted-foreground">Health score</dt>
-        <dd className="flex flex-wrap items-baseline gap-x-3">
-          <ValueReadout value={COMP_ASSET.healthScore} size="md" tone="warning" />
-          <StatusIndicator {...healthStatus(COMP_ASSET.health)} size="sm" detail="−7 in a week" />
-        </dd>
-      </div>
-      {COMP_FIGURES.map((figure) => (
-        <div key={figure.id} className="flex flex-col gap-1">
-          <dt className="text-xs text-muted-foreground">{figure.label}</dt>
-          <dd className="flex flex-wrap items-baseline gap-x-3">
-            <ValueReadout value={figure.value} unit={figure.unit} decimals={figure.decimals} size="md" />
-            <span className="text-xs tabular-nums text-muted-foreground">{figure.caption}</span>
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <Spectrum
+      label={`Velocity spectrum, ${stage.label.toLowerCase()}, ${stage.spectrum.probe.toLowerCase()}`}
+      bins={chBins(stage.spectrum)}
+      maxFrequency={CH_MAX_HZ}
+      peaks={chPeaks(stage.spectrum)}
+      limit={{ value: stage.spectrum.alarm, label: 'Alarm' }}
+      tone={stage.tone === 'warning' ? 'warning' : 'accent'}
+      height={height}
+    />
   );
 }
 
-type CompSelection = { selectedId: string; onSelect: (id: string) => void };
-
-/** The dominant element: a cutaway of the train with a selectable callout at every measurement point. */
-function CompDiagramPanel({ selectedId, onSelect }: CompSelection) {
+function ChGauges({ stage, size = 104 }: { stage: ChStage; size?: number }) {
   return (
-    <DashboardPanel
-      title="Machine"
-      description="Gas turbine, coupling and barrel compressor. Select a measurement point to inspect it."
-      footnote="Seven live measurement points; a callout is tinted and flagged only near or beyond a limit. The operating point is 24% right of the surge limit."
-    >
-      <DiagramCanvas
-        interactive
-        label="Cutaway of the 1st stage compressor train with seven selectable measurement points"
-        width={720}
-        height={344}
-        className="w-full"
-      >
-        <PipeLine
-          points={[
-            { x: 30, y: 60 },
-            { x: 330, y: 60 },
-            { x: 330, y: 140 },
-          ]}
-          weight="heavy"
-          flow="forward"
-          arrows={2}
-        />
-        <PipeLine
-          points={[
-            { x: 480, y: 140 },
-            { x: 480, y: 60 },
-            { x: 700, y: 60 },
-          ]}
-          weight="heavy"
-          flow="forward"
-          arrows={2}
-        />
-        <text x={30} y={48} fontSize={10} className="fill-muted-foreground">
-          Suction
-        </text>
-        <text x={700} y={78} fontSize={10} textAnchor="end" className="fill-muted-foreground">
-          Discharge
-        </text>
+    <div className="grid grid-cols-4 items-start gap-3">
+      {stage.gauges.map((gauge) => (
+        <RingGauge key={gauge.label} label={gauge.label} value={gauge.value} min={gauge.min} max={gauge.max} unit={gauge.unit} decimals={gauge.decimals} tone={gauge.tone} size={size} />
+      ))}
+    </div>
+  );
+}
 
-        <path d="M 150 210 H 640" stroke="currentColor" strokeWidth={5} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        <rect x={30} y={160} width={120} height={100} rx={6} stroke="currentColor" strokeWidth={1.5} className="fill-muted-background" />
-        <text x={90} y={206} fontSize={11} textAnchor="middle" className="fill-base-foreground font-medium">
-          Gas turbine
-        </text>
-        <text x={90} y={222} fontSize={9} textAnchor="middle" className="fill-muted-foreground font-mono">
-          23-GT-9001
-        </text>
-        <rect x={162} y={194} width={26} height={32} rx={3} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
-        <rect x={205} y={184} width={40} height={52} rx={4} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
-        <rect x={256} y={192} width={18} height={36} rx={2} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
-        <rect x={285} y={140} width={240} height={140} rx={20} stroke="currentColor" strokeWidth={1.5} className="fill-muted-background" />
-        {COMP_IMPELLERS.map((x) => (
-          <path
-            key={x}
-            d={`M ${x - 5} 162 H ${x + 5} L ${x + 13} 258 H ${x - 13} Z`}
-            stroke="currentColor"
-            strokeWidth={1}
-            fill="currentColor"
-            fillOpacity={0.12}
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-        <rect x={536} y={192} width={18} height={36} rx={2} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
-        <rect x={565} y={184} width={40} height={52} rx={4} stroke="currentColor" strokeWidth={1.5} className="fill-base-background" />
-        <text x={405} y={272} fontSize={9} textAnchor="middle" className="fill-muted-foreground font-mono">
-          {COMP_ASSET.tag}
-        </text>
+function ChDock({ selectedId, onSelect }: { selectedId: TrainStageId; onSelect: (id: TrainStageId) => void }) {
+  return (
+    <div role="toolbar" aria-label="Stage" className="flex items-stretch gap-1.5 rounded-3xl border border-(--kit-rule) bg-(--kit-surface) p-1.5 shadow-2xl backdrop-blur-xl">
+      {CH_STAGES.map((stage) => {
+        const selected = stage.id === selectedId;
+        return (
+          <button
+            key={stage.id}
+            type="button"
+            aria-pressed={selected}
+            data-tone={stage.tone}
+            onClick={() => onSelect(stage.id)}
+            className={`flex cursor-pointer items-center gap-3 rounded-2xl px-4 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-(--kit-text) ${selected ? 'bg-(--kit-text) text-(--kit-halo)' : 'text-(--kit-text) hover:bg-(--kit-track)'}`}
+          >
+            <span aria-hidden="true" className="[&>svg]:size-5">
+              {stage.icon}
+            </span>
+            <span>
+              <span className="block text-sm leading-5 font-semibold whitespace-nowrap">{stage.label}</span>
+              <span className={`block text-xs leading-4 font-medium tabular-nums ${selected ? '' : 'text-(--t-ink)'}`}>
+                {stage.state} · {stage.health}
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-        {COMP_POINTS.map((point) => {
-          const tone = compPointTone(point);
-          return (
-            <DiagramHotspot
-              key={point.id}
-              x={point.x - 4}
-              y={point.y - 4}
-              width={116}
-              height={40}
-              selected={point.id === selectedId}
-              onSelect={() => onSelect(point.id)}
-              label={`${point.name} at the ${point.location.toLowerCase()}: ${formatReading(point.value, point.unit, point.decimals)}, ${compPointState(point).toLowerCase()}`}
-            >
-              <ValueTag
-                x={point.x}
-                y={point.y}
-                width={108}
-                label={point.tag}
-                mono
-                value={point.value}
-                unit={point.unit}
-                decimals={point.decimals}
-                tone={tone}
-                flag={tone === 'neutral' ? undefined : 'near H'}
-                leaderTo={point.target}
+function ChStatePill({ stage, size }: { stage: ChStage; size?: 'md' | 'lg' }) {
+  return (
+    <StatusPill tone={CH_STATE_TONE[stage.state] ?? 'neutral'} size={size} icon={stage.state === 'Good' ? <IconCircleCheck /> : <IconAlertTriangle />}>
+      {stage.state}
+    </StatusPill>
+  );
+}
+
+function CompressorHealthSignature() {
+  const [selectedId, setSelectedId] = useState<TrainStageId>('lp');
+  const stage = chStage(selectedId);
+
+  return (
+    <LookScope look="glass">
+      <Canvas className="relative flex flex-col gap-4">
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-(--kit-text-3)">Nordkapp · gas compression · train A</p>
+            <p className="text-4xl font-semibold tracking-tight">Compressor health</p>
+            <p className="mt-1 max-w-2xl text-base text-(--kit-text-2)">
+              Train health is <span className="font-semibold text-(--kit-text) tabular-nums">78 of 100</span>. Drive-end vibration on the 1st stage is{' '}
+              <span className="font-semibold text-(--kit-text) tabular-nums">0.3 mm/s under its alarm</span> and rising.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <StatusPill tone="warning" size="lg" icon={<IconAlertTriangle />}>
+              Watch
+            </StatusPill>
+            <StatusPill tone="neutral" size="lg">
+              Running · 92 % load
+            </StatusPill>
+          </div>
+        </header>
+
+        <TrainSchematic label="Compressor train A in cross-section with live tags" stages={CH_STAGES} selectedId={selectedId} onSelect={setSelectedId} readouts={CH_READOUTS} className="mt-2 mb-8" />
+
+        <div className="grid grid-cols-12 gap-4">
+          <Panel className="col-span-6" title={stage.label} subtitle={`${stage.tag} · health ${stage.health} of 100`} actions={<ChStatePill stage={stage} />} tone={stage.tone === 'warning' ? 'warning' : 'accent'}>
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <ChGauges stage={stage} />
+              <p className="border-t border-(--kit-rule) pt-3 text-sm text-(--kit-text-2)">{stage.reading}</p>
+            </div>
+          </Panel>
+          <Panel className="col-span-6" title="Vibration spectrum" subtitle={`${stage.spectrum.probe} · velocity, mm/s`}>
+            <ChSpectrum stage={stage} height={210} />
+          </Panel>
+        </div>
+
+        <div className="flex justify-center pt-2">
+          <ChDock selectedId={selectedId} onSelect={setSelectedId} />
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+const CH_DAYS = ['Fri 6', 'Sat 7', 'Sun 8', 'Mon 9', 'Tue 10', 'Wed 11', 'Thu 12'];
+
+const CH_PROBES = {
+  de: { label: 'Drive end', tag: '23-VT-92540', values: makeValues({ seed: 91, points: 29, base: 5.6, amplitude: 0.25, noise: 0.12, drift: 1.2, cycles: 3, decimals: 1 }), now: 6.8 },
+  nde: { label: 'Non-drive end', tag: '23-VT-92541', values: makeValues({ seed: 92, points: 29, base: 3.4, amplitude: 0.2, noise: 0.1, drift: 0.3, cycles: 3, decimals: 1 }), now: 3.7 },
+  axial: { label: 'Axial', tag: '23-ZT-92545', values: makeValues({ seed: 93, points: 29, base: 2.1, amplitude: 0.15, noise: 0.08, drift: 0.1, cycles: 3, decimals: 1 }), now: 2.2 },
+};
+
+type ChProbeId = keyof typeof CH_PROBES;
+
+function isChProbe(value: unknown): value is ChProbeId {
+  return typeof value === 'string' && value in CH_PROBES;
+}
+
+const CH_TREND_LABELS = Array.from({ length: 29 }, (_, index) => CH_DAYS[Math.min(Math.floor(index / 4), 6)]);
+
+const CH_FAULTS: { label: string; value: number; tone: Tone; note: string }[] = [
+  { label: 'Unbalance', value: 62, tone: 'warning', note: '1× dominant, phase steady' },
+  { label: 'Misalignment', value: 21, tone: 'accent', note: '2× low, axial quiet' },
+  { label: 'Bearing wear', value: 12, tone: 'accent', note: 'No sub-synchronous energy' },
+  { label: 'Looseness', value: 5, tone: 'accent', note: 'No harmonics above 5×' },
+];
+
+function ChFaults() {
+  return (
+    <div className="flex flex-1 flex-col justify-between gap-4">
+      {CH_FAULTS.map((fault) => (
+        <div key={fault.label}>
+          <Meter label={fault.label} value={fault.value} max={100} unit="%" tone={fault.tone} hideScale />
+          <p className="mt-1 text-xs text-(--kit-text-3)">{fault.note}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function CompressorHealthDiagnostics() {
+  const [probeId, setProbeId] = useState<ChProbeId>('de');
+  const probe = CH_PROBES[probeId];
+  const values = [...probe.values.slice(0, -1), probe.now];
+
+  return (
+    <LookScope look="glass">
+      <Canvas className="flex flex-col gap-4">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-(--kit-text-3)">
+              1st stage compressor · <TagId>23-KA-9101</TagId>
+            </p>
+            <p className="text-3xl font-semibold tracking-tight">Vibration diagnostics</p>
+          </div>
+          <SegmentedControl value={probeId} onValueChange={(next) => setProbeId(isChProbe(next) ? next : 'de')}>
+            <SegmentedControlList size="small" aria-label="Probe">
+              <SegmentedControlButton value="de">Drive end</SegmentedControlButton>
+              <SegmentedControlButton value="nde">Non-drive end</SegmentedControlButton>
+              <SegmentedControlButton value="axial">Axial</SegmentedControlButton>
+            </SegmentedControlList>
+          </SegmentedControl>
+        </header>
+        <div className="grid grid-cols-12 gap-4">
+          <Panel className="col-span-8" tone="accent">
+            <TrendArea
+              label={`${probe.label} vibration over the last seven days against alarm and trip limits`}
+              series={[{ id: 'vibration', label: `${probe.label} vibration`, values, tone: probeId === 'de' ? 'warning' : 'accent' }]}
+              labels={CH_TREND_LABELS}
+              unit="mm/s"
+              decimals={1}
+              limits={[
+                { value: 7.1, label: 'Alarm', tone: 'warning' },
+                { value: 11, label: 'Trip', tone: 'critical' },
+              ]}
+              yDomain={[0, 12]}
+              height={330}
+              highlightLast
+              headline={
+                <div>
+                  <p className="text-sm text-(--kit-text-3)">
+                    {probe.label} · <TagId>{probe.tag}</TagId>
+                  </p>
+                  <p className="text-5xl font-semibold tracking-tight tabular-nums">
+                    {probe.now.toFixed(1)} <span className="text-lg font-medium text-(--kit-text-2)">mm/s</span>
+                  </p>
+                </div>
+              }
+            />
+          </Panel>
+          <Panel className="col-span-4" title="Likely cause" subtitle="From the spectrum shape and phase">
+            <ChFaults />
+          </Panel>
+          <Panel className="col-span-7" title="Bearing temperatures" subtitle="Against the 105 °C alarm">
+            <Bars
+              label="Bearing temperatures of the 1st stage compressor"
+              orientation="horizontal"
+              categories={['Drive-end journal', 'Non-drive-end journal', 'Thrust, active', 'Thrust, inactive']}
+              series={[{ id: 'temperature', label: 'Temperature', values: [86, 78, 91, 72] }]}
+              tones={['accent', 'accent', 'warning', 'accent']}
+              unit="°C"
+              limit={{ value: 105, label: 'Alarm', tone: 'critical' }}
+              showValues
+              height={210}
+            />
+          </Panel>
+          <Panel className="col-span-5" title="When it shakes" subtitle="Drive-end vibration by four-hour block, 7 days">
+            <div className="flex flex-1 flex-col justify-center">
+              <HeatStrip
+                label="Drive-end vibration by four-hour block over the last seven days"
+                rows={CH_DAYS.map((day, index) => ({ label: day, values: makeValues({ seed: 120 + index, points: 6, base: 5.4 + index * 0.2, amplitude: 0.6, noise: 0.3 }) }))}
+                axis={['00:00', '24:00']}
+                max={7.5}
+                tone="warning"
               />
-            </DiagramHotspot>
-          );
-        })}
-      </DiagramCanvas>
-      <div className="flex flex-col gap-3 border-t border-default pt-4">
-        <p className="text-xs font-medium text-medium-foreground">Operating envelope</p>
-        <CompEnvelopeStrip />
-      </div>
-    </DashboardPanel>
-  );
-}
-
-/** Side inspector: the selected point's dial, limits and 24-hour trend. */
-function CompInspectorPanel({ pointId }: { pointId: string }) {
-  const point = COMP_POINTS.find((candidate) => candidate.id === pointId) ?? COMP_POINTS[0];
-  if (!point) return null;
-  const tone = compPointTone(point);
-  const limits = [
-    { label: 'Low limit', value: point.low },
-    { label: 'High limit', value: point.high },
-    { label: 'Trip limit', value: point.trip },
-    { label: 'Margin to high', value: point.high - point.value },
-  ];
-
-  return (
-    <DashboardPanel title={point.name} description={point.location} footnote={point.finding}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-mono text-xs text-muted-foreground">{point.tag}</span>
-        <StatusIndicator
-          tone={tone === 'neutral' ? 'success' : tone}
-          shape={tone === 'neutral' ? 'dot' : 'square'}
-          label={compPointState(point)}
-          size="sm"
-        />
-      </div>
-      <div className="flex justify-center">
-        <RadialGauge
-          label={point.name}
-          value={point.value}
-          min={0}
-          max={point.rangeMax}
-          unit={point.unit}
-          decimals={point.decimals}
-          limits={{ low: point.low, high: point.high, highHigh: point.trip }}
-          tone={tone}
-          size="md"
-          showLabel={false}
-        />
-      </div>
-      <dl className="grid grid-cols-2 gap-x-6 border-t border-default pt-3">
-        {limits.map((limit) => (
-          <div key={limit.label} className="flex flex-wrap items-baseline justify-between gap-x-2 py-1 text-xs">
-            <dt className="text-muted-foreground">{limit.label}</dt>
-            <dd className="tabular-nums text-base-foreground">
-              {limit.value === undefined ? '—' : formatLimit(limit.value, point.decimals)}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <TrendChart
-        label={`${point.name} over the last 24 hours, from ${formatReading(point.dayAgo, point.unit, point.decimals)} to ${formatReading(point.value, point.unit, point.decimals)}`}
-        series={[{ key: point.id, label: point.name, points: compPointTrend(point) }]}
-        limits={compPointLimits(point)}
-        yDomain={point.domain}
-        yTicks={point.ticks}
-        unit={point.unit}
-        decimals={point.decimals}
-        maxTicks={3}
-        showLast
-        heightClassName="h-40"
-        className="w-full"
-      />
-    </DashboardPanel>
-  );
-}
-
-/** The operating point against the edges of the compressor map, one range per axis. */
-function CompEnvelopeStrip() {
-  return (
-    <ul aria-label="Operating envelope" className="grid w-full grid-cols-1 gap-x-8 gap-y-5 md:grid-cols-3">
-      {COMP_ENVELOPE.map((axis) => (
-        <li key={axis.id} className="min-w-0">
-          <RangeIndicator
-            label={axis.label}
-            value={axis.value}
-            unit={axis.unit}
-            decimals={axis.decimals}
-            min={axis.min}
-            max={axis.max}
-            limits={{ low: axis.low, high: axis.high }}
-          />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CompEnvelopePanel() {
-  return (
-    <DashboardPanel
-      title="Operating envelope"
-      description="Where the machine runs between the edges of its map"
-      footnote="The operating point is 24% right of the surge limit and inside the band on all three axes."
-    >
-      <CompEnvelopeStrip />
-    </DashboardPanel>
-  );
-}
-
-function CompHealthPanel() {
-  return (
-    <DashboardPanel
-      title="Health breakdown"
-      description="Score per indicator, 0 to 100"
-      footnote="Watch below 80, poor below 60. Vibration and temperature pull the score down."
-    >
-      <div className="flex items-center gap-4 border-b border-default pb-3">
-        <ProgressRing label="Overall health" value={COMP_ASSET.healthScore} unit="" decimals={0} size="md" tone="warning" showLabel={false} />
-        <div className="min-w-0 flex-1">
-          <StatusIndicator {...healthStatus(COMP_ASSET.health)} />
-          <p className="mt-1 text-xs text-muted-foreground">Down 7 points in a week</p>
+            </div>
+          </Panel>
         </div>
-      </div>
-      <HealthBreakdown indicators={COMP_INDICATORS} label="Compressor health by indicator" />
-    </DashboardPanel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function CompWorkOrdersPanel() {
+function CompressorHealthRound() {
+  const [selectedId, setSelectedId] = useState<TrainStageId>('lp');
+
   return (
-    <DashboardPanel title="Open work orders" description={`${COMP_ORDERS.length} on ${COMP_ASSET.tag}, by priority`}>
-      <ul className="flex w-full flex-col">
-        {COMP_ORDERS.map((order) => (
-          <li key={order.id} className="flex items-start gap-3 border-t border-default py-2 first:border-t-0 first:pt-0">
-            <div className="shrink-0 pt-0.5">
-              <PriorityBadge priority={order.priority} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 text-sm text-base-foreground">{order.title}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="font-mono text-xs text-muted-foreground">{order.id}</span>
-                <span className="text-xs text-muted-foreground">{workOrderStatusLabel(order.status)}</span>
-                <DueLabel due={formatDate(order.dueAt)} overdue={order.dueAt < REFERENCE_NOW} />
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </DashboardPanel>
+    <LookScope look="glass" className="mx-auto w-full max-w-[760px]">
+      <Canvas className="flex flex-col gap-4 rounded-[32px]">
+        <header className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-(--kit-text-3)">Operator round · tablet</p>
+            <p className="text-2xl font-semibold tracking-tight">Train A, stage by stage</p>
+          </div>
+          <StatusPill tone="warning" size="lg" icon={<IconAlertTriangle />}>
+            1 stage to watch
+          </StatusPill>
+        </header>
+        <Panel padding="tight">
+          <TrainSchematic label="Compressor train A" stages={CH_STAGES} selectedId={selectedId} onSelect={setSelectedId} hideNames />
+        </Panel>
+        <ul className="flex flex-col gap-3">
+          {CH_STAGES.map((stage) => {
+            const selected = stage.id === selectedId;
+            const lead = stage.gauges[stage.id === 'lp' || stage.id === 'hp' ? 0 : 2];
+            return (
+              <li key={stage.id}>
+                <button type="button" aria-pressed={selected} onClick={() => setSelectedId(stage.id)} className="block w-full cursor-pointer rounded-3xl text-left outline-none focus-visible:ring-2 focus-visible:ring-(--kit-text)">
+                  <Panel padding="tight" tone={selected ? (stage.tone === 'warning' ? 'warning' : 'accent') : 'neutral'}>
+                    <div className="grid grid-cols-[auto_minmax(0,1fr)_7rem_auto] items-center gap-4 px-2">
+                      <RingGauge label={`${stage.label} health`} value={stage.health} unit="" size={60} tone={stage.tone} hideLabel />
+                      <div>
+                        <p className="text-base font-semibold">{stage.label}</p>
+                        <p className="text-sm text-(--kit-text-2) tabular-nums">
+                          {lead.label} {lead.value} {lead.unit}
+                        </p>
+                      </div>
+                      <SparkLine
+                        label={`${stage.label} vibration, last 24 hours`}
+                        values={makeValues({ seed: stage.spectrum.seed + 40, points: 16, base: lead.value * 0.9, noise: lead.value * 0.03, drift: lead.value * 0.1, decimals: 2 })}
+                        tone={stage.tone}
+                        className="h-9 w-28"
+                        highlightLast
+                      />
+                      <ChStatePill stage={stage} />
+                    </div>
+                  </Panel>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function CompRecommendationPanel() {
+function CompressorHealthSchematic() {
+  const [selectedId, setSelectedId] = useState<TrainStageId>('hp');
   return (
-    <DashboardPanel title="Recommendation" description="From condition monitoring, 13:20 UTC">
-      <div className="flex flex-col gap-1">
-        <p className="text-base font-medium text-base-foreground">Bring the vibration survey forward to this shift</p>
-        <p className="text-sm text-medium-foreground">
-          Drive-end vibration is climbing at running speed while speed and the far bearing are steady, which points to
-          a developing drive-end bearing fault. A survey now decides between a planned stop and running on.
-        </p>
-      </div>
-      <dl className="flex flex-col border-t border-default">
-        {COMP_EVIDENCE.map((item) => (
-          <div key={item.id} className="flex flex-wrap items-baseline justify-between gap-x-3 border-b border-default py-2 text-sm">
-            <dt className="text-muted-foreground">{item.label}</dt>
-            <dd className="tabular-nums text-base-foreground">{item.value}</dd>
+    <LookScope look="glass">
+      <Canvas>
+        <TrainSchematic label="Compressor train, stages only" stages={CH_STAGES} selectedId={selectedId} onSelect={setSelectedId} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function CompressorHealthReadouts() {
+  return (
+    <LookScope look="glass" className="h-full">
+      <Canvas className="flex h-full flex-col justify-center gap-3">
+        {CH_READOUTS.filter((readout) => ['suction', 'dist', 'vib1', 'vib2'].includes(readout.id)).map((readout) => (
+          <div key={readout.id} data-tone={readout.tone ?? 'neutral'} className="flex items-center justify-between gap-3 rounded-xl border border-(--kit-rule) bg-(--kit-surface) px-4 py-2.5 backdrop-blur-xl">
+            <span className="text-sm text-(--kit-text-2)">{readout.label}</span>
+            <span className="flex items-baseline gap-2 text-base font-semibold tabular-nums">
+              {readout.value}
+              {readout.state ? <span className="text-xs text-(--t-ink)">{readout.state}</span> : null}
+            </span>
           </div>
         ))}
-      </dl>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm">Reschedule survey</Button>
-        <Button variant="outline" size="sm">
-          Review evidence
-        </Button>
-      </div>
-    </DashboardPanel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-/**
- * Archetype: diagram-first with a side inspector and a footer band.
- * Dominant element: the cutaway of the compressor train with its measurement callouts.
- * Interaction: selecting a measurement point on the diagram swaps the inspector's dial, limits and trend.
- */
-function CompDashboard() {
-  const [selectedId, setSelectedId] = useState('de-bearing');
-
+function CompressorHealthGauges() {
+  const stage = chStage('lp');
   return (
-    <DashboardFrame
-      title="Compressor health"
-      subtitle={`${COMP_ASSET.name} · Gas compression, Nordkapp · updated 14:00 UTC`}
-      status={
-        <>
-          <span className="font-mono text-sm text-medium-foreground">{COMP_ASSET.tag}</span>
-          <StatusIndicator {...runStateStatus(COMP_ASSET.state)} />
-          <Badge variant="secondary">Criticality {COMP_ASSET.criticality}</Badge>
-        </>
-      }
-      actions={
-        <Button variant="outline" size="sm">
-          <IconExternalLink /> Open asset
-        </Button>
-      }
-      toolbar={<CompFigureStrip />}
-    >
-      <div className="flex flex-col gap-4">
-        <DashboardGrid>
-          <DashboardCell span={8}>
-            <CompDiagramPanel selectedId={selectedId} onSelect={setSelectedId} />
-          </DashboardCell>
-          <DashboardCell span={4}>
-            <CompInspectorPanel pointId={selectedId} />
-          </DashboardCell>
-        </DashboardGrid>
-        <DashboardGrid>
-          <DashboardCell span={4}>
-            <CompHealthPanel />
-          </DashboardCell>
-          <DashboardCell span={4}>
-            <CompWorkOrdersPanel />
-          </DashboardCell>
-          <DashboardCell span={4}>
-            <CompRecommendationPanel />
-          </DashboardCell>
-        </DashboardGrid>
-      </div>
-    </DashboardFrame>
+    <LookScope look="glass">
+      <Canvas>
+        <Panel title={stage.label} subtitle={`${stage.tag} · four figures that decide the state`} actions={<ChStatePill stage={stage} />} tone="warning">
+          <ChGauges stage={stage} size={92} />
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function CompHealthDashSignature() {
+function CompressorHealthSpectrum() {
+  const stage = chStage('gearbox');
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <CompDashboard />
-    </ThemeScope>
+    <LookScope look="glass">
+      <Canvas>
+        <Panel title="Vibration spectrum" subtitle={`${stage.label} · ${stage.spectrum.probe.toLowerCase()}`}>
+          <ChSpectrum stage={stage} height={200} />
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function CompHealthDashAura() {
+function CompressorHealthDock() {
+  const [selectedId, setSelectedId] = useState<TrainStageId>('turbine');
   return (
-    <ThemeScope preset="aura" className="w-full">
-      <CompDashboard />
-    </ThemeScope>
+    <LookScope look="glass">
+      <Canvas className="flex justify-center">
+        <ChDock selectedId={selectedId} onSelect={setSelectedId} />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function CompHealthDashControlRoom() {
+function CompressorHealthFaults() {
   return (
-    <ThemeScope preset="control-room" className="w-full">
-      <CompDashboard />
-    </ThemeScope>
+    <LookScope look="glass">
+      <Canvas>
+        <Panel title="Likely cause" subtitle="1st stage, drive end">
+          <ChFaults />
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function CompHealthDashSchematic() {
+function CompressorHealthEvents() {
   return (
-    <ThemeScope preset="schematic" className="w-full">
-      <CompDashboard />
-    </ThemeScope>
+    <LookScope look="glass">
+      <Canvas>
+        <Panel title="Train events" subtitle="Last 30 days">
+          <ul>
+            <ListRow tone="critical" title="Recompressor trip on high vibration" meta={<TagId>23-KA-9103</TagId>} trailing="Today 13:46" />
+            <ListRow tone="warning" title="Drive-end vibration above 6.5 mm/s" meta={<TagId>23-VT-92540</TagId>} trailing="Today 12:02" />
+            <ListRow tone="info" title="Seal oil filters changed" meta={<TagId>23-KA-9102</TagId>} trailing="Tue 10 Mar" />
+            <ListRow tone="info" title="Borescope inspection, hot section" meta={<TagId>23-GT-9001</TagId>} trailing="Wed 11 Mar" />
+          </ul>
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
-}
-
-function CompHealthDashFigures() {
-  return <CompFigureStrip />;
-}
-
-function CompHealthDashMachine() {
-  const [selectedId, setSelectedId] = useState('discharge');
-  return <CompDiagramPanel selectedId={selectedId} onSelect={setSelectedId} />;
-}
-
-function CompHealthDashInspector() {
-  return <CompInspectorPanel pointId="temperature" />;
-}
-
-function CompHealthDashEnvelope() {
-  return <CompEnvelopePanel />;
-}
-
-function CompHealthDashBreakdown() {
-  return <CompHealthPanel />;
-}
-
-function CompHealthDashWorkOrders() {
-  return <CompWorkOrdersPanel />;
-}
-
-function CompHealthDashRecommendation() {
-  return <CompRecommendationPanel />;
 }
 
 export default definePage({
   id: 'compressor-health',
   title: 'Compressor health',
   summary:
-    'One machine in depth, built around a cutaway of the compressor train: select a measurement point to inspect its dial, limits and trend, then act on the open work and the recommendation underneath.',
+    'One compressor train in depth: the machine drawn in cross-section with live tags pinned to it, and ring gauges and a vibration spectrum that follow the selected stage.',
   guidance: {
     use: [
-      'As the detail screen behind an asset card, an alarm or a bad-actor list.',
-      'When where a reading is taken matters as much as its value: bearings, seals, nozzles.',
-      'Put the tag, run state and criticality beside the title so the machine is never in doubt.',
-      'End with the open work and one recommendation, so the screen leads to an action.',
+      'When the reader thinks in terms of the machine: put the drawing first and pin values where they are measured.',
+      'Let one selection drive everything below the drawing, so the screen always answers “what about this stage?”.',
+      'Name the peaks in a spectrum; an unlabelled trace only helps the specialist.',
     ],
     avoid: [
-      'A dial for every point at once; one inspector that follows the selection scales better.',
-      'Colouring the drawing itself by health; tint only the callout that is near a limit.',
-      'A trend without its limits, or limits without their values printed on the line.',
-      'Recommendations without the evidence and the reason behind them.',
+      'KPI tiles above the machine; say the train health in one sentence under the title.',
+      'More than about ten pinned tags — the drawing must stay readable under them.',
+      'Animating the gas path by default on a screen that is watched for hours.',
     ],
   },
   source,
@@ -722,164 +546,119 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description:
-        'Shown in the Blueprint theme. Diagram-first: the machine is the navigation, a side inspector follows the selected point, and work sits in a footer band.',
+      description: 'The train in the glass look with a floating stage dock.',
       specimens: [
         {
-          id: 'CompHealthDashSignature',
-          title: 'Compressor health',
-          note: 'Pick it as the detail screen for one critical rotating machine.',
+          id: 'CompressorHealthSignature',
+          title: 'Train cross-section',
+          note: 'Pick it for a rotating equipment engineer’s home screen: select a stage on the drawing or in the dock.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'dashboards/DashboardGrid.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/diagrams/DiagramCanvas.tsx',
-            'industrial/diagrams/DiagramHotspot.tsx',
-            'industrial/diagrams/PipeLine.tsx',
-            'industrial/diagrams/ValueTag.tsx',
-            'industrial/RadialGauge.tsx',
-            'industrial/RangeIndicator.tsx',
-            'industrial/ValueReadout.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'industrial/operations/HealthBreakdown.tsx',
-            'industrial/operations/PriorityBadge.tsx',
-            'industrial/operations/DueLabel.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: CompHealthDashSignature,
+          uses: ['kit/compressor-health/TrainSchematic.tsx', 'kit/compressor-health/Spectrum.tsx', 'kit/RingGauge.tsx', 'kit/Panel.tsx', 'looks/LookScope.tsx'],
+          Component: CompressorHealthSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same dashboard, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The diagnostics page behind one stage, and the train as a tablet round.',
       specimens: [
         {
-          id: 'CompHealthDashAura',
-          title: 'Aura',
-          note: 'Pick it when the screen sits inside a product that uses the design system as shipped.',
+          id: 'CompressorHealthDiagnostics',
+          title: 'Vibration diagnostics',
+          note: 'Pick it when a stage is on watch and the question is why: trend against limits, likely cause, bearings.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: CompHealthDashAura,
+          uses: ['kit/TrendArea.tsx', 'kit/Meter.tsx', 'kit/Bars.tsx', 'kit/HeatStrip.tsx'],
+          Component: CompressorHealthDiagnostics,
         },
         {
-          id: 'CompHealthDashControlRoom',
-          title: 'Control room',
-          note: 'Pick it for the operator console: dark, compact, sharp and high contrast.',
+          id: 'CompressorHealthRound',
+          title: 'Round on a tablet',
+          note: 'Pick it for the operator at the machine: one row per stage, the drawing as the index.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: CompHealthDashControlRoom,
-        },
-        {
-          id: 'CompHealthDashSchematic',
-          title: 'Schematic',
-          note: 'Pick it for tag-heavy engineering tools where monospaced figures line up.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: CompHealthDashSchematic,
+          uses: ['kit/compressor-health/TrainSchematic.tsx', 'kit/RingGauge.tsx', 'kit/SparkLine.tsx'],
+          Component: CompressorHealthRound,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Panels',
-      description: 'Each part on its own, ready to drop into another dashboard.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The pieces of the train screen on their own.',
       specimens: [
         {
-          id: 'CompHealthDashFigures',
-          title: 'Figure strip',
-          note: 'Pick it instead of a tile row when the figures support a larger element below.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: CompHealthDashFigures,
-        },
-        {
-          id: 'CompHealthDashMachine',
-          title: 'Machine diagram',
-          note: 'Pick it when the location of each measurement is how people find it.',
+          id: 'CompressorHealthSchematic',
+          title: 'Schematic without tags',
+          note: 'Use the bare drawing as a stage picker or an illustration.',
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: [
-            'dashboards/DashboardPanel.tsx',
-            'industrial/diagrams/DiagramCanvas.tsx',
-            'industrial/diagrams/DiagramHotspot.tsx',
-            'industrial/diagrams/PipeLine.tsx',
-            'industrial/diagrams/ValueTag.tsx',
-          ],
-          Component: CompHealthDashMachine,
+          uses: ['kit/compressor-health/TrainSchematic.tsx'],
+          Component: CompressorHealthSchematic,
         },
         {
-          id: 'CompHealthDashInspector',
-          title: 'Point inspector',
-          note: 'Pick it as the detail beside a diagram or table: one dial, its limits and its trend.',
+          id: 'CompressorHealthReadouts',
+          title: 'Readout chips',
+          note: 'Use them for live tags; a state word appears only when the value is not normal.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: [
-            'dashboards/DashboardPanel.tsx',
-            'industrial/RadialGauge.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/charts/TrendChart.tsx',
-          ],
-          Component: CompHealthDashInspector,
+          Component: CompressorHealthReadouts,
         },
         {
-          id: 'CompHealthDashEnvelope',
-          title: 'Operating envelope',
-          note: 'Pick it to show how far a machine runs from the edges of its map without drawing the map.',
+          id: 'CompressorHealthGauges',
+          title: 'Stage gauges',
+          note: 'Use four rings for the figures that decide a stage’s state.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['kit/RingGauge.tsx', 'kit/Panel.tsx'],
+          Component: CompressorHealthGauges,
+        },
+        {
+          id: 'CompressorHealthSpectrum',
+          title: 'Spectrum',
+          note: 'Use it wherever a vibration signature needs its peaks named.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['kit/compressor-health/Spectrum.tsx'],
+          Component: CompressorHealthSpectrum,
+        },
+        {
+          id: 'CompressorHealthDock',
+          title: 'Stage dock',
+          note: 'Use a floating dock when navigation must not take space from the drawing.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/RangeIndicator.tsx'],
-          Component: CompHealthDashEnvelope,
+          Component: CompressorHealthDock,
         },
         {
-          id: 'CompHealthDashBreakdown',
-          title: 'Health breakdown',
-          note: 'Pick it to show which condition indicator is pulling a health score down.',
+          id: 'CompressorHealthFaults',
+          title: 'Likely cause',
+          note: 'Use ranked likelihoods to turn a spectrum into a next step.',
           origin: 'custom',
-          size: 'sm',
+          size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/HealthBreakdown.tsx', 'industrial/ProgressRing.tsx'],
-          Component: CompHealthDashBreakdown,
+          uses: ['kit/Meter.tsx'],
+          Component: CompressorHealthFaults,
         },
         {
-          id: 'CompHealthDashWorkOrders',
-          title: 'Open work orders',
-          note: 'Pick it to list the open jobs on one asset in a narrow column.',
+          id: 'CompressorHealthEvents',
+          title: 'Train events',
+          note: 'Use it to place today’s readings in the machine’s recent history.',
           origin: 'custom',
-          size: 'sm',
+          size: 'md',
           align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx', 'industrial/operations/PriorityBadge.tsx', 'industrial/operations/DueLabel.tsx'],
-          Component: CompHealthDashWorkOrders,
-        },
-        {
-          id: 'CompHealthDashRecommendation',
-          title: 'Recommendation',
-          note: 'Pick it when the screen should end in one next step, with the reason and the evidence.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['dashboards/DashboardPanel.tsx'],
-          Component: CompHealthDashRecommendation,
+          uses: ['kit/ListRow.tsx'],
+          Component: CompressorHealthEvents,
         },
       ],
     },

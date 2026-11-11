@@ -1,18 +1,24 @@
-import { Button } from '@cognite/aura/components/button';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
+import { IconActivity, IconAlertOctagon, IconBuildingFactory2, IconFlame, IconPlayerPause, IconPower, IconTool } from '@cognite/aura/icons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
-import { IsoCallout } from '../../../library/experiences/spatial/IsoCallout';
 import { IsoCylinder } from '../../../library/experiences/spatial/IsoCylinder';
 import { IsoPrism } from '../../../library/experiences/spatial/IsoPrism';
 import { boxAnchor, cylinderBounds, iso, sortBackToFront, toFractions, toPoints, unionBox } from '../../../library/experiences/spatial/isoProjection';
 import type { IsoBox, IsoCylinderSpec, IsoPoint, IsoView } from '../../../library/experiences/spatial/isoProjection';
 import type { IsoTone, IsoVariant } from '../../../library/experiences/spatial/isoStyle';
-import { LayerSwitch } from '../../../library/experiences/spatial/LayerSwitch';
-import { HeatScaleLegend } from '../../../library/industrial/charts/HeatScaleLegend';
-import { formatReading, runStateStatus } from '../../../library/industrial/status';
-import type { DotShape, RunState } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { Canvas } from '../../../library/kit/Canvas';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Panel } from '../../../library/kit/Panel';
+import { ToggleChip } from '../../../library/kit/scene/ToggleChip';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type StatusTone, type Tone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
+import type { RunState } from '../../data/plant';
+import { HOUR, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './isometric-plant.tsx?raw';
@@ -42,18 +48,6 @@ type IsoPlantArea = { id: string; code: string; name: string; x: number; y: numb
 const ISO_PLANT_VIEW: IsoView = { scale: 24, originX: 320, originY: 78 };
 const ISO_PLANT_WIDTH = 810;
 const ISO_PLANT_HEIGHT = 540;
-
-const ISO_PLANT_LAYERS = [
-  { value: 'equipment', label: 'Equipment' },
-  { value: 'piping', label: 'Piping' },
-  { value: 'status', label: 'Status' },
-  { value: 'heat', label: 'Heat' },
-] as const;
-
-const ISO_PLANT_DECKS = [
-  { value: 'ground', label: 'Ground' },
-  { value: 'deck', label: 'Upper deck' },
-] as const;
 
 const ISO_PLANT_AREAS: readonly IsoPlantArea[] = [
   { id: 'a20', code: 'NK-20', name: 'Inlet and separation', x: 1, y: 1, w: 7.3, d: 5.1, temperature: 34 },
@@ -207,9 +201,35 @@ const ISO_PLANT_ITEMS: readonly IsoPlantItem[] = [
 
 const ISO_PLANT_DRAW_ORDER = sortBackToFront(ISO_PLANT_ITEMS);
 
-const ISO_PLANT_STATE_TONE: Record<RunState, IsoTone> = { running: 'success', standby: 'info', stopped: 'neutral', tripped: 'critical', maintenance: 'warning' };
+type IsoPlantStateMeta = { label: string; tone: StatusTone; iso: IsoTone; icon: ReactNode; note: string };
+
+const ISO_PLANT_STATES: Record<RunState, IsoPlantStateMeta> = {
+  running: { label: 'Running', tone: 'success', iso: 'success', icon: <IconActivity />, note: 'Running steadily, every reading inside its limits.' },
+  standby: { label: 'Standby', tone: 'info', iso: 'info', icon: <IconPlayerPause />, note: 'Ready to start. Held on standby for its duty partner.' },
+  stopped: { label: 'Stopped', tone: 'neutral', iso: 'neutral', icon: <IconPower />, note: 'Stopped by the operator.' },
+  tripped: { label: 'Tripped', tone: 'critical', iso: 'critical', icon: <IconAlertOctagon />, note: 'Tripped on high vibration 14 minutes ago. Inspection is under way.' },
+  maintenance: { label: 'Maintenance', tone: 'warning', iso: 'warning', icon: <IconTool />, note: 'Isolated for planned work. Due back in service on Friday.' },
+};
+
+const ISO_PLANT_STATE_ORDER: readonly RunState[] = ['tripped', 'maintenance', 'standby', 'running'];
+
+/** Each area keeps one decorative family across the drawing, its label and its tile. */
+const ISO_PLANT_AREA_TONE: Record<string, Tone> = { 'NK-20': 'blue', 'NK-23': 'purple', 'NK-29': 'amber', 'NK-21': 'teal', 'NK-27': 'green', 'NK-40': 'sky' };
+
+/** Where each area's name sits: a point in the drawing clear of the equipment, and which way the label hangs. */
+const ISO_PLANT_AREA_LABEL: Record<string, { at: readonly [number, number, number]; hang: 'above' | 'aboveLeft' | 'below' | 'right' }> = {
+  'NK-20': { at: [1, 1, 0.9], hang: 'aboveLeft' },
+  'NK-23': { at: [8.9, 1, 5.3], hang: 'above' },
+  'NK-29': { at: [20, 1, 0.9], hang: 'right' },
+  'NK-21': { at: [8.3, 13.75, 0], hang: 'below' },
+  'NK-27': { at: [15.5, 13.75, 0], hang: 'below' },
+  'NK-40': { at: [21.7, 13.75, 0], hang: 'below' },
+};
+
+const ISO_PLANT_HANG = { above: '-translate-x-1/2 -translate-y-full', aboveLeft: '-translate-x-[88%] -translate-y-full', below: '-translate-x-1/2 translate-y-1', right: '-translate-y-1/2' };
 
 const ISO_PLANT_HEAT_FILL = ['fill-heat-map-mild', 'fill-heat-map-moderate', 'fill-heat-map-strong', 'fill-heat-map-intense'];
+const ISO_PLANT_HEAT_SWATCH = ['bg-heat-map-mild', 'bg-heat-map-moderate', 'bg-heat-map-strong', 'bg-heat-map-intense'];
 
 const ISO_PLANT_SERVICES: readonly { id: IsoPlantService; label: string; swatch: string }[] = [
   { id: 'gas', label: 'Gas', swatch: 'bg-chart-1-450' },
@@ -217,7 +237,14 @@ const ISO_PLANT_SERVICES: readonly { id: IsoPlantService; label: string; swatch:
   { id: 'water', label: 'Cooling water', swatch: 'bg-chart-3-450' },
 ];
 
-const ISO_PLANT_GROUND_TEXT = '[paint-order:stroke] stroke-[color:var(--card-background)] font-mono uppercase tracking-wide';
+const ISO_PLANT_LAYERS: readonly { value: IsoPlantLayer; label: string }[] = [
+  { value: 'status', label: 'Status' },
+  { value: 'equipment', label: 'Equipment' },
+  { value: 'piping', label: 'Piping' },
+  { value: 'heat', label: 'Heat' },
+];
+
+const ISO_PLANT_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring-default)]';
 
 function isoPlantHeatLevel(temperature: number): number {
   if (temperature < 25) return 0;
@@ -229,6 +256,24 @@ function isoPlantUnitAnchor(unitId: string): IsoPoint {
   return boxAnchor(unionBox(ISO_PLANT_ITEMS.filter((item) => item.unitId === unitId)), ISO_PLANT_VIEW);
 }
 
+function isoPlantUnit(id: string | null): IsoPlantUnit | undefined {
+  return ISO_PLANT_UNITS.find((unit) => unit.id === id);
+}
+
+function isoPlantArea(code: string): IsoPlantArea | undefined {
+  return ISO_PLANT_AREAS.find((area) => area.code === code);
+}
+
+function isoPlantCount(state: RunState): number {
+  return ISO_PLANT_UNITS.filter((unit) => unit.state === state).length;
+}
+
+/** The unit an area tile opens: the one in the worst state. */
+function isoPlantWorstUnit(areaCode: string): IsoPlantUnit | undefined {
+  const units = ISO_PLANT_UNITS.filter((unit) => unit.area === areaCode);
+  return ISO_PLANT_STATE_ORDER.flatMap((state) => units.filter((unit) => unit.state === state))[0];
+}
+
 function isoPlantLook(item: IsoPlantItem, layer: IsoPlantLayer, deck: IsoPlantDeck, state: RunState | undefined): { tone: IsoTone; variant: IsoVariant } {
   if (item.deck !== deck) return { tone: 'neutral', variant: 'ghost' };
   if (item.role === 'pipe') {
@@ -236,138 +281,83 @@ function isoPlantLook(item: IsoPlantItem, layer: IsoPlantLayer, deck: IsoPlantDe
     return { tone: 'neutral', variant: layer === 'heat' ? 'ghost' : 'solid' };
   }
   if (item.role === 'structure') return { tone: 'neutral', variant: layer === 'equipment' || layer === 'status' ? 'solid' : 'ghost' };
-  if (layer === 'status') return { tone: state ? ISO_PLANT_STATE_TONE[state] : 'neutral', variant: 'solid' };
+  if (layer === 'status') return { tone: state ? ISO_PLANT_STATES[state].iso : 'neutral', variant: 'solid' };
   return { tone: 'accent', variant: layer === 'equipment' ? 'solid' : 'ghost' };
-}
-
-function isoPlantStatePath(shape: DotShape, x: number, y: number): string {
-  if (shape === 'diamond') return `M ${x} ${y - 6} L ${x + 6} ${y} L ${x} ${y + 6} L ${x - 6} ${y} Z`;
-  if (shape === 'square') return `M ${x - 4.5} ${y - 4.5} h 9 v 9 h -9 Z`;
-  return `M ${x - 5} ${y} a 5 5 0 1 0 10 0 a 5 5 0 1 0 -10 0 Z`;
 }
 
 function IsoPlantSolid({ item, tone, variant, outlined }: { item: IsoPlantItem; tone: IsoTone; variant: IsoVariant; outlined: boolean }) {
   if (item.shape.kind === 'cylinder') {
-    return (
-      <IsoCylinder
-        {...item.shape.spec}
-        view={ISO_PLANT_VIEW}
-        tone={tone}
-        variant={variant}
-        outlined={outlined}
-        level={item.shape.level}
-        contentTone={item.shape.contentTone}
-      />
-    );
+    return <IsoCylinder {...item.shape.spec} view={ISO_PLANT_VIEW} tone={tone} variant={variant} outlined={outlined} level={item.shape.level} contentTone={item.shape.contentTone} />;
   }
   return <IsoPrism box={item} view={ISO_PLANT_VIEW} tone={tone} variant={variant} outlined={outlined} />;
 }
 
+function isoPlantCorner(x: number, y: number): IsoPoint {
+  return iso(x, y, 0, ISO_PLANT_VIEW);
+}
+
+/** The plot: a faint survey grid and one tinted plot per area. In the heat layer the plots carry the temperature. */
 function IsoPlantGround({ layer }: { layer: IsoPlantLayer }) {
-  const corner = (x: number, y: number) => iso(x, y, 0, ISO_PLANT_VIEW);
   const lines = [
-    ...Array.from({ length: 23 }, (_, x) => [corner(x, 0), corner(x, 14)]),
-    ...Array.from({ length: 15 }, (_, y) => [corner(0, y), corner(22, y)]),
+    ...Array.from({ length: 12 }, (_, index) => [isoPlantCorner(index * 2, 0), isoPlantCorner(index * 2, 14)]),
+    ...Array.from({ length: 8 }, (_, index) => [isoPlantCorner(0, index * 2), isoPlantCorner(22, index * 2)]),
   ];
 
   return (
     <g data-slot="iso-plant-ground">
       {lines.map(([from, to]) => (
-        <line
-          key={`${from.x}-${from.y}-${to.x}`}
-          x1={from.x}
-          y1={from.y}
-          x2={to.x}
-          y2={to.y}
-          strokeWidth={1}
-          className="stroke-[color-mix(in_oklab,var(--primary-background)_14%,transparent)]"
+        <line key={`${from.x}-${from.y}-${to.x}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y} strokeWidth={1} className="stroke-[color-mix(in_oklab,var(--kit-text)_7%,transparent)]" />
+      ))}
+      {ISO_PLANT_AREAS.map((area) => (
+        <polygon
+          key={area.id}
+          data-area={area.code}
+          data-tone={ISO_PLANT_AREA_TONE[area.code]}
+          points={toPoints([isoPlantCorner(area.x, area.y), isoPlantCorner(area.x + area.w, area.y), isoPlantCorner(area.x + area.w, area.y + area.d), isoPlantCorner(area.x, area.y + area.d)])}
+          strokeWidth={1.5}
+          strokeLinejoin="round"
+          className={
+            layer === 'heat'
+              ? `${ISO_PLANT_HEAT_FILL[isoPlantHeatLevel(area.temperature)]} stroke-[color:var(--card-background)]`
+              : 'fill-[color-mix(in_oklab,var(--t-line)_13%,transparent)] stroke-[color-mix(in_oklab,var(--t-line)_42%,transparent)]'
+          }
         />
       ))}
-      {ISO_PLANT_AREAS.map((area) => {
-        const label = area.y < 7 ? corner(area.x + 0.25, area.y - 0.25) : corner(area.x + 0.25, area.y + area.d + 0.8);
-        return (
-          <g key={area.id} data-area={area.code}>
-            <polygon
-              points={toPoints([corner(area.x, area.y), corner(area.x + area.w, area.y), corner(area.x + area.w, area.y + area.d), corner(area.x, area.y + area.d)])}
-              strokeWidth={1}
-              strokeDasharray={layer === 'heat' ? undefined : '5 4'}
-              className={
-                layer === 'heat'
-                  ? `${ISO_PLANT_HEAT_FILL[isoPlantHeatLevel(area.temperature)]} stroke-[color:var(--card-background)]`
-                  : 'fill-[color-mix(in_oklab,var(--primary-background)_5%,transparent)] stroke-[color-mix(in_oklab,var(--primary-background)_55%,transparent)]'
-              }
-            />
-            <text
-              transform={`matrix(0.866 0.5 -0.866 0.5 ${label.x} ${label.y})`}
-              fontSize={12}
-              strokeWidth={3}
-              className={`${ISO_PLANT_GROUND_TEXT} ${layer === 'heat' ? 'fill-base-foreground font-semibold' : 'fill-medium-foreground'}`}
-            >
-              {layer === 'heat' ? `${area.code} ${area.temperature} °C` : `${area.code} ${area.name}`}
-            </text>
-          </g>
-        );
-      })}
     </g>
   );
 }
 
-function IsoPlantLegend({ layer }: { layer: IsoPlantLayer }) {
-  if (layer === 'heat') return <HeatScaleLegend title="Area temperature" lowLabel="15 °C" highLabel="60 °C" />;
-  if (layer === 'piping') {
-    return (
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {ISO_PLANT_SERVICES.map((service) => (
-          <li key={service.id} className="inline-flex items-center gap-2">
-            <span aria-hidden="true" className={`h-1 w-4 rounded-full ${service.swatch}`} />
-            {service.label}
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  if (layer === 'status') {
-    return (
-      <ul className="flex flex-wrap gap-x-4 gap-y-1">
-        {(['running', 'standby', 'maintenance', 'tripped'] as const).map((state) => (
-          <li key={state}>
-            <StatusIndicator {...runStateStatus(state)} size="sm" />
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  return <p className="text-xs text-muted-foreground">Hover a unit to lift it, select it for readings</p>;
-}
-
-function IsoPlantScene({
-  layer,
-  deck,
-  selectedId,
-  onSelect,
-}: {
+type IsoPlantBoardProps = {
   layer: IsoPlantLayer;
   deck: IsoPlantDeck;
   selectedId: string | null;
-  onSelect: (id: string | null) => void;
-}) {
+  onSelect: (unitId: string) => void;
+  /** Area names on the plot. Leave them off when the drawing is small. */
+  areaLabels?: boolean;
+};
+
+/** The isometric illustration: every unit can be hovered, focused and selected. */
+function IsoPlantBoard({ layer, deck, selectedId, onSelect, areaLabels = true }: IsoPlantBoardProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const selected = ISO_PLANT_UNITS.find((unit) => unit.id === selectedId);
-  const anchor = selected ? isoPlantUnitAnchor(selected.id) : undefined;
+  const selected = isoPlantUnit(selectedId);
+  const hovered = isoPlantUnit(hoveredId);
+  const fraction = (point: IsoPoint) => {
+    const at = toFractions(point, ISO_PLANT_WIDTH, ISO_PLANT_HEIGHT);
+    return { left: `${at.x * 100}%`, top: `${at.y * 100}%` };
+  };
 
   return (
-    <div className="relative aspect-[3/2] w-full">
+    <div data-slot="iso-plant-board" className="relative aspect-[3/2] w-full">
       <svg
         role="img"
-        aria-label={`Isometric plot plan of the Nordkapp gas plant, ${layer} layer, ${deck === 'deck' ? 'upper deck' : 'ground level'}${selected ? `, ${selected.name} selected` : ''}`}
+        aria-label={`Isometric drawing of the Nordkapp gas plant, ${layer} layer, ${deck === 'deck' ? 'upper deck' : 'ground level'}${selected ? `, ${selected.name} selected` : ''}`}
         viewBox={`0 0 ${ISO_PLANT_WIDTH} ${ISO_PLANT_HEIGHT}`}
         className="absolute inset-0 h-full w-full"
       >
         <IsoPlantGround layer={layer} />
         {ISO_PLANT_DRAW_ORDER.map((item) => {
-          const unit = ISO_PLANT_UNITS.find((candidate) => candidate.id === item.unitId);
+          const unit = isoPlantUnit(item.unitId ?? null);
           const look = isoPlantLook(item, layer, deck, unit?.state);
-          const active = unit !== undefined && (unit.id === selectedId || unit.id === hoveredId);
           if (!unit || unit.deck !== deck) {
             return (
               <g key={item.id} className="pointer-events-none">
@@ -379,293 +369,540 @@ function IsoPlantScene({
             <g
               key={item.id}
               data-unit={unit.id}
-              onClick={() => onSelect(unit.id === selectedId ? null : unit.id)}
+              onClick={() => onSelect(unit.id)}
               onPointerEnter={() => setHoveredId(unit.id)}
               onPointerLeave={() => setHoveredId((current) => (current === unit.id ? null : current))}
-              style={{ transform: unit.id === hoveredId ? 'translateY(-4px)' : undefined }}
+              style={{ transform: unit.id === hoveredId ? 'translateY(-5px)' : undefined }}
               className="cursor-pointer transition-transform duration-200 motion-reduce:transition-none"
             >
-              <IsoPlantSolid item={item} {...look} outlined={active} />
+              <IsoPlantSolid item={item} {...look} outlined={unit.id === selectedId || unit.id === hoveredId} />
             </g>
           );
         })}
-        {layer === 'status'
-          ? ISO_PLANT_UNITS.filter((unit) => unit.deck === deck).map((unit) => {
-              const at = isoPlantUnitAnchor(unit.id);
-              const status = runStateStatus(unit.state);
-              return (
-                <path
-                  key={unit.id}
-                  data-slot="iso-plant-state"
-                  d={isoPlantStatePath(status.shape, at.x, at.y - 12)}
-                  strokeWidth={2}
-                  className={`pointer-events-none [--iso:var(--${status.tone === 'neutral' ? 'muted-foreground' : `${status.tone}-foreground-strong`})] stroke-[color:var(--iso)] ${status.shape === 'ring' ? 'fill-card-background' : 'fill-[var(--iso)]'}`}
-                />
-              );
-            })
-          : null}
       </svg>
-      {selected && anchor ? (
-        <IsoCallout
-          anchor={toFractions(anchor, ISO_PLANT_WIDTH, ISO_PLANT_HEIGHT)}
-          title={selected.name}
-          tag={selected.tag}
-          status={<StatusIndicator {...runStateStatus(selected.state)} size="sm" />}
-          onClose={() => onSelect(null)}
+
+      {areaLabels
+        ? ISO_PLANT_AREAS.map((area) => {
+            const label = ISO_PLANT_AREA_LABEL[area.code];
+            return (
+              <span
+                key={area.id}
+                data-tone={ISO_PLANT_AREA_TONE[area.code]}
+                style={fraction(iso(label.at[0], label.at[1], label.at[2], ISO_PLANT_VIEW))}
+                className={`pointer-events-none absolute whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${ISO_PLANT_HANG[label.hang]} ${
+                  layer === 'heat' ? 'bg-[var(--card-background)] text-[color:var(--kit-text)] shadow-[0_1px_2px_var(--effect-shadow-md)]' : 'bg-[var(--t-soft)] text-[color:var(--t-on-soft)]'
+                }`}
+              >
+                {area.name}
+                {layer === 'heat' ? <span className="tabular-nums"> · {area.temperature} °C</span> : null}
+              </span>
+            );
+          })
+        : null}
+
+      {ISO_PLANT_UNITS.filter((unit) => unit.deck === deck).map((unit) => (
+        <button
+          key={unit.id}
+          type="button"
+          aria-label={`${unit.name}, ${ISO_PLANT_STATES[unit.state].label.toLowerCase()}`}
+          aria-pressed={unit.id === selectedId}
+          onClick={() => onSelect(unit.id)}
+          onFocus={() => setHoveredId(unit.id)}
+          onBlur={() => setHoveredId((current) => (current === unit.id ? null : current))}
+          style={fraction(isoPlantUnitAnchor(unit.id))}
+          className={`pointer-events-none absolute size-6 -translate-x-1/2 translate-y-1 rounded-full focus-visible:pointer-events-auto ${ISO_PLANT_FOCUS}`}
+        />
+      ))}
+
+      {hovered && hovered.id !== selectedId ? (
+        <span
+          data-slot="iso-plant-hover"
+          style={fraction(isoPlantUnitAnchor(hovered.id))}
+          className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] items-center gap-2 whitespace-nowrap rounded-full bg-[var(--card-background)] py-1.5 pl-3 pr-1.5 text-sm font-medium text-[color:var(--kit-text)] shadow-[0_8px_20px_-8px_var(--effect-shadow-xl),0_0_0_1px_var(--kit-rule)]"
         >
-          <dl className="flex flex-col gap-1 text-sm">
-            {selected.readings.map((reading) => (
-              <div key={reading.label} className="flex items-baseline justify-between gap-3">
-                <dt className="text-muted-foreground">{reading.label}</dt>
-                <dd className="font-medium tabular-nums text-base-foreground">{formatReading(reading.value, reading.unit, reading.decimals)}</dd>
-              </div>
-            ))}
-          </dl>
-        </IsoCallout>
+          {hovered.name}
+          <StatusPill tone={ISO_PLANT_STATES[hovered.state].tone}>{ISO_PLANT_STATES[hovered.state].label}</StatusPill>
+        </span>
+      ) : null}
+      {selected && selected.deck === deck ? (
+        <span
+          data-slot="iso-plant-selected"
+          style={fraction(isoPlantUnitAnchor(selected.id))}
+          className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] flex-col items-center"
+        >
+          <span className="whitespace-nowrap rounded-full bg-[var(--primary-background)] px-3 py-1.5 text-sm font-semibold text-[color:var(--primary-foreground)] shadow-[0_8px_20px_-8px_var(--effect-shadow-xl)]">{selected.name}</span>
+          <span aria-hidden="true" className="h-2 w-0.5 bg-[var(--primary-background)]" />
+        </span>
       ) : null}
     </div>
   );
 }
 
-function IsoPlantUnitList({ selectedId, onSelect }: { selectedId: string | null; onSelect: (id: string) => void }) {
+function IsoPlantLegend({ layer }: { layer: IsoPlantLayer }) {
+  const item = 'inline-flex items-center gap-2 whitespace-nowrap text-sm text-[color:var(--kit-text-2)]';
+  if (layer === 'heat') {
+    return (
+      <ul aria-label="Area temperature legend" className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        {['Below 25 °C', '25 to 40 °C', '40 to 50 °C', 'Above 50 °C'].map((label, index) => (
+          <li key={label} className={item}>
+            <span aria-hidden="true" className={`size-3.5 rounded-md ${ISO_PLANT_HEAT_SWATCH[index]}`} />
+            {label}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (layer === 'piping') {
+    return (
+      <ul aria-label="Service legend" className="flex flex-wrap items-center gap-x-5 gap-y-1">
+        {ISO_PLANT_SERVICES.map((service) => (
+          <li key={service.id} className={item}>
+            <span aria-hidden="true" className={`h-1.5 w-6 rounded-full ${service.swatch}`} />
+            {service.label}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  if (layer === 'status') {
+    return (
+      <ul aria-label="State legend" className="flex flex-wrap items-center gap-2">
+        {ISO_PLANT_STATE_ORDER.map((state) => (
+          <li key={state}>
+            <StatusPill tone={ISO_PLANT_STATES[state].tone} icon={ISO_PLANT_STATES[state].icon}>
+              {ISO_PLANT_STATES[state].label} {isoPlantCount(state)}
+            </StatusPill>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return <p className="text-sm text-[color:var(--kit-text-2)]">Process equipment in colour, structure and piping in grey. Tanks show their level.</p>;
+}
+
+function isoPlantIsLayer(value: unknown): value is IsoPlantLayer {
+  return ISO_PLANT_LAYERS.some((layer) => layer.value === value);
+}
+
+function IsoPlantLayerPills({ value, onChange }: { value: IsoPlantLayer; onChange: (layer: IsoPlantLayer) => void }) {
   return (
-    <ul aria-label="Units" className="flex min-h-0 flex-col overflow-y-auto">
-      {ISO_PLANT_UNITS.map((unit) => (
-        <li key={unit.id}>
-          <Button
-            variant={unit.id === selectedId ? 'secondary' : 'ghost'}
-            size="sm"
-            aria-pressed={unit.id === selectedId}
-            onClick={() => onSelect(unit.id)}
-            className="w-full justify-start"
-          >
-            <span className="truncate">{unit.name}</span>
-          </Button>
-        </li>
-      ))}
+    <SegmentedControl
+      value={value}
+      onValueChange={(next) => {
+        if (isoPlantIsLayer(next)) onChange(next);
+      }}
+    >
+      <SegmentedControlList aria-label="Layer">
+        {ISO_PLANT_LAYERS.map((layer) => (
+          <SegmentedControlButton key={layer.value} value={layer.value}>
+            {layer.label}
+          </SegmentedControlButton>
+        ))}
+      </SegmentedControlList>
+    </SegmentedControl>
+  );
+}
+
+function IsoPlantDeckChips({ value, onChange }: { value: IsoPlantDeck; onChange: (deck: IsoPlantDeck) => void }) {
+  return (
+    <div role="group" aria-label="Level" className="flex items-center gap-2">
+      <ToggleChip pressed={value === 'ground'} onPressedChange={() => onChange('ground')}>
+        Ground
+      </ToggleChip>
+      <ToggleChip pressed={value === 'deck'} onPressedChange={() => onChange('deck')}>
+        Upper deck
+      </ToggleChip>
+    </div>
+  );
+}
+
+function isoPlantReading(reading: IsoPlantReading): string {
+  return formatNumber(reading.value, reading.decimals);
+}
+
+/** Last 24 hours of a unit's lead reading. A unit that is down ran steadily, then fell to zero. */
+function isoPlantHistory(unit: IsoPlantUnit): number[] {
+  const lead = unit.readings[0];
+  const seed = ISO_PLANT_UNITS.findIndex((candidate) => candidate.id === unit.id) + 31;
+  if (lead.value === 0) return [...makeValues({ seed, points: 21, base: 100, amplitude: 3, noise: 1.5, cycles: 2, stepMs: HOUR, decimals: 1 }), 62, 8, 0];
+  const raw = makeValues({ seed, points: 24, base: lead.value, amplitude: Math.abs(lead.value) * 0.05, noise: Math.abs(lead.value) * 0.02, cycles: 2, stepMs: HOUR, decimals: 2 });
+  return raw.map((value) => value + lead.value - raw[raw.length - 1]);
+}
+
+type IsoPlantUnitCardProps = {
+  unit: IsoPlantUnit;
+  onStep?: (direction: 1 | -1) => void;
+  /** Lists the other units of the area as buttons. */
+  onSelect?: (unitId: string) => void;
+  className?: string;
+};
+
+/** The selected unit: state first, then its lead reading large and two supporting ones. */
+function IsoPlantUnitCard({ unit, onStep, onSelect, className }: IsoPlantUnitCardProps) {
+  const state = ISO_PLANT_STATES[unit.state];
+  const [lead, ...rest] = unit.readings;
+  const position = ISO_PLANT_UNITS.findIndex((candidate) => candidate.id === unit.id) + 1;
+  const stepper = 'flex size-9 items-center justify-center rounded-full bg-[var(--card-background)] text-base font-semibold text-[color:var(--kit-text)] shadow-[0_1px_2px_var(--effect-shadow-md)] hover:bg-[var(--kit-well)]';
+
+  return (
+    <Panel
+      className={className}
+      tone={state.tone}
+      title={unit.name}
+      subtitle={`${isoPlantArea(unit.area)?.name ?? unit.area} · ${unit.deck === 'deck' ? 'upper deck' : 'ground level'}`}
+      icon={<IconChip tone={state.tone}>{state.icon}</IconChip>}
+      footer={
+        onStep ? (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm tabular-nums text-[color:var(--kit-text-2)]">
+              Unit {position} of {ISO_PLANT_UNITS.length}
+            </span>
+            <span className="flex gap-2">
+              <button type="button" aria-label="Previous unit" onClick={() => onStep(-1)} className={`${stepper} ${ISO_PLANT_FOCUS}`}>
+                ‹
+              </button>
+              <button type="button" aria-label="Next unit" onClick={() => onStep(1)} className={`${stepper} ${ISO_PLANT_FOCUS}`}>
+                ›
+              </button>
+            </span>
+          </div>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-1 flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusPill tone={state.tone} size="lg" variant="filled" icon={state.icon}>
+            {state.label}
+          </StatusPill>
+          <TagId variant="chip">{unit.tag}</TagId>
+        </div>
+        <p className="text-sm text-[color:var(--kit-text-2)]">{state.note}</p>
+        <div className="flex flex-col">
+          <span className="text-sm text-[color:var(--kit-text-2)]">{lead.label}</span>
+          <span className="flex items-baseline gap-2">
+            <span className="text-5xl font-bold tracking-tight tabular-nums text-[color:var(--kit-text)]">{isoPlantReading(lead)}</span>
+            <span className="text-base text-[color:var(--kit-text-2)]">{lead.unit}</span>
+          </span>
+          <SparkLine values={isoPlantHistory(unit)} label={`${lead.label} over the last 24 hours`} tone={state.tone} className="mt-2 h-16 w-full" />
+          <span className="mt-1 flex justify-between text-xs text-[color:var(--kit-text-2)]">
+            <span>24 h ago</span>
+            <span>Now</span>
+          </span>
+        </div>
+        <dl className="grid grid-cols-2 gap-3">
+          {rest.map((reading) => (
+            <div key={reading.label} className="flex flex-col rounded-[var(--kit-radius-sm)] bg-[color-mix(in_oklab,var(--card-background)_70%,transparent)] px-3.5 py-2.5">
+              <dt className="text-xs text-[color:var(--kit-text-2)]">{reading.label}</dt>
+              <dd className="flex items-baseline gap-1">
+                <span className="text-xl font-bold tabular-nums text-[color:var(--kit-text)]">{isoPlantReading(reading)}</span>
+                <span className="text-xs text-[color:var(--kit-text-2)]">{reading.unit}</span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {onSelect ? (
+          <div className="mt-auto flex flex-col gap-2 pt-2">
+            <h4 className="text-sm font-bold text-[color:var(--kit-text)]">Also in {isoPlantArea(unit.area)?.name.toLowerCase() ?? 'this area'}</h4>
+            <ul className="flex flex-col gap-1.5">
+              {ISO_PLANT_UNITS.filter((other) => other.area === unit.area && other.id !== unit.id).map((other) => (
+                <li key={other.id}>
+                  <button
+                    type="button"
+                    onClick={() => onSelect(other.id)}
+                    className={`flex w-full items-center justify-between gap-3 rounded-full bg-[color-mix(in_oklab,var(--card-background)_70%,transparent)] py-1.5 pl-4 pr-1.5 text-left text-sm font-medium text-[color:var(--kit-text)] hover:bg-[var(--card-background)] ${ISO_PLANT_FOCUS}`}
+                  >
+                    <span className="min-w-0 truncate">{other.name}</span>
+                    <StatusPill tone={ISO_PLANT_STATES[other.state].tone}>{ISO_PLANT_STATES[other.state].label}</StatusPill>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+/** One pastel tile per area. A tile opens the unit in that area that most needs a look. */
+function IsoPlantAreaTiles({ selectedId, onSelect, columns = 2 }: { selectedId: string | null; onSelect: (unitId: string) => void; columns?: 2 | 3 }) {
+  const selectedArea = isoPlantUnit(selectedId)?.area;
+
+  return (
+    <ul aria-label="Areas" className={`grid gap-3 ${columns === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+      {ISO_PLANT_AREAS.map((area) => {
+        const units = ISO_PLANT_UNITS.filter((unit) => unit.area === area.code);
+        const worst = isoPlantWorstUnit(area.code);
+        const state = ISO_PLANT_STATES[worst?.state ?? 'running'];
+        return (
+          <li key={area.id} className="min-w-0">
+            <button
+              type="button"
+              data-tone={ISO_PLANT_AREA_TONE[area.code]}
+              aria-pressed={selectedArea === area.code}
+              aria-label={`${area.name}, ${units.length} units, ${worst && worst.state !== 'running' ? `${worst.name} ${state.label.toLowerCase()}` : 'all running'}`}
+              onClick={() => (worst ? onSelect(worst.id) : undefined)}
+              className={`flex h-full w-full flex-col gap-1.5 rounded-[var(--kit-radius-sm)] bg-[var(--t-soft)] px-3.5 py-3 text-left text-[color:var(--t-on-soft)] outline-offset-2 hover:brightness-[0.97] aria-pressed:shadow-[0_0_0_2px_var(--t-ink)] ${ISO_PLANT_FOCUS}`}
+            >
+              <span className="text-sm font-bold leading-tight">{area.name}</span>
+              <span className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold tabular-nums">{units.length}</span>
+                <span className="text-xs">units</span>
+              </span>
+              <span className="text-xs font-semibold">{worst && worst.state !== 'running' ? `${state.label}: ${worst.name}` : 'All running'}</span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-function IsoPlantScreen() {
-  const [layer, setLayer] = useState<IsoPlantLayer>('equipment');
-  const [deck, setDeck] = useState<IsoPlantDeck>('ground');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const select = (id: string | null) => {
-    const unit = ISO_PLANT_UNITS.find((candidate) => candidate.id === id);
-    if (unit) setDeck(unit.deck);
-    setSelectedId(id);
-  };
-
+function IsoPlantHeadline() {
   return (
-    <div className="grid h-[43rem] w-full grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden rounded-xl border border-default bg-card-background p-4">
-      <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+    <header className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <IconChip tone="accent" size="lg">
+          <IconBuildingFactory2 />
+        </IconChip>
         <div>
-          <h3 className="text-sm font-semibold text-base-foreground">Nordkapp gas plant</h3>
-          <p className="text-xs text-muted-foreground">Plot plan, looking north-west</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <LayerSwitch label="Level" value={deck} options={ISO_PLANT_DECKS} onValueChange={setDeck} />
-          <LayerSwitch label="Layer" value={layer} options={ISO_PLANT_LAYERS} onValueChange={setLayer} />
-        </div>
-      </header>
-      <div className="grid min-h-0 grid-cols-[13rem_minmax(0,1fr)] gap-4">
-        <IsoPlantUnitList selectedId={selectedId} onSelect={select} />
-        <div className="flex min-h-0 min-w-0 flex-col items-center justify-center gap-2">
-          <div className="w-[min(100%,54rem)]">
-            <IsoPlantScene layer={layer} deck={deck} selectedId={selectedId} onSelect={select} />
-          </div>
-          <div className="flex min-h-6 items-center">
-            <IsoPlantLegend layer={layer} />
-          </div>
+          <h2 className="text-3xl font-bold tracking-tight text-[color:var(--kit-text)]">Nordkapp at a glance</h2>
+          <p className="text-sm text-[color:var(--kit-text-2)]">Gas plant, drawn looking north-west · Thursday 12 March, 14:00 UTC</p>
         </div>
       </div>
-    </div>
-  );
-}
-
-function IsoPlantExperience() {
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <IsoPlantScreen />
-    </ThemeScope>
-  );
-}
-
-function IsoPlantHologram() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <IsoPlantScreen />
-    </ThemeScope>
-  );
-}
-
-function IsoPlantSandstone() {
-  return (
-    <ThemeScope preset="sandstone" className="w-full">
-      <IsoPlantScreen />
-    </ThemeScope>
-  );
-}
-
-const ISO_PLANT_PART_VIEW: IsoView = { scale: 30, originX: 150, originY: 70 };
-
-function IsoPlantPrisms() {
-  return (
-    <svg role="img" aria-label="Three isometric boxes: solid, status toned and ghost" viewBox="0 0 320 200" className="w-full max-w-xs">
-      <IsoPrism box={{ x: -1, y: 2.4, z: 0, w: 2, d: 2, h: 1.6 }} view={ISO_PLANT_PART_VIEW} tone="accent" />
-      <IsoPrism box={{ x: 2, y: 2, z: 0, w: 2, d: 2, h: 2.4 }} view={ISO_PLANT_PART_VIEW} tone="critical" />
-      <IsoPrism box={{ x: 5, y: 1.6, z: 0, w: 2, d: 2, h: 1.2 }} view={ISO_PLANT_PART_VIEW} variant="ghost" />
-    </svg>
-  );
-}
-
-function IsoPlantTanks() {
-  return (
-    <svg role="img" aria-label="Three tanks filled to 20, 55 and 90 percent" viewBox="0 0 320 200" className="w-full max-w-xs">
-      <IsoCylinder x={0} y={3.2} z={0} radius={1.1} length={3} level={0.2} view={ISO_PLANT_PART_VIEW} tone="accent" />
-      <IsoCylinder x={2.6} y={2.4} z={0} radius={1.1} length={3} level={0.55} view={ISO_PLANT_PART_VIEW} tone="accent" />
-      <IsoCylinder x={5.2} y={1.6} z={0} radius={1.1} length={3} level={0.9} contentTone="water" view={ISO_PLANT_PART_VIEW} tone="accent" />
-    </svg>
-  );
-}
-
-function IsoPlantVessel() {
-  return (
-    <svg role="img" aria-label="A horizontal separator on two saddles beside a vertical column" viewBox="0 0 320 200" className="w-full max-w-xs">
-      <IsoCylinder x={-0.4} y={4} z={0} radius={0.6} length={4.2} view={ISO_PLANT_PART_VIEW} tone="accent" />
-      <IsoPrism box={{ x: 2.4, y: 2.1, z: 0, w: 0.4, d: 1.4, h: 0.5 }} view={ISO_PLANT_PART_VIEW} />
-      <IsoPrism box={{ x: 5, y: 2.1, z: 0, w: 0.4, d: 1.4, h: 0.5 }} view={ISO_PLANT_PART_VIEW} />
-      <IsoCylinder x={1.6} y={2.8} z={1.4} radius={0.9} length={4.6} axis="x" view={ISO_PLANT_PART_VIEW} tone="accent" />
-    </svg>
-  );
-}
-
-function IsoPlantPipeRack() {
-  const view: IsoView = { scale: 26, originX: 60, originY: 60 };
-  const frames = [0.5, 3.5, 6.5, 9.5];
-
-  return (
-    <div className="flex w-full max-w-md flex-col gap-3">
-      <svg role="img" aria-label="A pipe rack carrying gas, condensate and cooling water lines" viewBox="0 0 360 230" className="w-full">
-        {frames.map((x) => (
-          <IsoPrism key={x} box={{ x, y: 1, z: 0, w: 0.16, d: 1.3, h: 1.8 }} view={view} />
-        ))}
-        <IsoPrism box={{ x: 0, y: 1.1, z: 1.8, w: 11, d: 0.22, h: 0.22 }} view={view} tone="gas" />
-        <IsoPrism box={{ x: 0, y: 1.55, z: 1.8, w: 11, d: 0.22, h: 0.22 }} view={view} tone="liquid" />
-        <IsoPrism box={{ x: 0, y: 2, z: 1.8, w: 11, d: 0.22, h: 0.22 }} view={view} tone="water" />
-      </svg>
-      <IsoPlantLegend layer="piping" />
-    </div>
-  );
-}
-
-function IsoPlantCallout() {
-  const unit = ISO_PLANT_UNITS[5];
-
-  return (
-    <div className="relative h-56 w-full max-w-md">
-      <svg role="img" aria-label="A tripped compressor house with its callout" viewBox="0 0 360 224" className="absolute inset-0 h-full w-full">
-        <IsoPrism box={{ x: 0, y: 2.2, z: 0, w: 2.2, d: 2.6, h: 2 }} view={{ scale: 26, originX: 110, originY: 90 }} tone="critical" outlined />
-      </svg>
-      <IsoCallout
-        anchor={{ x: 0.3, y: 0.42 }}
-        placement={{ side: 'right', vertical: 'above' }}
-        title={unit.name}
-        tag={unit.tag}
-        status={<StatusIndicator {...runStateStatus(unit.state)} size="sm" />}
-      >
-        <dl className="flex flex-col gap-1 text-sm">
-          {unit.readings.slice(0, 2).map((reading) => (
-            <div key={reading.label} className="flex items-baseline justify-between gap-3">
-              <dt className="text-muted-foreground">{reading.label}</dt>
-              <dd className="font-medium tabular-nums text-base-foreground">{formatReading(reading.value, reading.unit, reading.decimals)}</dd>
-            </div>
+      <p className="flex flex-wrap items-center gap-2 text-base text-[color:var(--kit-text)]">
+        <span>
+          <span className="font-bold tabular-nums">{ISO_PLANT_UNITS.length}</span> units in six areas:
+        </span>
+        {ISO_PLANT_STATE_ORDER.slice()
+          .reverse()
+          .map((state) => (
+            <StatusPill key={state} tone={ISO_PLANT_STATES[state].tone} size="lg" icon={ISO_PLANT_STATES[state].icon}>
+              {isoPlantCount(state)} {ISO_PLANT_STATES[state].label.toLowerCase()}
+            </StatusPill>
           ))}
-        </dl>
-      </IsoCallout>
-    </div>
+      </p>
+    </header>
   );
 }
 
-function IsoPlantLayerSwitch() {
-  const [layer, setLayer] = useState<IsoPlantLayer>('status');
+function IsoPlantBoardCard({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <section className={`flex min-w-0 flex-col gap-4 rounded-[var(--kit-radius)] bg-[var(--kit-surface)] p-5 shadow-[var(--kit-panel-shadow)] ${className}`}>{children}</section>;
+}
+
+type IsoPlantScreenState = { layer: IsoPlantLayer; deck: IsoPlantDeck; selectedId: string };
+
+function isoPlantStep(selectedId: string, direction: 1 | -1): IsoPlantUnit {
+  const index = ISO_PLANT_UNITS.findIndex((unit) => unit.id === selectedId);
+  return ISO_PLANT_UNITS[(index + direction + ISO_PLANT_UNITS.length) % ISO_PLANT_UNITS.length];
+}
+
+function useIsoPlantScreen(initial: IsoPlantScreenState) {
+  const [state, setState] = useState(initial);
+  const select = (unitId: string) => {
+    const unit = isoPlantUnit(unitId);
+    if (unit) setState((current) => ({ ...current, selectedId: unit.id, deck: unit.deck }));
+  };
+  return {
+    ...state,
+    unit: isoPlantUnit(state.selectedId) ?? ISO_PLANT_UNITS[0],
+    select,
+    step: (direction: 1 | -1) => select(isoPlantStep(state.selectedId, direction).id),
+    setLayer: (layer: IsoPlantLayer) => setState((current) => ({ ...current, layer })),
+    setDeck: (deck: IsoPlantDeck) => setState((current) => ({ ...current, deck })),
+  };
+}
+
+function IsometricPlantSignature() {
+  const screen = useIsoPlantScreen({ layer: 'status', deck: 'ground', selectedId: 'ka9103' });
+
+  return (
+    <LookScope look="soft">
+      <Canvas className="flex flex-col gap-[var(--kit-gap)]">
+        <IsoPlantHeadline />
+        <div className="grid grid-cols-[minmax(0,1fr)_21rem] items-stretch gap-[var(--kit-gap)]">
+          <div className="flex min-w-0 flex-col gap-[var(--kit-gap)]">
+            <IsoPlantBoardCard>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <IsoPlantLayerPills value={screen.layer} onChange={screen.setLayer} />
+                <IsoPlantDeckChips value={screen.deck} onChange={screen.setDeck} />
+              </div>
+              <IsoPlantBoard layer={screen.layer} deck={screen.deck} selectedId={screen.selectedId} onSelect={screen.select} />
+              <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
+                <IsoPlantLegend layer={screen.layer} />
+                <p className="text-sm text-[color:var(--kit-text-3)]">Hover a unit to lift it · click to open it</p>
+              </div>
+            </IsoPlantBoardCard>
+            <IsoPlantAreaTiles selectedId={screen.selectedId} onSelect={screen.select} columns={3} />
+          </div>
+          <IsoPlantUnitCard key={screen.unit.id} unit={screen.unit} onStep={screen.step} onSelect={screen.select} />
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+const ISO_PLANT_HEAT_RANK = [...ISO_PLANT_AREAS].sort((a, b) => b.temperature - a.temperature);
+
+/** Another screen of the same product: the thermal walk, with the plots coloured by temperature. */
+function IsometricPlantHeat() {
+  const screen = useIsoPlantScreen({ layer: 'heat', deck: 'ground', selectedId: 'ka9101' });
+  const hottest = ISO_PLANT_HEAT_RANK[0];
+
+  return (
+    <LookScope look="soft">
+      <Canvas className="grid grid-cols-[22rem_minmax(0,1fr)] items-stretch gap-[var(--kit-gap)]">
+        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--kit-gap)]">
+          <Panel
+            tone="amber"
+            title="Thermal walk"
+            subtitle="Skin temperature by area, 14:00 UTC"
+            icon={
+              <IconChip tone="amber">
+                <IconFlame />
+              </IconChip>
+            }
+          >
+            <p className="text-sm text-[color:var(--kit-text-2)]">Hottest area</p>
+            <p className="flex items-baseline gap-2">
+              <span className="text-6xl font-bold tracking-tight tabular-nums text-[color:var(--kit-text)]">{hottest.temperature}</span>
+              <span className="text-xl text-[color:var(--kit-text-2)]">°C</span>
+            </p>
+            <p className="mt-1 text-base font-bold text-[color:var(--kit-text)]">{hottest.name}</p>
+            <p className="mt-2 text-sm text-[color:var(--kit-text-2)]">Eight degrees above the review line while the first stage runs hot. Flare and compression share the warm side of the plot.</p>
+          </Panel>
+          <Panel title="Areas, warmest first" subtitle="Review line at 50 °C">
+            <ol className="flex flex-1 flex-col justify-between gap-3">
+              {ISO_PLANT_HEAT_RANK.map((area) => (
+                <li key={area.id} className="flex flex-col gap-1.5">
+                  <span className="flex items-baseline justify-between gap-3 text-sm">
+                    <span className="font-semibold text-[color:var(--kit-text)]">{area.name}</span>
+                    <span className="tabular-nums text-[color:var(--kit-text)]">
+                      <span className="font-bold">{area.temperature}</span> °C{area.temperature >= 50 ? <span className="font-semibold text-[color:var(--kit-line-warning)]"> · review</span> : null}
+                    </span>
+                  </span>
+                  <span aria-hidden="true" className="relative h-3.5 overflow-hidden rounded-full bg-[var(--kit-track)]">
+                    <span className={`block h-full rounded-full ${ISO_PLANT_HEAT_SWATCH[isoPlantHeatLevel(area.temperature)]}`} style={{ width: `${(area.temperature / 60) * 100}%` }} />
+                    <span className="absolute inset-y-0 w-0.5 bg-[var(--kit-text)]" style={{ left: `${(50 / 60) * 100}%` }} />
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Panel>
+        </div>
+        <IsoPlantBoardCard className="justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <IsoPlantLayerPills value={screen.layer} onChange={screen.setLayer} />
+            <IsoPlantDeckChips value={screen.deck} onChange={screen.setDeck} />
+          </div>
+          <IsoPlantBoard layer={screen.layer} deck={screen.deck} selectedId={screen.selectedId} onSelect={screen.select} />
+          <IsoPlantLegend layer={screen.layer} />
+        </IsoPlantBoardCard>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+/** The same product on a phone: the drawing on top, the selected unit as a sheet under it. */
+function IsometricPlantPhone() {
+  const screen = useIsoPlantScreen({ layer: 'status', deck: 'ground', selectedId: 'pa4001' });
+
+  return (
+    <LookScope look="soft" className="mx-auto w-full max-w-[26rem]">
+      <Canvas className="flex flex-col gap-4 rounded-[2.5rem] border-8 border-[color:var(--kit-text)]">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-[color:var(--kit-text)]">Nordkapp</h2>
+          <p className="text-sm text-[color:var(--kit-text-2)]">19 units · 1 tripped · 1 in maintenance</p>
+        </div>
+        <IsoPlantLayerPills value={screen.layer} onChange={screen.setLayer} />
+        <IsoPlantBoardCard className="!p-3">
+          <IsoPlantBoard layer={screen.layer} deck={screen.deck} selectedId={screen.selectedId} onSelect={screen.select} areaLabels={false} />
+        </IsoPlantBoardCard>
+        <IsoPlantUnitCard key={screen.unit.id} unit={screen.unit} onStep={screen.step} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function IsometricPlantPartUnitCard() {
+  const [unitId, setUnitId] = useState('ta3001');
+  const unit = isoPlantUnit(unitId) ?? ISO_PLANT_UNITS[0];
+
+  return (
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[32rem] flex-col">
+        <IsoPlantUnitCard key={unit.id} unit={unit} onStep={(direction) => setUnitId(isoPlantStep(unit.id, direction).id)} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function IsometricPlantPartAreas() {
+  const [unitId, setUnitId] = useState('pa4001');
+  const unit = isoPlantUnit(unitId) ?? ISO_PLANT_UNITS[0];
+
+  return (
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[32rem] flex-col justify-between gap-4">
+        <IsoPlantAreaTiles selectedId={unitId} onSelect={setUnitId} />
+        <p className="text-sm text-[color:var(--kit-text-2)]">
+          Opens <span className="font-bold text-[color:var(--kit-text)]">{unit.name}</span>, {ISO_PLANT_STATES[unit.state].label.toLowerCase()}: the unit in the area that most needs a look.
+        </p>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+const ISO_PLANT_PART_VIEW: IsoView = { scale: 30, originX: 170, originY: 64 };
+
+function IsometricPlantPartSolids() {
+  return (
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[30rem] flex-col gap-3">
+        <IsoPlantBoardCard className="min-h-0 flex-1 items-center justify-center">
+          <svg role="img" aria-label="Isometric solids: a tripped compressor house, a tank at 68 percent, a standby vessel and a running pump skid" viewBox="0 0 420 240" className="h-full w-full">
+            <IsoPrism box={{ x: 0, y: 0, z: 0, w: 2.2, d: 2.6, h: 2 }} view={ISO_PLANT_PART_VIEW} tone="critical" />
+            <IsoCylinder x={4.3} y={1.3} z={0} radius={1.2} length={2.6} view={ISO_PLANT_PART_VIEW} tone="success" level={0.68} contentTone="liquid" />
+            <IsoCylinder x={0.4} y={4.6} z={1} radius={0.6} length={3} axis="x" view={ISO_PLANT_PART_VIEW} tone="info" />
+            <IsoPrism box={{ x: 5, y: 4.2, z: 0, w: 2.5, d: 1, h: 0.25 }} view={ISO_PLANT_PART_VIEW} tone="success" />
+            <IsoCylinder x={5.2} y={4.7} z={0.65} radius={0.38} length={1.05} axis="x" view={ISO_PLANT_PART_VIEW} tone="success" />
+            <IsoPrism box={{ x: 6.4, y: 4.32, z: 0.25, w: 0.8, d: 0.76, h: 0.85 }} view={ISO_PLANT_PART_VIEW} tone="success" outlined />
+          </svg>
+        </IsoPlantBoardCard>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function IsometricPlantPartLayers() {
+  const [layer, setLayer] = useState<IsoPlantLayer>('piping');
   const [deck, setDeck] = useState<IsoPlantDeck>('ground');
 
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-xs font-medium text-muted-foreground">Layer</span>
-      <LayerSwitch label="Layer" hideLabel value={layer} options={ISO_PLANT_LAYERS} onValueChange={setLayer} />
-      <span className="pt-2 text-xs font-medium text-muted-foreground">Level</span>
-      <LayerSwitch label="Level" hideLabel value={deck} options={ISO_PLANT_DECKS} onValueChange={setDeck} />
-      <div className="flex min-h-6 items-center pt-2">
-        <IsoPlantLegend layer={layer} />
-      </div>
-    </div>
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex flex-wrap items-center justify-between gap-5">
+        <IsoPlantLayerPills value={layer} onChange={setLayer} />
+        <IsoPlantBoardCard className="!gap-0 !px-5 !py-3">
+          <IsoPlantLegend layer={layer} />
+        </IsoPlantBoardCard>
+        <IsoPlantDeckChips value={deck} onChange={setDeck} />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function IsoPlantHeatTiles() {
-  const view: IsoView = { scale: 22, originX: 150, originY: 24 };
-  const tiles = [
-    { code: 'NK-21', temperature: 19, x: 0, y: 0 },
-    { code: 'NK-20', temperature: 34, x: 3.2, y: 0 },
-    { code: 'NK-29', temperature: 47, x: 0, y: 3.2 },
-    { code: 'NK-23', temperature: 58, x: 3.2, y: 3.2 },
-  ];
+function IsometricPlantPartBoard() {
+  const [selectedId, setSelectedId] = useState('ha9114');
 
   return (
-    <div className="flex w-full max-w-xs flex-col gap-3">
-      <svg role="img" aria-label="Four areas coloured by temperature from 19 to 58 degrees" viewBox="0 0 300 170" className="w-full">
-        {tiles.map((tile) => {
-          const corner = (dx: number, dy: number) => iso(tile.x + dx, tile.y + dy, 0, view);
-          const code = corner(0.3, 1.5);
-          const value = corner(0.3, 2.6);
-          return (
-            <g key={tile.code}>
-              <polygon
-                points={toPoints([corner(0, 0), corner(3, 0), corner(3, 3), corner(0, 3)])}
-                strokeWidth={1}
-                className={`${ISO_PLANT_HEAT_FILL[isoPlantHeatLevel(tile.temperature)]} stroke-[color:var(--card-background)]`}
-              />
-              <text transform={`matrix(0.866 0.5 -0.866 0.5 ${code.x} ${code.y})`} fontSize={11} strokeWidth={3} className={`${ISO_PLANT_GROUND_TEXT} fill-base-foreground`}>
-                {tile.code}
-              </text>
-              <text transform={`matrix(0.866 0.5 -0.866 0.5 ${value.x} ${value.y})`} fontSize={12} strokeWidth={3} className={`${ISO_PLANT_GROUND_TEXT} fill-base-foreground font-semibold`}>
-                {tile.temperature} °C
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <HeatScaleLegend title="Area temperature" lowLabel="15 °C" highLabel="60 °C" />
-    </div>
-  );
-}
-
-function IsoPlantDepthOrder() {
-  const view: IsoView = { scale: 26, originX: 150, originY: 50 };
-  const boxes = sortBackToFront([
-    { id: 'front', x: 3.4, y: 3.4, z: 0, w: 1.6, d: 1.6, h: 1.2 },
-    { id: 'tower', x: 1.6, y: 1.6, z: 0, w: 1.4, d: 1.4, h: 3.4 },
-    { id: 'slab', x: 0, y: 3.4, z: 0, w: 3, d: 1.6, h: 0.5 },
-    { id: 'back', x: 3.4, y: 0, z: 0, w: 1.6, d: 3, h: 2 },
-  ]);
-
-  return (
-    <svg role="img" aria-label="Four boxes painted back to front so the near ones cover the far ones" viewBox="0 0 320 220" className="w-full max-w-xs">
-      {boxes.map((box, index) => {
-        const top = boxAnchor(box, view);
-        return (
-          <g key={box.id}>
-            <IsoPrism box={box} view={view} tone="accent" />
-            <text x={top.x} y={top.y} textAnchor="middle" dominantBaseline="central" fontSize={13} className="fill-base-foreground font-semibold tabular-nums">
-              {index + 1}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex min-h-[30rem] flex-col justify-center gap-3">
+        <IsoPlantBoardCard>
+          <IsoPlantBoard layer="equipment" deck="deck" selectedId={selectedId} onSelect={setSelectedId} areaLabels={false} />
+          <p className="text-sm text-[color:var(--kit-text-2)]">Upper deck: the two coolers stand out and everything at ground level is ghosted.</p>
+        </IsoPlantBoardCard>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -673,159 +910,138 @@ export default definePage({
   id: 'isometric-plant',
   title: 'Isometric plant',
   summary:
-    'The Nordkapp plot plan as a 2.5D drawing in plain SVG: separators, compressor houses, coolers, pumps, tanks, a flare and a pipe rack built from boxes and cylinders, with layers, deck levels and a callout for the selected unit.',
+    'The plant as a friendly isometric illustration, drawn in SVG with no WebGL. Units lift on hover, open on click, and can be coloured by state, service or area temperature. The drawing is the screen; a unit card and six area tiles sit beside it.',
   guidance: {
     use: [
-      'When people need to see where equipment stands, and WebGL is not available or not worth its cost.',
-      'For a site overview with a few dozen units, each a simple recognisable shape.',
-      'Switch layers to change the question: what is there, how it connects, how it runs, where it is hot.',
-      'Keep the unit list beside the drawing; it is the keyboard and screen-reader path.',
+      'When people need to recognise the plant at a glance and the exact geometry does not matter.',
+      'For occasional users and personal start pages: big targets, plain words, one unit open at a time.',
+      'With one layer at a time, each with its own legend, so colour always means one thing.',
+      'Where WebGL is not available or a 3D scene would be too heavy.',
     ],
     avoid: [
-      'Hundreds of units or free camera movement — use the 3D plant for that.',
-      'Shapes that intersect: painter ordering only works for solids that do not overlap.',
-      'Colour as the only state signal; the status layer adds a shape above each unit.',
-      'Fine engineering detail. This is a map for orientation, not a P&ID.',
+      'Engineering work that needs true positions, clearances or free rotation: use a 3D scene.',
+      'More than a few dozen solids. Depth sorting is done by hand and dense drawings become unreadable.',
+      'State by colour alone: every hover and selection label says the state in words.',
+      'Tiny text inside the drawing. Labels are HTML on top of it and keep their size when the drawing shrinks.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'Shown in the Blueprint theme. Hover a unit to lift and outline it, click it or pick it from the list to open its callout, switch the layer between equipment, piping, status and heat, and step between ground level and the upper deck.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'Hover a unit to lift it and read its state; click it, or tab to it, to open its card. Switch layer to recolour the drawing, pick Upper deck to bring the coolers forward, and use an area tile to jump to the unit that most needs a look.',
       specimens: [
         {
-          id: 'IsoPlantExperience',
+          id: 'IsometricPlantSignature',
           title: 'Isometric plant',
-          note: 'Pick it for a plant overview that should feel spatial but stay light, printable and themeable.',
+          note: 'Pick it as a welcoming way into a plant for people who know it by sight, not by tag.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'experiences/spatial/isoProjection.ts',
-            'experiences/spatial/isoStyle.ts',
             'experiences/spatial/IsoPrism.tsx',
             'experiences/spatial/IsoCylinder.tsx',
-            'experiences/spatial/IsoCallout.tsx',
-            'experiences/spatial/LayerSwitch.tsx',
-            'industrial/charts/HeatScaleLegend.tsx',
-            'industrial/StatusIndicator.tsx',
-            'themes/ThemeScope.tsx',
+            'experiences/spatial/isoProjection.ts',
+            'kit/Panel.tsx',
+            'kit/StatusPill.tsx',
+            'kit/IconChip.tsx',
+            'kit/scene/ToggleChip.tsx',
+            'looks/LookScope.tsx',
           ],
-          Component: IsoPlantExperience,
+          Component: IsometricPlantSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same drawing, unchanged, in a dark preset and a warm light one. Face shading swaps so tops stay brightest.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The thermal walk, where the plots carry temperature and a ranking sits beside the drawing, and the same product on a phone.',
       specimens: [
         {
-          id: 'IsoPlantHologram',
-          title: 'Hologram',
-          note: 'Pick it next to digital-twin views: teal solids on black.',
+          id: 'IsometricPlantHeat',
+          title: 'Thermal walk',
+          note: 'Pick it when the question is where the plant runs warm: plots coloured by temperature, ranked against a review line.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: IsoPlantHologram,
+          bleed: true,
+          uses: ['experiences/spatial/IsoPrism.tsx', 'experiences/spatial/isoProjection.ts', 'kit/Bars.tsx', 'kit/Panel.tsx', 'looks/LookScope.tsx'],
+          Component: IsometricPlantHeat,
         },
         {
-          id: 'IsoPlantSandstone',
-          title: 'Sandstone',
-          note: 'Pick it for reports and handover documents: warm paper tones that print well.',
+          id: 'IsometricPlantPhone',
+          title: 'Phone',
+          note: 'Pick it for a quick look on the way to site: the drawing without area labels and the selected unit as a sheet.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: IsoPlantSandstone,
+          uses: ['experiences/spatial/IsoPrism.tsx', 'experiences/spatial/IsoCylinder.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: IsometricPlantPhone,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'Each part on its own, in the theme of the page around it. All solids are projected with the same helper.',
+      description: 'The card, the tiles, the controls and the solids the drawing is built from.',
       specimens: [
         {
-          id: 'IsoPlantPrisms',
-          title: 'Prisms',
-          note: 'Pick it for buildings, skids and decks: solid, toned by state, or a ghost for what is not the subject.',
-          origin: 'custom',
-          size: 'sm',
-          uses: ['experiences/spatial/IsoPrism.tsx', 'experiences/spatial/isoProjection.ts', 'experiences/spatial/isoStyle.ts'],
-          Component: IsoPlantPrisms,
-        },
-        {
-          id: 'IsoPlantTanks',
-          title: 'Tanks with fill level',
-          note: 'Pick it when the level is the message: contents show through a translucent shell.',
-          origin: 'custom',
-          size: 'sm',
-          uses: ['experiences/spatial/IsoCylinder.tsx', 'experiences/spatial/isoProjection.ts'],
-          Component: IsoPlantTanks,
-        },
-        {
-          id: 'IsoPlantVessel',
-          title: 'Vessel and column',
-          note: 'Pick it for separators, drums and columns: a cylinder lying along an axis or standing.',
-          origin: 'custom',
-          size: 'sm',
-          uses: ['experiences/spatial/IsoCylinder.tsx', 'experiences/spatial/IsoPrism.tsx'],
-          Component: IsoPlantVessel,
-        },
-        {
-          id: 'IsoPlantPipeRack',
-          title: 'Pipe rack',
-          note: 'Pick it to show how areas connect: thin prisms on frames, coloured by service with a legend.',
+          id: 'IsometricPlantPartUnitCard',
+          title: 'Unit card',
+          note: 'Pick it as the detail of one selected unit: the card takes the colour of the state and leads with one reading.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['experiences/spatial/IsoPrism.tsx', 'experiences/spatial/isoStyle.ts'],
-          Component: IsoPlantPipeRack,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx', 'kit/IconChip.tsx'],
+          Component: IsometricPlantPartUnitCard,
         },
         {
-          id: 'IsoPlantCallout',
-          title: 'Anchored callout',
-          note: 'Pick it for the details of the one selected unit, pinned to it by a dot and a leader.',
+          id: 'IsometricPlantPartAreas',
+          title: 'Area tiles',
+          note: 'Pick pastel tiles as shortcuts into a drawing: one decorative family per area, and the tile says what needs attention.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['experiences/spatial/IsoCallout.tsx', 'experiences/spatial/IsoPrism.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: IsoPlantCallout,
+          bleed: true,
+          uses: ['kit/tones.ts'],
+          Component: IsometricPlantPartAreas,
         },
         {
-          id: 'IsoPlantLayerSwitch',
-          title: 'Layer and level switches',
-          note: 'Pick it to change what one scene emphasises; the legend follows the layer.',
+          id: 'IsometricPlantPartBoard',
+          title: 'Upper deck',
+          note: 'Pick a level switch when equipment is stacked: the chosen level is solid and the rest is ghosted, never hidden.',
           origin: 'custom',
-          size: 'sm',
-          uses: ['experiences/spatial/LayerSwitch.tsx', 'industrial/charts/HeatScaleLegend.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: IsoPlantLayerSwitch,
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['experiences/spatial/IsoPrism.tsx', 'experiences/spatial/IsoCylinder.tsx', 'experiences/spatial/isoProjection.ts'],
+          Component: IsometricPlantPartBoard,
         },
         {
-          id: 'IsoPlantHeatTiles',
-          title: 'Heat tiles',
-          note: 'Pick it for one value per area on the ground plane, printed on each tile as well as coloured.',
+          id: 'IsometricPlantPartSolids',
+          title: 'Isometric solids',
+          note: 'Pick boxes and cylinders shaded from one colour as the building blocks: houses, vessels, skids and tanks with a level.',
           origin: 'custom',
-          size: 'sm',
-          uses: ['experiences/spatial/isoProjection.ts', 'industrial/charts/HeatScaleLegend.tsx'],
-          Component: IsoPlantHeatTiles,
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['experiences/spatial/IsoPrism.tsx', 'experiences/spatial/IsoCylinder.tsx', 'experiences/spatial/isoStyle.ts'],
+          Component: IsometricPlantPartSolids,
         },
         {
-          id: 'IsoPlantDepthOrder',
-          title: 'Depth order',
-          note: 'Pick the sorter whenever solids overlap on screen; the numbers show the order they are painted in.',
+          id: 'IsometricPlantPartLayers',
+          title: 'Layers and legend',
+          note: 'Pick one-of-many pills for layers that recolour a drawing; the legend changes with the layer.',
           origin: 'custom',
-          size: 'sm',
-          uses: ['experiences/spatial/isoProjection.ts', 'experiences/spatial/IsoPrism.tsx'],
-          Component: IsoPlantDepthOrder,
+          size: 'full',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/scene/ToggleChip.tsx', 'kit/StatusPill.tsx'],
+          Component: IsometricPlantPartLayers,
         },
       ],
     },

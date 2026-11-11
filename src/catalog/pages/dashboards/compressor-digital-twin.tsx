@@ -1,29 +1,42 @@
 import { Button } from '@cognite/aura/components/button';
-import { Slider } from '@cognite/aura/components/slider';
-import { Switch } from '@cognite/aura/components/switch';
-import { IconArrowLeft } from '@cognite/aura/icons';
+import {
+  IconActivity,
+  IconAlertTriangle,
+  IconArrowsSplit,
+  IconComponents,
+  IconEngine,
+  IconEye,
+  IconGauge,
+  IconRefresh,
+  IconSlice,
+  IconStack2,
+  IconTool,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
-import { summarize } from '../../../library/industrial/charts/stats';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import type { TrendLimit } from '../../../library/industrial/charts/TrendChart';
-import { RangeIndicator } from '../../../library/industrial/RangeIndicator';
-import { formatLimit, formatReading, healthStatus, runStateStatus, severityStatus, toneFromLimits } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { ScenePin } from '../../../library/kit/scene/ScenePin';
+import { SceneStage } from '../../../library/kit/scene/SceneStage';
+import { ToggleChip } from '../../../library/kit/scene/ToggleChip';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type StatusTone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import type { TrendLimit } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
 import { CameraRig } from '../../../library/three/CameraRig';
 import { addVec3, boundsCenter, boundsRadius, distanceToFit, normalizeVec3, scaleVec3 } from '../../../library/three/cameraTargets';
 import type { Bounds, CameraTarget, Vec3 } from '../../../library/three/cameraTargets';
 import { Ground } from '../../../library/three/Ground';
-import { assemblyLeafIds, findAssembly, isAssemblyActive } from '../../../library/three/models/assemblyTree';
-import type { AssemblyNode } from '../../../library/three/models/assemblyTree';
+import { assemblyLeafIds, findAssembly } from '../../../library/three/models/assemblyTree';
 import { BarrelCasing } from '../../../library/three/models/BarrelCasing';
 import { BearingHousing } from '../../../library/three/models/BearingHousing';
 import { CompressorTrain } from '../../../library/three/models/CompressorTrain';
-import type { CompressorTrainHotspot } from '../../../library/three/models/CompressorTrain';
 import {
   COMPRESSOR_TRAIN_BOUNDS,
   COMPRESSOR_TRAIN_EXPLODE,
@@ -32,30 +45,28 @@ import {
   TRAIN_MEASUREMENT_POINTS,
 } from '../../../library/three/models/compressorTrainLayout';
 import type { TrainMeasurementPoint } from '../../../library/three/models/compressorTrainLayout';
-import { explodeOffset, explodeProgress, explodedBounds } from '../../../library/three/models/explodeOffsets';
-import { Hotspot } from '../../../library/three/models/Hotspot';
-import { LubeOilSkid } from '../../../library/three/models/LubeOilSkid';
+import { explodeOffset, explodedBounds } from '../../../library/three/models/explodeOffsets';
 import { RotorBundle } from '../../../library/three/models/RotorBundle';
 import { StillScene } from '../../../library/three/models/StillScene';
 import { SceneCanvas } from '../../../library/three/SceneCanvas';
 import { SceneLights } from '../../../library/three/SceneLights';
 import { TurntableStage } from '../../../library/three/TurntableStage';
+import { ViewInsets } from '../../../library/three/ViewInsets';
 import { ALARMS, SENSORS, findAsset } from '../../data/plant';
 import type { Alarm, Sensor } from '../../data/plant';
-import { MINUTE, formatAgo, makeSeries } from '../../data/series';
-import type { SeriesPoint } from '../../data/series';
+import { MINUTE, REFERENCE_NOW, formatAgo, formatTime, makeSeries } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './compressor-digital-twin.tsx?raw';
 
-const COMPTWIN3D_ASSET_ID = '23-ka-9101';
+const CTWIN_ASSET_ID = '23-ka-9101';
 
 /** The lube oil header has no tag in the shared plant data; this one follows the same tag style. */
-const COMPTWIN3D_LUBE_OIL_SENSOR: Sensor = {
+const CTWIN_LUBE_OIL: Sensor = {
   id: 'pt-92560',
   tag: '23-PT-92560',
-  name: 'Lube oil header pressure',
-  assetId: COMPTWIN3D_ASSET_ID,
+  name: 'Lube oil pressure',
+  assetId: CTWIN_ASSET_ID,
   unit: 'barg',
   value: 2.4,
   lowLimit: 1.8,
@@ -67,671 +78,635 @@ const COMPTWIN3D_LUBE_OIL_SENSOR: Sensor = {
   seed: 71,
 };
 
-/** Which sensor sits at which measurement point, in the order the hotspots are numbered. */
-const COMPTWIN3D_POINTS: readonly { sensorId: string; point: TrainMeasurementPoint; where: string }[] = [
-  { sensorId: 'vt-92540', point: TRAIN_MEASUREMENT_POINTS.driveEndVibration, where: 'Drive-end bearing housing, radial probe' },
-  { sensorId: 'tt-92532', point: TRAIN_MEASUREMENT_POINTS.dischargeTemperature, where: 'Discharge nozzle, thermowell' },
-  { sensorId: 'pt-92531', point: TRAIN_MEASUREMENT_POINTS.dischargePressure, where: 'Discharge nozzle flange tapping' },
-  { sensorId: 'pt-92530', point: TRAIN_MEASUREMENT_POINTS.suctionPressure, where: 'Suction nozzle flange tapping' },
-  { sensorId: 'st-92501', point: TRAIN_MEASUREMENT_POINTS.shaftSpeed, where: 'Coupling guard, keyphasor' },
-  { sensorId: 'pt-92560', point: TRAIN_MEASUREMENT_POINTS.lubeOilPressure, where: 'Lube oil supply header' },
+type CtwinLayerId = 'drive-train' | 'compressor' | 'auxiliaries' | 'structure';
+
+type CtwinLayers = Record<CtwinLayerId, boolean>;
+
+const CTWIN_LAYERS: readonly { id: CtwinLayerId; label: string; icon: ReactNode }[] = [
+  { id: 'drive-train', label: 'Drive train', icon: <IconEngine /> },
+  { id: 'compressor', label: 'Compressor', icon: <IconComponents /> },
+  { id: 'auxiliaries', label: 'Auxiliaries', icon: <IconTool /> },
+  { id: 'structure', label: 'Structure', icon: <IconStack2 /> },
 ];
 
-const COMPTWIN3D_SENSORS: readonly Sensor[] = [...SENSORS, COMPTWIN3D_LUBE_OIL_SENSOR];
+const CTWIN_ALL_LAYERS: CtwinLayers = { 'drive-train': true, compressor: true, auxiliaries: true, structure: true };
 
-type CompTwin3dReading = {
-  index: number;
+type CtwinReading = {
   sensor: Sensor;
   point: TrainMeasurementPoint;
+  /** Where the instrument is mounted, in words. */
   where: string;
-  tone: Tone;
-  /** The open alarm on this tag, when there is one. */
+  /** Where the pinned card sits relative to its point, in px. */
+  offset: readonly [number, number];
+  tone: StatusTone;
+  /** The judgement in a word. */
+  state: string;
   alarm?: Alarm;
 };
 
-function compTwin3dReading(entry: (typeof COMPTWIN3D_POINTS)[number], position: number): CompTwin3dReading[] {
-  const sensor = COMPTWIN3D_SENSORS.find((candidate) => candidate.id === entry.sensorId);
+const CTWIN_POINTS: readonly { sensorId: string; point: TrainMeasurementPoint; where: string; offset: readonly [number, number] }[] = [
+  { sensorId: 'pt-92530', point: TRAIN_MEASUREMENT_POINTS.suctionPressure, where: 'Suction nozzle, flange tapping', offset: [-56, -84] },
+  { sensorId: 'pt-92531', point: TRAIN_MEASUREMENT_POINTS.dischargePressure, where: 'Discharge nozzle, flange tapping', offset: [36, -96] },
+  { sensorId: 'tt-92532', point: TRAIN_MEASUREMENT_POINTS.dischargeTemperature, where: 'Discharge nozzle, thermowell', offset: [-84, 76] },
+  { sensorId: 'vt-92540', point: TRAIN_MEASUREMENT_POINTS.driveEndVibration, where: 'Drive-end bearing housing, radial probe', offset: [-20, 150] },
+  { sensorId: 'st-92501', point: TRAIN_MEASUREMENT_POINTS.shaftSpeed, where: 'Coupling guard, keyphasor', offset: [84, -70] },
+  { sensorId: 'pt-92560', point: TRAIN_MEASUREMENT_POINTS.lubeOilPressure, where: 'Lube oil supply header', offset: [56, 64] },
+];
+
+function ctwinReading(entry: (typeof CTWIN_POINTS)[number]): CtwinReading[] {
+  const sensor = [...SENSORS, CTWIN_LUBE_OIL].find((candidate) => candidate.id === entry.sensorId);
   if (!sensor) return [];
-  const alarm = ALARMS.find((candidate) => candidate.sensorTag === sensor.tag && candidate.state !== 'cleared');
-  const limitTone = toneFromLimits(sensor.value, { low: sensor.lowLimit, high: sensor.highLimit, highHigh: sensor.highHighLimit });
-  const tone = alarm && limitTone === 'neutral' ? severityStatus(alarm.severity).tone : limitTone;
-  return [{ index: position + 1, sensor, point: entry.point, where: entry.where, tone, alarm }];
+  const alarm = ALARMS.find((candidate) => candidate.sensorTag === sensor.tag && (candidate.state === 'active' || candidate.state === 'acknowledged'));
+  const overTrip = sensor.highHighLimit !== undefined && sensor.value >= sensor.highHighLimit;
+  const tone: StatusTone = overTrip ? 'critical' : alarm || sensor.value >= sensor.highLimit ? 'warning' : 'neutral';
+  const state = overTrip ? 'Trip limit' : alarm ? (alarm.state === 'active' ? 'In alarm' : 'Near limit') : 'Normal';
+  return [{ sensor, point: entry.point, where: entry.where, offset: entry.offset, tone, state, alarm }];
 }
 
-const COMPTWIN3D_READINGS: readonly CompTwin3dReading[] = COMPTWIN3D_POINTS.flatMap(compTwin3dReading);
+const CTWIN_READINGS: readonly CtwinReading[] = CTWIN_POINTS.flatMap(ctwinReading);
 
-const COMPTWIN3D_HOTSPOTS: readonly CompressorTrainHotspot[] = COMPTWIN3D_READINGS.map((reading) => ({
-  id: reading.sensor.id,
-  index: reading.index,
-  assemblyId: reading.point.assemblyId,
-  position: reading.point.position,
-  tag: reading.sensor.tag,
-  value: formatReading(reading.sensor.value, reading.sensor.unit, reading.sensor.decimals),
-  tone: reading.tone === 'neutral' ? undefined : reading.tone,
-  pulse: reading.alarm?.state === 'active',
-}));
-
-const COMPTWIN3D_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
-
-const COMPTWIN3D_ROW = `flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${COMPTWIN3D_FOCUS}`;
+function ctwinValue(sensor: Sensor): string {
+  return formatNumber(sensor.value, sensor.decimals);
+}
 
 /** Last 24 hours for a tag, ending exactly on its current value. */
-function compTwin3dTrend(sensor: Sensor): SeriesPoint[] {
+function ctwinTrend(sensor: Sensor): { values: number[]; labels: string[] } {
   const span = sensor.highLimit - sensor.lowLimit;
-  const raw = makeSeries({
-    seed: sensor.seed,
-    points: 48,
-    base: sensor.value,
-    amplitude: span * 0.05,
-    noise: span * 0.025,
-    cycles: 1.5,
-    stepMs: 30 * MINUTE,
-    decimals: sensor.decimals + 1,
-  });
+  const raw = makeSeries({ seed: sensor.seed, points: 49, base: sensor.value, amplitude: span * 0.05, noise: span * 0.025, cycles: 1.5, stepMs: 30 * MINUTE, decimals: sensor.decimals + 1 });
   const shift = sensor.value - raw[raw.length - 1].v;
   const factor = 10 ** sensor.decimals;
-  return raw.map((point) => ({
-    t: point.t,
-    v: Math.round(Math.min(sensor.rangeMax, Math.max(sensor.rangeMin, point.v + shift)) * factor) / factor,
-  }));
+  return {
+    values: raw.map((point) => Math.round(Math.min(sensor.rangeMax, Math.max(sensor.rangeMin, point.v + shift)) * factor) / factor),
+    labels: raw.map((_, index) => formatTime(REFERENCE_NOW - (raw.length - 1 - index) * 30 * MINUTE)),
+  };
 }
 
-function compTwin3dLimits(sensor: Sensor): TrendLimit[] {
-  const limits: TrendLimit[] = [];
-  if (sensor.highHighLimit !== undefined) {
-    limits.push({ value: sensor.highHighLimit, label: `Trip ${formatLimit(sensor.highHighLimit, sensor.decimals)}`, tone: 'critical' });
-  }
-  limits.push({ value: sensor.highLimit, label: `High ${formatLimit(sensor.highLimit, sensor.decimals)}`, tone: 'warning' });
-  if (sensor.lowLimit > sensor.rangeMin) {
-    limits.push({ value: sensor.lowLimit, label: `Low ${formatLimit(sensor.lowLimit, sensor.decimals)}`, tone: 'warning' });
+function ctwinLimits(sensor: Sensor): TrendLimit[] {
+  const limits: TrendLimit[] = [{ value: sensor.highLimit, label: 'High', tone: 'warning' }];
+  if (sensor.highHighLimit !== undefined && sensor.highHighLimit - sensor.value < (sensor.highLimit - sensor.lowLimit) * 0.6) {
+    limits.push({ value: sensor.highHighLimit, label: 'Trip', tone: 'critical' });
   }
   return limits;
 }
 
+/** The sub-assemblies that stay solid for a set of layers; `null` when nothing is hidden. */
+function ctwinActiveIds(layers: CtwinLayers): string[] | null {
+  if (CTWIN_LAYERS.every((layer) => layers[layer.id])) return null;
+  return CTWIN_LAYERS.filter((layer) => layers[layer.id]).flatMap((layer) => assemblyLeafIds(COMPRESSOR_TRAIN_TREE, layer.id));
+}
+
+function ctwinPartCount(layerId: CtwinLayerId): number {
+  return assemblyLeafIds(COMPRESSOR_TRAIN_TREE, layerId).length;
+}
+
 /** From the front and a little towards the driver, so the shaft runs across the screen. */
-const COMPTWIN3D_VIEW_DIRECTION: Vec3 = [0.28, 0.5, 0.82];
+const CTWIN_VIEW_DIRECTION: Vec3 = [0.3, 0.46, 0.84];
 
-/** The camera pose that fits a box into the tall, narrow scene between the two panels. */
-function compTwin3dCamera(bounds: Bounds, padding: number): CameraTarget {
+function ctwinCamera(bounds: Bounds, zoom: number): CameraTarget {
   const lookAt = boundsCenter(bounds);
-  const distance = distanceToFit(boundsRadius(bounds), 40, 0.95) * padding;
-  return { position: addVec3(lookAt, scaleVec3(normalizeVec3(COMPTWIN3D_VIEW_DIRECTION), distance)), lookAt };
+  const distance = distanceToFit(boundsRadius(bounds), 40, 1) * zoom;
+  return { position: addVec3(lookAt, scaleVec3(normalizeVec3(CTWIN_VIEW_DIRECTION), distance)), lookAt };
 }
 
-function compTwin3dAssemblyName(id: string): string {
-  return findAssembly(COMPRESSOR_TRAIN_TREE, id)?.name ?? id;
-}
+type CtwinView = { layers: CtwinLayers; readouts: boolean; sectionCut: boolean; exploded: boolean; sensorId: string };
 
-function compTwin3dReadingStatus(reading: CompTwin3dReading): { tone: Tone; label: string; shape: 'dot' | 'square' | 'diamond' } {
-  if (reading.alarm) {
-    const severity = severityStatus(reading.alarm.severity);
-    return { tone: reading.tone, shape: severity.shape === 'ring' ? 'dot' : severity.shape, label: reading.alarm.state === 'active' ? 'In alarm' : 'Alarm acknowledged' };
-  }
-  if (reading.tone !== 'neutral') return { tone: reading.tone, shape: 'square', label: 'Outside limits' };
-  return { tone: 'success', shape: 'dot', label: 'Within limits' };
-}
+const CTWIN_INITIAL: CtwinView = { layers: CTWIN_ALL_LAYERS, readouts: true, sectionCut: false, exploded: false, sensorId: 'tt-92532' };
 
-function CompTwin3dNumber({ reading, selected = false }: { reading: CompTwin3dReading; selected?: boolean }) {
+type CtwinSceneProps = {
+  view: CtwinView;
+  onSelectSensor: (sensorId: string) => void;
+  /** Pixels the overlays cover on each edge, so the machine is framed in the free part. */
+  insets?: { top?: number; right?: number; bottom?: number; left?: number };
+  zoom?: number;
+  still?: boolean;
+};
+
+function CtwinScene({ view, onSelectSensor, insets = {}, zoom = 1.04, still = false }: CtwinSceneProps) {
+  const amount = view.exploded ? 0.85 : 0;
+  const activeIds = ctwinActiveIds(view.layers);
+  const bounds = explodedBounds(COMPRESSOR_TRAIN_BOUNDS, COMPRESSOR_TRAIN_EXPLODE, amount);
+  const target = bounds ? ctwinCamera(bounds, zoom) : null;
+  const shown = TRAIN_ASSEMBLY_IDS.length - (activeIds ? TRAIN_ASSEMBLY_IDS.length - activeIds.length : 0);
+
   return (
-    <span
-      aria-hidden="true"
-      className={`flex size-5 shrink-0 items-center justify-center rounded-full border font-mono text-xs tabular-nums text-base-foreground ${
-        selected ? 'border-[var(--primary-background)]' : reading.tone === 'warning' ? 'border-warning-foreground-strong' : reading.tone === 'critical' ? 'border-critical-foreground-strong' : 'border-emphasized'
-      }`}
+    <SceneCanvas
+      label={`3D model of compressor train 23-KA-9101, ${view.exploded ? 'exploded along the shaft' : 'assembled'}${view.sectionCut ? ', casing sectioned' : ''}, ${shown} of ${TRAIN_ASSEMBLY_IDS.length} sub-assemblies solid, with ${CTWIN_READINGS.length} live readouts pinned to their measurement points`}
+      fallback={<CtwinFallbackList />}
     >
-      {reading.index}
-    </span>
+      <StillScene still={still}>
+        <SceneLights />
+        {target ? <CameraRig target={target} minDistance={5} maxDistance={90} /> : null}
+        <ViewInsets top={insets.top ?? 0} right={insets.right ?? 0} bottom={insets.bottom ?? 0} left={insets.left ?? 0} />
+        <Ground size={[56, 32]} cell={2} majorEvery={4} center={[1, 0]} />
+        <CompressorTrain explode={amount} sectionCut={view.sectionCut} activeIds={activeIds} />
+        {view.readouts
+          ? CTWIN_READINGS.map((reading) => (
+              <ScenePin
+                key={reading.sensor.id}
+                position={addVec3(reading.point.position, explodeOffset(COMPRESSOR_TRAIN_EXPLODE[reading.point.assemblyId], amount))}
+                label={reading.sensor.name}
+                value={ctwinValue(reading.sensor)}
+                unit={reading.sensor.unit}
+                state={reading.tone === 'neutral' ? undefined : reading.state}
+                tone={reading.tone}
+                offset={reading.offset}
+                selected={reading.sensor.id === view.sensorId}
+                dimmed={activeIds !== null && !activeIds.includes(reading.point.assemblyId)}
+                onSelect={() => onSelectSensor(reading.sensor.id)}
+              />
+            ))
+          : null}
+      </StillScene>
+    </SceneCanvas>
   );
 }
 
-function CompTwin3dPanel({ title, meta, actions, children, className = '' }: { title: string; meta?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+function CtwinFallbackList() {
   return (
-    <section aria-label={title} className={`flex min-h-0 min-w-0 flex-col bg-card-background ${className}`}>
-      <header className="flex h-10 shrink-0 items-center gap-2 border-b border-default px-3">
-        <h3 className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">{title}</h3>
-        {meta ? <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{meta}</span> : null}
-        {actions}
-      </header>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">{children}</div>
-    </section>
-  );
-}
-
-function CompTwin3dTree({
-  selectedId,
-  onSelect,
-  onHover,
-}: {
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-  onHover?: (id: string | null) => void;
-}) {
-  const row = (node: AssemblyNode, nested: boolean) => (
-    <button
-      type="button"
-      aria-pressed={node.id === selectedId}
-      onClick={() => onSelect(node.id === selectedId ? null : node.id)}
-      onMouseEnter={() => onHover?.(node.id)}
-      onMouseLeave={() => onHover?.(null)}
-      onFocus={() => onHover?.(node.id)}
-      onBlur={() => onHover?.(null)}
-      className={`${COMPTWIN3D_ROW} ${nested ? 'pl-5' : ''}`}
-    >
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className={`text-sm text-base-foreground ${nested ? '' : 'font-medium'}`}>{node.name}</span>
-        {node.detail ? <span className="text-xs text-muted-foreground">{node.detail}</span> : null}
-      </span>
-      {nested ? (
-        <span className="flex shrink-0 gap-1">
-          {COMPTWIN3D_READINGS.filter((reading) => reading.point.assemblyId === node.id).map((reading) => (
-            <CompTwin3dNumber key={reading.sensor.id} reading={reading} />
-          ))}
-        </span>
-      ) : (
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{assemblyLeafIds(node, node.id).length}</span>
-      )}
-    </button>
-  );
-
-  return (
-    <ul aria-label="Assemblies of the compressor train" className="flex flex-col gap-1.5">
-      {(COMPRESSOR_TRAIN_TREE.children ?? []).map((group) => (
-        <li key={group.id} className="flex flex-col">
-          {row(group, false)}
-          <ul className="flex flex-col">
-            {(group.children ?? []).map((part) => (
-              <li key={part.id}>{row(part, true)}</li>
-            ))}
-          </ul>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CompTwin3dReadingList({ selectedId, onSelect }: { selectedId?: string | null; onSelect: (sensorId: string) => void }) {
-  return (
-    <ul aria-label="Measurement points" className="flex flex-col">
-      {COMPTWIN3D_READINGS.map((reading) => (
-        <li key={reading.sensor.id}>
-          <button
-            type="button"
-            aria-pressed={reading.sensor.id === selectedId}
-            aria-label={`Hotspot ${reading.index}, ${reading.sensor.name}, ${formatReading(reading.sensor.value, reading.sensor.unit, reading.sensor.decimals)}, ${compTwin3dReadingStatus(reading).label.toLowerCase()}`}
-            onClick={() => onSelect(reading.sensor.id)}
-            className={`${COMPTWIN3D_ROW} items-start`}
-          >
-            <CompTwin3dNumber reading={reading} selected={reading.sensor.id === selectedId} />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-sm text-base-foreground">{reading.sensor.name}</span>
-              <span className="font-mono text-xs text-muted-foreground">{reading.sensor.tag}</span>
-              {reading.alarm ? <StatusIndicator {...compTwin3dReadingStatus(reading)} size="sm" /> : null}
-            </span>
-            <ValueReadout value={reading.sensor.value} unit={reading.sensor.unit} decimals={reading.sensor.decimals} size="xs" tone={reading.tone} className="shrink-0 pt-0.5" />
-          </button>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CompTwin3dSensorDetail({ reading, onBack, onShowPart }: { reading: CompTwin3dReading; onBack?: () => void; onShowPart?: (assemblyId: string) => void }) {
-  const { sensor } = reading;
-  const points = compTwin3dTrend(sensor);
-  const stats = summarize(points.map((point) => point.v));
-  const status = compTwin3dReadingStatus(reading);
-
-  return (
-    <>
-      {onBack ? (
-        <div>
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <IconArrowLeft /> All measurement points
-          </Button>
-        </div>
-      ) : null}
-      <div className="flex items-start gap-2">
-        <CompTwin3dNumber reading={reading} selected />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-base-foreground">{sensor.name}</p>
-          <p className="font-mono text-xs text-muted-foreground">{sensor.tag}</p>
-        </div>
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <ValueReadout value={sensor.value} unit={sensor.unit} decimals={sensor.decimals} size="lg" tone={reading.tone} />
-        <StatusIndicator {...status} size="sm" pulse={reading.alarm?.state === 'active'} className="shrink-0 pb-0.5" />
-      </div>
-      {reading.alarm ? (
-        <p className="text-sm text-medium-foreground">
-          {reading.alarm.message}: peaked at <span className="tabular-nums">{reading.alarm.value}</span> against a limit of{' '}
-          <span className="tabular-nums">{reading.alarm.limit}</span>, {formatAgo(reading.alarm.raisedAt)}.
-        </p>
-      ) : null}
-
-      <RangeIndicator
-        label="Position in operating band"
-        value={sensor.value}
-        min={sensor.rangeMin}
-        max={sensor.rangeMax}
-        limits={{ low: sensor.lowLimit > sensor.rangeMin ? sensor.lowLimit : undefined, high: sensor.highLimit, highHigh: sensor.highHighLimit }}
-        unit={sensor.unit}
-        decimals={sensor.decimals}
-        tone={reading.tone}
-        showHeader={false}
-        className="w-full"
-      />
-
-      <TrendChart
-        label={`${sensor.name} over the last 24 hours, now ${formatReading(sensor.value, sensor.unit, sensor.decimals)}`}
-        series={[{ key: sensor.id, label: sensor.name, points }]}
-        limits={compTwin3dLimits(sensor)}
-        unit={sensor.unit}
-        decimals={sensor.decimals}
-        maxTicks={3}
-        showLast
-        heightClassName="h-40"
-        className="w-full"
-      />
-
-      {stats ? (
-        <dl className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'Min 24 h', value: stats.min },
-            { label: 'Mean 24 h', value: stats.mean },
-            { label: 'Max 24 h', value: stats.max },
-          ].map((stat) => (
-            <div key={stat.label} className="flex flex-col gap-0.5">
-              <dt className="text-xs text-muted-foreground">{stat.label}</dt>
-              <dd>
-                <ValueReadout value={stat.value} decimals={sensor.decimals} size="xs" />
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-
-      <dl className="flex flex-col gap-1.5 text-sm">
-        <div className="flex justify-between gap-3">
-          <dt className="shrink-0 text-muted-foreground">Operating band</dt>
-          <dd className="text-right tabular-nums text-base-foreground">
-            {formatLimit(sensor.lowLimit, sensor.decimals)} to {formatReading(sensor.highLimit, sensor.unit, Number.isInteger(sensor.highLimit) ? 0 : sensor.decimals)}
-          </dd>
-        </div>
-        {sensor.highHighLimit !== undefined ? (
-          <div className="flex justify-between gap-3">
-            <dt className="shrink-0 text-muted-foreground">Trip limit</dt>
-            <dd className="text-right tabular-nums text-base-foreground">
-              {formatReading(sensor.highHighLimit, sensor.unit, Number.isInteger(sensor.highHighLimit) ? 0 : sensor.decimals)}
-            </dd>
-          </div>
-        ) : null}
-        <div className="flex justify-between gap-3">
-          <dt className="shrink-0 text-muted-foreground">Mounted on</dt>
-          <dd className="text-right text-base-foreground">{reading.where}</dd>
-        </div>
-      </dl>
-
-      {onShowPart ? (
-        <div>
-          <Button variant="outline" size="sm" onClick={() => onShowPart(reading.point.assemblyId)}>
-            Isolate {compTwin3dAssemblyName(reading.point.assemblyId).toLowerCase()}
-          </Button>
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function CompTwin3dFallback() {
-  return (
-    <ul className="flex flex-col gap-2 rounded-lg border border-default bg-card-background p-3">
-      {COMPTWIN3D_READINGS.map((reading) => (
-        <li key={reading.sensor.id} className="flex items-center justify-between gap-3 text-sm">
-          <span className="flex min-w-0 items-center gap-2">
-            <CompTwin3dNumber reading={reading} />
-            <span className="min-w-0 truncate text-base-foreground">{reading.sensor.name}</span>
+    <ul className="flex flex-col gap-2 rounded-xl border border-default bg-card-background p-4">
+      {CTWIN_READINGS.map((reading) => (
+        <li key={reading.sensor.id} className="flex items-baseline justify-between gap-4 text-sm">
+          <span className="text-base-foreground">{reading.sensor.name}</span>
+          <span className="font-medium tabular-nums text-base-foreground">
+            {ctwinValue(reading.sensor)} {reading.sensor.unit}
           </span>
-          <ValueReadout value={reading.sensor.value} unit={reading.sensor.unit} decimals={reading.sensor.decimals} size="xs" tone={reading.tone} className="shrink-0" />
         </li>
       ))}
     </ul>
   );
 }
 
-type CompTwin3dInitial = { explode?: number; sectionCut?: boolean; assemblyId?: string | null; sensorId?: string | null };
+function CtwinTitle() {
+  const asset = findAsset(CTWIN_ASSET_ID);
+  return (
+    <div className="pointer-events-auto flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        <IconChip tone="accent" size="lg">
+          <IconEngine />
+        </IconChip>
+        <div className="flex flex-col">
+          <h2 className="text-2xl font-semibold tracking-tight text-[color:var(--kit-text)]">{asset?.name ?? 'Compressor'}</h2>
+          <p className="text-sm text-[color:var(--kit-text-2)]">
+            <TagId>{asset?.tag ?? '23-KA-9101'}</TagId> · Digital twin · live 14:00 UTC
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill tone="success" icon={<IconActivity />}>
+          Running
+        </StatusPill>
+        <StatusPill tone="warning" icon={<IconAlertTriangle />}>
+          Health {asset?.healthScore ?? 72} · watch
+        </StatusPill>
+      </div>
+    </div>
+  );
+}
 
-function CompTwin3dTwin({ initial = {}, still = false }: { initial?: CompTwin3dInitial; still?: boolean }) {
-  const [explode, setExplode] = useState(initial.explode ?? 0);
-  const [sectionCut, setSectionCut] = useState(initial.sectionCut ?? false);
-  const [assemblyId, setAssemblyId] = useState<string | null>(initial.assemblyId ?? null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [sensorId, setSensorId] = useState<string | null>(initial.sensorId ?? null);
+type CtwinDockProps = {
+  view: CtwinView;
+  onChange: (view: CtwinView) => void;
+};
 
-  const asset = findAsset(COMPTWIN3D_ASSET_ID);
-  const reading = COMPTWIN3D_READINGS.find((candidate) => candidate.sensor.id === sensorId);
-  const amount = explode / 100;
-  const activeIds = assemblyId === null ? null : TRAIN_ASSEMBLY_IDS.filter((id) => isAssemblyActive(COMPRESSOR_TRAIN_TREE, assemblyId, id));
-  const hoveredIds = hoveredId ? assemblyLeafIds(COMPRESSOR_TRAIN_TREE, hoveredId) : [];
-  // Two framings, not one per slider step: the camera flies once when the train starts to come apart.
-  const bounds = explodedBounds(COMPRESSOR_TRAIN_BOUNDS, COMPRESSOR_TRAIN_EXPLODE, explode > 4 ? 1 : 0);
-  const target = bounds ? compTwin3dCamera(bounds, explode > 4 ? 1 : 0.9) : null;
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Escape') return;
-    if (sensorId !== null) setSensorId(null);
-    else if (assemblyId !== null) setAssemblyId(null);
-    else return;
-    event.preventDefault();
-  };
-
-  if (!asset) return null;
-
+/** The floating layer dock: which assemblies stay solid, and how the machine is opened up. */
+function CtwinDock({ view, onChange }: CtwinDockProps) {
   return (
     <div
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      onPointerDownCapture={(event) => {
-        // Orbit controls swallow the pointer event, so take focus by hand to keep Escape working.
-        if (event.target instanceof HTMLCanvasElement) event.currentTarget.focus({ preventScroll: true });
-      }}
-      className="flex h-[46rem] w-full flex-col overflow-hidden rounded-xl border border-default bg-base-background outline-none"
+      role="group"
+      aria-label="Scene layers"
+      className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-2 rounded-[var(--kit-radius)] border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_72%,transparent)] p-2 shadow-[0_18px_40px_-20px_var(--opacity-black-60)] backdrop-blur-xl"
     >
-      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-default bg-card-background px-4 py-2.5">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="font-mono text-sm font-medium text-base-foreground">{asset.tag}</span>
-          <span className="truncate text-sm text-medium-foreground">{asset.name}, digital twin</span>
-        </div>
-        <StatusIndicator {...runStateStatus(asset.state)} size="sm" />
-        <StatusIndicator {...healthStatus(asset.health)} label={`Health ${asset.healthScore}`} detail={healthStatus(asset.health).label.toLowerCase()} size="sm" />
-        <span className="ml-auto text-xs text-muted-foreground">
-          {assemblyId ? `Isolated: ${compTwin3dAssemblyName(assemblyId)}` : 'All assemblies shown'}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setExplode(0);
-            setSectionCut(false);
-            setAssemblyId(null);
-            setSensorId(null);
-          }}
+      {CTWIN_LAYERS.map((layer) => (
+        <ToggleChip
+          key={layer.id}
+          icon={layer.icon}
+          count={String(ctwinPartCount(layer.id))}
+          pressed={view.layers[layer.id]}
+          onPressedChange={(pressed) => onChange({ ...view, layers: { ...view.layers, [layer.id]: pressed } })}
         >
-          Reset view
-        </Button>
-      </header>
+          {layer.label}
+        </ToggleChip>
+      ))}
+      <span aria-hidden="true" className="basis-full" />
+      <ToggleChip tone="teal" icon={<IconEye />} pressed={view.readouts} onPressedChange={(readouts) => onChange({ ...view, readouts })}>
+        Readouts
+      </ToggleChip>
+      <ToggleChip tone="purple" icon={<IconSlice />} pressed={view.sectionCut} onPressedChange={(sectionCut) => onChange({ ...view, sectionCut })}>
+        Section cut
+      </ToggleChip>
+      <ToggleChip tone="purple" icon={<IconArrowsSplit />} pressed={view.exploded} onPressedChange={(exploded) => onChange({ ...view, exploded })}>
+        Exploded
+      </ToggleChip>
+    </div>
+  );
+}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[14rem_minmax(0,1fr)_19rem]">
-        <CompTwin3dPanel
-          title="Assemblies"
-          className="border-r border-default"
-          actions={
-            assemblyId ? (
-              <Button variant="ghost" size="sm" onClick={() => setAssemblyId(null)}>
-                Show all
-              </Button>
-            ) : null
-          }
-        >
-          <CompTwin3dTree selectedId={assemblyId} onSelect={setAssemblyId} onHover={setHoveredId} />
-        </CompTwin3dPanel>
+function CtwinStateIcon({ tone }: { tone: StatusTone }) {
+  return tone === 'neutral' ? <IconActivity /> : <IconAlertTriangle />;
+}
 
-        <div className="flex min-h-0 min-w-0 flex-col">
-          <div className="relative min-h-0 flex-1 bg-[radial-gradient(ellipse_at_50%_45%,color-mix(in_oklab,var(--primary-background)_9%,transparent),transparent_70%)]">
-            <SceneCanvas
-              label={`3D model of compressor train ${asset.tag}, ${explode === 0 ? 'assembled' : `exploded ${explode} percent`}${sectionCut ? ', casing sectioned' : ''}, with ${COMPTWIN3D_READINGS.length} numbered measurement points`}
-              fallback={<CompTwin3dFallback />}
-            >
-              <StillScene still={still}>
-                <SceneLights />
-                {target ? <CameraRig target={target} minDistance={5} maxDistance={90} /> : null}
-                <Ground size={[56, 32]} cell={2} majorEvery={4} center={[1, 0]} />
-                <CompressorTrain
-                  explode={amount}
-                  sectionCut={sectionCut}
-                  activeIds={activeIds}
-                  hoveredIds={hoveredIds}
-                  selectedIds={assemblyId ? assemblyLeafIds(COMPRESSOR_TRAIN_TREE, assemblyId) : []}
-                  onSelect={(id) => setAssemblyId(id === assemblyId ? null : id)}
-                  onHoverChange={setHoveredId}
-                  hotspots={COMPTWIN3D_HOTSPOTS}
-                  selectedHotspotId={sensorId}
-                  onSelectHotspot={setSensorId}
-                />
-              </StillScene>
-            </SceneCanvas>
-          </div>
-          <div className="flex shrink-0 items-center gap-5 border-t border-default bg-card-background px-4 py-2.5">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <span className="shrink-0 text-sm text-base-foreground">Explode</span>
-              <Slider aria-label="Explode the train along the shaft" value={[explode]} min={0} max={100} step={1} onValueChange={(value) => setExplode(value[0] ?? 0)} />
-              <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{explode}%</span>
-            </div>
-            <Switch label="Section cut" checked={sectionCut} onCheckedChange={(checked) => setSectionCut(checked)} />
-          </div>
+/** The selected readout in full: figure, state, position in its band, 24-hour trend and mounting. */
+function CtwinInspector({ reading, trendHeight = 170, className }: { reading: CtwinReading; trendHeight?: number; className?: string }) {
+  const { sensor } = reading;
+  const trend = ctwinTrend(sensor);
+  const tone = reading.tone === 'neutral' ? 'accent' : reading.tone;
+
+  return (
+    <Panel
+      className={className}
+      title={sensor.name}
+      subtitle={`${sensor.tag} · ${reading.where}`}
+      tone={reading.tone === 'neutral' ? 'neutral' : reading.tone}
+      icon={
+        <IconChip tone={tone}>
+          <IconGauge />
+        </IconChip>
+      }
+    >
+      <div className="flex flex-1 flex-col gap-4">
+        <div className="flex items-end justify-between gap-3">
+          <p className="flex items-baseline gap-2">
+            <span className="text-5xl font-semibold tracking-tight tabular-nums text-[color:var(--kit-text)]">{ctwinValue(sensor)}</span>
+            <span className="text-base text-[color:var(--kit-text-2)]">{sensor.unit}</span>
+          </p>
+          <StatusPill tone={reading.tone === 'neutral' ? 'success' : reading.tone} icon={<CtwinStateIcon tone={reading.tone} />}>
+            {reading.state}
+          </StatusPill>
         </div>
-
-        <CompTwin3dPanel title={reading ? 'Reading' : 'Measurement points'} meta={reading ? undefined : COMPTWIN3D_READINGS.length} className="border-l border-default">
-          {reading ? (
-            <CompTwin3dSensorDetail
-              key={reading.sensor.id}
-              reading={reading}
-              onBack={() => setSensorId(null)}
-              onShowPart={(id) => setAssemblyId(id)}
-            />
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground">Numbers match the hotspots on the machine. Open one for its reading, limits and trend.</p>
-              <CompTwin3dReadingList selectedId={sensorId} onSelect={setSensorId} />
-            </>
-          )}
-        </CompTwin3dPanel>
+        {reading.alarm ? (
+          <p className="text-sm text-[color:var(--kit-text-2)]">
+            {reading.alarm.message}: peaked at <span className="font-medium tabular-nums text-[color:var(--kit-text)]">{reading.alarm.value}</span> against a limit of{' '}
+            <span className="tabular-nums">{reading.alarm.limit}</span>, {formatAgo(reading.alarm.raisedAt)}.
+          </p>
+        ) : (
+          <p className="text-sm text-[color:var(--kit-text-2)]">
+            Inside its operating band of {formatNumber(sensor.lowLimit, sensor.decimals)} to {formatNumber(sensor.highLimit, sensor.decimals)} {sensor.unit} for the last 24 hours.
+          </p>
+        )}
+        <Meter
+          label="Position in operating range"
+          value={sensor.value}
+          min={sensor.rangeMin}
+          max={sensor.rangeMax}
+          unit={sensor.unit}
+          decimals={sensor.decimals}
+          high={sensor.highLimit}
+          low={sensor.lowLimit > sensor.rangeMin ? sensor.lowLimit : undefined}
+          target={{ value: sensor.highLimit, label: 'High limit' }}
+          tone={tone}
+        />
+        <TrendArea
+          label={`${sensor.name} over the last 24 hours, now ${ctwinValue(sensor)} ${sensor.unit}`}
+          labels={trend.labels}
+          series={[{ id: sensor.id, label: 'Last 24 h', values: trend.values, tone }]}
+          limits={ctwinLimits(sensor)}
+          unit={sensor.unit}
+          decimals={sensor.decimals}
+          height={trendHeight}
+          showLegend={false}
+        />
       </div>
-    </div>
+    </Panel>
   );
 }
 
-function CompTwin3dTwinBlueprint() {
+/** The same readouts as the pins, as buttons: the keyboard path into the scene. */
+function CtwinReadoutList({ selectedId, onSelect, columns = 2 }: { selectedId: string; onSelect: (sensorId: string) => void; columns?: 1 | 2 }) {
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <CompTwin3dTwin />
-    </ThemeScope>
+    <ul aria-label="Live readouts" className={`grid gap-2 ${columns === 2 ? 'grid-cols-2' : 'flex-1 grid-cols-1'}`}>
+      {CTWIN_READINGS.map((reading) => {
+        const selected = reading.sensor.id === selectedId;
+        const abnormal = reading.tone !== 'neutral';
+        return (
+          <li key={reading.sensor.id} className="min-w-0">
+            <button
+              type="button"
+              data-tone={reading.tone}
+              aria-pressed={selected}
+              onClick={() => onSelect(reading.sensor.id)}
+              className="flex h-full w-full flex-col gap-0.5 rounded-[var(--kit-radius-sm)] border border-[color:var(--kit-rule)] bg-[var(--kit-well)] px-3 py-2 text-left hover:border-[color:var(--kit-rule-strong)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)] aria-pressed:border-[var(--primary-background)] aria-pressed:bg-[color-mix(in_oklab,var(--primary-background)_16%,transparent)]"
+            >
+              <span className="truncate text-xs font-medium text-[color:var(--kit-text-2)]">{reading.sensor.name}</span>
+              <span className="flex items-baseline gap-1">
+                <span className={`text-lg font-semibold tabular-nums ${abnormal ? 'text-[color:var(--t-line)]' : 'text-[color:var(--kit-text)]'}`}>{ctwinValue(reading.sensor)}</span>
+                <span className="text-xs text-[color:var(--kit-text-3)]">{reading.sensor.unit}</span>
+              </span>
+              <span className={`text-xs font-medium ${abnormal ? 'text-[color:var(--t-line)]' : 'text-[color:var(--kit-text-3)]'}`}>
+                {reading.state}
+                {columns === 1 ? <span className="font-normal text-[color:var(--kit-text-3)]"> · {reading.sensor.tag} · {reading.where}</span> : null}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-function CompTwin3dTwinHologram() {
+function ctwinReadingFor(sensorId: string): CtwinReading {
+  return CTWIN_READINGS.find((reading) => reading.sensor.id === sensorId) ?? CTWIN_READINGS[0];
+}
+
+function CtwinStageFrame({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <CompTwin3dTwin still initial={{ explode: 100, sectionCut: true, assemblyId: 'rotor' }} />
-    </ThemeScope>
+    <div className={`overflow-hidden rounded-[var(--kit-radius)] border border-[color:var(--kit-rule)] bg-[var(--kit-surface)] shadow-[var(--kit-panel-shadow)] ${className}`}>{children}</div>
   );
 }
 
-function CompTwin3dTwinControlRoom() {
-  return (
-    <ThemeScope preset="control-room" className="w-full">
-      <CompTwin3dTwin still initial={{ sensorId: 'tt-92532' }} />
-    </ThemeScope>
-  );
-}
-
-function CompTwin3dStage({ label, children, heightClass = 'h-72' }: { label: string; children: ReactNode; heightClass?: string }) {
-  return (
-    <div className={`${heightClass} w-full overflow-hidden rounded-xl border border-default bg-base-background`}>
-      <SceneCanvas label={label}>
-        <StillScene>{children}</StillScene>
-      </SceneCanvas>
-    </div>
-  );
-}
-
-function CompTwin3dPartRotor() {
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <CompTwin3dStage label="Compressor rotor with five shrouded impellers and a balance piston">
-        <TurntableStage subjectSize={[6.4, 2.2, 2.2]} padding={0.9}>
-          <group position={[4.45, -1.2, 0]}>
-            <RotorBundle />
-          </group>
-        </TurntableStage>
-      </CompTwin3dStage>
-    </ThemeScope>
-  );
-}
-
-function CompTwin3dPartLubeSkid() {
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <CompTwin3dStage label="Lube oil skid with reservoir, cooler, two pumps and duplex filters">
-        <TurntableStage subjectSize={[4.8, 2.5, 2]} padding={1}>
-          <group position={[-5.8, 0, -4.3]}>
-            <LubeOilSkid />
-          </group>
-        </TurntableStage>
-      </CompTwin3dStage>
-    </ThemeScope>
-  );
-}
-
-function CompTwin3dPartHotspots() {
-  const [selected, setSelected] = useState<number | null>(1);
+function CtwinTwin({ initial = CTWIN_INITIAL, still = false }: { initial?: CtwinView; still?: boolean }) {
+  const [view, setView] = useState<CtwinView>(initial);
+  const reading = ctwinReadingFor(view.sensorId);
+  const hidden = CTWIN_LAYERS.filter((layer) => !view.layers[layer.id]).length;
 
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <CompTwin3dStage label="Bearing housing with two numbered hotspots, one selected and one in warning">
-        <TurntableStage subjectSize={[1.6, 2.6, 1.6]} padding={1.5}>
-          <group position={[1.8, -0.6, 0]}>
-            <BearingHousing x={-1.8} />
-            <Hotspot position={[-1.8, 3.15, 0.25]} index={1} tag="23-VT-92540" value="6.8 mm/s" tone="warning" selected={selected === 1} onSelect={() => setSelected(selected === 1 ? null : 1)} />
-            <Hotspot position={[-1.8, 1.5, 0.45]} index={2} tag="23-TT-92544" value="71.4 °C" selected={selected === 2} onSelect={() => setSelected(selected === 2 ? null : 2)} />
-          </group>
-        </TurntableStage>
-      </CompTwin3dStage>
-    </ThemeScope>
+    <LookScope look="glass">
+      <Canvas className="h-[52rem]">
+        <div className="grid h-full grid-cols-[minmax(0,1fr)_22rem] gap-[var(--kit-gap)]">
+          <CtwinStageFrame className="h-full">
+            <SceneStage
+              className="h-full"
+              onEscape={() => setView({ ...view, layers: CTWIN_ALL_LAYERS, sectionCut: false, exploded: false })}
+              overlay={
+                <div className="flex h-full flex-col justify-between p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <CtwinTitle />
+                    <div className="pointer-events-auto flex flex-col items-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setView({ ...CTWIN_INITIAL, sensorId: view.sensorId })}>
+                        <IconRefresh /> Reset view
+                      </Button>
+                      <p className="text-right text-xs text-[color:var(--kit-text-2)]">
+                        {hidden === 0 ? 'All 11 sub-assemblies solid' : `${hidden} of 4 layers ghosted`}
+                        <br />
+                        Drag to orbit · scroll to zoom
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex justify-center">
+                    <CtwinDock view={view} onChange={setView} />
+                  </div>
+                </div>
+              }
+            >
+              <CtwinScene view={view} onSelectSensor={(sensorId) => setView({ ...view, sensorId })} insets={{ top: 100, bottom: 110, left: 70 }} still={still} />
+            </SceneStage>
+          </CtwinStageFrame>
+
+          <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-[var(--kit-gap)]">
+            <CtwinInspector key={reading.sensor.id} reading={reading} />
+            <Panel title="Live readouts" subtitle="The same six points as the pins" padding="tight">
+              <CtwinReadoutList selectedId={view.sensorId} onSelect={(sensorId) => setView({ ...view, sensorId })} />
+            </Panel>
+          </div>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function CompTwin3dPartSectionCut() {
+function CompressorTwinSignature() {
+  return <CtwinTwin />;
+}
+
+type CtwinTravelRow = { id: string; name: string; axis: string; travel: number; from: string };
+
+const CTWIN_TRAVEL: readonly CtwinTravelRow[] = TRAIN_ASSEMBLY_IDS.filter((id) => COMPRESSOR_TRAIN_EXPLODE[id].distance > 0).map((id) => {
+  const spec = COMPRESSOR_TRAIN_EXPLODE[id];
+  const axis = spec.direction[0] !== 0 ? 'Along the shaft' : spec.direction[1] !== 0 ? 'Down' : 'Sideways';
+  return { id, name: findAssembly(COMPRESSOR_TRAIN_TREE, id)?.name ?? id, axis, travel: spec.distance, from: spec.start ? 'after the bearing' : '' };
+});
+
+const CTWIN_TRAVEL_COLUMNS: readonly DataTableColumn<CtwinTravelRow>[] = [
+  { id: 'name', header: 'Sub-assembly', cell: (row) => <span className="font-medium">{row.name}</span>, nowrap: true },
+  { id: 'axis', header: 'Pulls', cell: (row) => (row.from ? `${row.axis}, ${row.from}` : row.axis), muted: true },
+  { id: 'travel', header: 'Clearance', cell: (row) => `${formatNumber(row.travel, 1)} m`, numeric: true, nowrap: true },
+];
+
+/** A second screen of the same twin: the machine opened for a bundle pull, with the lift plan. */
+function CompressorTwinService() {
+  const [view, setView] = useState<CtwinView>({ layers: { ...CTWIN_ALL_LAYERS, auxiliaries: false, structure: false }, readouts: false, sectionCut: true, exploded: true, sensorId: 'vt-92540' });
+
+  return (
+    <LookScope look="glass">
+      <Canvas className="h-[49rem]">
+        <div className="grid h-full grid-cols-[25rem_minmax(0,1fr)] gap-[var(--kit-gap)]">
+          <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--kit-gap)]">
+            <Panel
+              title="Bundle pull, planned"
+              subtitle="Work order WO-104482 · window 16–18 March"
+              tone="accent"
+              icon={
+                <IconChip tone="accent">
+                  <IconTool />
+                </IconChip>
+              }
+            >
+              <p className="text-sm text-[color:var(--kit-text-2)]">
+                The rotor leaves through the non-drive end once that bearing has cleared the shaft. Auxiliaries and the base frame stay in place and are ghosted here.
+              </p>
+              <dl className="mt-4 grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Heaviest lift', value: '4.2', unit: 't' },
+                  { label: 'Laydown', value: '6.3', unit: 'm' },
+                  { label: 'Parts out', value: '6', unit: 'of 11' },
+                ].map((item) => (
+                  <div key={item.label} className="flex flex-col">
+                    <dt className="text-xs text-[color:var(--kit-text-3)]">{item.label}</dt>
+                    <dd className="flex items-baseline gap-1">
+                      <span className="text-2xl font-semibold tabular-nums text-[color:var(--kit-text)]">{item.value}</span>
+                      <span className="text-xs text-[color:var(--kit-text-2)]">{item.unit}</span>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </Panel>
+            <Panel title="Pull sequence" subtitle="Clearance each part needs" padding="none">
+              <DataTable label="Clearance each sub-assembly needs when the train is opened" columns={CTWIN_TRAVEL_COLUMNS} rows={CTWIN_TRAVEL} rowKey={(row) => row.id} density="compact" flush />
+            </Panel>
+          </div>
+          <CtwinStageFrame className="h-full">
+            <SceneStage
+              className="h-full"
+              overlay={
+                <div className="flex h-full flex-col justify-between p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <StatusPill tone="info" size="lg" icon={<IconArrowsSplit />}>
+                      Exploded · casing sectioned
+                    </StatusPill>
+                    <p className="text-sm text-[color:var(--kit-text-2)]">
+                      <TagId>23-KA-9101</TagId> · service view
+                    </p>
+                  </div>
+                  <div className="flex justify-center">
+                    <CtwinDock view={view} onChange={setView} />
+                  </div>
+                </div>
+              }
+            >
+              <CtwinScene view={view} onSelectSensor={(sensorId) => setView({ ...view, sensorId })} insets={{ top: 60, bottom: 84 }} zoom={0.98} still />
+            </SceneStage>
+          </CtwinStageFrame>
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+/** The twin on a tablet in the compressor hall: scene on top, the selected readout as a sheet. */
+function CompressorTwinTablet() {
+  const [view, setView] = useState<CtwinView>({ ...CTWIN_INITIAL, layers: { ...CTWIN_ALL_LAYERS, auxiliaries: false }, sensorId: 'vt-92540' });
+  const reading = ctwinReadingFor(view.sensorId);
+
+  return (
+    <LookScope look="glass" className="mx-auto w-full max-w-[48rem]">
+      <Canvas className="flex h-[70rem] flex-col gap-[var(--kit-gap)]">
+        <CtwinStageFrame className="min-h-0 flex-1">
+          <SceneStage
+            className="h-full"
+            overlay={
+              <div className="p-4">
+                <CtwinTitle />
+              </div>
+            }
+          >
+            <CtwinScene view={view} onSelectSensor={(sensorId) => setView({ ...view, sensorId })} insets={{ top: 110, bottom: 40 }} zoom={1.02} still />
+          </SceneStage>
+        </CtwinStageFrame>
+        <div className="flex shrink-0 justify-center">
+          <CtwinDock view={view} onChange={setView} />
+        </div>
+        <div className="grid shrink-0 grid-cols-2 gap-[var(--kit-gap)]">
+          <CtwinInspector key={reading.sensor.id} reading={reading} trendHeight={150} />
+          <Panel title="Live readouts" padding="tight">
+            <CtwinReadoutList selectedId={view.sensorId} onSelect={(sensorId) => setView({ ...view, sensorId })} />
+          </Panel>
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function CtwinPartStage({ label, children, footer }: { label: string; children: ReactNode; footer?: ReactNode }) {
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-[28rem] flex-col gap-3">
+        <CtwinStageFrame className="min-h-0 flex-1">
+          <SceneStage className="h-full">
+            <SceneCanvas label={label}>
+              <StillScene>{children}</StillScene>
+            </SceneCanvas>
+          </SceneStage>
+        </CtwinStageFrame>
+        {footer}
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function CompressorTwinPartPin() {
+  const [selected, setSelected] = useState('vibration');
+
+  return (
+    <CtwinPartStage label="Bearing housing with two pinned readouts, one near its limit">
+      <TurntableStage subjectSize={[1.6, 2.6, 1.6]} padding={2.1}>
+        <group position={[1.8, -0.6, 0]}>
+          <BearingHousing x={-1.8} />
+          <ScenePin position={[-1.8, 3.15, 0.25]} label="Drive-end vibration" value="6.8" unit="mm/s" state="Near limit" tone="warning" offset={[40, -44]} selected={selected === 'vibration'} onSelect={() => setSelected('vibration')} />
+          <ScenePin position={[-1.8, 1.5, 0.45]} label="Bearing temperature" value="71.4" unit="°C" offset={[-40, 40]} selected={selected === 'temperature'} onSelect={() => setSelected('temperature')} />
+        </group>
+      </TurntableStage>
+    </CtwinPartStage>
+  );
+}
+
+function CompressorTwinPartDock() {
+  const [view, setView] = useState<CtwinView>({ ...CTWIN_INITIAL, layers: { ...CTWIN_ALL_LAYERS, structure: false }, sectionCut: true });
+  const active = ctwinActiveIds(view.layers);
+
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-[28rem] flex-col items-center justify-center gap-5">
+        <CtwinDock view={view} onChange={setView} />
+        <p className="text-sm text-[color:var(--kit-text-2)]">
+          {active === null ? 'All 11 sub-assemblies solid' : `${active.length} of 11 sub-assemblies solid, the rest ghosted`}
+          {view.sectionCut ? ' · casing sectioned' : ''}
+          {view.exploded ? ' · exploded' : ''}
+        </p>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function CompressorTwinPartInspector() {
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-[36rem] flex-col">
+        <CtwinInspector reading={ctwinReadingFor('tt-92532')} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function CompressorTwinPartReadouts() {
+  const [sensorId, setSensorId] = useState('vt-92540');
+
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-[36rem] flex-col">
+        <Panel title="Live readouts" subtitle="Updated 14:00 UTC" padding="tight">
+          <CtwinReadoutList selectedId={sensorId} onSelect={setSensorId} columns={1} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function CompressorTwinPartRotor() {
+  return (
+    <CtwinPartStage label="Compressor rotor with five shrouded impellers and a balance piston">
+      <TurntableStage subjectSize={[6.4, 2.2, 2.2]} padding={0.9}>
+        <group position={[4.45, -1.2, 0]}>
+          <RotorBundle />
+        </group>
+      </TurntableStage>
+    </CtwinPartStage>
+  );
+}
+
+function CompressorTwinPartSection() {
   const [cut, setCut] = useState(true);
 
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-3">
-        <div className="flex justify-end">
-          <Switch label="Section cut" checked={cut} onCheckedChange={(checked) => setCut(checked)} />
+    <CtwinPartStage
+      label={`Barrel casing ${cut ? 'sectioned on its horizontal joint, showing the rotor and diaphragms' : 'closed'}`}
+      footer={
+        <div className="flex justify-center">
+          <ToggleChip tone="purple" icon={<IconSlice />} pressed={cut} onPressedChange={setCut}>
+            Section cut
+          </ToggleChip>
         </div>
-        <CompTwin3dStage label={`Barrel casing ${cut ? 'sectioned on its horizontal joint, showing the rotor and diaphragms' : 'closed'}`}>
-          <TurntableStage subjectSize={[5.2, 4.6, 3.2]} padding={0.9}>
-            <group position={[4.5, -0.6, 0]}>
-              <BarrelCasing sectionCut={cut} />
-              <RotorBundle />
-            </group>
-          </TurntableStage>
-        </CompTwin3dStage>
-      </div>
-    </ThemeScope>
+      }
+    >
+      <TurntableStage subjectSize={[5.2, 4.6, 3.2]} padding={0.9}>
+        <group position={[4.5, -0.6, 0]}>
+          <BarrelCasing sectionCut={cut} />
+          <RotorBundle />
+        </group>
+      </TurntableStage>
+    </CtwinPartStage>
   );
 }
 
-function CompTwin3dPartExplode() {
-  const [explode, setExplode] = useState(45);
-  const amount = explode / 100;
-
+function CompressorTwinPartFallback() {
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex w-full flex-col gap-4 rounded-xl border border-default bg-card-background p-4">
-        <div className="flex items-center gap-3">
-          <span className="shrink-0 text-sm text-base-foreground">Explode</span>
-          <Slider aria-label="Explode amount" value={[explode]} min={0} max={100} step={1} onValueChange={(value) => setExplode(value[0] ?? 0)} />
-          <span className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground">{explode}%</span>
-        </div>
-        <table className="w-full text-sm">
-          <caption className="sr-only">Travel of each sub-assembly at the chosen explode amount</caption>
-          <thead>
-            <tr className="text-left text-xs text-muted-foreground">
-              <th scope="col" className="pb-1.5 font-medium">
-                Sub-assembly
-              </th>
-              <th scope="col" className="pb-1.5 font-medium">
-                Axis
-              </th>
-              <th scope="col" className="w-28 pb-1.5 font-medium">
-                Progress
-              </th>
-              <th scope="col" className="pb-1.5 text-right font-medium">
-                Travel
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {TRAIN_ASSEMBLY_IDS.filter((id) => COMPRESSOR_TRAIN_EXPLODE[id].distance > 0).map((id) => {
-              const spec = COMPRESSOR_TRAIN_EXPLODE[id];
-              const [x, y, z] = explodeOffset(spec, amount);
-              const progress = explodeProgress(amount, spec.start);
-              const axis = spec.direction[0] !== 0 ? 'Shaft' : spec.direction[1] !== 0 ? 'Down' : 'Sideways';
-              return (
-                <tr key={id} className="border-t border-default">
-                  <td className="py-1.5 text-base-foreground">{compTwin3dAssemblyName(id)}</td>
-                  <td className="py-1.5 text-muted-foreground">{axis}</td>
-                  <td className="py-1.5">
-                    <span className="block h-1.5 w-24 overflow-hidden rounded-full bg-medium-background" aria-hidden="true">
-                      <span className="block h-full rounded-full bg-chart-1-450" style={{ width: `${Math.round(progress * 100)}%` }} />
-                    </span>
-                  </td>
-                  <td className="py-1.5 text-right tabular-nums text-base-foreground">{formatReading(Math.hypot(x, y, z), 'm', 1)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        <p className="text-xs text-muted-foreground">The rotor waits until 30% so the non-drive-end bearing clears the shaft first.</p>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function CompTwin3dPartTree() {
-  const [selectedId, setSelectedId] = useState<string | null>('compressor');
-  const isolated = selectedId ? assemblyLeafIds(COMPRESSOR_TRAIN_TREE, selectedId) : [];
-
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex h-[44rem] w-full justify-center rounded-xl border border-default bg-base-background p-4">
-        <div className="flex min-h-0 w-64 flex-col overflow-hidden rounded-lg border border-default">
-          <CompTwin3dPanel title="Assemblies" meta={selectedId ? `${isolated.length} isolated` : 'All shown'} className="flex-1">
-            <CompTwin3dTree selectedId={selectedId} onSelect={setSelectedId} />
-          </CompTwin3dPanel>
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function CompTwin3dPartInspector() {
-  const [sensorId, setSensorId] = useState<string | null>('tt-92532');
-  const reading = COMPTWIN3D_READINGS.find((candidate) => candidate.sensor.id === sensorId);
-
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="flex h-[44rem] w-full justify-center rounded-xl border border-default bg-base-background p-4">
-        <div className="flex min-h-0 w-80 flex-col overflow-hidden rounded-lg border border-default">
-          <CompTwin3dPanel title={reading ? 'Reading' : 'Measurement points'} className="flex-1">
-            {reading ? <CompTwin3dSensorDetail key={reading.sensor.id} reading={reading} onBack={() => setSensorId(null)} /> : <CompTwin3dReadingList onSelect={setSensorId} />}
-          </CompTwin3dPanel>
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function CompTwin3dPartFallback() {
-  return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <div className="h-96 w-full overflow-hidden rounded-xl border border-default">
-        <SceneCanvas label="3D model of compressor train 23-KA-9101" forceFallback fallback={<CompTwin3dFallback />}>
-          <CompressorTrain />
-        </SceneCanvas>
-      </div>
-    </ThemeScope>
+    <LookScope look="glass" className="w-full">
+      <Canvas className="h-[28rem]">
+        <CtwinStageFrame className="h-full">
+          <SceneCanvas label="3D model of compressor train 23-KA-9101" forceFallback fallback={<CtwinFallbackList />}>
+            <CompressorTrain />
+          </SceneCanvas>
+        </CtwinStageFrame>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -739,173 +714,166 @@ export default definePage({
   id: 'compressor-digital-twin',
   title: 'Compressor digital twin',
   summary:
-    'One machine in detail: a centrifugal compressor train you can pull apart along its shaft, cut open and read. A parts tree isolates assemblies, numbered hotspots sit where the instruments really are, and each opens its live reading, limits and trend.',
+    'One machine as the whole screen: a centrifugal compressor train in 3D with its live readings pinned to the points where they are measured. Layer chips ghost assemblies, cut the casing open or pull the train apart, and picking a readout opens its band and trend beside the scene.',
   guidance: {
     use: [
-      'When the question is about one machine: which part, which bearing, which nozzle a reading belongs to.',
-      'With numbers that tie the scene to the panels: the same digit on the hotspot, in the tree and in the list.',
-      'With docked panels and a wide scene, so the machine never hides behind its own controls.',
-      'On a light surface for engineering work: steel stays grey and only abnormal readings take colour.',
+      'When the question is about one machine: which bearing, which nozzle a reading belongs to.',
+      'With readings pinned on the model and the same readings as a list beside it, so the scene is never the only way in.',
+      'With layers that combine: ghost what is in the way instead of hiding it, so the machine keeps its shape.',
+      'On a dark glass surface for a showpiece or a review screen; steel stays grey and only abnormal readings take colour.',
     ],
     avoid: [
-      'A plant overview: use the 3D plant explorer when location between machines matters.',
-      'Exploding by default. Start assembled; the explode slider is for finding a part, then put it back.',
-      'Colouring parts by health. Parts are isolated by ghosting the rest; state lives on hotspots and in panels.',
-      'Hotspots without a list beside the canvas: the scene is one image to a screen reader.',
+      'A plant overview: use the 3D plant explorer when the location between machines matters.',
+      'Opening exploded. Start assembled; exploding and sectioning are for finding a part, then put it back.',
+      'Colouring parts by health. State lives on the pinned readouts and in the inspector, always with a word.',
+      'More than six or seven pins at once. Past that they hide the machine; group them behind a layer.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
+      id: 'dashboard',
+      title: 'Dashboard',
       description:
-        'Drag to orbit, scroll to zoom. Move the Explode slider to pull the train apart along the shaft; the rotor follows the bearing out of the casing. Hover or select an assembly in the tree to light and isolate it, click a numbered hotspot for its reading, and switch on Section cut to open the casing. Escape steps back.',
+        'Drag to orbit, scroll to zoom. The dock at the bottom toggles layers: switch off Auxiliaries or Structure to ghost them, cut the casing or explode the train. Click a pinned readout, or pick it in the list, to open it on the right. Escape puts the machine back together.',
       specimens: [
         {
-          id: 'CompTwin3dTwinBlueprint',
+          id: 'CompressorTwinSignature',
           title: 'Compressor digital twin',
-          note: 'Pick it when engineers need to connect a reading to the exact part of the machine it comes from.',
+          note: 'Pick it when engineers need to tie a live reading to the exact part of the machine it comes from.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
+            'kit/scene/SceneStage.tsx',
+            'kit/scene/ScenePin.tsx',
+            'kit/scene/ToggleChip.tsx',
+            'kit/Panel.tsx',
+            'kit/Meter.tsx',
+            'kit/TrendArea.tsx',
+            'kit/StatusPill.tsx',
+            'looks/LookScope.tsx',
             'three/models/CompressorTrain.tsx',
             'three/models/compressorTrainLayout.ts',
-            'three/models/assemblyTree.ts',
             'three/models/explodeOffsets.ts',
-            'three/models/ExplodeGroup.tsx',
-            'three/models/Hotspot.tsx',
-            'three/models/BarrelCasing.tsx',
-            'three/models/SectionCut.tsx',
-            'three/models/RotorBundle.tsx',
-            'three/models/StillScene.tsx',
             'three/SceneCanvas.tsx',
             'three/CameraRig.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'industrial/RangeIndicator.tsx',
-            'industrial/ValueReadout.tsx',
-            'industrial/StatusIndicator.tsx',
-            'themes/ThemeScope.tsx',
           ],
-          Component: CompTwin3dTwinBlueprint,
+          Component: CompressorTwinSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same twin in two dark presets, each opened in a different state and held still. Steel, ghosting and hotspots are resolved from tokens.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'Two more screens of the same product: the machine opened up for a planned bundle pull, and the twin on a tablet in the compressor hall.',
       specimens: [
         {
-          id: 'CompTwin3dTwinHologram',
-          title: 'Hologram, exploded and sectioned',
-          note: 'Pick it for a review screen in a dark room, opened with the rotor pulled out of the casing and isolated.',
+          id: 'CompressorTwinService',
+          title: 'Service view',
+          note: 'Pick it for planning an overhaul: the train exploded and sectioned, with the pull sequence and clearances beside it.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['three/models/CompressorTrain.tsx', 'three/models/StillScene.tsx', 'three/SceneCanvas.tsx', 'themes/ThemeScope.tsx'],
-          Component: CompTwin3dTwinHologram,
+          bleed: true,
+          uses: ['kit/scene/SceneStage.tsx', 'kit/scene/ToggleChip.tsx', 'kit/DataTable.tsx', 'kit/Panel.tsx', 'three/models/CompressorTrain.tsx', 'three/models/explodeOffsets.ts'],
+          Component: CompressorTwinService,
         },
         {
-          id: 'CompTwin3dTwinControlRoom',
-          title: 'Control room, on one reading',
-          note: 'Pick it next to operator displays, opened on the reading that is in alarm.',
+          id: 'CompressorTwinTablet',
+          title: 'Tablet, in the hall',
+          note: 'Pick it for a technician standing at the machine: scene on top, the selected readout and the list below, the dock wrapped.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['three/models/CompressorTrain.tsx', 'three/models/Hotspot.tsx', 'three/models/StillScene.tsx', 'three/SceneCanvas.tsx', 'themes/ThemeScope.tsx'],
-          Component: CompTwin3dTwinControlRoom,
+          uses: ['kit/scene/SceneStage.tsx', 'kit/scene/ScenePin.tsx', 'kit/scene/ToggleChip.tsx', 'kit/Panel.tsx', 'kit/TrendArea.tsx', 'three/models/CompressorTrain.tsx'],
+          Component: CompressorTwinTablet,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'Sub-assemblies on a turntable you can drag, and the panels and controls around the scene.',
+      description: 'The pieces around and inside the scene, each on its own.',
       specimens: [
         {
-          id: 'CompTwin3dPartRotor',
+          id: 'CompressorTwinPartInspector',
+          title: 'Readout inspector',
+          note: 'Pick it as the detail side of a pinned readout: figure, state, position in the band and the 24-hour trend with limits.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Meter.tsx', 'kit/TrendArea.tsx', 'kit/StatusPill.tsx'],
+          Component: CompressorTwinPartInspector,
+        },
+        {
+          id: 'CompressorTwinPartReadouts',
+          title: 'Readout list',
+          note: 'Pick it as the keyboard path into a scene: the same points as the pins, as buttons with value and state.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/TagId.tsx'],
+          Component: CompressorTwinPartReadouts,
+        },
+        {
+          id: 'CompressorTwinPartPin',
+          title: 'Pinned readout',
+          note: 'Pick a pinned readout when a number only makes sense at the place it is measured; an abnormal one takes its status colour and a word.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/scene/ScenePin.tsx', 'kit/scene/SceneStage.tsx', 'three/models/BearingHousing.tsx', 'three/TurntableStage.tsx'],
+          Component: CompressorTwinPartPin,
+        },
+        {
+          id: 'CompressorTwinPartDock',
+          title: 'Layer dock',
+          note: 'Pick toggle chips when layers combine; each shows how many parts it holds and the line under it says what the scene now shows.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/scene/ToggleChip.tsx'],
+          Component: CompressorTwinPartDock,
+        },
+        {
+          id: 'CompressorTwinPartRotor',
           title: 'Rotor bundle',
           note: 'Pick it to show what turns inside a casing: shaft, impellers, balance piston and journals.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['three/models/RotorBundle.tsx', 'three/models/AxialCylinder.tsx', 'three/TurntableStage.tsx', 'three/models/StillScene.tsx'],
-          Component: CompTwin3dPartRotor,
+          bleed: true,
+          uses: ['three/models/RotorBundle.tsx', 'three/TurntableStage.tsx', 'kit/scene/SceneStage.tsx'],
+          Component: CompressorTwinPartRotor,
         },
         {
-          id: 'CompTwin3dPartLubeSkid',
-          title: 'Lube oil skid',
-          note: 'Pick it for the auxiliary a compressor cannot run without, when oil pressure or temperature is the topic.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/models/LubeOilSkid.tsx', 'three/TurntableStage.tsx', 'three/models/StillScene.tsx'],
-          Component: CompTwin3dPartLubeSkid,
-        },
-        {
-          id: 'CompTwin3dPartHotspots',
-          title: 'Numbered hotspots',
-          note: 'Pick numbered hotspots when several instruments sit close together; the selected one widens to show its tag and reading.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/models/Hotspot.tsx', 'three/SensorMarker.tsx', 'three/models/BearingHousing.tsx', 'three/TurntableStage.tsx'],
-          Component: CompTwin3dPartHotspots,
-        },
-        {
-          id: 'CompTwin3dPartSectionCut',
+          id: 'CompressorTwinPartSection',
           title: 'Section cut',
           note: 'Pick it when the internals matter: the casing opens on its joint and the nozzles stay as ghosts.',
           origin: 'custom',
-          size: 'md',
+          size: 'sm',
           align: 'stretch',
-          uses: ['three/models/BarrelCasing.tsx', 'three/models/SectionCut.tsx', 'three/models/RotorBundle.tsx', 'three/TurntableStage.tsx'],
-          Component: CompTwin3dPartSectionCut,
+          bleed: true,
+          uses: ['three/models/BarrelCasing.tsx', 'three/models/RotorBundle.tsx', 'kit/scene/ToggleChip.tsx'],
+          Component: CompressorTwinPartSection,
         },
         {
-          id: 'CompTwin3dPartExplode',
-          title: 'Explode control',
-          note: 'Pick a staged explode when parts must leave in order; the table shows what the slider does to each one.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/models/explodeOffsets.ts', 'three/models/compressorTrainLayout.ts'],
-          Component: CompTwin3dPartExplode,
-        },
-        {
-          id: 'CompTwin3dPartTree',
-          title: 'Parts tree',
-          note: 'Pick it as the keyboard path into a model: groups isolate several parts, leaves one, and digits show where the hotspots are.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/models/assemblyTree.ts', 'three/models/compressorTrainLayout.ts'],
-          Component: CompTwin3dPartTree,
-        },
-        {
-          id: 'CompTwin3dPartInspector',
-          title: 'Reading inspector',
-          note: 'Pick it as the detail side of a hotspot: value, alarm, position in the band, trend and where it is mounted.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/charts/TrendChart.tsx', 'industrial/RangeIndicator.tsx', 'industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: CompTwin3dPartInspector,
-        },
-        {
-          id: 'CompTwin3dPartFallback',
+          id: 'CompressorTwinPartFallback',
           title: 'Without WebGL',
-          note: 'Pick a fallback that lists the same numbered readings, so the twin still answers where 3D cannot render.',
+          note: 'Pick a fallback that lists the same readings, so the twin still answers where 3D cannot render.',
           origin: 'custom',
-          size: 'full',
+          size: 'sm',
           align: 'stretch',
-          uses: ['three/SceneCanvas.tsx', 'three/webgl.ts', 'industrial/ValueReadout.tsx'],
-          Component: CompTwin3dPartFallback,
+          bleed: true,
+          uses: ['three/SceneCanvas.tsx', 'three/webgl.ts'],
+          Component: CompressorTwinPartFallback,
         },
       ],
     },

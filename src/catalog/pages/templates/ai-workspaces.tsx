@@ -1,1053 +1,1260 @@
-import { Badge } from '@cognite/aura/components/badge';
+import { Avatar, AvatarFallback } from '@cognite/aura/components/avatar';
 import { Button } from '@cognite/aura/components/button';
-import { MessageResponse } from '@cognite/aura/components/message';
 import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-} from '@cognite/aura/components/prompt-input';
-import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
-import {
-  IconArrowLeft,
-  IconBinaryTree,
-  IconCalendarEvent,
+  IconAlertTriangle,
+  IconBell,
+  IconBook,
   IconChartLine,
+  IconCheck,
+  IconClipboardList,
+  IconCopy,
+  IconDatabase,
   IconFileText,
+  IconHistory,
   IconLayoutDashboard,
-  IconListCheck,
   IconMessageCircle,
+  IconNotebook,
+  IconPaperclip,
+  IconPlayerPlay,
+  IconPlayerStop,
   IconPlus,
+  IconRefresh,
+  IconRobot,
+  IconSettings,
+  IconShare,
   IconSparkles,
+  IconThumbDown,
+  IconThumbUp,
   IconTool,
+  IconTopologyStar3,
+  IconUsers,
   IconX,
 } from '@cognite/aura/icons';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { ChatThread } from '../../../library/ai/ChatThread';
-import type { ChatMessage } from '../../../library/ai/ChatThread';
-import { PromptSuggestions } from '../../../library/ai/PromptSuggestions';
-import type { SourceItem, SourceKind } from '../../../library/ai/SourceList';
-import { ToolCall } from '../../../library/ai/ToolCall';
-import type { ToolCallData } from '../../../library/ai/ToolCall';
-import { ToolCallList } from '../../../library/ai/ToolCallList';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { Prose } from '../../../library/patterns/content/Prose';
-import { AssistantPanel } from '../../../library/patterns/product/AssistantPanel';
-import { InsightCard } from '../../../library/patterns/product/InsightCard';
-import { SetupChecklist } from '../../../library/patterns/states/SetupChecklist';
-import type { SetupStep } from '../../../library/patterns/states/SetupChecklist';
-import { PageHeader } from '../../../library/patterns/structure/PageHeader';
-import { PropertyList } from '../../../library/patterns/structure/PropertyList';
-import type { SidebarNavGroup } from '../../../library/patterns/structure/SidebarNav';
-import { DecisionForm } from '../../../library/patterns/workflows/DecisionForm';
-import type { Decision } from '../../../library/patterns/workflows/DecisionForm';
-import { Table } from '../../../library/primitives/table/Table';
-import { TableBody } from '../../../library/primitives/table/TableBody';
-import { TableCaption } from '../../../library/primitives/table/TableCaption';
-import { TableCell } from '../../../library/primitives/table/TableCell';
-import { TableHead } from '../../../library/primitives/table/TableHead';
-import { TableHeader } from '../../../library/primitives/table/TableHeader';
-import { TableRow } from '../../../library/primitives/table/TableRow';
-import { AgentRunList } from '../../../library/templates-b/AgentRunList';
-import type { AgentRunStep, AgentRunStepStatus } from '../../../library/templates-b/AgentRunList';
-import { PageFrame } from '../../../library/templates-b/PageFrame';
-import { ShellPage } from '../../../library/templates-b/ShellPage';
-import { WorkspaceLayout } from '../../../library/templates-b/WorkspaceLayout';
-import { ASSETS, SENSORS, sensorsOf } from '../../data/plant';
-import { makeSeries, makeValues } from '../../data/series';
+import { AgentStep, type AgentStepState } from '../../../library/kit/ai-workspaces/AgentStep';
+import { ChangeRow } from '../../../library/kit/ai-workspaces/ChangeRow';
+import { ChatMessage } from '../../../library/kit/ai-workspaces/ChatMessage';
+import { Composer } from '../../../library/kit/ai-workspaces/Composer';
+import { NotebookCell } from '../../../library/kit/ai-workspaces/NotebookCell';
+import { PromptCard } from '../../../library/kit/ai-workspaces/PromptCard';
+import { SourceCard } from '../../../library/kit/ai-workspaces/SourceCard';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { DetailList } from '../../../library/kit/auth-pages/DetailList';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Grid } from '../../../library/kit/Grid';
+import { IconChip } from '../../../library/kit/IconChip';
+import { BrowserFrame } from '../../../library/kit/landing-pages/BrowserFrame';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendLine, type TrendLimit } from '../../../library/kit/TrendLine';
+import { ALARMS, ASSETS, type Alarm, type Asset } from '../../data/plant';
+import { formatAgo } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './ai-workspaces.tsx?raw';
 
-const AIW_COMPRESSOR = ASSETS[8];
-const AIW_COMPRESSORS = ASSETS.filter((asset) => asset.type === 'compressor');
-const AIW_VIBRATION = SENSORS[3];
-const AIW_VIBRATION_SERIES = makeSeries({ seed: AIW_VIBRATION.seed, points: 48, base: 5.9, amplitude: 0.3, noise: 0.15, drift: 0.9 });
-const AIW_COMPRESSOR_SENSORS = sensorsOf(AIW_COMPRESSOR.id).slice(0, 5);
+const AI_VIBRATION = [6.2, 6.3, 6.5, 6.4, 6.9, 7.4, 8.1, 9.0, 10.2, 11.6, 3.1, 0.4, 0.2];
 
-/** Drive-end vibration per compressor: latest value and a week of history, for the comparison blocks. */
-const AIW_COMPARISON = [
-  { asset: AIW_COMPRESSORS[0], latest: 6.8, limit: 7.1, values: makeValues({ seed: 41, points: 28, base: 5.9, noise: 0.12, drift: 0.9 }) },
-  { asset: AIW_COMPRESSORS[1], latest: 3.1, limit: 7.1, values: makeValues({ seed: 42, points: 28, base: 3.1, noise: 0.1 }) },
-  { asset: AIW_COMPRESSORS[2], latest: 11.6, limit: 11, values: makeValues({ seed: 43, points: 28, base: 7.4, noise: 0.3, drift: 4.2 }) },
-];
+const AI_VIBRATION_2025 = [6.0, 6.1, 6.0, 6.4, 6.6, 7.0, 7.7, 8.8, 9.9, 11.2, 2.8, 0.3, 0.2];
 
-const AIW_SOURCES: readonly SourceItem[] = [
-  { id: 'ts', title: '23-VT-92540 Drive-end vibration', href: 'https://fusion.cognite.test/timeseries/23-VT-92540', kind: 'timeseries' },
-  { id: 'asset', title: '23-KA-9101 1st stage compressor', href: 'https://fusion.cognite.test/assets/23-KA-9101', kind: 'asset' },
-  { id: 'event', title: 'Alarm alm-4809, acknowledged 12:02', href: 'https://fusion.cognite.test/events/alm-4809', kind: 'event' },
-  { id: 'file', title: 'Vibration limits, rotating equipment (rev. 4)', href: 'https://fusion.cognite.test/files/vibration-limits', kind: 'file' },
-];
-
-const AIW_SOURCE_EXCERPTS: Record<string, string> = {
-  ts: 'Hourly average, last 48 hours: 5.9 mm/s rising to 6.8 mm/s. No gaps, quality good.',
-  asset: 'Criticality A. Running. Health score 72, down from 81 a week ago.',
-  event: 'Drive-end vibration approaching limit. Raised 12:00, acknowledged by Ingrid Haugen at 12:02.',
-  file: 'Section 3.2: high alarm at 7.1 mm/s, trip at 11.0 mm/s for compressors in service class II.',
+const AI_TRIP_LIMIT: TrendLimit = {
+  value: 11,
+  label: 'Trip',
+  tone: 'critical',
 };
 
-const AIW_SOURCE_ICON: Record<SourceKind, typeof IconFileText> = {
-  web: IconFileText,
-  file: IconFileText,
-  timeseries: IconChartLine,
-  asset: IconBinaryTree,
-  event: IconCalendarEvent,
+const AI_MINUTES = ['13:00', '13:05', '13:10', '13:15', '13:20', '13:25', '13:30', '13:35', '13:40', '13:45', '13:50', '13:55', '14:00'];
+
+const AI_COMPRESSION_ALARMS = ALARMS.filter((alarm) => alarm.sensorTag.startsWith('23-')).slice(0, 4);
+
+const AI_COMPRESSION_UNITS = ASSETS.filter((asset) => asset.parentId === 'nk-23');
+
+const AI_SEVERITY_TONE: Record<Alarm['severity'], Tone> = {
+  critical: 'critical',
+  high: 'warning',
+  medium: 'info',
+  low: 'neutral',
 };
 
-const AIW_SOURCE_KIND: Record<SourceKind, string> = {
-  web: 'Web page',
-  file: 'Document',
-  timeseries: 'Time series',
-  asset: 'Asset',
-  event: 'Event',
+const AI_SEVERITY_LABEL: Record<Alarm['severity'], string> = {
+  critical: 'Critical',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
 };
 
-const AIW_ANSWER =
-  'Drive-end vibration on **23-KA-9101** is **6.8 mm/s**, 0.3 below the high limit of 7.1. It has risen 0.9 mm/s over the last 48 hours while shaft speed stayed flat, which points to the bearing and not to load.';
+const AI_STATE_TONE: Record<Asset['state'], Tone> = {
+  running: 'success',
+  standby: 'info',
+  stopped: 'neutral',
+  tripped: 'critical',
+  maintenance: 'warning',
+};
 
-const AIW_ANSWER_SHORT = 'Vibration is 6.8 mm/s and rising about 0.45 mm/s per day. At that rate it reaches the 7.1 limit in roughly 16 hours.';
+const AI_STATE_LABEL: Record<Asset['state'], string> = {
+  running: 'Running',
+  standby: 'Standby',
+  stopped: 'Stopped',
+  tripped: 'Tripped',
+  maintenance: 'Maintenance',
+};
 
-const AIW_ANSWER_ORDERS =
-  'One work order covers it: **WO-104466**, a vibration survey on 23-KA-9101, is open and unassigned, due in 2 days. Nothing is planned for the bearing itself.';
-
-const AIW_TOOLS: readonly ToolCallData[] = [
+const AI_ALARM_COLUMNS: DataTableColumn<Alarm>[] = [
   {
-    id: 'find',
-    toolName: 'find_asset',
-    title: 'Find asset 23-KA-9101',
-    status: 'completed',
-    input: { tag: '23-KA-9101' },
-    output: { name: '1st stage compressor', sensors: 6 },
+    id: 'severity',
+    header: 'Severity',
+    nowrap: true,
+    cell: (alarm) => <StatusPill tone={AI_SEVERITY_TONE[alarm.severity]}>{AI_SEVERITY_LABEL[alarm.severity]}</StatusPill>,
+  },
+  { id: 'message', header: 'Alarm', cell: (alarm) => alarm.message },
+  {
+    id: 'tag',
+    header: 'Tag',
+    nowrap: true,
+    cell: (alarm) => <TagId>{alarm.sensorTag}</TagId>,
   },
   {
-    id: 'query',
-    toolName: 'query_time_series',
-    title: 'Read 23-VT-92540, last 48 hours',
-    status: 'completed',
-    input: { tag: '23-VT-92540', start: '48h-ago', aggregate: 'average', granularity: '1h' },
-    output: { points: 48, min: 5.7, max: 6.9, latest: 6.8 },
-  },
-];
-
-const AIW_THREAD: readonly ChatMessage[] = [
-  { id: 'u1', role: 'user', text: 'Why is drive-end vibration on 23-KA-9101 rising?' },
-  { id: 'a1', role: 'assistant', text: AIW_ANSWER, tools: AIW_TOOLS, sources: AIW_SOURCES },
-  { id: 'u2', role: 'user', text: 'Is work already planned?' },
-  { id: 'a2', role: 'assistant', text: AIW_ANSWER_ORDERS },
-];
-
-const AIW_SHORT_THREAD: readonly ChatMessage[] = AIW_THREAD.slice(0, 2);
-
-const AIW_STARTERS = [
-  { id: 'why', label: 'Why is vibration rising?', prompt: 'Why is drive-end vibration on 23-KA-9101 rising?' },
-  { id: 'limit', label: 'When will it reach the limit?', prompt: 'When will 23-VT-92540 reach its high limit at the current rate?' },
-  { id: 'orders', label: 'Is work already planned?', prompt: 'Is there planned work on 23-KA-9101?' },
-  { id: 'handover', label: 'Draft the shift handover', prompt: 'Summarise this shift for the handover log' },
-];
-
-type AiwConversation = { id: string; title: string; group: 'Today' | 'Yesterday' | 'Earlier'; when: string; messages: readonly ChatMessage[] };
-
-const AIW_CONVERSATIONS: readonly AiwConversation[] = [
-  { id: 'c1', title: 'Vibration on 23-KA-9101', group: 'Today', when: '13:52', messages: AIW_THREAD },
-  {
-    id: 'c2',
-    title: 'Recompressor trip at 13:46',
-    group: 'Today',
-    when: '13:48',
-    messages: [
-      { id: 'u1', role: 'user', text: 'Why did the recompressor trip at 13:46?' },
-      {
-        id: 'a1',
-        role: 'assistant',
-        text: '**23-KA-9103** tripped on high drive-end vibration: 11.6 mm/s against a trip limit of 11.0. Vibration climbed for six hours before the trip. WO-104482 to inspect the bearing is in progress.',
-        sources: AIW_SOURCES.slice(1, 3),
-      },
-    ],
+    id: 'value',
+    header: 'Value',
+    numeric: true,
+    nowrap: true,
+    cell: (alarm) => alarm.value,
   },
   {
-    id: 'c3',
-    title: 'Overdue work in gas export',
-    group: 'Yesterday',
-    when: '16:20',
-    messages: [
-      { id: 'u1', role: 'user', text: 'Which work orders in gas export are overdue?' },
-      {
-        id: 'a1',
-        role: 'assistant',
-        text: 'One: **WO-104458**, the standby start test on export pump B, was due 4 days ago and is unassigned.',
-      },
-    ],
-  },
-  {
-    id: 'c4',
-    title: 'Cooler outlet temperature',
-    group: 'Earlier',
-    when: '9 Mar',
-    messages: [
-      { id: 'u1', role: 'user', text: 'Is the interstage cooler fouling?' },
-      {
-        id: 'a1',
-        role: 'assistant',
-        text: 'Likely. Outlet temperature on **23-TT-91141** has drifted from 36 to 38.9 °C in two weeks at the same load. Cleaning is planned in WO-104471.',
-      },
-    ],
+    id: 'raised',
+    header: 'Raised',
+    numeric: true,
+    nowrap: true,
+    muted: true,
+    cell: (alarm) => formatAgo(alarm.raisedAt),
   },
 ];
 
-const AIW_RUN_PLAN: readonly { id: string; label: string; result: string; activity: string; duration: string; tools?: readonly ToolCallData[] }[] = [
+const AI_UNIT_COLUMNS: DataTableColumn<Asset>[] = [
+  { id: 'unit', header: 'Unit', nowrap: true, cell: (unit) => unit.name },
   {
-    id: 'history',
-    label: 'Read alarm history for 23-KA-9103',
-    result: '3 trips since January',
-    activity: 'Reading alarms',
-    duration: '4 s',
-    tools: [
-      {
-        id: 'alarms',
-        toolName: 'list_alarms',
-        title: 'List trips on 23-KA-9103',
-        status: 'completed',
-        input: { asset: '23-KA-9103', severity: 'critical', since: '2026-01-01' },
-        output: { count: 3 },
-      },
-    ],
+    id: 'tag',
+    header: 'Tag',
+    nowrap: true,
+    cell: (unit) => <TagId>{unit.tag}</TagId>,
+  },
+  {
+    id: 'state',
+    header: 'State',
+    nowrap: true,
+    cell: (unit) => <StatusPill tone={AI_STATE_TONE[unit.state]}>{AI_STATE_LABEL[unit.state]}</StatusPill>,
+  },
+  {
+    id: 'health',
+    header: 'Health',
+    numeric: true,
+    cell: (unit) => `${unit.healthScore} %`,
+  },
+  {
+    id: 'criticality',
+    header: 'Criticality',
+    numeric: true,
+    muted: true,
+    cell: (unit) => unit.criticality,
+  },
+];
+
+const AI_RAIL_NAV: AppFrameNavItem[] = [
+  { id: 'new', label: 'New chat', icon: <IconSparkles /> },
+  { id: 'history', label: 'History', icon: <IconHistory /> },
+  { id: 'agents', label: 'Agents', icon: <IconRobot />, badge: '1' },
+  { id: 'notebooks', label: 'Notebooks', icon: <IconNotebook /> },
+  { id: 'settings', label: 'Settings', icon: <IconSettings /> },
+];
+
+const AI_TOP_NAV: AppFrameNavItem[] = [
+  { id: 'chat', label: 'Chat', icon: <IconMessageCircle /> },
+  { id: 'agents', label: 'Agents', icon: <IconRobot /> },
+  { id: 'library', label: 'Library', icon: <IconBook /> },
+];
+
+const AI_HISTORY_NAV: AppFrameNavItem[] = [
+  { id: 'trip', label: 'Recompressor trip', icon: <IconMessageCircle /> },
+  { id: 'handover', label: 'Day shift handover', icon: <IconMessageCircle /> },
+  { id: 'cooler', label: 'Cooler fouling', icon: <IconMessageCircle /> },
+  { id: 'flaring', label: 'Flaring and permit', icon: <IconMessageCircle /> },
+  { id: 'backlog', label: 'Overdue P2 orders', icon: <IconMessageCircle /> },
+  { id: 'energy', label: 'Energy in February', icon: <IconMessageCircle /> },
+];
+
+const AI_DATA_NAV: AppFrameNavItem[] = [
+  { id: 'overview', label: 'Overview', icon: <IconLayoutDashboard /> },
+  { id: 'equipment', label: 'Equipment', icon: <IconTopologyStar3 /> },
+  { id: 'alarms', label: 'Alarms', icon: <IconBell />, badge: '4' },
+  { id: 'work', label: 'Work orders', icon: <IconClipboardList /> },
+];
+
+const AI_NOTEBOOK_NAV: AppFrameNavItem[] = [
+  { id: 'question', label: 'Question' },
+  { id: 'data', label: 'Data' },
+  { id: 'finding', label: 'Finding' },
+  { id: 'next', label: 'Next steps' },
+];
+
+const AI_FIRST_RUN_NAV: AppFrameNavItem[] = [
+  { id: 'workspace', label: 'Workspace', icon: <IconSparkles /> },
+  { id: 'data', label: 'Data', icon: <IconDatabase /> },
+  { id: 'agents', label: 'Agents', icon: <IconRobot /> },
+  { id: 'team', label: 'Team', icon: <IconUsers /> },
+];
+
+type AiSource = {
+  index: number;
+  title: string;
+  kind: string;
+  location: string;
+  excerpt: string;
+};
+
+const AI_SOURCES: AiSource[] = [
+  {
+    index: 1,
+    title: 'Recompressor drive-end vibration',
+    kind: 'Time series',
+    location: '23-VT-92740, 13:00 to 14:00',
+    excerpt: 'Rose from 6.2 to 11.6 mm/s in 45 minutes, then fell to zero at 13:46.',
+  },
+  {
+    index: 2,
+    title: 'Alarm and event list',
+    kind: 'Events',
+    location: '4 alarms on gas compression',
+    excerpt: 'Trip on high vibration at 13:46, 0.6 mm/s over the 11.0 mm/s limit.',
+  },
+  {
+    index: 3,
+    title: 'Trip report, 4 March 2025',
+    kind: 'Document',
+    location: 'Page 3, root cause',
+    excerpt: 'Drive-end bearing wear after 14 months; vibration climbed for 40 minutes before the trip.',
+  },
+  {
+    index: 4,
+    title: 'WO-104482',
+    kind: 'Work order',
+    location: 'In progress, Tomás Barros',
+    excerpt: 'Inspect recompressor drive-end bearing. Due today 20:00.',
+  },
+];
+
+type AiRunStep = {
+  id: string;
+  title: string;
+  state: AgentStepState;
+  detail: string;
+  duration: string;
+};
+
+const AI_RUN_STEPS: AiRunStep[] = [
+  {
+    id: 'alarms',
+    title: 'Read the alarm list',
+    state: 'done',
+    detail: '8 alarms, 4 on compression',
+    duration: '0:04',
   },
   {
     id: 'trends',
-    label: 'Read vibration in the hour before each trip',
-    result: 'Same rising pattern in 2 of 3',
-    activity: 'Reading 23-VT-92740',
-    duration: '11 s',
-    tools: [
-      {
-        id: 'series',
-        toolName: 'query_time_series',
-        title: 'Read 23-VT-92740 around each trip',
-        status: 'completed',
-        input: { tag: '23-VT-92740', windows: 3, before: '1h' },
-        output: { points: 180 },
-      },
-    ],
+    title: 'Pull vibration trends',
+    state: 'done',
+    detail: '6 series, 24 hours',
+    duration: '0:21',
   },
-  { id: 'compare', label: 'Compare with 23-KA-9101', result: 'Rising at a third of the rate', activity: 'Comparing trends', duration: '6 s' },
-  { id: 'orders', label: 'Check work orders that followed', result: '2 bearing inspections, 1 open', activity: 'Reading SAP PM', duration: '5 s' },
-  { id: 'report', label: 'Write the comparison', result: 'Report ready', activity: 'Writing', duration: '9 s' },
-  { id: 'draft', label: 'Draft an inspection work order', result: 'WO draft created', activity: 'Waiting for you', duration: '2 s' },
+  {
+    id: 'history',
+    title: 'Find similar trips',
+    state: 'done',
+    detail: '1 match, March 2025',
+    duration: '0:38',
+  },
+  {
+    id: 'compare',
+    title: 'Compare the two trips',
+    state: 'running',
+    detail: 'Aligning on the trip time',
+    duration: '1:11',
+  },
+  {
+    id: 'order',
+    title: 'Draft a work order',
+    state: 'waiting',
+    detail: 'Bearing replacement, P1',
+    duration: 'Since 13:49',
+  },
+  {
+    id: 'log',
+    title: 'Post to the shift log',
+    state: 'queued',
+    detail: 'After approval',
+    duration: 'Queued',
+  },
 ];
 
-const AIW_DRAFT_TOOL: ToolCallData = {
-  id: 'create',
-  toolName: 'create_work_order',
-  title: 'Create work order in SAP PM',
-  status: 'awaiting-approval',
-  input: { asset: '23-KA-9101', type: 'inspection', priority: 'P2', title: 'Inspect drive-end bearing', estimatedHours: 4 },
-  approvalReason: 'This writes to the maintenance system.',
+type AiChange = {
+  id: string;
+  title: string;
+  detail: string;
+  from: string;
+  to: string;
+  risk: { label: string; tone: Tone };
 };
 
-const AIW_SHELL_NAV: readonly SidebarNavGroup[] = [
+const AI_CHANGES: AiChange[] = [
   {
-    id: 'main',
-    items: [
-      { id: 'overview', label: 'Overview', icon: <IconLayoutDashboard /> },
-      { id: 'assets', label: 'Assets', icon: <IconBinaryTree /> },
-      { id: 'trends', label: 'Trends', icon: <IconChartLine /> },
-      { id: 'orders', label: 'Work orders', icon: <IconTool /> },
-    ],
+    id: 'limit',
+    title: 'High vibration alarm limit',
+    detail: '23-VT-92540 on the 1st stage compressor: earlier warning, same trip limit',
+    from: '7.1 mm/s',
+    to: '6.5 mm/s',
+    risk: { label: 'Low risk', tone: 'success' },
+  },
+  {
+    id: 'order',
+    title: 'Work order priority',
+    detail: 'WO-104466 vibration survey: the same bearing type failed today',
+    from: 'P2',
+    to: 'P1',
+    risk: { label: 'Low risk', tone: 'success' },
+  },
+  {
+    id: 'shelve',
+    title: 'Shelve cooler outlet alarm',
+    detail: '23-TT-91141: expected while running on two stages',
+    from: 'Active',
+    to: 'Shelved 8 h',
+    risk: { label: 'Review', tone: 'warning' },
+  },
+  {
+    id: 'load',
+    title: 'Compressor load setpoint',
+    detail: '23-KA-9102 2nd stage: lowers discharge temperature by about 4 °C',
+    from: '92 %',
+    to: '88 %',
+    risk: { label: 'Affects export', tone: 'critical' },
   },
 ];
 
-const AIW_SETUP: readonly SetupStep[] = [
-  { id: 'source', title: 'Connect a data source', done: true },
-  {
-    id: 'scope',
-    title: 'Choose what the assistant can read',
-    description: 'Pick the areas of the plant it may query. It never writes without asking.',
-    done: false,
-    actionLabel: 'Choose scope',
-    hint: 'About 2 min',
-  },
-  {
-    id: 'ask',
-    title: 'Ask a first question',
-    description: 'Try one of the examples below, or type your own.',
-    done: false,
-    actionLabel: 'Use an example',
-  },
-];
+const AI_NOTEBOOK_QUERY = [
+  'select minute, avg(value) as vibration',
+  'from timeseries("23-VT-92740")',
+  'where trip in ("2026-03-12T13:46", "2025-03-04T09:12")',
+  '  and minute between trip - 45 and trip + 15',
+  'group by trip, minute',
+].join('\n');
 
-const AIW_PROPOSAL = [
-  { label: 'Title', value: 'Inspect drive-end bearing' },
-  { label: 'Equipment', value: <span className="font-mono text-xs">23-KA-9101</span> },
-  { label: 'Type', value: 'Inspection' },
-  { label: 'Priority', value: 'P2' },
-  { label: 'Estimated', value: '4 h' },
-  { label: 'Due', value: '14 Mar 2026' },
-];
-
-function aiwReply(prompt: string, index: number): ChatMessage[] {
-  return [
-    { id: `u-${index}`, role: 'user', text: prompt },
-    { id: `a-${index}`, role: 'assistant', text: AIW_ANSWER_SHORT, sources: AIW_SOURCES.slice(0, 2) },
-  ];
+function useAiAsk() {
+  const [draft, setDraft] = useState('');
+  const [asked, setAsked] = useState<readonly string[]>([]);
+  const send = (text: string) => {
+    setAsked((current) => [...current, text]);
+    setDraft('');
+  };
+  return { draft, setDraft, asked, send };
 }
 
-function isAiwView(value: unknown): value is 'chart' | 'table' {
-  return value === 'chart' || value === 'table';
-}
-
-function AiwPrompt({ onSend, placeholder = 'Ask about Nordkapp' }: { onSend: (text: string) => void; placeholder?: string }) {
+function AiAtlasAvatar() {
   return (
-    <PromptInput
-      helperText={false}
-      onSubmit={(message) => {
-        const text = message.text?.trim();
-        if (text) onSend(text);
-      }}
-    >
-      <PromptInputBody>
-        <PromptInputTextarea aria-label="Message" placeholder={placeholder} />
-      </PromptInputBody>
-      <PromptInputFooter>
-        <PromptInputTools />
-        <PromptInputSubmit />
-      </PromptInputFooter>
-    </PromptInput>
+    <IconChip tone="accent" size="sm">
+      <IconSparkles />
+    </IconChip>
   );
 }
 
-/** Title line of a workspace header: a mark, the name and what the assistant can see. */
-function AiwTitle({ title, context, children }: { title: string; context?: string; children?: ReactNode }) {
+function AiUserAvatar() {
+  return (
+    <Avatar variant="decorative-2" sizes="xsm" aria-label="Ingrid Haugen">
+      <AvatarFallback>IH</AvatarFallback>
+    </Avatar>
+  );
+}
+
+function AiAnswerActions() {
   return (
     <>
-      <span aria-hidden className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-muted-background text-base-foreground">
-        <IconSparkles className="size-4" />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <h2 className="truncate text-sm font-semibold text-base-foreground">{title}</h2>
-        {context ? <p className="truncate text-xs text-muted-foreground">{context}</p> : null}
-      </div>
-      {children ? <div className="flex shrink-0 items-center gap-2">{children}</div> : null}
+      <Button variant="ghost" size="sm">
+        <IconCopy /> Copy
+      </Button>
+      <Button variant="ghost" size="sm">
+        <IconThumbUp /> Helpful
+      </Button>
+      <Button variant="ghost" size="sm">
+        <IconThumbDown /> Not helpful
+      </Button>
+      <Button variant="ghost" size="sm">
+        <IconRefresh /> Try again
+      </Button>
     </>
   );
 }
 
-function AiwVibrationChart({ heightClassName = 'h-56' }: { heightClassName?: string }) {
+function AiComposerTools() {
   return (
-    <TrendChart
-      className="w-full"
-      label="Drive-end vibration over 48 hours, rising towards its high limit of 7.1 mm/s"
-      series={[{ key: 'vibration', label: AIW_VIBRATION.name, points: AIW_VIBRATION_SERIES }]}
-      limits={[{ value: AIW_VIBRATION.highLimit, label: `High ${AIW_VIBRATION.highLimit}`, tone: 'warning' }]}
-      unit={AIW_VIBRATION.unit}
-      yDomain={[4, 8]}
-      maxTicks={5}
-      showLast
-      heightClassName={heightClassName}
+    <>
+      <Button variant="ghost" size="sm" type="button">
+        <IconPaperclip /> Attach
+      </Button>
+      <Button variant="ghost" size="sm" type="button">
+        <IconDatabase /> Nordkapp production
+      </Button>
+    </>
+  );
+}
+
+function AiFollowUps({ asked, avatars = false }: { asked: readonly string[]; avatars?: boolean }) {
+  return (
+    <>
+      {asked.map((question, index) => (
+        <div key={`${index}-${question}`} className="flex flex-col gap-5">
+          <ChatMessage role="user" author="Ingrid Haugen" time="14:03" avatar={avatars ? <AiUserAvatar /> : undefined}>
+            {question}
+          </ChatMessage>
+          <ChatMessage role="assistant" author="Atlas" time="14:03" avatar={avatars ? <AiAtlasAvatar /> : undefined}>
+            <p>This template has no agent behind it. Connect one and the answer to this question appears here, with its sources.</p>
+          </ChatMessage>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function AiVibrationChart({ height = 220, compare = false, high = false }: { height?: number; compare?: boolean; high?: boolean }) {
+  return (
+    <TrendLine
+      label="Recompressor drive-end vibration from 13:00 to 14:00 against the trip limit"
+      labels={AI_MINUTES}
+      unit="mm/s"
+      decimals={1}
+      height={height}
+      highlightLast={false}
+      series={
+        compare
+          ? [
+              {
+                id: 'today',
+                label: '12 March 2026',
+                values: AI_VIBRATION,
+                tone: 'accent',
+              },
+              {
+                id: 'before',
+                label: '4 March 2025',
+                values: AI_VIBRATION_2025,
+                tone: 'neutral',
+                dashed: true,
+              },
+            ]
+          : [
+              {
+                id: 'today',
+                label: 'Drive-end vibration',
+                values: AI_VIBRATION,
+                tone: 'accent',
+              },
+            ]
+      }
+      limits={high ? [AI_TRIP_LIMIT, { value: 7.1, label: 'High', tone: 'warning' }] : [AI_TRIP_LIMIT]}
     />
   );
 }
 
-function AiWorkspaceTemplatePromptLanding() {
-  const [messages, setMessages] = useState<readonly ChatMessage[]>([]);
-  const send = (prompt: string) => setMessages((current) => [...current, ...aiwReply(prompt, current.length)]);
-
-  if (messages.length > 0) {
-    return (
-      <PageFrame title="Prompt-first landing" address="nordkapp.example/assistant">
-        <WorkspaceLayout
-          label="Plant assistant"
-          header={
-            <AiwTitle title="New conversation">
-              <Button variant="ghost" size="sm" onClick={() => setMessages([])}>
-                <IconArrowLeft /> Back to start
-              </Button>
-            </AiwTitle>
-          }
-          thread={<ChatThread messages={messages} />}
-          composer={<AiwPrompt onSend={send} />}
-        />
-      </PageFrame>
-    );
-  }
-
+function AiTripAnswer({ cite }: { cite?: (index: number) => ReactNode }) {
   return (
-    <PageFrame title="Prompt-first landing" address="nordkapp.example/assistant">
-      <div className="flex min-h-full flex-col items-center justify-center bg-base-background px-6 py-8">
-        <div className="flex w-full max-w-2xl flex-col gap-6">
-          <div className="flex flex-col gap-1 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight text-base-foreground">What do you want to know about Nordkapp?</h1>
-            <p className="text-sm text-muted-foreground">Answers cite the tags, alarms and documents they are based on.</p>
+    <>
+      <p>
+        The recompressor <TagId>23-KA-9103</TagId> tripped at 13:46 on high drive-end vibration. It climbed from 6.2 to 11.6 mm/s over 45 minutes and crossed the 11.0 mm/s trip
+        limit.
+        {cite ? <> {cite(1)}</> : null}
+      </p>
+      <p>
+        The pattern matches the trip on 4 March 2025, which was traced to drive-end bearing wear.{cite ? <> {cite(3)}</> : null} A bearing inspection is already in progress and due
+        at 20:00.
+        {cite ? <> {cite(4)}</> : null}
+      </p>
+    </>
+  );
+}
+
+function AiWorkspaceTemplatePromptLanding() {
+  const { draft, setDraft, asked, send } = useAiAsk();
+  return (
+    <BrowserFrame url="atlas.nordkapp.test" look="glass" minHeight={760}>
+      <AppFrame variant="rail" brand={{ name: 'Atlas', mark: <IconSparkles /> }} nav={AI_RAIL_NAV} current="new" tools={<AiUserAvatar />}>
+        <div className="mx-auto flex h-full w-full max-w-4xl flex-col justify-center gap-8">
+          <div className="flex flex-col gap-3">
+            <StatusPill tone="warning" icon={<IconAlertTriangle />} className="self-start">
+              Nordkapp is at reduced capacity
+            </StatusPill>
+            <p className="text-5xl leading-[1.05] font-semibold tracking-tighter text-balance">Good afternoon, Ingrid. What do you want to know?</p>
+            <p className="max-w-2xl text-base text-(color:--kit-text-2)">
+              Atlas reads the alarms, 212 600 time series, work orders and documents of Nordkapp production, and shows where every answer comes from.
+            </p>
           </div>
-          <AiwPrompt onSend={send} placeholder="Ask about an asset, a tag, an alarm or a work order" />
-          <PromptSuggestions suggestions={AIW_STARTERS} onSelect={send} />
-          <section aria-labelledby="aiw-landing-recent" className="flex flex-col gap-1">
-            <h2 id="aiw-landing-recent" className="text-xs font-medium text-muted-foreground">
-              Recent conversations
-            </h2>
-            <ul className="flex flex-col">
-              {AIW_CONVERSATIONS.slice(0, 3).map((conversation) => (
-                <li key={conversation.id} className="border-b border-default last:border-b-0">
-                  <button
-                    type="button"
-                    onClick={() => setMessages(conversation.messages)}
-                    className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm outline-none hover:bg-base-background-hover focus-visible:shadow-focus-ring"
-                  >
-                    <IconMessageCircle aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0 flex-1 truncate text-base-foreground">{conversation.title}</span>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {conversation.group === 'Earlier' ? conversation.when : `${conversation.group}, ${conversation.when}`}
-                    </span>
-                  </button>
-                </li>
-              ))}
+          <Composer
+            size="lg"
+            label="Ask Atlas about the plant"
+            placeholder="Ask about an alarm, an asset or a trend"
+            value={draft}
+            onChange={setDraft}
+            onSend={send}
+            context={['Nordkapp production', 'Last 24 hours']}
+            tools={<AiComposerTools />}
+            hint={asked.length > 0 ? `${asked.length} sent · Enter to send` : 'Enter to send'}
+          />
+          <div className="grid grid-cols-4 gap-(--kit-gap)">
+            <PromptCard
+              tone="pink"
+              icon={<IconBell />}
+              title="Explain the 13:46 trip"
+              detail="Alarms, vibration and the last time it happened."
+              onSelect={() => setDraft('Why did the recompressor trip at 13:46?')}
+            />
+            <PromptCard
+              tone="sky"
+              icon={<IconFileText />}
+              title="Draft my handover"
+              detail="Day shift summary from the log and open alarms."
+              onSelect={() => setDraft('Draft the day shift handover note.')}
+            />
+            <PromptCard
+              tone="teal"
+              icon={<IconChartLine />}
+              title="Compare two compressors"
+              detail="1st and 2nd stage, last 7 days, side by side."
+              onSelect={() => setDraft('Compare the 1st and 2nd stage compressors over the last 7 days.')}
+            />
+            <PromptCard
+              tone="amber"
+              icon={<IconTool />}
+              title="What is overdue?"
+              detail="Work orders past their due date, by priority."
+              onSelect={() => setDraft('Which work orders are overdue?')}
+            />
+          </div>
+          <Panel className="h-auto" title="Pick up where you left off" subtitle="Your last three conversations">
+            <ul>
+              <ListRow
+                leading={<IconMessageCircle className="size-5" aria-hidden="true" />}
+                title="Interstage cooler fouling"
+                meta="Answered with 3 sources · cooler outlet temperature"
+                trailing="Yesterday"
+              />
+              <ListRow
+                leading={<IconMessageCircle className="size-5" aria-hidden="true" />}
+                title="Flaring against permit"
+                meta="Answered with 2 sources · 12.4 of 15.0 kSm³/d"
+                trailing="Tuesday"
+              />
+              <ListRow
+                leading={<IconRobot className="size-5" aria-hidden="true" />}
+                title="Trip review agent"
+                meta="Run 3 is waiting for your approval"
+                trailing={<StatusPill tone="warning">Needs you</StatusPill>}
+              />
             </ul>
-          </section>
+          </Panel>
         </div>
-      </div>
-    </PageFrame>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function AiWorkspaceTemplateFirstRun() {
-  const [steps, setSteps] = useState<readonly SetupStep[]>(AIW_SETUP);
-  const complete = (id: string) => setSteps((current) => current.map((step) => (step.id === id ? { ...step, done: true } : step)));
-
+  const [draft, setDraft] = useState('');
   return (
-    <PageFrame title="Empty workspace, first run" address="nordkapp.example/assistant">
-      <WorkspaceLayout
-        label="Plant assistant"
-        sidebar={
-          <div className="flex flex-1 flex-col gap-3 p-3">
-            <Button variant="secondary" size="sm" className="w-full" disabled>
-              <IconPlus /> New conversation
-            </Button>
-            <p className="text-xs text-muted-foreground">Finish setup to start a conversation. Your conversations will be listed here.</p>
-          </div>
-        }
-        threadWidth="reading"
-        thread={
-          <div className="flex h-full flex-col justify-center gap-6 overflow-y-auto py-4">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-xl font-semibold tracking-tight text-base-foreground">Set up the plant assistant</h1>
-              <p className="text-sm text-muted-foreground">Two steps left. After that you can ask about anything in the areas you chose.</p>
+    <BrowserFrame url="atlas.nordkapp.test/welcome" look="poster" minHeight={760}>
+      <AppFrame
+        variant="masthead"
+        brand={{ name: 'Atlas' }}
+        nav={AI_FIRST_RUN_NAV}
+        current="workspace"
+        title="Your workspace is empty."
+        subtitle="Three steps and Atlas can answer questions about your own plant. The first is already done."
+      >
+        <Grid className="h-full">
+          <Panel className="col-span-4" tone="green" title="1. Invite your team" subtitle="Done by Liv Wold">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <p className="text-base font-medium">Six people from the day and evening shifts can open this workspace.</p>
+              <StatusPill tone="success" size="lg" icon={<IconCheck />} className="self-start">
+                Done
+              </StatusPill>
             </div>
-            <SetupChecklist
-              title="Getting started"
-              steps={steps}
-              onStepAction={complete}
-              complete={
-                <div className="flex flex-col gap-3">
-                  <p className="text-sm text-medium-foreground">Setup is done. Ask your first question below.</p>
-                  <div>
-                    <Button variant="ghost" size="sm" onClick={() => setSteps(AIW_SETUP)}>
-                      Reset example
-                    </Button>
-                  </div>
-                </div>
-              }
-            />
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-muted-foreground">Examples of what you can ask</p>
-              <PromptSuggestions suggestions={AIW_STARTERS.slice(0, 3)} onSelect={() => complete('ask')} disabled={!steps[1].done} />
+          </Panel>
+          <Panel className="col-span-4" tone="blue" title="2. Connect data" subtitle="About four minutes">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <p className="text-base font-medium">Point Atlas at Nordkapp production: 18 420 assets and 212 600 time series.</p>
+              <Button size="lg" className="self-start">
+                <IconDatabase /> Connect Nordkapp production
+              </Button>
             </div>
+          </Panel>
+          <Panel className="col-span-4" tone="amber" title="3. Pick an agent" subtitle="Or start with plain chat">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <p className="text-base font-medium">Agents run a task end to end: review a trip, draft a handover, plan a shutdown.</p>
+              <Button size="lg" variant="outline" className="self-start" disabled aria-describedby="ai-first-run-agent-reason">
+                <IconRobot /> Browse agents
+              </Button>
+              <p id="ai-first-run-agent-reason" className="text-sm font-medium">
+                Available once data is connected.
+              </p>
+            </div>
+          </Panel>
+
+          <Panel className="col-span-8" title="Try it on sample data" subtitle="A fictional compressor train, ready now">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <div className="grid grid-cols-3 gap-4">
+                <PromptCard tone="pink" title="Why did the sample compressor trip?" onSelect={() => setDraft('Why did the sample compressor trip?')} />
+                <PromptCard tone="sky" title="Which alarms repeat most?" onSelect={() => setDraft('Which alarms repeat most?')} />
+                <PromptCard tone="purple" title="Summarise last week" onSelect={() => setDraft('Summarise last week for the sample train.')} />
+              </div>
+              <Composer
+                label="Ask about the sample data"
+                placeholder="Pick a question above or write your own"
+                value={draft}
+                onChange={setDraft}
+                onSend={() => setDraft('')}
+                context={['Sample compressor train']}
+                hint="Answers use sample data"
+              />
+            </div>
+          </Panel>
+          <div className="col-span-4 flex flex-col gap-(--kit-gap)">
+            <Stat size="lg" tone="pink" label="Setup progress" value="1 of 3" target="Next: connect data" />
+            <Stat size="lg" tone="purple" label="Typical time to first answer" value={6} unit="min" target="From an empty workspace" />
           </div>
-        }
-      />
-    </PageFrame>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function AiWorkspaceTemplateChatOnly() {
-  const [messages, setMessages] = useState<readonly ChatMessage[]>(AIW_THREAD);
-  const send = (prompt: string) => setMessages((current) => [...current, ...aiwReply(prompt, current.length)]);
-
+  const { draft, setDraft, asked, send } = useAiAsk();
   return (
-    <PageFrame title="Chat only" address="nordkapp.example/assistant/c1" height="lg">
-      <WorkspaceLayout
-        label="Plant assistant"
-        header={
-          <AiwTitle title="Vibration on 23-KA-9101" context="Reads Nordkapp data. It cannot change anything.">
-            <Button variant="ghost" size="sm" onClick={() => setMessages([])}>
-              <IconPlus /> New conversation
-            </Button>
-          </AiwTitle>
+    <BrowserFrame url="atlas.nordkapp.test/chat/recompressor-trip" look="soft" minHeight={760}>
+      <AppFrame
+        variant="topbar"
+        brand={{
+          name: 'Atlas',
+          detail: 'Nordkapp production',
+          mark: <IconSparkles />,
+        }}
+        nav={AI_TOP_NAV}
+        current="chat"
+        tools={
+          <Button size="sm">
+            <IconPlus /> New chat
+          </Button>
         }
-        thread={
-          <ChatThread
-            messages={messages}
-            emptyState={
-              <div className="flex max-w-sm flex-col items-center gap-4 text-center">
-                <p className="text-sm text-muted-foreground">Ask about an asset, a tag, an alarm or a work order.</p>
-                <PromptSuggestions layout="stack" suggestions={AIW_STARTERS.slice(0, 3)} onSelect={send} />
-              </div>
-            }
-          />
-        }
-        composer={<AiwPrompt onSend={send} />}
-      />
-    </PageFrame>
+      >
+        <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-5">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-2xl font-bold tracking-tight">Why did the recompressor trip?</p>
+            <StatusPill tone="success">Grounded in 4 sources</StatusPill>
+          </div>
+          <ChatMessage role="user" author="Ingrid Haugen" time="14:01" avatar={<AiUserAvatar />}>
+            Why did the recompressor trip at 13:46, and has it happened before?
+          </ChatMessage>
+          <ChatMessage role="assistant" author="Atlas" time="14:01" avatar={<AiAtlasAvatar />} actions={<AiAnswerActions />}>
+            <AiTripAnswer />
+            <AiVibrationChart height={200} />
+            <div className="flex flex-wrap gap-2">
+              <StatusPill tone="blue">1 · Vibration trend</StatusPill>
+              <StatusPill tone="pink">2 · Alarm list</StatusPill>
+              <StatusPill tone="amber">3 · Trip report 2025</StatusPill>
+              <StatusPill tone="teal">4 · WO-104482</StatusPill>
+            </div>
+          </ChatMessage>
+          <AiFollowUps asked={asked} avatars />
+          <div className="mt-auto flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDraft('What is the export impact until 20:00?')}>
+                What is the export impact until 20:00?
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setDraft('Show the bearing temperature as well.')}>
+                Show the bearing temperature as well
+              </Button>
+            </div>
+            <Composer label="Reply to Atlas" placeholder="Ask a follow-up" value={draft} onChange={setDraft} onSend={send} tools={<AiComposerTools />} hint="Enter to send" />
+          </div>
+        </div>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function AiWorkspaceTemplateHistorySidebar() {
-  const [activeId, setActiveId] = useState<string | null>('c2');
-  const [extra, setExtra] = useState<Readonly<Record<string, readonly ChatMessage[]>>>({});
-  const active = AIW_CONVERSATIONS.find((conversation) => conversation.id === activeId);
-  const key = activeId ?? 'new';
-  const messages = [...(active?.messages ?? []), ...(extra[key] ?? [])];
-  const send = (prompt: string) =>
-    setExtra((current) => ({ ...current, [key]: [...(current[key] ?? []), ...aiwReply(prompt, (current[key] ?? []).length + 10)] }));
-  const groups = ['Today', 'Yesterday', 'Earlier'] as const;
-
+  const { draft, setDraft, asked, send } = useAiAsk();
+  const [thread, setThread] = useState('trip');
+  const title = AI_HISTORY_NAV.find((item) => item.id === thread)?.label ?? '';
   return (
-    <PageFrame title="History sidebar and thread" address="nordkapp.example/assistant" height="lg">
-      <WorkspaceLayout
-        label="Plant assistant"
-        sidebar={
-          <div className="flex flex-col gap-4 p-3">
-            <Button variant="secondary" size="sm" className="w-full" onClick={() => setActiveId(null)}>
-              <IconPlus /> New conversation
+    <BrowserFrame url="atlas.nordkapp.test/chat" look="studio" minHeight={780}>
+      <AppFrame
+        variant="sidebar"
+        brand={{
+          name: 'Atlas',
+          detail: 'Nordkapp production',
+          mark: <IconSparkles />,
+        }}
+        nav={AI_HISTORY_NAV}
+        current={thread}
+        onNavigate={setThread}
+        tools={
+          <Button className="w-full">
+            <IconPlus /> New chat
+          </Button>
+        }
+        title={title}
+        subtitle="Today · 2 messages · shared with the day shift"
+        actions={
+          <>
+            <Button variant="outline" size="sm">
+              <IconShare /> Share
             </Button>
-            {groups.map((group) => (
-              <div key={group} className="flex flex-col gap-1">
-                <p className="px-2 text-xs font-medium text-muted-foreground">{group}</p>
-                <ul className="flex flex-col">
-                  {AIW_CONVERSATIONS.filter((conversation) => conversation.group === group).map((conversation) => (
-                    <li key={conversation.id}>
-                      <button
-                        type="button"
-                        aria-current={conversation.id === activeId ? 'page' : undefined}
-                        onClick={() => setActiveId(conversation.id)}
-                        className={`flex w-full flex-col rounded-lg px-2 py-1.5 text-left outline-none hover:bg-base-background-hover focus-visible:shadow-focus-ring ${conversation.id === activeId ? 'bg-secondary-background text-secondary-foreground' : ''}`}
-                      >
-                        <span className={`truncate text-sm ${conversation.id === activeId ? 'font-medium text-base-foreground' : 'text-medium-foreground'}`}>
-                          {conversation.title}
-                        </span>
-                        <span className="text-xs tabular-nums text-muted-foreground">{conversation.when}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+            <Button variant="outline" size="sm">
+              <IconFileText /> Save as note
+            </Button>
+          </>
         }
-        thread={
-          <ChatThread
-            key={key}
-            messages={messages}
-            emptyState={
-              <div className="flex max-w-sm flex-col items-center gap-4 text-center">
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm font-medium text-base-foreground">New conversation</p>
-                  <p className="text-sm text-muted-foreground">Earlier conversations stay in the list on the left.</p>
-                </div>
-                <PromptSuggestions layout="stack" suggestions={AIW_STARTERS.slice(0, 3)} onSelect={send} />
-              </div>
-            }
+      >
+        <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-5">
+          <ChatMessage role="user" author="Ingrid Haugen" time="14:01" avatar={<AiUserAvatar />}>
+            Why did the recompressor trip at 13:46? List what else is alarming on compression.
+          </ChatMessage>
+          <ChatMessage role="assistant" author="Atlas" time="14:02" avatar={<AiAtlasAvatar />} actions={<AiAnswerActions />}>
+            <ul>
+              <AgentStep title="Read the alarm list" state="done" detail="8 alarms in 3 days, 4 on gas compression" duration="0:04" />
+              <AgentStep title="Pull vibration trends" state="done" detail="23-VT-92740 and 5 neighbours, last 24 hours" duration="0:21" last />
+            </ul>
+            <AiTripAnswer />
+            <div className="overflow-hidden rounded-(--kit-radius-sm) border border-(--kit-rule)">
+              <DataTable
+                label="Open alarms on gas compression"
+                columns={AI_ALARM_COLUMNS}
+                rows={AI_COMPRESSION_ALARMS}
+                rowKey={(alarm) => alarm.id}
+                rowTone={(alarm) => AI_SEVERITY_TONE[alarm.severity]}
+                density="compact"
+              />
+            </div>
+          </ChatMessage>
+          <AiFollowUps asked={asked} avatars />
+          <Composer
+            className="mt-auto"
+            label="Reply to Atlas"
+            placeholder="Ask a follow-up"
+            value={draft}
+            onChange={setDraft}
+            onSend={send}
+            context={['23-KA-9103', 'Last 24 hours']}
+            tools={<AiComposerTools />}
+            hint="Enter to send"
           />
-        }
-        composer={<AiwPrompt onSend={send} />}
-      />
-    </PageFrame>
+        </div>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function AiCitation({ index, active, onPick }: { index: number; active: boolean; onPick: (index: number) => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`Source ${index}`}
+      onClick={() => onPick(index)}
+      className="inline-flex size-5 cursor-pointer items-center justify-center border border-(--kit-rule-strong) align-text-top text-xs font-semibold tabular-nums outline-none focus-visible:shadow-(--shadow-focus-ring) aria-pressed:bg-(--kit-accent) aria-pressed:text-(color:--kit-on-accent)"
+    >
+      {index}
+    </button>
   );
 }
 
 function AiWorkspaceTemplateSourcesRail() {
-  const [selected, setSelected] = useState(AIW_SOURCES[0].id);
-
+  const { draft, setDraft, asked, send } = useAiAsk();
+  const [active, setActive] = useState(1);
   return (
-    <PageFrame title="Chat with sources rail" address="nordkapp.example/assistant/c1" height="lg">
-      <WorkspaceLayout
-        label="Plant assistant"
-        header={<AiwTitle title="Vibration on 23-KA-9101" context={`${AIW_SOURCES.length} sources behind the last answer`} />}
-        threadWidth="fill"
-        thread={<ChatThread messages={AIW_SHORT_THREAD.map((message) => (message.role === 'assistant' ? { ...message, sources: undefined } : message))} />}
-        composer={<AiwPrompt onSend={() => undefined} placeholder="Ask a follow-up" />}
-        railLabel="Sources"
-        rail={
-          <div className="flex flex-col gap-3 p-3">
-            <div className="flex items-baseline justify-between gap-2 px-1">
-              <h3 className="text-sm font-medium text-base-foreground">Sources</h3>
-              <span className="text-xs tabular-nums text-muted-foreground">{AIW_SOURCES.length} used</span>
-            </div>
-            <ul className="flex flex-col gap-1">
-              {AIW_SOURCES.map((item, index) => {
-                const kind = item.kind ?? 'web';
-                const Icon = AIW_SOURCE_ICON[kind];
-                const open = item.id === selected;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      aria-expanded={open}
-                      onClick={() => setSelected(item.id)}
-                      className={`flex w-full flex-col gap-1 rounded-lg p-2 text-left outline-none hover:bg-base-background-hover focus-visible:shadow-focus-ring ${open ? 'bg-muted-background' : ''}`}
-                    >
-                      <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="tabular-nums">{index + 1}</span>
-                        <Icon aria-hidden className="size-4 shrink-0" />
-                        {AIW_SOURCE_KIND[kind]}
-                      </span>
-                      <span className="text-sm text-base-foreground">{item.title}</span>
-                      {open ? <span className="text-xs text-medium-foreground">{AIW_SOURCE_EXCERPTS[item.id]}</span> : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <p className="px-1 text-xs text-muted-foreground">Select a source to see the part the answer used.</p>
-          </div>
+    <BrowserFrame url="atlas.nordkapp.test/chat/recompressor-trip/sources" look="blueprint" minHeight={780}>
+      <AppFrame
+        variant="topbar"
+        brand={{
+          name: 'Atlas',
+          detail: 'Grounded chat',
+          mark: <IconSparkles />,
+        }}
+        nav={AI_TOP_NAV}
+        current="chat"
+        tools={
+          <>
+            <span>
+              Sources <span className="font-medium tabular-nums">4</span>
+            </span>
+            <span>
+              In focus <span className="font-medium tabular-nums">{active}</span>
+            </span>
+          </>
         }
-      />
-    </PageFrame>
+      >
+        <Grid className="h-full">
+          <div className="col-span-7 flex flex-col gap-(--kit-gap)">
+            <ChatMessage role="user" author="Ingrid Haugen" time="14:01">
+              Why did the recompressor trip at 13:46, and has it happened before?
+            </ChatMessage>
+            <ChatMessage role="assistant" author="Atlas" time="14:01" actions={<AiAnswerActions />}>
+              <AiTripAnswer cite={(index) => <AiCitation index={index} active={active === index} onPick={setActive} />} />
+              <p>
+                Three other alarms are open on gas compression, all on the 1st stage and its cooler. <AiCitation index={2} active={active === 2} onPick={setActive} />
+              </p>
+            </ChatMessage>
+            <AiFollowUps asked={asked} />
+            <Composer className="mt-auto" label="Reply to Atlas" placeholder="Ask a follow-up" value={draft} onChange={setDraft} onSend={send} hint="Answers cite their sources" />
+          </div>
+          <Panel className="col-span-5" title="Sources" subtitle="4 cited" icon={<IconBook className="size-4.5" aria-hidden="true" />}>
+            <div className="flex flex-1 flex-col justify-between gap-3">
+              {AI_SOURCES.map((item) => (
+                <SourceCard
+                  key={item.index}
+                  index={item.index}
+                  title={item.title}
+                  kind={item.kind}
+                  location={item.location}
+                  excerpt={item.excerpt}
+                  active={item.index === active}
+                />
+              ))}
+            </div>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function AiWorkspaceTemplateChatCanvas() {
-  const [view, setView] = useState<'chart' | 'table'>('chart');
-  const [messages, setMessages] = useState<readonly ChatMessage[]>(AIW_SHORT_THREAD);
-  const send = (prompt: string) => setMessages((current) => [...current, ...aiwReply(prompt, current.length)]);
-
+  const { draft, setDraft, asked, send } = useAiAsk();
   return (
-    <PageFrame title="Chat and canvas" address="nordkapp.example/assistant/c1" height="lg">
-      <WorkspaceLayout
-        label="Plant assistant"
-        thread={<ChatThread messages={messages} hideActions />}
-        composer={<AiwPrompt onSend={send} placeholder="Ask to change the chart" />}
-        canvasLabel="Artifact: drive-end vibration"
-        canvas={
-          <div className="flex flex-1 flex-col gap-4 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-col">
-                <h2 className="truncate text-sm font-semibold text-base-foreground">{AIW_VIBRATION.name}, last 48 hours</h2>
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-mono">{AIW_VIBRATION.tag}</span> · made by the assistant, version 1
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <SegmentedControl
-                  value={view}
-                  onValueChange={(value) => {
-                    if (isAiwView(value)) setView(value);
-                  }}
-                >
-                  <SegmentedControlList aria-label="Artifact view" size="small">
-                    <SegmentedControlButton value="chart" tabContent="label-only" size="small">
-                      Chart
-                    </SegmentedControlButton>
-                    <SegmentedControlButton value="table" tabContent="label-only" size="small">
-                      Data
-                    </SegmentedControlButton>
-                  </SegmentedControlList>
-                </SegmentedControl>
-                <Button variant="secondary" size="sm">
-                  Add to dashboard
-                </Button>
-              </div>
-            </div>
-            <div className="flex flex-1 flex-col rounded-xl bg-base-background p-4">
-              {view === 'chart' ? (
-                <AiwVibrationChart heightClassName="h-96" />
-              ) : (
-                <Table>
-                  <TableCaption srOnly>Drive-end vibration, every eighth hourly value</TableCaption>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Hours ago</TableHead>
-                      <TableHead numeric>Value, {AIW_VIBRATION.unit}</TableHead>
-                      <TableHead numeric>Margin to limit</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {AIW_VIBRATION_SERIES.filter((_, index) => index % 8 === 7).map((point, index) => (
-                      <TableRow key={point.t}>
-                        <TableCell numeric align="start" muted>
-                          {40 - index * 8}
-                        </TableCell>
-                        <TableCell numeric>{point.v.toFixed(1)}</TableCell>
-                        <TableCell numeric>{(AIW_VIBRATION.highLimit - point.v).toFixed(1)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              The canvas keeps the latest artifact. Ask in the thread to change the range, add a tag or compare with another compressor.
-            </p>
-          </div>
+    <BrowserFrame url="atlas.nordkapp.test/canvas/trip-review" look="console" minHeight={780}>
+      <AppFrame
+        variant="topbar"
+        brand={{ name: 'Atlas', detail: 'Canvas', mark: <IconSparkles /> }}
+        nav={AI_TOP_NAV}
+        current="chat"
+        padding="none"
+        tools={
+          <>
+            <span>Trip review · 23-KA-9103</span>
+            <span className="font-medium tabular-nums">14:02:10 UTC</span>
+          </>
         }
-      />
-    </PageFrame>
+      >
+        <Grid className="h-full grid-rows-[auto_minmax(0,1fr)_auto]">
+          <StatGroup columns={4} label="Trip figures" className="col-span-12">
+            <Stat variant="plain" size="md" label="Peak vibration" value={11.6} decimals={1} unit="mm/s" tone="critical" target="Trip limit 11.0" />
+            <Stat variant="plain" size="md" label="Rise time" value={45} unit="min" tone="warning" target="From 6.2 mm/s" />
+            <Stat variant="plain" size="md" label="Tripped at" value="13:46" target="14 min ago" />
+            <Stat variant="plain" size="md" label="Similar trips" value={1} target="4 March 2025" />
+          </StatGroup>
+
+          <Panel className="col-span-4 row-span-2" title="Conversation" subtitle="Atlas" padding="none">
+            <div className="flex flex-1 flex-col">
+              <ChatMessage role="user" author="I. Haugen" time="14:01">
+                Plot recompressor vibration for the last hour with the limits.
+              </ChatMessage>
+              <ChatMessage role="assistant" author="Atlas" time="14:01">
+                <p>Added to the canvas. Vibration crossed the high limit at 13:22 and the trip limit at 13:45.</p>
+              </ChatMessage>
+              <ChatMessage role="user" author="I. Haugen" time="14:02">
+                Add the open alarms on compression under it.
+              </ChatMessage>
+              <ChatMessage role="assistant" author="Atlas" time="14:02">
+                <p>Added a table with 4 alarms, most severe first. Two are on the 1st stage compressor.</p>
+              </ChatMessage>
+              <AiFollowUps asked={asked} />
+              <div className="mt-auto p-3.5">
+                <Composer
+                  label="Tell Atlas what to add to the canvas"
+                  placeholder="Add, change or remove something on the canvas"
+                  value={draft}
+                  onChange={setDraft}
+                  onSend={send}
+                  hint="Enter to send"
+                />
+              </div>
+            </div>
+          </Panel>
+          <Panel className="col-span-8" title="Recompressor drive-end vibration" subtitle="mm/s · 13:00 to 14:00 · added by Atlas" tone="critical">
+            <AiVibrationChart height={250} high />
+          </Panel>
+          <Panel className="col-span-8" title="Open alarms on gas compression" subtitle="4 alarms · added by Atlas" padding="none">
+            <DataTable
+              label="Open alarms on gas compression"
+              flush
+              columns={AI_ALARM_COLUMNS}
+              rows={AI_COMPRESSION_ALARMS}
+              rowKey={(alarm) => alarm.id}
+              rowTone={(alarm) => AI_SEVERITY_TONE[alarm.severity]}
+            />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function AiWorkspaceTemplateDockedAssistant() {
-  const [open, setOpen] = useState(true);
-  const [messages, setMessages] = useState<readonly ChatMessage[]>(AIW_SHORT_THREAD);
-  const send = (prompt: string) => setMessages((current) => [...current, ...aiwReply(prompt, current.length)]);
-
+  const { draft, setDraft, asked, send } = useAiAsk();
   return (
-    <PageFrame title="Assistant docked in a data page" address="nordkapp.example/assets/23-KA-9101" height="lg">
-      <ShellPage product="Nordkapp" nav={AIW_SHELL_NAV} activeId="assets" collapsed trail={['Assets', 'Gas compression', AIW_COMPRESSOR.tag]} flush>
-        <div className="flex min-h-0 flex-1">
-          <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6">
-            <PageHeader
-              as="h1"
-              title={AIW_COMPRESSOR.name}
-              meta={<span className="font-mono text-xs">{AIW_COMPRESSOR.tag}</span>}
-              status={<StatusIndicator tone="warning" label="Watch" variant="badge" />}
-              actions={
-                <Button variant={open ? 'secondary' : 'default'} size="sm" aria-expanded={open} onClick={() => setOpen(!open)}>
-                  <IconSparkles /> {open ? 'Hide assistant' : 'Ask assistant'}
-                </Button>
-              }
-            />
-            <AiwVibrationChart heightClassName="h-44" />
-            <Table>
-              <TableCaption srOnly>Sensors on {AIW_COMPRESSOR.name}</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Measurement</TableHead>
-                  <TableHead>Tag</TableHead>
-                  <TableHead numeric>Value</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {AIW_COMPRESSOR_SENSORS.map((sensor) => (
-                  <TableRow key={sensor.id}>
-                    <TableCell>{sensor.name}</TableCell>
-                    <TableCell mono muted>
-                      {sensor.tag}
-                    </TableCell>
-                    <TableCell numeric>
-                      {sensor.value.toFixed(sensor.decimals)} <span className="text-muted-foreground">{sensor.unit}</span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          {open ? (
-            <div className="flex w-80 shrink-0">
-              <AssistantPanel
-                title="Plant assistant"
-                context={`Reading ${AIW_COMPRESSOR.tag} and its alarms`}
-                icon={<IconSparkles />}
-                actions={
-                  <Button variant="ghost" size="icon-sm" aria-label="Close assistant" onClick={() => setOpen(false)}>
-                    <IconX />
-                  </Button>
-                }
-                footer={<AiwPrompt onSend={send} placeholder="Ask about this compressor" />}
-              >
-                <ChatThread messages={messages} hideActions />
-              </AssistantPanel>
+    <BrowserFrame url="nordkapp.test/equipment/gas-compression" look="studio" minHeight={760}>
+      <AppFrame
+        variant="topbar"
+        brand={{
+          name: 'Nordkapp',
+          detail: 'Operations',
+          mark: <IconTopologyStar3 />,
+        }}
+        nav={AI_DATA_NAV}
+        current="equipment"
+        tools={<AiUserAvatar />}
+        title="Gas compression"
+        subtitle="NK-23 · 5 units · updated 14:00 UTC"
+        status={
+          <StatusPill tone="warning" size="lg" icon={<IconAlertTriangle />}>
+            Watch
+          </StatusPill>
+        }
+      >
+        <Grid className="h-full">
+          <div className="col-span-8 flex flex-col gap-(--kit-gap)">
+            <div className="grid grid-cols-3 gap-(--kit-gap)">
+              <Stat label="Area health" value={78} unit="/ 100" tone="warning" icon={<IconChartLine />} delta={{ value: -6, decimals: 0, caption: 'vs last week' }} />
+              <Stat label="Units running" value="4 of 5" tone="teal" icon={<IconPlayerPlay />} target="Recompressor tripped" />
+              <Stat
+                label="Open alarms"
+                value={4}
+                tone="critical"
+                icon={<IconBell />}
+                delta={{
+                  value: 2,
+                  decimals: 0,
+                  good: 'down',
+                  caption: 'vs yesterday',
+                }}
+              />
             </div>
-          ) : null}
-        </div>
-      </ShellPage>
-    </PageFrame>
+            <Panel className="flex-1" title="Equipment" subtitle="Run state and condition" padding="none">
+              <DataTable
+                label="Gas compression equipment"
+                flush
+                columns={AI_UNIT_COLUMNS}
+                rows={AI_COMPRESSION_UNITS}
+                rowKey={(unit) => unit.id}
+                rowTone={(unit) => (unit.state === 'running' ? undefined : AI_STATE_TONE[unit.state])}
+              />
+            </Panel>
+          </div>
+          <Panel
+            className="col-span-4"
+            tone="accent"
+            title="Atlas"
+            subtitle="Sees this page: 5 units, 4 alarms"
+            icon={
+              <IconChip tone="accent">
+                <IconSparkles />
+              </IconChip>
+            }
+            actions={
+              <Button variant="ghost" size="sm">
+                <IconX /> Close
+              </Button>
+            }
+          >
+            <div className="flex flex-1 flex-col gap-4">
+              <ChatMessage role="user" author="Ingrid Haugen" time="14:01">
+                Which unit should I worry about first?
+              </ChatMessage>
+              <ChatMessage role="assistant" author="Atlas" time="14:01">
+                <p>The recompressor: it tripped at 13:46 and its health is 41. After that the 1st stage compressor, where drive-end vibration is 0.3 mm/s under its high limit.</p>
+                <SparkLine values={AI_VIBRATION.slice(0, 10)} label="Recompressor vibration before the trip" tone="critical" className="h-10 w-full" />
+              </ChatMessage>
+              <AiFollowUps asked={asked} />
+              <div className="mt-auto flex flex-col gap-2.5">
+                <Button variant="outline" size="sm" className="w-full" onClick={() => setDraft('Filter the table to units that need attention.')}>
+                  Filter to units that need attention
+                </Button>
+                <Composer label="Ask Atlas about this page" placeholder="Ask about this page" value={draft} onChange={setDraft} onSend={send} />
+              </div>
+            </div>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function AiWorkspaceTemplateNotebook() {
-  const [extra, setExtra] = useState<readonly string[]>([]);
-
   return (
-    <PageFrame title="Notebook" address="nordkapp.example/notebooks/compressor-vibration" height="lg">
-      <div className="flex min-h-full flex-col bg-base-background">
-        <header className="flex items-center gap-3 border-b border-default px-6 py-3">
-          <AiwTitle title="Compressor vibration, week 11" context="Notebook · 3 questions · saved 13:58">
-            <Button variant="secondary" size="sm">
-              Share notebook
-            </Button>
-          </AiwTitle>
-        </header>
-        <ol className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-6">
-          <li className="flex flex-col gap-3">
-            <AiwNotebookQuestion index={1} text="Show drive-end vibration on 23-KA-9101 for the last 48 hours." />
-            <div className="ml-10 flex flex-col gap-3">
-              <AiwVibrationChart heightClassName="h-48" />
-              <MessageResponse>{AIW_ANSWER}</MessageResponse>
-            </div>
-          </li>
-          <li className="flex flex-col gap-3">
-            <AiwNotebookQuestion index={2} text="Compare with the other two compressors this week." />
-            <div className="ml-10 flex flex-col gap-3">
-              <Table>
-                <TableCaption srOnly>Drive-end vibration per compressor, last 7 days</TableCaption>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Compressor</TableHead>
-                    <TableHead className="w-40">Last 7 days</TableHead>
-                    <TableHead numeric>Latest, mm/s</TableHead>
-                    <TableHead numeric>Limit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {AIW_COMPARISON.map((row) => (
-                    <TableRow key={row.asset.id}>
-                      <TableCell>
-                        <span className="flex flex-col">
-                          <span className="text-base-foreground">{row.asset.name}</span>
-                          <span className="font-mono text-xs text-muted-foreground">{row.asset.tag}</span>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Sparkline
-                          values={row.values}
-                          label={`Drive-end vibration on ${row.asset.tag}, last 7 days`}
-                          unit="mm/s"
-                          height={28}
-                          tone={row.latest > row.limit ? 'critical' : 'neutral'}
-                          showLast
-                        />
-                      </TableCell>
-                      <TableCell numeric>{row.latest.toFixed(1)}</TableCell>
-                      <TableCell numeric muted>
-                        {row.limit.toFixed(1)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <MessageResponse>
-                The recompressor **23-KA-9103** went past its trip limit and is down. **23-KA-9101** shows the same rising shape at about a third of the rate. **23-KA-9102** is flat.
-              </MessageResponse>
-            </div>
-          </li>
-          <li className="flex flex-col gap-3">
-            <AiwNotebookQuestion index={3} text="Is work already planned on 23-KA-9101?" />
-            <div className="ml-10">
-              <MessageResponse>{AIW_ANSWER_ORDERS}</MessageResponse>
-            </div>
-          </li>
-          {extra.map((question, index) => (
-            <li key={`${index}-${question}`} className="flex flex-col gap-3">
-              <AiwNotebookQuestion index={index + 4} text={question} />
-              <div className="ml-10">
-                <MessageResponse>{AIW_ANSWER_SHORT}</MessageResponse>
-              </div>
-            </li>
-          ))}
-          <li className="ml-10 flex flex-col gap-2">
-            <AiwPrompt onSend={(text) => setExtra((current) => [...current, text])} placeholder="Add a question to the notebook" />
-            {extra.length > 0 ? (
-              <div>
-                <Button variant="ghost" size="sm" onClick={() => setExtra([])}>
-                  Remove added questions
+    <BrowserFrame url="atlas.nordkapp.test/notebooks/recompressor-trip" look="editorial" minHeight={820}>
+      <AppFrame
+        variant="masthead"
+        brand={{ name: 'Atlas' }}
+        nav={AI_NOTEBOOK_NAV}
+        current="data"
+        tools={<span>Notebook · saved 14:02 · Ingrid Haugen</span>}
+        title="What changed before the recompressor tripped?"
+        subtitle="A working notebook for the 12 March trip review. Each cell is a question, the query Atlas wrote for it, or what came back."
+      >
+        <Grid className="h-full">
+          <div className="col-span-8 flex flex-col gap-8">
+            <NotebookCell index={1} kind="prompt" title="Compare the hour before today's trip with the hour before the trip in March 2025." meta="Ingrid Haugen · 14:01">
+              <p className="text-(color:--kit-text-2)">Scope: recompressor 23-KA-9103, drive-end vibration, both trips aligned on the minute of the trip.</p>
+            </NotebookCell>
+            <NotebookCell
+              index={2}
+              kind="code"
+              title="Query written by Atlas"
+              meta="0.8 s · 26 rows"
+              actions={
+                <Button variant="ghost" size="sm">
+                  <IconPlayerPlay /> Run
                 </Button>
-              </div>
-            ) : null}
-          </li>
-        </ol>
-      </div>
-    </PageFrame>
+              }
+            >
+              {AI_NOTEBOOK_QUERY}
+            </NotebookCell>
+            <NotebookCell index={3} kind="result" title="Vibration in the hour around each trip" meta="mm/s">
+              <AiVibrationChart height={230} compare />
+            </NotebookCell>
+            <NotebookCell index={4} kind="note" title="Finding">
+              <p>Both trips follow the same 40 to 45 minute climb from about 6 mm/s. In 2025 the cause was drive-end bearing wear after 14 months; this bearing has run for 12.</p>
+            </NotebookCell>
+          </div>
+          <div className="col-span-4 flex flex-col gap-(--kit-gap)">
+            <Panel className="h-auto" title="In this notebook" subtitle="What every cell can use.">
+              <DetailList
+                items={[
+                  { label: 'Asset', value: <TagId>23-KA-9103</TagId> },
+                  { label: 'Series', value: <TagId>23-VT-92740</TagId> },
+                  { label: 'Trip today', value: '13:46 UTC' },
+                  { label: 'Trip in 2025', value: '4 March, 09:12' },
+                  { label: 'Trip limit', value: '11.0 mm/s' },
+                ]}
+              />
+            </Panel>
+            <Panel className="flex-1" title="Next steps" subtitle="Suggested by Atlas from the finding.">
+              <ul className="flex flex-1 flex-col justify-between">
+                <ListRow
+                  title="Check bearing clearance during today's inspection"
+                  meta="Add to WO-104482"
+                  trailing={
+                    <Button variant="outline" size="sm">
+                      Add
+                    </Button>
+                  }
+                />
+                <ListRow
+                  title="Lower the early-warning limit on the 1st stage"
+                  meta="7.1 to 6.5 mm/s"
+                  trailing={
+                    <Button variant="outline" size="sm">
+                      Review
+                    </Button>
+                  }
+                />
+                <ListRow
+                  title="Share this notebook with reliability"
+                  meta="Aisha Khan"
+                  trailing={
+                    <Button variant="outline" size="sm">
+                      Share
+                    </Button>
+                  }
+                />
+              </ul>
+            </Panel>
+          </div>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
-}
-
-function AiwNotebookQuestion({ index, text }: { index: number; text: string }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted-background font-mono text-xs tabular-nums text-muted-foreground">
-        {index}
-      </span>
-      <p className="min-w-0 flex-1 pt-1 text-sm font-medium text-base-foreground">{text}</p>
-    </div>
-  );
-}
-
-function aiwStepStatus(index: number, done: number): AgentRunStepStatus {
-  if (index < done) return 'done';
-  if (index > done) return 'queued';
-  return index === AIW_RUN_PLAN.length - 1 ? 'waiting' : 'running';
 }
 
 function AiWorkspaceTemplateAgentRun() {
-  const [done, setDone] = useState(3);
-  const total = AIW_RUN_PLAN.length;
-  const finished = done >= total;
-  const waiting = done === total - 1;
-
-  const steps: AgentRunStep[] = AIW_RUN_PLAN.map((plan, index) => {
-    const status = aiwStepStatus(index, done);
-    const isDraft = plan.id === 'draft';
-    return {
-      id: plan.id,
-      label: plan.label,
-      status,
-      detail: status === 'done' ? plan.result : status === 'queued' ? undefined : plan.activity,
-      duration: status === 'done' ? plan.duration : undefined,
-      trace: isDraft ? (
-        status === 'queued' ? undefined : (
-          <ToolCall
-            call={status === 'done' ? { ...AIW_DRAFT_TOOL, status: 'completed', output: { id: 'WO-104490' } } : AIW_DRAFT_TOOL}
-            defaultOpen
-            onApprove={() => setDone(total)}
-            onDeny={() => setDone(3)}
-          />
-        )
-      ) : plan.tools && status === 'done' ? (
-        <ToolCallList calls={plan.tools} />
-      ) : undefined,
-    };
-  });
-
+  const [approved, setApproved] = useState(false);
+  const steps = AI_RUN_STEPS.map((step): AiRunStep =>
+    approved && step.id === 'order'
+      ? {
+          ...step,
+          state: 'done',
+          detail: 'WO-104490 created, P1',
+          duration: '0:02',
+        }
+      : step,
+  );
+  const done = steps.filter((step) => step.state === 'done').length;
   return (
-    <PageFrame title="Agent run" address="nordkapp.example/agents/runs/run-2291" height="lg">
-      <div className="flex h-full flex-col bg-base-background">
-        <header className="flex min-h-12 shrink-0 items-center gap-3 border-b border-default px-4 py-2">
-          <AiwTitle title="Compare recompressor trips and propose an inspection" context="Run run-2291 · started 13:52 by Aisha Khan">
-            <StatusIndicator
-              size="sm"
-              tone={finished ? 'success' : waiting ? 'warning' : 'info'}
-              label={finished ? 'Finished' : waiting ? 'Needs approval' : 'Running'}
-            />
-            {finished || waiting ? null : (
-              <Button variant="secondary" size="sm" onClick={() => setDone(done + 1)}>
-                Advance one step
-              </Button>
+    <BrowserFrame url="atlas.nordkapp.test/agents/trip-review/run-3" look="signal" minHeight={760}>
+      <AppFrame
+        brand={{ name: 'Atlas' }}
+        title="Trip review agent"
+        subtitle="Run 3 today · recompressor 23-KA-9103 · started 13:47 UTC"
+        status={
+          <>
+            <StatusPill tone="success" size="lg">
+              {done} done
+            </StatusPill>
+            <StatusPill tone="info" size="lg">
+              1 running
+            </StatusPill>
+            {approved ? null : (
+              <StatusPill tone="warning" size="lg">
+                1 needs you
+              </StatusPill>
             )}
-            <Button variant="ghost" size="sm" onClick={() => setDone(3)}>
-              Restart example
-            </Button>
-          </AiwTitle>
-        </header>
-        <div className="flex min-h-0 flex-1">
-          <section aria-label="Steps" className="flex min-w-0 flex-1 flex-col overflow-y-auto p-4">
-            <AgentRunList key={done} label="Steps" steps={steps} />
-          </section>
-          <section aria-label="Report" className="flex w-96 shrink-0 flex-col gap-3 overflow-y-auto border-l border-default bg-muted-background p-4">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <IconListCheck aria-hidden className="size-4" /> Final report
+          </>
+        }
+      >
+        <Grid className="h-full grid-rows-[auto_minmax(0,1fr)_auto]">
+          <Panel className="col-span-8" tone="info">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <p className="text-lg font-semibold">Run state</p>
+              <div className="flex items-center gap-5">
+                <IconRobot className="size-16 shrink-0" stroke={2.2} aria-hidden="true" />
+                <p className="text-6xl leading-none font-extrabold tracking-tighter">Running step 4 of 6</p>
+              </div>
+              <p className="max-w-2xl text-xl font-medium">Comparing today's trip with 4 March 2025. Both climbed for about 45 minutes before tripping.</p>
             </div>
-            {done >= 5 ? (
-              <Prose>
-                <h3>Two of three trips followed the same pattern</h3>
-                <p>
-                  Before the trips on 14 January and 12 March, drive-end vibration on <code>23-VT-92740</code> rose steadily for about six
-                  hours. The February trip was a process upset and is unrelated.
-                </p>
-                <ul>
-                  <li>
-                    <code>23-KA-9101</code> shows the same shape now, at a third of the rate.
-                  </li>
-                  <li>Both earlier inspections found a worn drive-end bearing.</li>
-                </ul>
-                <p>
-                  <strong>Proposed:</strong> inspect the drive-end bearing on 23-KA-9101 within 2 days.
-                  {finished ? ' Work order WO-104490 has been created.' : ' The work order waits for your approval.'}
-                </p>
-              </Prose>
-            ) : (
-              <p className="text-sm text-muted-foreground">The report appears here when the agent has written it. Findings so far are on each step.</p>
-            )}
-          </section>
-        </div>
-      </div>
-    </PageFrame>
+          </Panel>
+          <Stat className="col-span-4" size="hero" tone="neutral" label="Elapsed" value="2:14" unit="min" target="Typical run 3:30" />
+
+          <ul className="col-span-12 grid grid-cols-6 gap-(--kit-gap)">
+            {steps.map((step) => (
+              <AgentStep key={step.id} title={step.title} state={step.state} detail={step.detail} duration={step.duration} />
+            ))}
+          </ul>
+
+          <Panel
+            className="col-span-7"
+            tone={approved ? 'success' : 'warning'}
+            title={approved ? 'Approved by Ingrid Haugen' : 'Needs your approval'}
+            subtitle="Step 5 · draft a work order"
+          >
+            <div className="flex flex-1 items-center justify-between gap-6">
+              <p className="max-w-md text-base font-medium">Create a P1 corrective order to replace the recompressor drive-end bearing, assigned to Tomás Barros.</p>
+              <div className="flex shrink-0 gap-2.5">
+                <Button size="lg" disabled={approved} onClick={() => setApproved(true)}>
+                  <IconCheck /> {approved ? 'Approved' : 'Approve'}
+                </Button>
+                <Button size="lg" variant="secondary" onClick={() => setApproved(false)}>
+                  <IconPlayerStop /> {approved ? 'Undo' : 'Stop run'}
+                </Button>
+              </div>
+            </div>
+          </Panel>
+          <Panel className="col-span-5" title="Found so far" subtitle="3 findings">
+            <ul>
+              <ListRow tone="critical" title="Peak 11.6 mm/s, 0.6 over the trip limit" trailing="13:46" />
+              <ListRow tone="warning" title="Same 45 minute climb as March 2025" trailing="Match" />
+              <ListRow tone="info" title="Bearing has run 12 of a typical 14 months" trailing="86 %" />
+            </ul>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function AiWorkspaceTemplateReviewAction() {
-  const [decision, setDecision] = useState<Decision | null>(null);
-  const [outcome, setOutcome] = useState<string | null>(null);
-
-  const decide = (kind: Decision, comment: string) => {
-    const verb = kind === 'approve' ? 'Approved' : kind === 'reject' ? 'Rejected' : 'Sent back';
-    setOutcome(comment ? `${verb}: ${comment}` : `${verb}. The agent has been told.`);
-    setDecision(null);
-  };
-
+  const [included, setIncluded] = useState<readonly string[]>(['limit', 'order', 'shelve']);
+  const toggle = (id: string, on: boolean) => setIncluded((current) => (on ? [...current, id] : current.filter((item) => item !== id)));
   return (
-    <PageFrame title="Review and approve agent action" address="nordkapp.example/agents/reviews/rev-118">
-      <div className="flex min-h-full flex-col bg-base-background">
-        <header className="flex min-h-12 shrink-0 items-center gap-3 border-b border-default px-4 py-2">
-          <AiwTitle title="Review agent action" context="rev-118 · proposed 13:58 by the maintenance agent">
-            <Badge variant={outcome ? 'secondary' : 'warning'}>{outcome ? 'Decided' : 'Waiting for you'}</Badge>
-          </AiwTitle>
-        </header>
-        <div className="grid flex-1 grid-cols-1 gap-6 p-6 @3xl:grid-cols-5">
-          <section aria-labelledby="aiw-review-proposal" className="flex flex-col gap-4 @3xl:col-span-3">
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-muted-foreground">The agent wants to</p>
-              <h1 id="aiw-review-proposal" className="text-xl font-semibold tracking-tight text-base-foreground">
-                Create a work order in SAP PM
-              </h1>
-              <p className="text-sm text-muted-foreground">Nothing is written until you approve. You can edit the work order afterwards.</p>
-            </div>
-            <div className="rounded-xl border border-default p-4">
-              <PropertyList items={AIW_PROPOSAL} columns={2} layout="stacked" />
-            </div>
-            <ToolCallList calls={[AIW_TOOLS[1], { ...AIW_DRAFT_TOOL, status: 'pending', approvalReason: undefined }]} collapsible />
-            {outcome ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted-background p-4" role="status">
-                <p className="text-sm text-base-foreground">{outcome}</p>
-                <Button variant="ghost" size="sm" onClick={() => setOutcome(null)}>
-                  Reset example
-                </Button>
+    <BrowserFrame url="atlas.nordkapp.test/agents/trip-review/run-3/review" look="glass" minHeight={760}>
+      <AppFrame
+        variant="rail"
+        brand={{ name: 'Atlas', mark: <IconSparkles /> }}
+        nav={AI_RAIL_NAV}
+        current="agents"
+        tools={<AiUserAvatar />}
+        title="Review and approve"
+        subtitle="Trip review agent, run 3 · nothing changes until you approve"
+        status={
+          <StatusPill tone="warning" size="lg">
+            Waiting for you
+          </StatusPill>
+        }
+      >
+        <Grid className="h-full">
+          <Panel
+            className="col-span-8"
+            title="Atlas proposes 4 changes"
+            subtitle="Untick what you do not want; each is applied separately"
+            footer={
+              <span className="flex w-full items-center justify-between gap-4">
+                <span className="text-sm">
+                  <span className="font-semibold text-(color:--kit-text) tabular-nums">
+                    {included.length} of {AI_CHANGES.length}
+                  </span>{' '}
+                  selected · logged under your name
+                </span>
+                <span className="flex gap-2.5">
+                  <Button variant="outline">Reject all</Button>
+                  <Button disabled={included.length === 0}>
+                    <IconCheck /> Approve {included.length} {included.length === 1 ? 'change' : 'changes'}
+                  </Button>
+                </span>
+              </span>
+            }
+          >
+            <ul className="flex flex-1 flex-col *:flex-1">
+              {AI_CHANGES.map((change) => (
+                <ChangeRow
+                  key={change.id}
+                  title={change.title}
+                  detail={change.detail}
+                  from={change.from}
+                  to={change.to}
+                  risk={change.risk}
+                  included={included.includes(change.id)}
+                  onToggle={(on) => toggle(change.id, on)}
+                />
+              ))}
+            </ul>
+          </Panel>
+          <div className="col-span-4 flex flex-col gap-(--kit-gap)">
+            <Panel className="h-auto" tone="sky" title="Why Atlas proposes this" subtitle="From 4 sources">
+              <div className="flex items-center gap-6">
+                <RingGauge label="Confidence" value={86} size={104} tone="sky" className="shrink-0" />
+                <p className="text-sm text-(color:--kit-text-2)">Today's trip follows the same 45 minute vibration climb as the bearing failure in March 2025.</p>
               </div>
-            ) : decision ? (
-              <DecisionForm
-                key={decision}
-                decision={decision}
-                submitLabel={decision === 'approve' ? 'Approve and create' : undefined}
-                onSubmit={(comment) => decide(decision, comment)}
-                onCancel={() => setDecision(null)}
-              />
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={() => setDecision('approve')}>Approve</Button>
-                <Button variant="secondary" onClick={() => setDecision('request-changes')}>
-                  Request changes
-                </Button>
-                <Button variant="ghost" onClick={() => setDecision('reject')}>
-                  Reject
-                </Button>
+            </Panel>
+            <Panel className="flex-1" title="Evidence" subtitle="Recompressor vibration, 13:00 to 13:45">
+              <div className="flex flex-1 flex-col justify-between gap-4">
+                <SparkLine values={AI_VIBRATION.slice(0, 10)} label="Recompressor vibration before the trip" tone="critical" className="h-20 w-full" />
+                <DetailList
+                  items={[
+                    { label: 'Peak', value: '11.6 mm/s' },
+                    { label: 'Trip limit', value: '11.0 mm/s' },
+                    { label: 'Requested by', value: 'Ingrid Haugen' },
+                  ]}
+                />
               </div>
-            )}
-          </section>
-          <aside aria-label="Why the agent proposes this" className="flex flex-col gap-4 @3xl:col-span-2">
-            <InsightCard
-              kind="Reason"
-              tone="warning"
-              title="Vibration is following the pattern that preceded two trips"
-              summary="Drive-end vibration on 23-KA-9101 has risen 0.9 mm/s in 48 hours at constant speed, the same shape seen on the recompressor before it tripped."
-              evidence={[
-                { id: 'now', label: '23-VT-92540', value: '6.8 mm/s, limit 7.1', mono: true },
-                { id: 'rate', label: 'Rate of rise', value: '0.45 mm/s per day' },
-                { id: 'trips', label: 'Earlier trips with this pattern', value: '2 of 3' },
-              ]}
-              footnote="Based on hourly averages. The agent did not read the lube oil analysis."
-            />
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-muted-foreground">Trend the agent read</p>
-              <Sparkline
-                values={AIW_VIBRATION_SERIES.map((point) => point.v)}
-                label="Drive-end vibration, last 48 hours"
-                unit={AIW_VIBRATION.unit}
-                height={56}
-                variant="area"
-                limit={AIW_VIBRATION.highLimit}
-                showLast
-              />
-            </div>
-          </aside>
-        </div>
-      </div>
-    </PageFrame>
+            </Panel>
+          </div>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
@@ -1055,47 +1262,45 @@ export default definePage({
   id: 'ai-workspaces',
   title: 'AI workspaces',
   summary:
-    'Whole pages built around an assistant: from a single thread to chat beside a canvas, a docked assistant in a data page and agent runs that need review. Every one is assembled from the AI components and runs on prepared plant-operations content.',
+    'Whole pages built around an assistant: prompt-first landing, chat, chat beside data and canvases, notebooks and agent runs. Each is drawn in a different look, and the message, composer and step anatomy changes with it.',
   guidance: {
     use: [
-      'Keep the prompt pinned to the bottom of the thread, in view at every scroll position.',
-      'Give the flexible width to the work (canvas, table, chart) and make the thread the fixed column.',
-      'Show what the assistant can read, and stop for approval before anything is written.',
-      'Let every answer lead to its sources, either under the answer or in a rail.',
+      'Start from the page that matches the job: chat only for questions, chat beside a canvas when the answer is something to keep.',
+      'Show where an answer comes from, as numbered sources or as the steps the agent took.',
+      'Ask for approval before an agent changes anything, with every change listed and its risk in words.',
+      'Keep the composer in one place on every page of the workspace.',
     ],
     avoid: [
-      'A chat-only page for work that produces something to look at; give it a canvas.',
-      'Agent runs that only show a spinner: list the steps and what each one found.',
-      'Hiding the data page behind the assistant; dock it beside the content.',
+      'A chat panel over the data it is talking about; dock it beside the page.',
+      'Agent state shown only as a spinner: say which step is running and what is waiting.',
+      'An empty workspace with only a text box; offer real first questions.',
     ],
   },
   source,
   sections: [
     {
-      id: 'starting',
+      id: 'starting-points',
       title: 'Starting points',
-      description: 'What the workspace shows before there is a conversation.',
+      description: 'What a person sees before the first question.',
       specimens: [
         {
           id: 'AiWorkspaceTemplatePromptLanding',
           title: 'Prompt-first landing',
-          note: 'Pick it as the home of an assistant product: the prompt is the page, with suggestions and recent conversations under it.',
+          note: 'Pick it as the home of an assistant product, where the composer is the hero and suggestions get people started.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/WorkspaceLayout.tsx', 'ai/PromptSuggestions.tsx', 'ai/ChatThread.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/ai-workspaces/Composer.tsx', 'kit/ai-workspaces/PromptCard.tsx', 'kit/ListRow.tsx'],
           Component: AiWorkspaceTemplatePromptLanding,
         },
         {
           id: 'AiWorkspaceTemplateFirstRun',
           title: 'Empty workspace, first run',
-          note: 'Use the first time someone opens the workspace, when setup has to happen before the first question.',
+          note: 'Pick it for a workspace with no data connected yet: the setup steps lead and sample questions keep it usable.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/WorkspaceLayout.tsx', 'patterns/states/SetupChecklist.tsx', 'ai/PromptSuggestions.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx', 'kit/ai-workspaces/Composer.tsx', 'kit/ai-workspaces/PromptCard.tsx'],
           Component: AiWorkspaceTemplateFirstRun,
         },
       ],
@@ -1103,39 +1308,49 @@ export default definePage({
     {
       id: 'conversation',
       title: 'Conversation pages',
-      description: 'The thread is the page.',
+      description: 'A thread as the whole page, with history or sources beside it.',
       specimens: [
         {
           id: 'AiWorkspaceTemplateChatOnly',
           title: 'Chat only',
-          note: 'Pick it when answers are text: a centred thread at reading width with the prompt at the bottom.',
+          note: 'Pick it when the conversation is the product: one centred column and nothing else to manage.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/WorkspaceLayout.tsx', 'ai/ChatThread.tsx', 'ai/PromptSuggestions.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/ai-workspaces/ChatMessage.tsx', 'kit/ai-workspaces/Composer.tsx', 'kit/TrendLine.tsx'],
           Component: AiWorkspaceTemplateChatOnly,
         },
         {
           id: 'AiWorkspaceTemplateHistorySidebar',
           title: 'History sidebar and thread',
-          note: 'Use when people return to earlier conversations; the list is grouped by day and switching keeps each thread.',
+          note: 'Pick it when people come back to earlier conversations; the sidebar is the history and the answer shows its steps.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/WorkspaceLayout.tsx', 'ai/ChatThread.tsx', 'ai/PromptSuggestions.tsx'],
+          bleed: true,
+          uses: [
+            'kit/landing-pages/BrowserFrame.tsx',
+            'kit/AppFrame.tsx',
+            'kit/ai-workspaces/ChatMessage.tsx',
+            'kit/ai-workspaces/AgentStep.tsx',
+            'kit/ai-workspaces/Composer.tsx',
+            'kit/DataTable.tsx',
+          ],
           Component: AiWorkspaceTemplateHistorySidebar,
         },
         {
           id: 'AiWorkspaceTemplateSourcesRail',
           title: 'Chat with sources rail',
-          note: 'Pick it when checking the evidence is part of the job: sources stay open beside the answer instead of under it.',
+          note: 'Pick it when answers must be checked: citations in the text select the source beside it.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/WorkspaceLayout.tsx', 'ai/ChatThread.tsx'],
+          bleed: true,
+          uses: [
+            'kit/landing-pages/BrowserFrame.tsx',
+            'kit/AppFrame.tsx',
+            'kit/ai-workspaces/ChatMessage.tsx',
+            'kit/ai-workspaces/SourceCard.tsx',
+            'kit/ai-workspaces/Composer.tsx',
+          ],
           Component: AiWorkspaceTemplateSourcesRail,
         },
       ],
@@ -1143,60 +1358,58 @@ export default definePage({
     {
       id: 'beside-work',
       title: 'Chat beside work',
-      description: 'The assistant shares the page with what it produces or reads.',
+      description: 'The assistant next to the thing it helps with.',
       specimens: [
         {
           id: 'AiWorkspaceTemplateChatCanvas',
           title: 'Chat and canvas',
-          note: 'Use when the assistant makes something to look at: thread on the left, the chart or table it made on the right.',
+          note: 'Pick it when the assistant builds something to keep: the conversation drives, the canvas holds the charts and tables.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/WorkspaceLayout.tsx',
-            'ai/ChatThread.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'primitives/table/Table.tsx',
-            'primitives/table/TableCaption.tsx',
+            'kit/landing-pages/BrowserFrame.tsx',
+            'kit/AppFrame.tsx',
+            'kit/ai-workspaces/ChatMessage.tsx',
+            'kit/ai-workspaces/Composer.tsx',
+            'kit/TrendLine.tsx',
+            'kit/DataTable.tsx',
+            'kit/StatGroup.tsx',
           ],
           Component: AiWorkspaceTemplateChatCanvas,
         },
         {
           id: 'AiWorkspaceTemplateDockedAssistant',
           title: 'Assistant docked in a data page',
-          note: 'Pick it when the assistant helps with a page people already use; it opens beside the trend and table and can be closed.',
+          note: 'Pick it to add an assistant to an existing page: it sits beside the data, says what it can see and never covers it.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/ShellPage.tsx',
-            'patterns/product/AssistantPanel.tsx',
-            'patterns/structure/PageHeader.tsx',
-            'ai/ChatThread.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'primitives/table/Table.tsx',
-            'primitives/table/TableCaption.tsx',
+            'kit/landing-pages/BrowserFrame.tsx',
+            'kit/AppFrame.tsx',
+            'kit/ai-workspaces/ChatMessage.tsx',
+            'kit/ai-workspaces/Composer.tsx',
+            'kit/DataTable.tsx',
+            'kit/Stat.tsx',
+            'kit/SparkLine.tsx',
           ],
           Component: AiWorkspaceTemplateDockedAssistant,
         },
         {
           id: 'AiWorkspaceTemplateNotebook',
           title: 'Notebook',
-          note: 'Use for an analysis people keep and share: numbered questions, each followed by the chart or table and the answer.',
+          note: 'Pick it for analysis that should be read later: questions, the queries behind them and the results in order.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'templates-b/PageFrame.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'industrial/Sparkline.tsx',
-            'primitives/table/Table.tsx',
-            'primitives/table/TableCaption.tsx',
+            'kit/landing-pages/BrowserFrame.tsx',
+            'kit/AppFrame.tsx',
+            'kit/ai-workspaces/NotebookCell.tsx',
+            'kit/auth-pages/DetailList.tsx',
+            'kit/TrendLine.tsx',
+            'kit/ListRow.tsx',
           ],
           Component: AiWorkspaceTemplateNotebook,
         },
@@ -1205,41 +1418,32 @@ export default definePage({
     {
       id: 'agents',
       title: 'Agent pages',
-      description: 'Long-running work with steps, traces and a decision for a person.',
+      description: 'Watching an agent work and deciding what it may do.',
       specimens: [
         {
           id: 'AiWorkspaceTemplateAgentRun',
           title: 'Agent run',
-          note: 'Pick it for a task that takes minutes: steps with their state and tool traces on the left, the report on the right.',
+          note: 'Pick it to follow a long-running agent on a shared screen: every step is a tile filled with its state.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/AgentRunList.tsx',
-            'templates-b/agentRun.ts',
-            'ai/ToolCall.tsx',
-            'ai/ToolCallList.tsx',
-            'patterns/content/Prose.tsx',
-          ],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/ai-workspaces/AgentStep.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx', 'kit/ListRow.tsx'],
           Component: AiWorkspaceTemplateAgentRun,
         },
         {
           id: 'AiWorkspaceTemplateReviewAction',
           title: 'Review and approve',
-          note: 'Use when an agent wants to write to another system: the proposal, the reason and the decision on one page.',
+          note: 'Pick it before an agent writes anything back: each change with its old and new value and risk, to include or leave out.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'templates-b/PageFrame.tsx',
-            'patterns/product/InsightCard.tsx',
-            'patterns/workflows/DecisionForm.tsx',
-            'patterns/structure/PropertyList.tsx',
-            'ai/ToolCallList.tsx',
-            'industrial/Sparkline.tsx',
+            'kit/landing-pages/BrowserFrame.tsx',
+            'kit/AppFrame.tsx',
+            'kit/ai-workspaces/ChangeRow.tsx',
+            'kit/RingGauge.tsx',
+            'kit/SparkLine.tsx',
+            'kit/auth-pages/DetailList.tsx',
           ],
           Component: AiWorkspaceTemplateReviewAction,
         },

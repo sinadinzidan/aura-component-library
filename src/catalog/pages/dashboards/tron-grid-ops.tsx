@@ -1,565 +1,617 @@
-import { Button } from '@cognite/aura/components/button';
-import { IconArrowLeft } from '@cognite/aura/icons';
+import { Switch } from '@cognite/aura/components/switch';
+import { IconAlertOctagon, IconAlertTriangle, IconCircleCheck } from '@cognite/aura/icons';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { EventTicker } from '../../../library/experiences/futuristic/EventTicker';
-import type { TickerItem } from '../../../library/experiences/futuristic/EventTicker';
-import { GlowText } from '../../../library/experiences/futuristic/GlowText';
-import { GridBlock } from '../../../library/experiences/futuristic/GridBlock';
-import { neonFromStatus } from '../../../library/experiences/futuristic/neon';
-import type { NeonTone } from '../../../library/experiences/futuristic/neon';
-import { NeonPanel } from '../../../library/experiences/futuristic/NeonPanel';
-import { NeonSparkline } from '../../../library/experiences/futuristic/NeonSparkline';
-import { floorPath, paintOrder } from '../../../library/experiences/futuristic/perspective';
-import type { FloorBlock, FloorPoint, GridView } from '../../../library/experiences/futuristic/perspective';
-import { PerspectiveGrid } from '../../../library/experiences/futuristic/PerspectiveGrid';
-import { PulseLine } from '../../../library/experiences/futuristic/PulseLine';
-import { SegmentNumerals } from '../../../library/experiences/futuristic/SegmentNumerals';
-import { formatValue, runStateStatus, severityStatus } from '../../../library/industrial/status';
-import type { DotShape, Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { ALARMS, ASSETS, PLANT_KPIS, WORK_ORDERS, childrenOf, findAsset } from '../../data/plant';
-import { REFERENCE_NOW, formatTime, makeValues } from '../../data/series';
+import { Canvas } from '../../../library/kit/Canvas';
+import { Legend } from '../../../library/kit/Legend';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import { isoBox, isoPoint, isoPoints, type IsoView } from '../../../library/kit/tron-grid-ops/iso';
+import { LookScope } from '../../../library/looks/LookScope';
+import { REFERENCE_NOW, HOUR, formatTime, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './tron-grid-ops.tsx?raw';
 
-type TronGridUnit = { tag: string; name: string; tone: Tone; label: string; shape: DotShape };
+type TgoMeter = { label: string; value: number; max: number; unit: string; decimals: number; high?: number };
 
-type TronGridArea = {
+type TgoZone = {
   id: string;
-  tag: string;
   name: string;
-  /** Load as a share of design capacity, 0–100. Sets the height of the block. */
-  load: number;
-  healthScore: number;
-  /** State in words and the status tone it maps to. */
-  state: string;
-  tone: Tone;
-  shape: DotShape;
-  openAlarms: number;
-  units: readonly TronGridUnit[];
-  /** Load over the last 24 hours, ending on `load`. */
-  trend: readonly number[];
-  block: FloorBlock;
+  state: 'Nominal' | 'Watch' | 'Tripped';
+  figure: { label: string; value: string; unit: string };
+  meters: readonly TgoMeter[];
+  trend: { label: string; unit: string; base: number; seed: number; decimals: number; limit?: number };
+  /** Plate on the ground grid: x, y, width, depth. */
+  plate: readonly [number, number, number, number];
+  /** Equipment on the plate: x and y from the plate corner, width, depth, height, and a state override. */
+  blocks: readonly (readonly [number, number, number, number, number, Tone?])[];
 };
 
-type TronGridRoute = { id: string; points: readonly FloorPoint[]; idle?: boolean; pulses?: number; duration?: number };
+type TgoPipe = { id: string; kind: 'gas' | 'water' | 'power'; path: readonly (readonly [number, number])[] };
 
-const TRON_GRID_VIEW: GridView = { width: 800, height: 610, horizonY: 180, foreshortening: 0.5 };
+const TGO_VIEW: IsoView = { originX: 312, originY: 76, unit: 30 };
 
-/** Where each area stands on the floor and how loaded it is. Loads are a share of design capacity. */
-const TRON_GRID_PLACEMENT: Record<string, { x: number; z: number; load: number; seed: number }> = {
-  'nk-20': { x: -0.7, z: 0.5, load: 64, seed: 41 },
-  'nk-23': { x: 0, z: 0.5, load: 88, seed: 42 },
-  'nk-27': { x: 0.7, z: 0.5, load: 73, seed: 43 },
-  'nk-40': { x: -0.52, z: 1.9, load: 41, seed: 44 },
-  'nk-80': { x: 0.52, z: 1.9, load: 71, seed: 45 },
-  'nk-43': { x: -1.5, z: 3.4, load: 12, seed: 46 },
-};
+const TGO_STATE_TONE: Record<TgoZone['state'], Tone> = { Nominal: 'accent', Watch: 'warning', Tripped: 'critical' };
 
-/** Two areas the shared plant model does not carry: power and flare, with their main units. */
-const TRON_GRID_EXTRA_AREAS = [
+const TGO_ZONES: readonly TgoZone[] = [
   {
-    id: 'nk-80',
-    tag: 'NK-80',
+    id: 'inlet',
+    name: 'Inlet and separation',
+    state: 'Nominal',
+    figure: { label: 'Feed gas', value: '4.61', unit: 'MSm³/d' },
+    meters: [
+      { label: 'Separator level', value: 54.3, max: 100, unit: '%', decimals: 1, high: 70 },
+      { label: 'Separator pressure', value: 13.1, max: 20, unit: 'barg', decimals: 1, high: 15 },
+      { label: 'Zone load', value: 88, max: 100, unit: '%', decimals: 0 },
+    ],
+    trend: { label: 'Separator level', unit: '%', base: 54, seed: 17, decimals: 1, limit: 70 },
+    plate: [0, 0, 5, 4.5],
+    blocks: [
+      [0.6, 0.7, 3.2, 1, 1],
+      [0.6, 2.7, 2.2, 0.9, 0.8],
+      [3.9, 2.4, 0.6, 0.6, 0.6],
+    ],
+  },
+  {
+    id: 'compression',
+    name: 'Gas compression',
+    state: 'Tripped',
+    figure: { label: 'Discharge pressure', value: '48.6', unit: 'barg' },
+    meters: [
+      { label: 'Discharge temperature', value: 141.2, max: 180, unit: '°C', decimals: 1, high: 145 },
+      { label: 'Drive-end vibration', value: 6.8, max: 15, unit: 'mm/s', decimals: 1, high: 7.1 },
+      { label: 'Zone load', value: 97, max: 100, unit: '%', decimals: 0, high: 95 },
+    ],
+    trend: { label: 'Discharge pressure', unit: 'barg', base: 48.2, seed: 11, decimals: 1, limit: 52 },
+    plate: [6, 0, 5.6, 4.5],
+    blocks: [
+      [0.5, 0.5, 1.2, 2.5, 1.5, 'warning'],
+      [2.2, 0.5, 1.2, 2.5, 1.5],
+      [3.9, 0.5, 1.2, 2.5, 1.5, 'critical'],
+      [0.5, 3.4, 4.6, 0.6, 0.6],
+    ],
+  },
+  {
+    id: 'flare',
+    name: 'Flare and relief',
+    state: 'Nominal',
+    figure: { label: 'Flaring', value: '12.4', unit: 'kSm³/d' },
+    meters: [
+      { label: 'Knock-out drum level', value: 12, max: 100, unit: '%', decimals: 0, high: 60 },
+      { label: 'Purge gas flow', value: 42, max: 80, unit: 'Sm³/h', decimals: 0 },
+      { label: 'Relief load', value: 4, max: 100, unit: '%', decimals: 0, high: 50 },
+    ],
+    trend: { label: 'Flaring', unit: 'kSm³/d', base: 13, seed: 47, decimals: 1 },
+    plate: [12.4, 0, 1.6, 2.2],
+    blocks: [[0.55, 0.8, 0.5, 0.5, 5.2]],
+  },
+  {
+    id: 'cooling',
+    name: 'Cooling water',
+    state: 'Watch',
+    figure: { label: 'Supply temperature', value: '18.4', unit: '°C' },
+    meters: [
+      { label: 'Cooler outlet', value: 38.9, max: 60, unit: '°C', decimals: 1, high: 40 },
+      { label: 'Header pressure', value: 4.6, max: 8, unit: 'barg', decimals: 1 },
+      { label: 'Zone load', value: 74, max: 100, unit: '%', decimals: 0 },
+    ],
+    trend: { label: 'Cooler outlet temperature', unit: '°C', base: 38.4, seed: 19, decimals: 1, limit: 40 },
+    plate: [0, 6, 4, 5],
+    blocks: [
+      [0.6, 0.7, 1.6, 1.6, 2.2],
+      [2.8, 1.1, 0.8, 0.8, 0.7, 'warning'],
+      [0.6, 3.3, 2.8, 0.9, 0.7],
+    ],
+  },
+  {
+    id: 'power',
     name: 'Power generation',
-    healthScore: 90,
-    state: 'Running',
-    tone: 'success',
-    shape: 'dot',
-    units: [
-      { tag: '80-GT-8001', name: 'Gas turbine generator A', ...runStateStatus('running') },
-      { tag: '80-GT-8002', name: 'Gas turbine generator B', ...runStateStatus('running') },
-      { tag: '80-GE-8010', name: 'Emergency generator', ...runStateStatus('standby') },
+    state: 'Nominal',
+    figure: { label: 'Load', value: '31.4', unit: 'MW' },
+    meters: [
+      { label: 'Spinning reserve', value: 9, max: 20, unit: 'MW', decimals: 0 },
+      { label: 'Fuel gas pressure', value: 24.2, max: 40, unit: 'barg', decimals: 1 },
+      { label: 'Zone load', value: 78, max: 100, unit: '%', decimals: 0 },
+    ],
+    trend: { label: 'Generation load', unit: 'MW', base: 31, seed: 24, decimals: 1 },
+    plate: [5, 6, 4, 5],
+    blocks: [
+      [0.5, 0.6, 2.4, 0.9, 1.2],
+      [0.5, 2, 2.4, 0.9, 1.2],
+      [0.5, 3.4, 2.4, 0.9, 1.2],
+      [3.2, 0.8, 0.4, 0.4, 3],
     ],
   },
   {
-    id: 'nk-43',
-    tag: 'NK-43',
-    name: 'Flare and vent',
-    healthScore: 93,
-    state: 'Standby',
-    tone: 'info',
-    shape: 'ring',
-    units: [
-      { tag: '43-FL-4301', name: 'High-pressure flare', ...runStateStatus('standby') },
-      { tag: '43-VD-4310', name: 'Flare knock-out drum', ...runStateStatus('running') },
+    id: 'export',
+    name: 'Gas export',
+    state: 'Nominal',
+    figure: { label: 'Export rate', value: '4.38', unit: 'MSm³/d' },
+    meters: [
+      { label: 'Export flow', value: 412, max: 600, unit: 'm³/h', decimals: 0, high: 480 },
+      { label: 'Motor current', value: 86.2, max: 120, unit: 'A', decimals: 1, high: 95 },
+      { label: 'Zone load', value: 82, max: 100, unit: '%', decimals: 0 },
+    ],
+    trend: { label: 'Export rate', unit: 'MSm³/d', base: 4.32, seed: 31, decimals: 2, limit: 4.5 },
+    plate: [10, 6, 4, 5],
+    blocks: [
+      [0.6, 0.7, 1, 1, 0.8],
+      [0.6, 2.8, 1, 1, 0.8],
+      [2.2, 1.1, 1.3, 2.6, 1.1],
     ],
   },
-] as const;
-
-function tronGridTrend(seed: number, load: number): number[] {
-  const values = makeValues({ seed, points: 24, base: load, amplitude: 5, noise: 2.5, cycles: 1.5, min: 0, max: 100, decimals: 0 });
-  return [...values.slice(0, -1), load];
-}
-
-function tronGridBlock(id: string): FloorBlock {
-  const { x, z, load } = TRON_GRID_PLACEMENT[id];
-  return { x, z, width: 0.3, depth: 0.3, height: 0.05 + load * 0.004 };
-}
-
-/** An area takes the state of its worst unit: one trip makes the whole block critical. */
-function tronGridAreaState(units: readonly TronGridUnit[]): Pick<TronGridArea, 'state' | 'tone' | 'shape'> {
-  if (units.some((unit) => unit.tone === 'critical')) return { state: 'Unit tripped', tone: 'critical', shape: 'diamond' };
-  if (units.some((unit) => unit.tone === 'warning')) return { state: 'Maintenance', tone: 'warning', shape: 'square' };
-  return { state: 'Running', tone: 'success', shape: 'dot' };
-}
-
-const TRON_GRID_AREAS: readonly TronGridArea[] = [
-  ...ASSETS.filter((asset) => asset.type === 'area' || asset.type === 'system').map((asset) => {
-    const children = childrenOf(asset.id);
-    const units = children.map((unit) => ({ tag: unit.tag, name: unit.name, ...runStateStatus(unit.state) }));
-    const childIds = children.map((unit) => unit.id);
-    const { load, seed } = TRON_GRID_PLACEMENT[asset.id];
-    return {
-      id: asset.id,
-      tag: asset.tag,
-      name: asset.name,
-      load,
-      healthScore: asset.healthScore,
-      ...tronGridAreaState(units),
-      openAlarms: ALARMS.filter((alarm) => childIds.includes(alarm.assetId) && (alarm.state === 'active' || alarm.state === 'acknowledged')).length,
-      units,
-      trend: tronGridTrend(seed, load),
-      block: tronGridBlock(asset.id),
-    };
-  }),
-  ...TRON_GRID_EXTRA_AREAS.map((area) => {
-    const { load, seed } = TRON_GRID_PLACEMENT[area.id];
-    return { ...area, load, openAlarms: 0, trend: tronGridTrend(seed, load), block: tronGridBlock(area.id) };
-  }),
 ];
 
-/** The process route on the floor: feed in, through compression, out to export; utilities join from behind. */
-const TRON_GRID_ROUTES: readonly TronGridRoute[] = [
-  { id: 'feed', points: [{ x: -1.9, z: 0.5 }, { x: -0.7, z: 0.5 }], pulses: 2, duration: 5 },
-  { id: 'inlet-compression', points: [{ x: -0.7, z: 0.5 }, { x: 0, z: 0.5 }], pulses: 2, duration: 3 },
-  { id: 'compression-export', points: [{ x: 0, z: 0.5 }, { x: 0.7, z: 0.5 }], pulses: 2, duration: 3 },
-  { id: 'export', points: [{ x: 0.7, z: 0.5 }, { x: 1.9, z: 0.5 }], pulses: 2, duration: 5 },
-  { id: 'cooling', points: [{ x: -0.52, z: 1.9 }, { x: -0.52, z: 1.2 }, { x: -0.08, z: 1.2 }, { x: -0.08, z: 0.5 }], duration: 5 },
-  { id: 'power', points: [{ x: 0.52, z: 1.9 }, { x: 0.52, z: 1.2 }, { x: 0.08, z: 1.2 }, { x: 0.08, z: 0.5 }], duration: 5 },
-  { id: 'flare', points: [{ x: 0, z: 0.5 }, { x: 0, z: 3.4 }, { x: -1.5, z: 3.4 }], idle: true },
+const TGO_PIPES: readonly TgoPipe[] = [
+  { id: 'feed', kind: 'gas', path: [[-1.6, 2.2], [0, 2.2]] },
+  { id: 'to-compression', kind: 'gas', path: [[5, 2.2], [6, 2.2]] },
+  { id: 'to-flare', kind: 'gas', path: [[11.6, 1.1], [12.4, 1.1]] },
+  { id: 'to-export', kind: 'gas', path: [[10.6, 4.5], [10.6, 5.25], [12, 5.25], [12, 6]] },
+  { id: 'export-out', kind: 'gas', path: [[14, 8.5], [15.4, 8.5]] },
+  { id: 'cooling', kind: 'water', path: [[2, 6], [2, 5.25], [7, 5.25], [7, 4.5]] },
+  { id: 'power', kind: 'power', path: [[8.6, 6], [8.6, 4.5]] },
 ];
 
-const TRON_GRID_ACTIVE_ALARMS = ALARMS.filter((alarm) => alarm.state === 'active').length;
-const TRON_GRID_TRIPPED = ASSETS.filter((asset) => asset.state === 'tripped').length;
+const TGO_PIPE_TONE: Record<TgoPipe['kind'], Tone> = { gas: 'pink', water: 'blue', power: 'amber' };
 
-const TRON_GRID_EVENTS: readonly TickerItem[] = [
-  ...ALARMS.slice(0, 5).map((alarm) => ({
-    id: alarm.id,
-    time: formatTime(alarm.raisedAt),
-    kind: `${severityStatus(alarm.severity).label} alarm`,
-    text: `${findAsset(alarm.assetId)?.tag ?? ''} ${alarm.message}`,
-    tone: neonFromStatus(severityStatus(alarm.severity).tone),
-  })),
-  ...WORK_ORDERS.slice(0, 3).map((order, index) => ({
-    id: order.id,
-    time: formatTime(REFERENCE_NOW - (index + 1) * 47 * 60_000),
-    kind: 'Work order',
-    text: `${order.id} ${order.title}`,
-    tone: 'accent' as const,
-  })),
-];
+const TGO_HOURS = Array.from({ length: 25 }, (_, index) => formatTime(REFERENCE_NOW - (24 - index) * HOUR));
 
-function tronGridDescription(area: TronGridArea): string {
-  return `${area.tag} ${area.name}: load ${area.load} %, ${area.state.toLowerCase()}`;
+function tgoZone(id: string): TgoZone {
+  return TGO_ZONES.find((zone) => zone.id === id) ?? TGO_ZONES[0];
 }
 
-function TronGridFigure({ label, value, unit, tone = 'accent' }: { label: string; value: string; unit?: string; tone?: NeonTone }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs uppercase tracking-wider text-muted-foreground">{label}</span>
-      <SegmentNumerals value={value} label={label} unit={unit} tone={tone} size="md" />
-    </div>
-  );
+/** Height of a zone's name tag: above its buildings, ignoring a thin stack that towers over the rest. */
+function tgoTagHeight(zone: TgoZone): number {
+  const bulky = zone.blocks.filter((block) => block[2] >= 0.6 || zone.blocks.length === 1).map((block) => block[4]);
+  return Math.max(...bulky) + 0.9;
 }
 
-function TronGridTopBar() {
-  const plant = runStateStatus(ASSETS[0].state);
-  return (
-    <header className="relative flex flex-wrap items-end gap-x-8 gap-y-3 border-b border-[color:color-mix(in_oklab,var(--primary-background)_40%,transparent)] px-5 py-3">
-      <div className="mr-auto flex flex-col gap-1.5">
-        <GlowText variant="label">Nordkapp // Grid operations</GlowText>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          <StatusIndicator tone={plant.tone} shape={plant.shape} label={`Plant ${plant.label.toLowerCase()}`} />
-          <StatusIndicator tone="critical" shape="diamond" label={`${TRON_GRID_TRIPPED} unit tripped`} />
-        </div>
-      </div>
-      <TronGridFigure label="Gas export" value={formatValue(PLANT_KPIS.gasExport.value, 2)} unit={PLANT_KPIS.gasExport.unit} />
-      <TronGridFigure label="Availability" value={formatValue(PLANT_KPIS.availability.value, 1)} unit="%" />
-      <TronGridFigure label="Active alarms" value={String(TRON_GRID_ACTIVE_ALARMS).padStart(2, '0')} tone="warning" />
-      <div className="flex flex-col gap-1.5">
-        <span className="text-xs uppercase tracking-wider text-muted-foreground">Time UTC</span>
-        <SegmentNumerals value={formatTime(REFERENCE_NOW)} label="Time, UTC" size="md" />
-      </div>
-    </header>
-  );
+function TgoStateIcon({ state }: { state: TgoZone['state'] }) {
+  if (state === 'Tripped') return <IconAlertOctagon />;
+  if (state === 'Watch') return <IconAlertTriangle />;
+  return <IconCircleCheck />;
 }
 
-function TronGridScene({ selectedId, onSelect }: { selectedId: string | null; onSelect: (id: string) => void }) {
-  return (
-    <PerspectiveGrid
-      view={TRON_GRID_VIEW}
-      label="Plant areas on the grid. Block height is load, edge colour is state."
-      columns={20}
-      rows={9}
-      xMin={-2.5}
-      xMax={2.5}
-      zMax={6}
-      horizonRings={4}
-    >
-      {TRON_GRID_ROUTES.map((route) => (
-        <PulseLine
-          key={route.id}
-          d={floorPath(TRON_GRID_VIEW, route.points)}
-          idle={route.idle}
-          pulses={route.pulses}
-          duration={route.duration}
-          tone={route.idle ? 'neutral' : 'accent'}
-        />
-      ))}
-      {paintOrder(TRON_GRID_AREAS.map((area) => ({ area, z: area.block.z }))).map(({ area }) => (
-        <GridBlock
-          key={area.id}
-          view={TRON_GRID_VIEW}
-          block={area.block}
-          label={area.tag}
-          value={`${area.load}%`}
-          status={area.tone === 'success' ? undefined : area.state}
-          description={tronGridDescription(area)}
-          tone={neonFromStatus(area.tone)}
-          selected={area.id === selectedId}
-          onSelect={() => onSelect(area.id)}
-        />
-      ))}
-    </PerspectiveGrid>
-  );
-}
+type TgoMapProps = {
+  selected: string;
+  onSelect: (id: string) => void;
+  /** Draw the lines between zones. */
+  flows?: boolean;
+  /** Move dashes along the lines. */
+  animate?: boolean;
+  /** Name tags over the zones. */
+  tags?: boolean;
+};
 
-function TronGridPlantPanel({ onSelect }: { onSelect: (id: string) => void }) {
+/** The plant as a neon isometric map: one plate per zone, glowing outlines for equipment, lines for what flows between. */
+function TgoMap({ selected, onSelect, flows = true, animate = false, tags = true }: TgoMapProps) {
+  const face = (tone: number) => `color-mix(in oklab, var(--t-line) ${tone}%, var(--mountain-black))`;
   return (
-    <NeonPanel title="Plant overview" meta="NK" className="h-full">
-      <p className="text-sm text-medium-foreground">Select an area on the grid or in this list to open its readout.</p>
-      <ul className="mt-3 flex flex-col">
-        {TRON_GRID_AREAS.map((area) => (
-          <li key={area.id}>
-            <button
-              type="button"
-              onClick={() => onSelect(area.id)}
-              className="flex w-full items-center gap-3 border-b border-default py-2 text-left text-sm outline-none hover:bg-[color-mix(in_oklab,var(--primary-background)_10%,transparent)] focus-visible:bg-[color-mix(in_oklab,var(--primary-background)_18%,transparent)]"
+    <div className="relative w-full" style={{ aspectRatio: '700 / 470' }}>
+      <svg viewBox="0 0 700 470" className="absolute inset-0 size-full" role="group" aria-label="Isometric map of the Nordkapp plant by zone">
+        {flows
+          ? TGO_PIPES.map((pipe) => (
+              <polyline
+                key={pipe.id}
+                data-tone={TGO_PIPE_TONE[pipe.kind]}
+                points={isoPoints(TGO_VIEW, pipe.path.map(([x, y]) => [x, y, 0.05]))}
+                fill="none"
+                strokeWidth="3"
+                strokeLinejoin="round"
+                strokeDasharray={animate ? '10 8' : undefined}
+                style={{ stroke: 'var(--t-line)', filter: 'drop-shadow(0 0 5px var(--t-line))' }}
+              >
+                {animate ? <animate attributeName="stroke-dashoffset" from="36" to="0" dur="1.2s" repeatCount="indefinite" /> : null}
+              </polyline>
+            ))
+          : null}
+        {TGO_ZONES.map((zone) => {
+          const [x, y, width, depth] = zone.plate;
+          const picked = zone.id === selected;
+          const plate = isoBox(TGO_VIEW, x, y, width, depth, 0.12);
+          return (
+            <g
+              key={zone.id}
+              data-tone={TGO_STATE_TONE[zone.state]}
+              className="cursor-pointer transition-transform duration-300 motion-reduce:transition-none"
+              style={{ transform: picked ? 'translateY(-8px)' : undefined, filter: `drop-shadow(0 0 ${picked ? 12 : 4}px var(--t-line))` }}
+              onClick={() => onSelect(zone.id)}
             >
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="font-mono font-medium text-base-foreground">{area.tag}</span>
-                <span className="text-xs text-muted-foreground">{area.name}</span>
+              <g strokeWidth={picked ? 2.5 : 1.5} strokeLinejoin="round" style={{ stroke: 'var(--t-line)' }}>
+                <polygon points={plate.left} style={{ fill: face(20) }} />
+                <polygon points={plate.right} style={{ fill: face(12) }} />
+                <polygon points={plate.top} style={{ fill: face(picked ? 34 : 10) }} />
+              </g>
+              {zone.blocks.map(([dx, dy, w, d, h, tone], index) => {
+                const box = isoBox(TGO_VIEW, x + dx, y + dy, w, d, h, 0.12);
+                return (
+                  <g key={index} data-tone={tone} strokeWidth="1.5" strokeLinejoin="round" style={{ stroke: 'var(--t-line)' }}>
+                    <polygon points={box.left} style={{ fill: face(tone ? 46 : 30) }} />
+                    <polygon points={box.right} style={{ fill: face(tone ? 30 : 18) }} />
+                    <polygon points={box.top} style={{ fill: face(tone ? 62 : 44) }} />
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })}
+      </svg>
+      {tags
+        ? TGO_ZONES.map((zone) => {
+            const [x, y, width, depth] = zone.plate;
+            const point = isoPoint(TGO_VIEW, x + width / 2, y + depth / 2, tgoTagHeight(zone));
+            const picked = zone.id === selected;
+            return (
+              <span
+                key={zone.id}
+                data-tone={TGO_STATE_TONE[zone.state]}
+                className={`pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-[8px] border px-2 py-1 text-xs leading-tight font-semibold whitespace-nowrap ${
+                  picked
+                    ? 'border-[var(--t-line)] bg-[color-mix(in_oklab,var(--t-line)_34%,var(--mountain-black))]'
+                    : 'border-[color-mix(in_oklab,var(--t-line)_55%,transparent)] bg-[color-mix(in_oklab,var(--mountain-black)_72%,transparent)]'
+                }`}
+                style={{ left: `${(point.x / 700) * 100}%`, top: `${(point.y / 470) * 100}%` }}
+              >
+                {zone.name}
+                {zone.state === 'Nominal' ? null : <span className="block font-medium text-[var(--t-ink)]">{zone.state}</span>}
               </span>
-              <span className="flex shrink-0 flex-col items-end gap-0.5">
-                <span className="font-mono tabular-nums text-base-foreground">{area.load} %</span>
-                <StatusIndicator tone={area.tone} shape={area.shape} label={area.state} size="sm" />
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </NeonPanel>
-  );
-}
-
-function TronGridAreaPanel({ area, onClose }: { area: TronGridArea; onClose?: () => void }) {
-  const tone = neonFromStatus(area.tone);
-  return (
-    <NeonPanel title="Area readout" meta={area.tag} tone={tone} className="h-full">
-      <div className="flex flex-col gap-1">
-        <span className="text-base font-semibold text-base-foreground">{area.name}</span>
-        <StatusIndicator tone={area.tone} shape={area.shape} label={area.state} />
-      </div>
-
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Load</span>
-          <SegmentNumerals value={String(area.load)} label="Load" unit="%" tone={tone} size="lg" />
-        </div>
-        <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-1 text-xs">
-          <dt className="text-muted-foreground">Health</dt>
-          <dd className="text-right font-mono tabular-nums text-base-foreground">{area.healthScore}</dd>
-          <dt className="text-muted-foreground">Open alarms</dt>
-          <dd className="text-right font-mono tabular-nums text-base-foreground">{area.openAlarms}</dd>
-        </dl>
-      </div>
-
-      <div className="mt-3">
-        <NeonSparkline values={area.trend} label={`${area.tag} load, last 24 hours`} unit="%" decimals={0} tone={tone} height={56} />
-        <div className="flex justify-between pt-1 font-mono text-xs text-muted-foreground">
-          <span>-24 h</span>
-          <span>now</span>
-        </div>
-      </div>
-
-      <h4 className="mt-4 text-xs uppercase tracking-wider text-muted-foreground">Units</h4>
-      <ul className="mt-1 flex flex-col">
-        {area.units.map((unit) => (
-          <li key={unit.tag} className="flex items-center justify-between gap-3 border-b border-default py-1.5 text-xs">
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="font-mono font-medium text-base-foreground">{unit.tag}</span>
-              <span className="text-muted-foreground">{unit.name}</span>
-            </span>
-            <StatusIndicator tone={unit.tone} shape={unit.shape} label={unit.label} size="sm" className="shrink-0" />
-          </li>
-        ))}
-      </ul>
-
-      {onClose ? (
-        <div className="mt-auto pt-3">
-          <Button variant="outline" size="sm" onClick={onClose}>
-            <IconArrowLeft />
-            Back to plant
-          </Button>
-        </div>
-      ) : null}
-    </NeonPanel>
-  );
-}
-
-const TRON_GRID_LEGEND = [
-  runStateStatus('running'),
-  runStateStatus('maintenance'),
-  { ...runStateStatus('tripped'), label: 'Unit tripped' },
-  runStateStatus('standby'),
-];
-
-/** Reads the scene: what height, edge colour and pulses mean. Sits in the sky, clear of the blocks. */
-function TronGridLegend() {
-  return (
-    <div className="pointer-events-none absolute left-5 top-4 flex flex-col gap-2 text-xs">
-      <GlowText variant="label">Sector NK // Process route</GlowText>
-      <p className="text-muted-foreground">Height is load. Edge is the state of the worst unit. Pulses follow the flow.</p>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1">
-        {TRON_GRID_LEGEND.map((entry) => (
-          <li key={entry.label}>
-            <StatusIndicator tone={entry.tone} shape={entry.shape} label={entry.label} size="sm" />
-          </li>
-        ))}
-      </ul>
+            );
+          })
+        : null}
     </div>
   );
 }
 
-/** Faint scan lines and an edge vignette over the scene. Both are built from tokens. */
-function TronGridScanlines() {
+/** The grid floor: lines running to a horizon, with a glow where they meet it. */
+function TgoFloor({ className = '', children }: { className?: string; children: ReactNode }) {
   return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(0deg,color-mix(in_oklab,var(--primary-background)_5%,transparent)_0,color-mix(in_oklab,var(--primary-background)_5%,transparent)_1px,transparent_1px,transparent_4px)]"
+    <div
+      data-look="glass"
+      className={`relative overflow-hidden ${className}`}
+      style={{
+        background:
+          'radial-gradient(70% 34% at 50% 40%, color-mix(in oklab, var(--pink-600) 32%, transparent), transparent 70%), linear-gradient(180deg, var(--mountain-black) 0%, color-mix(in oklab, var(--dusk-900) 55%, var(--mountain-black)) 40%, var(--mountain-black) 100%)',
+      }}
+    >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[40%] bottom-0 [perspective:520px]">
+        <div
+          className="absolute inset-x-[-60%] top-0 h-[220%] origin-top [transform:rotateX(74deg)]"
+          style={{
+            backgroundImage:
+              'linear-gradient(color-mix(in oklab, var(--kit-accent) 55%, transparent) 1.5px, transparent 1.5px), linear-gradient(90deg, color-mix(in oklab, var(--kit-accent) 55%, transparent) 1.5px, transparent 1.5px)',
+            backgroundSize: '64px 64px',
+            maskImage: 'linear-gradient(180deg, transparent 0%, var(--mountain-black) 22%, var(--mountain-black) 100%)',
+          }}
+        />
+      </div>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-[40%] h-px"
+        style={{ background: 'linear-gradient(90deg, transparent, var(--kit-accent), transparent)', boxShadow: '0 0 24px 3px var(--kit-accent)' }}
+      />
+      <div className="relative h-full">{children}</div>
+    </div>
+  );
+}
+
+/** The left rail: every zone as a row, the picked one opened below with its figure and meters. */
+function TgoRail({ selected, onSelect, className }: { selected: string; onSelect: (id: string) => void; className?: string }) {
+  const zone = tgoZone(selected);
+  return (
+    <Panel className={className} title="Nordkapp grid" subtitle="6 zones · 14:00 UTC">
+      <ul className="flex flex-col gap-1">
+        {TGO_ZONES.map((entry) => {
+          const picked = entry.id === selected;
+          return (
+            <li key={entry.id}>
+              <button
+                type="button"
+                data-tone={TGO_STATE_TONE[entry.state]}
+                aria-pressed={picked}
+                onClick={() => onSelect(entry.id)}
+                className={`flex w-full items-center gap-2.5 rounded-[10px] border px-2.5 py-1.5 text-left text-sm outline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--kit-accent)] ${
+                  picked ? 'border-[var(--t-line)] bg-[color-mix(in_oklab,var(--t-line)_22%,transparent)] font-semibold' : 'border-transparent font-medium'
+                }`}
+              >
+                <span aria-hidden="true" className="h-5 w-1 shrink-0 rounded-full bg-[var(--t-line)]" style={{ boxShadow: '0 0 8px var(--t-line)' }} />
+                <span className="min-w-0 flex-1">{entry.name}</span>
+                <span className="shrink-0 text-xs font-medium text-[var(--t-ink)]">{entry.state}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="mt-4 flex flex-1 flex-col justify-between gap-4 border-t border-[var(--kit-rule)] pt-4">
+        <div>
+          <p className="text-sm text-[var(--kit-text-2)]">{zone.figure.label}</p>
+          <p className="text-5xl leading-none font-semibold tracking-tight tabular-nums">
+            {zone.figure.value} <span className="text-base font-medium text-[var(--kit-text-2)]">{zone.figure.unit}</span>
+          </p>
+        </div>
+        {zone.meters.map((meter) => (
+          <Meter
+            key={meter.label}
+            label={meter.label}
+            value={meter.value}
+            max={meter.max}
+            unit={meter.unit}
+            decimals={meter.decimals}
+            high={meter.high}
+            tone={meter.high !== undefined && meter.value > meter.high * 0.94 ? 'warning' : 'accent'}
+            hideScale
+          />
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+/** The picked zone's lead reading over the last day. */
+function TgoTrend({ zone, compact = false, className }: { zone: TgoZone; compact?: boolean; className?: string }) {
+  const values = makeValues({ seed: zone.trend.seed, points: 25, base: zone.trend.base, amplitude: zone.trend.base * 0.03, noise: zone.trend.base * 0.01, decimals: zone.trend.decimals });
+  return (
+    <Panel
+      className={className}
+      padding="tight"
+      title={zone.trend.label}
+      subtitle={compact ? 'Last 24 h' : `${zone.name} · last 24 h`}
+      actions={
+        compact ? undefined : (
+          <StatusPill tone={zone.state === 'Nominal' ? 'success' : TGO_STATE_TONE[zone.state]} icon={<TgoStateIcon state={zone.state} />}>
+            {zone.state}
+          </StatusPill>
+        )
+      }
+    >
+      <TrendArea
+        label={`${zone.trend.label} in ${zone.name}, last 24 hours`}
+        series={[{ id: 'value', label: zone.trend.label, values, tone: 'accent' }]}
+        labels={TGO_HOURS}
+        unit={zone.trend.unit}
+        decimals={zone.trend.decimals}
+        limits={zone.trend.limit && !compact ? [{ value: zone.trend.limit, label: 'Limit', tone: 'warning' }] : undefined}
+        height={compact ? 104 : 132}
+        highlightLast
+      />
+    </Panel>
+  );
+}
+
+/** The floating toolbar: what the map shows and whether it moves. */
+function TgoToolbar({ flows, onFlows, animate, onAnimate }: { flows: boolean; onFlows: (on: boolean) => void; animate: boolean; onAnimate: (on: boolean) => void }) {
+  return (
+    <div className="flex items-center gap-5 rounded-full border border-[var(--kit-rule-strong)] bg-[color-mix(in_oklab,var(--mountain-black)_60%,transparent)] px-5 py-2 backdrop-blur-md">
+      <Switch label="Flow lines" checked={flows} onCheckedChange={onFlows} />
+      <Switch label="Animate flow" checked={animate} onCheckedChange={onAnimate} />
+    </div>
+  );
+}
+
+function TgoLegend() {
+  return (
+    <Legend
+      items={[
+        { label: 'Gas', tone: 'pink' },
+        { label: 'Cooling water', tone: 'blue' },
+        { label: 'Power', tone: 'amber' },
+      ]}
     />
   );
 }
 
-function TronGridScreen({ initialAreaId = null }: { initialAreaId?: string | null }) {
-  const [selectedId, setSelectedId] = useState<string | null>(initialAreaId);
-  const selected = TRON_GRID_AREAS.find((area) => area.id === selectedId);
-  const toggle = (id: string) => setSelectedId((current) => (current === id ? null : id));
-
+function TronGridOpsSignature() {
+  const [selected, setSelected] = useState('compression');
+  const [flows, setFlows] = useState(true);
+  const [animate, setAnimate] = useState(false);
+  const zone = tgoZone(selected);
   return (
-    <div className="relative flex h-[44rem] flex-col overflow-hidden rounded-xl border border-default bg-base-background text-base-foreground">
-      <TronGridTopBar />
-      <div className="relative flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
-          <TronGridScene selectedId={selectedId} onSelect={toggle} />
-          <TronGridScanlines />
-          <TronGridLegend />
+    <LookScope look="glass">
+      <Canvas padding="none">
+        <TgoFloor className="h-[47.5rem]">
+          <div className="grid h-full grid-cols-[19rem_minmax(0,1fr)] gap-4 p-4">
+            <TgoRail selected={selected} onSelect={setSelected} />
+            <div className="relative flex min-w-0 flex-col">
+              <div data-tone={TGO_STATE_TONE[zone.state]} className="w-fit max-w-[calc(100%-18.5rem)] pt-1 pl-2">
+                <p className="text-sm text-[var(--kit-text-2)]">Zone in focus</p>
+                <p className="text-3xl leading-tight font-semibold tracking-tight">{zone.name}</p>
+                <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--t-ink)] [&>svg]:size-4">
+                  <TgoStateIcon state={zone.state} />
+                  {zone.state}
+                </p>
+              </div>
+              <div className="flex flex-1 items-end pb-3">
+                <TgoMap selected={selected} onSelect={setSelected} flows={flows} animate={animate && flows} />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <TgoLegend />
+                <TgoToolbar flows={flows} onFlows={setFlows} animate={animate} onAnimate={setAnimate} />
+              </div>
+              <div className="absolute top-0 right-0 w-[17.5rem]">
+                <TgoTrend zone={zone} compact />
+              </div>
+            </div>
+          </div>
+        </TgoFloor>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TronGridOpsZone() {
+  const [selected, setSelected] = useState('cooling');
+  const zone = tgoZone(selected);
+  return (
+    <LookScope look="glass">
+      <Canvas padding="none">
+        <TgoFloor className="h-full">
+          <div className="flex h-full flex-col gap-4 p-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-sm text-[var(--kit-text-2)]">Zone briefing</p>
+                <p className="text-3xl font-semibold tracking-tight">{zone.name}</p>
+              </div>
+              <div role="group" aria-label="Zones" className="flex flex-wrap gap-1.5">
+                {TGO_ZONES.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    data-tone={TGO_STATE_TONE[entry.state]}
+                    aria-pressed={entry.id === selected}
+                    onClick={() => setSelected(entry.id)}
+                    className={`rounded-full border px-3 py-1 text-sm font-medium outline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--kit-accent)] ${
+                      entry.id === selected ? 'border-[var(--t-line)] bg-[color-mix(in_oklab,var(--t-line)_26%,transparent)]' : 'border-[color-mix(in_oklab,var(--t-line)_45%,transparent)]'
+                    }`}
+                  >
+                    {entry.name.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid flex-1 grid-cols-3 gap-4">
+              {zone.meters.map((meter) => (
+                <Panel key={meter.label} padding="tight">
+                  <p className="text-sm text-[var(--kit-text-2)]">{meter.label}</p>
+                  <p className="mt-1 text-4xl leading-none font-semibold tracking-tight tabular-nums">
+                    {meter.value.toFixed(meter.decimals)} <span className="text-sm font-medium text-[var(--kit-text-2)]">{meter.unit}</span>
+                  </p>
+                  <Meter label="Of range" value={meter.value} max={meter.max} decimals={meter.decimals} unit={meter.unit} high={meter.high} className="mt-4" />
+                </Panel>
+              ))}
+            </div>
+            <TgoTrend zone={zone} />
+          </div>
+        </TgoFloor>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TronGridOpsPortrait() {
+  const [selected, setSelected] = useState('export');
+  const zone = tgoZone(selected);
+  return (
+    <LookScope look="glass">
+      <Canvas padding="none">
+        <TgoFloor className="h-full">
+          <div className="flex h-full flex-col justify-between gap-3 p-4">
+            <div>
+              <p className="text-sm text-[var(--kit-text-2)]">{zone.figure.label}</p>
+              <p className="text-4xl leading-none font-semibold tracking-tight tabular-nums">
+                {zone.figure.value} <span className="text-sm font-medium text-[var(--kit-text-2)]">{zone.figure.unit}</span>
+              </p>
+            </div>
+            <TgoMap selected={selected} onSelect={setSelected} tags={false} />
+            <ul className="grid grid-cols-2 gap-1.5">
+              {TGO_ZONES.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    data-tone={TGO_STATE_TONE[entry.state]}
+                    aria-pressed={entry.id === selected}
+                    onClick={() => setSelected(entry.id)}
+                    className={`w-full rounded-[10px] border px-2 py-1.5 text-left text-xs leading-tight font-medium outline-offset-2 focus-visible:outline-2 focus-visible:outline-[var(--kit-accent)] ${
+                      entry.id === selected
+                        ? 'border-[var(--t-line)] bg-[color-mix(in_oklab,var(--t-line)_30%,var(--mountain-black))]'
+                        : 'border-[color-mix(in_oklab,var(--t-line)_45%,transparent)] bg-[color-mix(in_oklab,var(--mountain-black)_70%,transparent)]'
+                    }`}
+                  >
+                    {entry.name}
+                    <span className="block text-[var(--t-ink)]">{entry.state}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </TgoFloor>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function TronGridOpsMap() {
+  const [selected, setSelected] = useState('power');
+  const [animate, setAnimate] = useState(false);
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas padding="none">
+        <div data-look="glass" className="flex flex-col gap-2 bg-[var(--mountain-black)] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <TgoLegend />
+            <Switch label="Animate flow" checked={animate} onCheckedChange={setAnimate} />
+          </div>
+          <TgoMap selected={selected} onSelect={setSelected} animate={animate} />
         </div>
-        <aside className="relative w-80 shrink-0 p-4 pl-2">
-          {selected ? <TronGridAreaPanel area={selected} onClose={() => setSelectedId(null)} /> : <TronGridPlantPanel onSelect={toggle} />}
-        </aside>
-      </div>
-      <footer className="relative border-t border-[color:color-mix(in_oklab,var(--primary-background)_40%,transparent)] px-3">
-        <EventTicker items={TRON_GRID_EVENTS} label="Recent events" />
-      </footer>
-    </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function TronGridStage({ children, className = '' }: { children: ReactNode; className?: string }) {
+function TronGridOpsFloor() {
   return (
-    <ThemeScope preset="tron" className="w-full">
-      <div className={`rounded-xl border border-default bg-base-background p-5 text-base-foreground ${className}`.trim()}>{children}</div>
-    </ThemeScope>
+    <LookScope look="glass" className="w-full">
+      <Canvas padding="none">
+        <TgoFloor className="h-72">
+          <div className="flex h-full flex-col items-center justify-start gap-1 p-6 text-center">
+            <p className="text-2xl font-semibold tracking-tight">Nordkapp grid</p>
+            <p className="text-sm text-[var(--kit-text-2)]">Six zones on one floor</p>
+          </div>
+        </TgoFloor>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function TronGridOpsExperience() {
+function TronGridOpsRail() {
+  const [selected, setSelected] = useState('inlet');
   return (
-    <ThemeScope preset="tron" className="w-full">
-      <TronGridScreen />
-    </ThemeScope>
+    <LookScope look="glass" className="w-full">
+      <Canvas padding="none">
+        <TgoFloor className="h-full">
+          <div className="flex h-full flex-col p-4">
+            <TgoRail selected={selected} onSelect={setSelected} className="flex-1" />
+          </div>
+        </TgoFloor>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function TronGridOpsNeonDusk() {
+function TronGridOpsTrend() {
   return (
-    <ThemeScope preset="neon-dusk" className="w-full">
-      <TronGridScreen initialAreaId="nk-23" />
-    </ThemeScope>
+    <LookScope look="glass" className="w-full">
+      <Canvas padding="none">
+        <TgoFloor className="h-full">
+          <div className="flex h-full flex-col justify-center gap-4 p-4">
+            <TgoTrend zone={tgoZone('compression')} />
+            <TgoTrend zone={tgoZone('power')} />
+          </div>
+        </TgoFloor>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function TronGridOpsNightVision() {
+function TronGridOpsToolbar() {
+  const [flows, setFlows] = useState(true);
+  const [animate, setAnimate] = useState(false);
   return (
-    <ThemeScope preset="night-vision" className="w-full">
-      <TronGridScreen initialAreaId="nk-40" />
-    </ThemeScope>
-  );
-}
-
-function TronGridPartFloor() {
-  const view: GridView = { width: 480, height: 280, horizonY: 80, foreshortening: 0.55 };
-  const [selected, setSelected] = useState(false);
-  return (
-    <TronGridStage className="h-80 overflow-hidden">
-      <PerspectiveGrid view={view} label="A floor grid with one selectable block and a route" columns={16} rows={7} zMax={5}>
-        <PulseLine d={floorPath(view, [{ x: -1.6, z: 0.6 }, { x: 0.4, z: 0.6 }, { x: 0.4, z: 2.4 }, { x: 1.8, z: 2.4 }])} pulses={2} duration={5} />
-        <GridBlock
-          view={view}
-          block={{ x: -0.3, z: 0.6, width: 0.4, depth: 0.4, height: 0.34 }}
-          label="NK-27"
-          value="73%"
-          description="NK-27 Gas export: load 73 %, running"
-          selected={selected}
-          onSelect={() => setSelected((current) => !current)}
-        />
-      </PerspectiveGrid>
-    </TronGridStage>
-  );
-}
-
-function TronGridPartBlockStates() {
-  const view: GridView = { width: 480, height: 280, horizonY: 60, foreshortening: 0.5 };
-  const blocks = [
-    { tag: 'NK-20', value: '64%', status: undefined, tone: 'accent', height: 0.28, x: -0.72 },
-    { tag: 'NK-40', value: '41%', status: 'Maintenance', tone: 'warning', height: 0.2, x: -0.24 },
-    { tag: 'NK-23', value: '88%', status: 'Unit tripped', tone: 'critical', height: 0.38, x: 0.24 },
-    { tag: 'NK-43', value: '12%', status: 'Standby', tone: 'info', height: 0.1, x: 0.72 },
-  ] as const;
-  return (
-    <TronGridStage className="h-80 overflow-hidden">
-      <PerspectiveGrid view={view} label="Blocks in each state: running, maintenance, tripped and standby" columns={16} rows={6} zMax={5}>
-        {blocks.map((block) => (
-          <GridBlock
-            key={block.tag}
-            view={view}
-            block={{ x: block.x, z: 0.5, width: 0.3, depth: 0.3, height: block.height }}
-            label={block.tag}
-            value={block.value}
-            status={block.status}
-            description={`${block.tag}: load ${block.value}, ${block.status ?? 'running'}`}
-            tone={block.tone}
-          />
-        ))}
-      </PerspectiveGrid>
-    </TronGridStage>
-  );
-}
-
-function TronGridPartPanel() {
-  return (
-    <TronGridStage className="h-[34rem]">
-      <TronGridAreaPanel area={TRON_GRID_AREAS[1]} />
-    </TronGridStage>
-  );
-}
-
-function TronGridPartNumerals() {
-  return (
-    <TronGridStage>
-      <div className="flex flex-col gap-5">
-        <TronGridFigure label="Gas export" value="4.38" unit="MSm³/d" />
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Time UTC</span>
-          <SegmentNumerals value="14:00" label="Time, UTC" size="lg" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Vibration, tripped</span>
-          <SegmentNumerals value="11.6" label="Vibration" unit="mm/s" tone="critical" size="lg" />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Compact, no ghost segments</span>
-          <SegmentNumerals value="182,400" label="Gas flow" unit="Sm³/h" size="sm" ghost={false} />
-        </div>
-      </div>
-    </TronGridStage>
-  );
-}
-
-function TronGridPartPulseLine() {
-  return (
-    <TronGridStage>
-      <svg viewBox="0 0 280 150" role="img" aria-label="Three connector lines: flowing, alarm and idle" className="block w-full">
-        <PulseLine d="M 10 30 H 120 L 150 55 H 270" pulses={2} duration={3} />
-        <PulseLine d="M 10 80 H 270" tone="critical" pulses={1} duration={2} />
-        <PulseLine d="M 10 125 H 150 L 180 100 H 270" tone="neutral" idle />
-        <g className="fill-muted-foreground font-mono text-[0.6875rem]">
-          <text x={10} y={18}>
-            Flowing
-          </text>
-          <text x={10} y={70}>
-            In alarm
-          </text>
-          <text x={10} y={115}>
-            Idle route
-          </text>
-        </g>
-      </svg>
-    </TronGridStage>
-  );
-}
-
-function TronGridPartSparkline() {
-  const area = TRON_GRID_AREAS[1];
-  return (
-    <TronGridStage>
-      <div className="flex flex-col gap-4">
-        <div>
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Load, last 24 hours</span>
-          <NeonSparkline values={area.trend} label="NK-23 load, last 24 hours" unit="%" decimals={0} height={56} />
-        </div>
-        <div>
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Against a limit, in alarm</span>
-          <NeonSparkline values={area.trend} label="NK-23 load against its limit" unit="%" decimals={0} limit={85} tone="warning" height={56} />
-        </div>
-      </div>
-    </TronGridStage>
-  );
-}
-
-function TronGridPartGlowText() {
-  return (
-    <TronGridStage>
-      <div className="flex flex-col gap-3">
-        <GlowText variant="label">Nordkapp // Grid operations</GlowText>
-        <GlowText mono className="text-2xl font-semibold">
-          23-KA-9101
-        </GlowText>
-        <GlowText tone="critical" variant="label">
-          Unit tripped
-        </GlowText>
-        <GlowText tone="warning" variant="label">
-          Maintenance
-        </GlowText>
-        <GlowText glow={false} className="text-sm">
-          Without the halo, for dense runs of text.
-        </GlowText>
-      </div>
-    </TronGridStage>
-  );
-}
-
-function TronGridPartTicker() {
-  return (
-    <TronGridStage>
-      <EventTicker items={TRON_GRID_EVENTS} label="Recent events" />
-    </TronGridStage>
+    <LookScope look="glass" className="w-full">
+      <Canvas padding="none">
+        <TgoFloor className="h-72">
+          <div className="flex h-full flex-col items-center justify-between p-5">
+            <TgoToolbar flows={flows} onFlows={setFlows} animate={animate} onAnimate={setAnimate} />
+            <div className="rounded-full border border-[var(--kit-rule)] bg-[color-mix(in_oklab,var(--mountain-black)_60%,transparent)] px-4 py-2">
+              <TgoLegend />
+            </div>
+          </div>
+        </TgoFloor>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -567,186 +619,122 @@ export default definePage({
   id: 'tron-grid-ops',
   title: 'Grid operations',
   summary:
-    'The plant as neon blocks on a perspective grid: height is load, edge colour is state, and pulses of light run the process route. A showpiece overview for a wall or a demo that still answers "what is running and what is not".',
+    'The plant as a neon isometric map standing on a grid floor: zones are glowing plates, equipment is outlined in the colour of its state, and what flows between zones runs as lines of light.',
   guidance: {
     use: [
-      'As an overview for a wall display, a lobby or a customer demo, where presence matters as much as density.',
-      'For six to ten areas with one headline value each; the grid is a stage, not a table.',
-      'With a dark futuristic theme. Every colour is a token, so the accent follows the theme.',
-      'Pair every block with a row in the list beside it, so the screen works without a pointer.',
+      'When where things are matters as much as how they are doing: zones, their neighbours and what connects them.',
+      'For a handful of zones with a few landmark shapes each; the map is a diagram, not a model.',
+      'One line colour per medium, with the legend always in view.',
     ],
     avoid: [
-      'As the working screen of a control room — operators need the dense console, not perspective.',
-      'More than about ten blocks: they start to hide each other.',
-      'Encoding state in edge colour alone; abnormal blocks also say their state in words.',
-      'Fast or constant motion. Pulses are slow, the ticker pauses, and both stop with reduced motion.',
+      'Neon on text: glow is for lines and outlines, words stay in plain high-contrast type.',
+      'Flow animation by default: it is a switch and starts off.',
+      'Drawing every asset: past twenty shapes the map stops being readable at a glance.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'Shown in the Tron theme. Click a block, or a row in the panel, to lift it and open its readout; click it again or use Back to plant to return. Tab reaches every block; Enter or Space selects. Pause the ticker with its button.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'Pick a zone on the map or in the rail; the rail, the name tag and the trend follow. Flow lines and their animation are switches.',
       specimens: [
         {
-          id: 'TronGridOpsExperience',
-          title: 'Grid operations',
-          note: 'Pick it when the overview has to impress first and inform second, on a wall display or in a demo.',
+          id: 'TronGridOpsSignature',
+          title: 'Neon plant map',
+          note: 'Pick it as a showpiece overview where the layout of the plant is the navigation.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'experiences/futuristic/PerspectiveGrid.tsx',
-            'experiences/futuristic/GridBlock.tsx',
-            'experiences/futuristic/PulseLine.tsx',
-            'experiences/futuristic/NeonPanel.tsx',
-            'experiences/futuristic/SegmentNumerals.tsx',
-            'experiences/futuristic/NeonSparkline.tsx',
-            'experiences/futuristic/EventTicker.tsx',
-            'experiences/futuristic/GlowText.tsx',
-            'experiences/futuristic/perspective.ts',
-            'experiences/futuristic/neon.ts',
-            'industrial/StatusIndicator.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: TronGridOpsExperience,
+          bleed: true,
+          uses: ['kit/tron-grid-ops/iso.ts', 'kit/Panel.tsx', 'kit/Meter.tsx', 'kit/TrendArea.tsx', 'kit/Legend.tsx', 'looks/LookScope.tsx'],
+          Component: TronGridOpsSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'Themes',
-      description: 'The same screen in two other presets, each opened on a selected area. Nothing changes but the tokens.',
+      id: 'variations',
+      title: 'Variations',
+      description: 'Two more screens: a zone briefing without the map, and the portrait layout for a narrow display.',
       specimens: [
         {
-          id: 'TronGridOpsNeonDusk',
-          title: 'Neon dusk',
-          note: 'Pick it for showpiece and AI screens; purple lines and grotesk type soften the instrument feel.',
+          id: 'TronGridOpsZone',
+          title: 'Zone briefing',
+          note: 'Pick it after choosing a zone: three readings large, each on its range, and the lead trend underneath.',
           origin: 'custom',
-          size: 'full',
+          size: 'lg',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: TronGridOpsNeonDusk,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Meter.tsx', 'kit/TrendArea.tsx'],
+          Component: TronGridOpsZone,
         },
         {
-          id: 'TronGridOpsNightVision',
-          title: 'Night vision',
-          note: 'Pick it for surveillance-style monitoring rooms; green on black with monospaced type.',
+          id: 'TronGridOpsPortrait',
+          title: 'Portrait map',
+          note: 'Pick it for a tablet or a kiosk: figure on top, map in the middle, zones as buttons below.',
           origin: 'custom',
-          size: 'full',
+          size: 'sm',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: TronGridOpsNightVision,
+          bleed: true,
+          uses: ['kit/tron-grid-ops/iso.ts'],
+          Component: TronGridOpsPortrait,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The reusable pieces on their own stage. Each takes its data through props and its colour from one neon tone.',
+      description: 'The map, the floor and the floating panels on their own.',
       specimens: [
         {
-          id: 'TronGridPartFloor',
-          title: 'Perspective floor',
-          note: 'Pick it as the stage whenever things should stand in a space rather than sit in a grid.',
+          id: 'TronGridOpsMap',
+          title: 'Isometric map',
+          note: 'Pick it on a plain dark surface when the grid floor would be too much.',
           origin: 'custom',
-          size: 'md',
+          size: 'lg',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'experiences/futuristic/PerspectiveGrid.tsx',
-            'experiences/futuristic/GridBlock.tsx',
-            'experiences/futuristic/PulseLine.tsx',
-            'experiences/futuristic/perspective.ts',
-          ],
-          Component: TronGridPartFloor,
+          bleed: true,
+          uses: ['kit/tron-grid-ops/iso.ts', 'kit/Legend.tsx'],
+          Component: TronGridOpsMap,
         },
         {
-          id: 'TronGridPartBlockStates',
-          title: 'Block states',
-          note: 'Pick the tone from the state and add the state in words for anything that is not running.',
+          id: 'TronGridOpsRail',
+          title: 'Zone rail',
+          note: 'Pick it beside any map: the list is the keyboard path and the lower half shows the picked zone.',
           origin: 'custom',
-          size: 'md',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/GridBlock.tsx', 'experiences/futuristic/PerspectiveGrid.tsx', 'experiences/futuristic/neon.ts'],
-          Component: TronGridPartBlockStates,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Meter.tsx'],
+          Component: TronGridOpsRail,
         },
         {
-          id: 'TronGridPartPanel',
-          title: 'Framed readout panel',
-          note: 'Pick it for the one panel that answers a selection; its outline takes the tone of what is selected.',
+          id: 'TronGridOpsFloor',
+          title: 'Grid floor',
+          note: 'Pick it as the backdrop of a showpiece screen; keep content above the horizon or on glass panels.',
           origin: 'custom',
-          size: 'md',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'experiences/futuristic/NeonPanel.tsx',
-            'experiences/futuristic/SegmentNumerals.tsx',
-            'experiences/futuristic/NeonSparkline.tsx',
-            'industrial/StatusIndicator.tsx',
-          ],
-          Component: TronGridPartPanel,
+          bleed: true,
+          Component: TronGridOpsFloor,
         },
         {
-          id: 'TronGridPartNumerals',
-          title: 'Segment numerals',
-          note: 'Pick them for the three or four headline figures of a screen, never for a table of values.',
+          id: 'TronGridOpsToolbar',
+          title: 'Floating toolbar and legend',
+          note: 'Pick them to keep map controls off the map: a pill of switches on top, the line colours below.',
           origin: 'custom',
-          size: 'md',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/SegmentNumerals.tsx', 'experiences/futuristic/segments.ts'],
-          Component: TronGridPartNumerals,
+          bleed: true,
+          uses: ['kit/Legend.tsx'],
+          Component: TronGridOpsToolbar,
         },
         {
-          id: 'TronGridPartPulseLine',
-          title: 'Pulse line',
-          note: 'Pick it to show which way something flows; use the idle variant for a route that is not in use.',
+          id: 'TronGridOpsTrend',
+          title: 'Zone trend',
+          note: 'Pick it as the floating panel in the free corner of the map for the picked zone.',
           origin: 'custom',
-          size: 'sm',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/PulseLine.tsx', 'experiences/futuristic/usePrefersReducedMotion.ts'],
-          Component: TronGridPartPulseLine,
-        },
-        {
-          id: 'TronGridPartSparkline',
-          title: 'Neon sparkline',
-          note: 'Pick it for a trend inside a neon panel; on ordinary screens the plain sparkline is the better choice.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/NeonSparkline.tsx', 'industrial/sparklinePath.ts'],
-          Component: TronGridPartSparkline,
-        },
-        {
-          id: 'TronGridPartGlowText',
-          title: 'Glow text',
-          note: 'Pick it for titles, captions and single figures; body text stays in the normal foreground.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/GlowText.tsx', 'experiences/futuristic/neon.ts'],
-          Component: TronGridPartGlowText,
-        },
-        {
-          id: 'TronGridPartTicker',
-          title: 'Event ticker',
-          note: 'Pick it for ambient awareness along the bottom edge; it pauses on request and stands still with reduced motion.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['experiences/futuristic/EventTicker.tsx', 'experiences/futuristic/usePrefersReducedMotion.ts'],
-          Component: TronGridPartTicker,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/TrendArea.tsx', 'kit/StatusPill.tsx'],
+          Component: TronGridOpsTrend,
         },
       ],
     },

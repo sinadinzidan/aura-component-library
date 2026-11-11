@@ -1,16 +1,21 @@
 import { Button } from '@cognite/aura/components/button';
 import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import { Slider } from '@cognite/aura/components/slider';
+import { IconArrowLeft, IconArrowRight, IconChevronRight, IconPlayerPlay, IconRoute, IconShip, IconSnowflake, IconWorld } from '@cognite/aura/icons';
 import { useReducer, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { TONE_VALUE_TEXT, formatValue } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
-import { HudPanel } from '../../../library/three/HudPanel';
-import { AirCoolerBank } from '../../../library/three/plants/AirCoolerBank';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { Canvas } from '../../../library/kit/Canvas';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Legend } from '../../../library/kit/Legend';
+import { Panel } from '../../../library/kit/Panel';
+import { SceneStage } from '../../../library/kit/scene/SceneStage';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type StatusTone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
 import { ContainmentTank } from '../../../library/three/plants/ContainmentTank';
 import { CryogenicExchanger } from '../../../library/three/plants/CryogenicExchanger';
 import { LngCarrier } from '../../../library/three/plants/LngCarrier';
@@ -18,17 +23,13 @@ import { LngSite } from '../../../library/three/plants/LngSite';
 import type { LngLine, LngRack, LngUnitStatus } from '../../../library/three/plants/LngSite';
 import type { LngUnit } from '../../../library/three/plants/lngSite';
 import { LoadingArms } from '../../../library/three/plants/LoadingArms';
-import { CRYOGENIC_EXCHANGER_SIZE, airCoolerBankSize, containmentTankSize, lngCarrierSize, slugCatcherSize } from '../../../library/three/plants/plantSizes';
-import { SlugCatcher } from '../../../library/three/plants/SlugCatcher';
+import { CRYOGENIC_EXCHANGER_SIZE, containmentTankSize, lngCarrierSize } from '../../../library/three/plants/plantSizes';
 import { TemperatureRail } from '../../../library/three/plants/TemperatureRail';
-import { TEMPERATURE_RAMP_TOKENS, formatTemperature, temperatureBands, temperatureGradient } from '../../../library/three/plants/temperatureRamp';
+import { TEMPERATURE_RAMP_TOKENS, TEMPERATURE_RAMP_VARS, formatTemperature, temperatureFraction, temperatureGradient, temperatureRampKey } from '../../../library/three/plants/temperatureRamp';
 import type { TemperatureScale } from '../../../library/three/plants/temperatureRamp';
 import { initialTourState, tourCameraTarget, tourFlightTarget, tourReducer, tourStopFor } from '../../../library/three/plants/tourState';
-import type { TourState, TourStop } from '../../../library/three/plants/tourState';
-import { TourStepper } from '../../../library/three/plants/TourStepper';
+import type { TourAction, TourState, TourStop } from '../../../library/three/plants/tourState';
 import { SceneCanvas } from '../../../library/three/SceneCanvas';
-import { SceneLegend } from '../../../library/three/SceneLegend';
-import type { SceneLegendItem } from '../../../library/three/SceneLegend';
 import { Jetty } from '../../../library/three/scenes/Jetty';
 import { StillScene } from '../../../library/three/scenes/StillScene';
 import { TurntableStage } from '../../../library/three/TurntableStage';
@@ -39,7 +40,7 @@ import source from './lng-train-3d.tsx?raw';
 
 type LngTrain3dColourBy = 'status' | 'temperature';
 
-type LngTrain3dFigure = { label: string; value: number; unit: string; decimals: number; tone?: Tone };
+type LngTrain3dFigure = { label: string; value: number; unit: string; decimals: number; tone?: StatusTone };
 
 type LngTrain3dStage = {
   id: string;
@@ -162,17 +163,6 @@ const LNGTRAIN3D_STATUSES: Readonly<Record<string, LngUnitStatus>> = {
   carrier: { tone: 'info', shape: 'dot', text: 'Loading 64 %' },
 };
 
-const LNGTRAIN3D_STATUS_LEGEND: readonly SceneLegendItem[] = [
-  { kind: 'status', label: 'Warning', tone: 'warning' },
-  { kind: 'status', label: 'Information', tone: 'info' },
-  { kind: 'status', label: 'Standby', tone: 'neutral' },
-  { kind: 'selection', label: 'Selected unit' },
-  { kind: 'flow', label: 'Flow' },
-];
-
-const LNGTRAIN3D_GLASS = 'border border-default bg-[color-mix(in_oklab,var(--card-background)_78%,transparent)] backdrop-blur-md';
-const LNGTRAIN3D_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
-
 function lngTrain3dIsColourBy(value: unknown): value is LngTrain3dColourBy {
   return value === 'status' || value === 'temperature';
 }
@@ -193,155 +183,105 @@ function lngTrain3dReadings(state: TourState): { temperature: number | null; sub
   return { temperature: unit?.temperature ?? stage.temperature, subject: unit ? unit.tag : stage.title };
 }
 
-function LngTrain3dColourSwitch({ value, onChange }: { value: LngTrain3dColourBy; onChange: (value: LngTrain3dColourBy) => void }) {
-  return (
-    <div className={`flex items-center gap-2 rounded-lg px-2 py-1 ${LNGTRAIN3D_GLASS}`}>
-      <span className="text-xs text-muted-foreground">Colour by</span>
-      <SegmentedControl
-        value={value}
-        onValueChange={(next) => {
-          if (lngTrain3dIsColourBy(next)) onChange(next);
-        }}
-      >
-        <SegmentedControlList size="small" aria-label="Colour the site by">
-          <SegmentedControlButton value="status">Status</SegmentedControlButton>
-          <SegmentedControlButton value="temperature">Temperature</SegmentedControlButton>
-        </SegmentedControlList>
-      </SegmentedControl>
-    </div>
-  );
+
+const LNGTRAIN3D_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring-default)]';
+
+const LNGTRAIN3D_NAV: AppFrameNavItem[] = [
+  { id: 'tour', label: 'Process tour', icon: <IconRoute /> },
+  { id: 'site', label: 'Site', icon: <IconWorld /> },
+  { id: 'cold', label: 'Cold chain', icon: <IconSnowflake /> },
+  { id: 'cargo', label: 'Cargo', icon: <IconShip />, badge: '1' },
+];
+
+/** The ramp colour a temperature plots in, as a CSS value, so a swatch always matches the scene. */
+function lngTrain3dSwatch(temperature: number): string {
+  return TEMPERATURE_RAMP_VARS[temperatureRampKey(temperature, LNGTRAIN3D_SCALE)];
 }
 
-function LngTrain3dLegend({ colourBy }: { colourBy: LngTrain3dColourBy }) {
-  if (colourBy === 'status') return <SceneLegend items={LNGTRAIN3D_STATUS_LEGEND} label="Status legend" />;
-  const bands = temperatureBands(LNGTRAIN3D_SCALE);
-  return (
-    <div role="group" aria-label="Temperature legend" className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs text-muted-foreground">Ground ring shows process temperature</span>
-      <span aria-hidden="true" className="h-2 w-64 max-w-full rounded-full border border-default" style={{ background: temperatureGradient('to right') }} />
-      <span className="flex w-64 max-w-full justify-between text-xs tabular-nums text-medium-foreground">
-        <span>{formatTemperature(bands[0].from)}</span>
-        <span>{formatTemperature(Math.round((bands[2].from + bands[2].to) / 2))}</span>
-        <span>{formatTemperature(bands[4].to)}</span>
-      </span>
-    </div>
-  );
-}
-
-function LngTrain3dUnitButton({ unit, selected, colourBy, onSelect }: { unit: LngUnit; selected: boolean; colourBy: LngTrain3dColourBy; onSelect: () => void }) {
-  const status = LNGTRAIN3D_STATUSES[unit.id];
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={`-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${LNGTRAIN3D_FOCUS}`}
-    >
-      <span className="flex min-w-0 flex-col">
-        <span className="font-mono text-xs text-base-foreground">{unit.tag}</span>
-        <span className="truncate text-xs text-muted-foreground">{unit.name}</span>
-      </span>
-      {colourBy === 'temperature' && unit.temperature !== null ? (
-        <span className="shrink-0 text-xs tabular-nums text-medium-foreground">{formatTemperature(unit.temperature)}</span>
-      ) : status ? (
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-medium-foreground">
-          <StatusDot tone={status.tone} shape={status.shape} size="sm" />
-          {status.text}
-        </span>
-      ) : null}
-    </button>
-  );
-}
-
-function LngTrain3dStageCard({ state, colourBy, onSelectUnit }: { state: TourState; colourBy: LngTrain3dColourBy; onSelectUnit: (unit: LngUnit) => void }) {
-  const stage = LNGTRAIN3D_STAGES[state.stageIndex];
-  if (!stage) {
-    return (
-      <HudPanel title="Site overview" meta="5 stops" className="pointer-events-auto w-80 shrink-0 self-start max-h-full">
-        <p className="text-sm text-base-foreground">Nordkapp LNG, train 1: gas in from the west, liquid out to the carrier in the east.</p>
-        <p className="text-sm text-muted-foreground">Follow the process stop by stop with the tour along the bottom, or click any unit to jump to its stop. Drag to look around on your own.</p>
-        <Button size="sm" onClick={() => onSelectUnit(LNGTRAIN3D_UNITS[0])}>
-          Start the tour
-        </Button>
-      </HudPanel>
-    );
-  }
-  const units = LNGTRAIN3D_UNITS.filter((unit) => unit.stageId === stage.id);
-  return (
-    <HudPanel
-      key={stage.id}
-      title={`Stop ${state.stageIndex + 1} of ${LNGTRAIN3D_STAGES.length}`}
-      meta={state.mode === 'free' ? 'Free view' : undefined}
-      className="pointer-events-auto w-80 shrink-0 self-start max-h-full motion-safe:transition-[opacity,translate] motion-safe:duration-300 motion-safe:starting:translate-x-4 motion-safe:starting:opacity-0"
-    >
-      <div className="flex flex-col gap-1">
-        <h4 className="text-base font-semibold text-base-foreground">{stage.title}</h4>
-        <p className="text-sm text-medium-foreground">{stage.blurb}</p>
-      </div>
-      <dl className="grid grid-cols-3 gap-2">
-        {stage.figures.map((figure) => (
-          <div key={figure.label} className="flex min-w-0 flex-col gap-0.5">
-            <dt className="text-xs leading-tight text-muted-foreground">{figure.label}</dt>
-            <dd>
-              <span className={`block text-base font-semibold tabular-nums ${TONE_VALUE_TEXT[figure.tone ?? 'neutral']}`}>{formatValue(figure.value, figure.decimals)}</span>
-              <span className="block text-xs text-muted-foreground">{figure.unit}</span>
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Units at this stop</span>
-        <ul className="flex flex-col">
-          {units.map((unit) => (
-            <li key={unit.id}>
-              <LngTrain3dUnitButton unit={unit} selected={unit.id === state.selectedUnitId} colourBy={colourBy} onSelect={() => onSelectUnit(unit)} />
-            </li>
-          ))}
-        </ul>
-      </div>
-    </HudPanel>
-  );
+function lngTrain3dStatusTone(unit: LngUnit): StatusTone | undefined {
+  const tone = LNGTRAIN3D_STATUSES[unit.id]?.tone;
+  return tone === 'warning' || tone === 'info' || tone === 'neutral' || tone === 'critical' || tone === 'success' ? tone : undefined;
 }
 
 function LngTrain3dFallbackList() {
   return (
-    <ul className="flex flex-col gap-2 rounded-lg border border-default bg-card-background p-3">
+    <ul className="flex flex-col gap-2 rounded-xl border border-default bg-card-background p-4">
       {LNGTRAIN3D_STAGES.map((stage) => (
-        <li key={stage.id} className="flex items-center justify-between gap-3 text-sm">
-          <span className="min-w-0 truncate text-base-foreground">{stage.title}</span>
-          <span className="shrink-0 tabular-nums text-muted-foreground">{formatTemperature(stage.temperature)}</span>
+        <li key={stage.id} className="flex items-baseline justify-between gap-4 text-sm">
+          <span className="text-base-foreground">{stage.title}</span>
+          <span className="tabular-nums text-medium-foreground">{formatTemperature(stage.temperature)}</span>
         </li>
       ))}
     </ul>
   );
 }
 
-function LngTrain3dExperience({ initial = 0, initialColour = 'status', still = false }: { initial?: number; initialColour?: LngTrain3dColourBy; still?: boolean }) {
-  // Archetype: a guided tour — the camera follows a fixed route along the process.
-  // Interaction: step through the five stops (or click a unit) and the camera flies there; any
-  //   drag leaves the tour, and Resume tour flies back to the current stop.
-  const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, initial));
-  const [colourBy, setColourBy] = useState<LngTrain3dColourBy>(initialColour);
+function LngTrain3dColourSwitch({ value, onChange }: { value: LngTrain3dColourBy; onChange: (value: LngTrain3dColourBy) => void }) {
+  return (
+    <SegmentedControl
+      value={value}
+      onValueChange={(next) => {
+        if (lngTrain3dIsColourBy(next)) onChange(next);
+      }}
+    >
+      <SegmentedControlList size="small" aria-label="Colour the site by">
+        <SegmentedControlButton value="status">Status</SegmentedControlButton>
+        <SegmentedControlButton value="temperature">Temperature</SegmentedControlButton>
+      </SegmentedControlList>
+    </SegmentedControl>
+  );
+}
+
+function LngTrain3dLegend({ colourBy }: { colourBy: LngTrain3dColourBy }) {
+  if (colourBy === 'status') {
+    return (
+      <Legend
+        items={[
+          { label: 'Warning', tone: 'warning' },
+          { label: 'Information', tone: 'info' },
+          { label: 'Standby', tone: 'neutral' },
+          { label: 'Selected', tone: 'accent' },
+        ]}
+      />
+    );
+  }
+  return (
+    <div role="group" aria-label="Temperature legend" className="flex items-center gap-3 text-sm tabular-nums text-[color:var(--kit-text-2)]">
+      <span>{formatTemperature(LNGTRAIN3D_SCALE.warm)}</span>
+      <span aria-hidden="true" className="h-2.5 w-48 rounded-full" style={{ background: temperatureGradient('to right') }} />
+      <span>{formatTemperature(LNGTRAIN3D_SCALE.cold)}</span>
+    </div>
+  );
+}
+
+type LngTrain3dSceneProps = {
+  state: TourState;
+  dispatch: (action: TourAction) => void;
+  colourBy: LngTrain3dColourBy;
+  insets?: { top?: number; right?: number; bottom?: number; left?: number };
+  still?: boolean;
+  /** Corner content over the scene. */
+  overlay?: ReactNode;
+  className?: string;
+};
+
+/** The site in 3D inside a stage; grabbing it leaves the tour. */
+function LngTrain3dScene({ state, dispatch, colourBy, insets, still = false, overlay, className }: LngTrain3dSceneProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const ramp = useTokenColors(TEMPERATURE_RAMP_TOKENS, rootRef);
-  const rampColors = ramp
-    ? { step0: ramp.step0.color, step1: ramp.step1.color, step2: ramp.step2.color, step3: ramp.step3.color, step4: ramp.step4.color }
-    : null;
-  const { temperature, subject } = lngTrain3dReadings(state);
+  const rampColors = ramp ? { step0: ramp.step0.color, step1: ramp.step1.color, step2: ramp.step2.color, step3: ramp.step3.color, step4: ramp.step4.color } : null;
   const stage = LNGTRAIN3D_STAGES[state.stageIndex];
-
-  const selectUnit = (unit: LngUnit) => {
-    const index = lngTrain3dStageOfUnit(unit);
-    if (index >= 0) dispatch({ type: 'goTo', stageIndex: index, unitId: unit.id });
-  };
   const selectId = (id: string) => {
     const unit = LNGTRAIN3D_UNITS.find((candidate) => candidate.id === id);
-    if (unit) selectUnit(unit);
+    const index = unit ? lngTrain3dStageOfUnit(unit) : -1;
+    if (index >= 0) dispatch({ type: 'goTo', stageIndex: index, unitId: id });
   };
 
   return (
     <div
       ref={rootRef}
+      data-stage={stage?.id ?? 'overview'}
+      data-mode={state.mode}
       onPointerDownCapture={(event) => {
         // Grabbing the scene leaves the tour; the camera keeps wherever the user takes it.
         if (event.target instanceof HTMLCanvasElement) dispatch({ type: 'detach' });
@@ -349,231 +289,525 @@ function LngTrain3dExperience({ initial = 0, initialColour = 'status', still = f
       onWheelCapture={(event) => {
         if (event.target instanceof HTMLCanvasElement) dispatch({ type: 'detach' });
       }}
-      data-stage={stage?.id ?? 'overview'}
-      data-mode={state.mode}
-      className="relative h-[46rem] w-full overflow-hidden rounded-xl border border-default bg-base-background"
+      className={className}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,color-mix(in_oklab,var(--primary-background)_12%,transparent),transparent_65%)]"
-      />
-      <SceneCanvas
-        label={`3D model of the Nordkapp LNG train, ${stage ? `at stop ${state.stageIndex + 1}, ${stage.title}` : 'overview of the whole site'}, coloured by ${colourBy}`}
-        fallback={<LngTrain3dFallbackList />}
-        camera={{ position: [180, 200, 330], fov: 38, far: 3000 }}
+      <SceneStage className="h-full" overlay={overlay}>
+        <SceneCanvas
+          label={`3D model of the Nordkapp LNG train, ${stage ? `at stop ${state.stageIndex + 1}, ${stage.title}` : 'overview of the whole site'}, coloured by ${colourBy}`}
+          fallback={<LngTrain3dFallbackList />}
+          camera={{ position: [180, 200, 330], fov: 38, far: 3000 }}
+        >
+          <StillScene still={still}>
+            <LngSite
+              units={LNGTRAIN3D_UNITS}
+              racks={LNGTRAIN3D_RACKS}
+              lines={LNGTRAIN3D_LINES}
+              land={{ center: [0, 0], size: [290, 170] }}
+              sea={{ center: [215, 0], size: [150, 170], level: 0 }}
+              target={lngTrain3dTarget(state)}
+              insets={insets}
+              activeStageId={stage?.id ?? null}
+              selectedUnitId={state.selectedUnitId}
+              onSelect={selectId}
+              colourBy={colourBy}
+              statuses={LNGTRAIN3D_STATUSES}
+              rampColors={rampColors}
+              scale={LNGTRAIN3D_SCALE}
+            >
+              <Jetty position={[138, 0, -4]} length={26} />
+            </LngSite>
+          </StillScene>
+        </SceneCanvas>
+      </SceneStage>
+    </div>
+  );
+}
+
+function LngTrain3dTemperatureChip({ temperature }: { temperature: number }) {
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap font-semibold tabular-nums">
+      <span aria-hidden="true" className="size-3 rounded-full ring-2 ring-[color:var(--kit-surface)]" style={{ background: lngTrain3dSwatch(temperature) }} />
+      {formatTemperature(temperature)}
+    </span>
+  );
+}
+
+type LngTrain3dStripProps = { state: TourState; dispatch: (action: TourAction) => void; compact?: boolean };
+
+/** The process strip: one card per stop in process order, the current one raised, with the way forward and back. */
+function LngTrain3dStrip({ state, dispatch, compact = false }: LngTrain3dStripProps) {
+  const following = state.mode === 'tour';
+
+  return (
+    <nav aria-label="Process, stop by stop" className="flex items-stretch gap-3">
+      <Button variant="outline" size="icon" aria-label="Previous stop" disabled={state.stageIndex <= -1 && following} onClick={() => dispatch({ type: 'previous' })} className="self-center">
+        <IconArrowLeft />
+      </Button>
+      <ol className="grid min-w-0 flex-1 grid-cols-5 gap-2">
+        {LNGTRAIN3D_STAGES.map((stage, index) => {
+          const current = index === state.stageIndex;
+          const passed = index < state.stageIndex;
+          const figure = stage.figures[0];
+          return (
+            <li key={stage.id} className="relative flex min-w-0">
+              <button
+                type="button"
+                aria-current={current ? 'step' : undefined}
+                onClick={() => dispatch({ type: 'goTo', stageIndex: index })}
+                className={`flex min-w-0 flex-1 flex-col gap-2 rounded-[var(--kit-radius-sm)] border p-3.5 text-left transition-[translate,box-shadow] ${LNGTRAIN3D_FOCUS} ${
+                  current
+                    ? '-translate-y-1.5 border-transparent bg-[var(--primary-background)] text-[color:var(--primary-foreground)] shadow-[0_16px_28px_-14px_var(--primary-background)]'
+                    : 'border-[color:var(--kit-rule)] bg-[var(--kit-surface)] text-[color:var(--kit-text)] hover:border-[color:var(--kit-rule-strong)]'
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums ${
+                      current ? 'bg-[var(--primary-foreground)] text-[color:var(--primary-background)]' : passed ? 'bg-[var(--kit-text)] text-[color:var(--kit-surface)]' : 'bg-[var(--kit-track)] text-[color:var(--kit-text-2)]'
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 truncate text-sm font-semibold">{stage.label}</span>
+                </span>
+                <span className="text-2xl leading-none tracking-tight">
+                  <LngTrain3dTemperatureChip temperature={stage.temperature} />
+                </span>
+                {compact ? null : (
+                  <span className={`text-xs ${current ? 'opacity-90' : 'text-[color:var(--kit-text-2)]'}`}>
+                    {figure.label}{' '}
+                    <span className="font-semibold tabular-nums">
+                      {formatNumber(figure.value, figure.decimals)} {figure.unit}
+                    </span>
+                  </span>
+                )}
+              </button>
+              {index < LNGTRAIN3D_STAGES.length - 1 ? <IconChevronRight aria-hidden="true" className="absolute -right-[0.8125rem] top-1/2 z-10 size-4 -translate-y-1/2 text-[color:var(--kit-text-3)]" /> : null}
+            </li>
+          );
+        })}
+      </ol>
+      <Button variant="outline" size="icon" aria-label="Next stop" disabled={state.stageIndex >= LNGTRAIN3D_STAGES.length - 1 && following} onClick={() => dispatch({ type: 'next' })} className="self-center">
+        <IconArrowRight />
+      </Button>
+    </nav>
+  );
+}
+
+function LngTrain3dUnitRow({ unit, selected, colourBy, onSelect }: { unit: LngUnit; selected: boolean; colourBy: LngTrain3dColourBy; onSelect: () => void }) {
+  const status = LNGTRAIN3D_STATUSES[unit.id];
+  const tone = lngTrain3dStatusTone(unit);
+
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={`flex w-full items-center justify-between gap-3 rounded-[var(--kit-radius-sm)] border border-transparent px-3 py-1.5 text-left hover:bg-[var(--kit-well)] aria-pressed:border-[var(--primary-background)] aria-pressed:bg-[color-mix(in_oklab,var(--primary-background)_8%,transparent)] ${LNGTRAIN3D_FOCUS}`}
+    >
+      <span className="flex min-w-0 items-baseline gap-2">
+        <span className="truncate text-sm font-medium text-[color:var(--kit-text)]">{unit.name}</span>
+        <span className="shrink-0 text-xs text-[color:var(--kit-text-3)]">
+          <TagId>{unit.tag}</TagId>
+        </span>
+      </span>
+      {colourBy === 'temperature' && unit.temperature !== null ? (
+        <span className="shrink-0 text-sm text-[color:var(--kit-text)]">
+          <LngTrain3dTemperatureChip temperature={unit.temperature} />
+        </span>
+      ) : status && tone ? (
+        <StatusPill tone={tone}>{status.text}</StatusPill>
+      ) : (
+        <span className="shrink-0 text-xs text-[color:var(--kit-text-3)]">Normal</span>
+      )}
+    </button>
+  );
+}
+
+type LngTrain3dStageCardProps = { state: TourState; dispatch: (action: TourAction) => void; colourBy: LngTrain3dColourBy; className?: string };
+
+/** What the current stop is: the plain-language explanation, three figures and the units standing there. */
+function LngTrain3dStageCard({ state, dispatch, colourBy, className }: LngTrain3dStageCardProps) {
+  const stage = LNGTRAIN3D_STAGES[state.stageIndex];
+  if (!stage) {
+    return (
+      <Panel
+        className={className}
+        title="The whole site"
+        subtitle="Nordkapp LNG, train 1"
+        icon={
+          <IconChip tone="accent">
+            <IconWorld />
+          </IconChip>
+        }
       >
-        <StillScene still={still}>
-          <LngSite
-            units={LNGTRAIN3D_UNITS}
-            racks={LNGTRAIN3D_RACKS}
-            lines={LNGTRAIN3D_LINES}
-            land={{ center: [0, 0], size: [290, 170] }}
-            sea={{ center: [215, 0], size: [150, 170], level: 0 }}
-            target={lngTrain3dTarget(state)}
-            insets={{ top: 56, bottom: 120, left: 150, right: 344 }}
-            activeStageId={stage?.id ?? null}
-            selectedUnitId={state.selectedUnitId}
-            onSelect={selectId}
-            colourBy={colourBy}
-            statuses={LNGTRAIN3D_STATUSES}
-            rampColors={rampColors}
-            scale={LNGTRAIN3D_SCALE}
-          >
-            <Jetty position={[138, 0, -4]} length={26} />
-          </LngSite>
-        </StillScene>
-      </SceneCanvas>
-
-      <div className="pointer-events-none absolute inset-3 z-30 flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className={`pointer-events-auto flex flex-col rounded-lg px-3 py-1.5 ${LNGTRAIN3D_GLASS}`}>
-            <span className="text-sm font-semibold text-base-foreground">Nordkapp LNG, train 1</span>
-            <span className="text-xs text-muted-foreground">Guided tour along the process</span>
-          </div>
-          <div className="pointer-events-auto">
-            <LngTrain3dColourSwitch value={colourBy} onChange={setColourBy} />
+        <div className="flex flex-1 flex-col gap-4">
+          <p className="text-sm text-[color:var(--kit-text-2)]">Gas comes in from the west at 28 °C and leaves for the carrier in the east as liquid at −162 °C. Five stops follow it through the plant.</p>
+          <dl className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Feed gas', value: '18.4', unit: 'MSm³/d' },
+              { label: 'LNG made', value: '560', unit: 't/h' },
+              { label: 'Carrier', value: '64', unit: '% loaded' },
+            ].map((item) => (
+              <div key={item.label} className="flex flex-col">
+                <dt className="text-xs text-[color:var(--kit-text-3)]">{item.label}</dt>
+                <dd className="text-2xl font-semibold tracking-tight tabular-nums text-[color:var(--kit-text)]">{item.value}</dd>
+                <dd className="text-xs text-[color:var(--kit-text-2)]">{item.unit}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="mt-auto">
+            <Button onClick={() => dispatch({ type: 'goTo', stageIndex: 0 })}>
+              <IconPlayerPlay /> Start at the inlet
+            </Button>
           </div>
         </div>
+      </Panel>
+    );
+  }
+  const units = LNGTRAIN3D_UNITS.filter((unit) => unit.stageId === stage.id);
+  const next = LNGTRAIN3D_STAGES[state.stageIndex + 1];
 
-        <div className="flex min-h-0 flex-1 justify-between gap-3">
-          <HudPanel title="Temperature" className="pointer-events-auto h-full max-h-[26rem] w-36 shrink-0 self-start">
-            <TemperatureRail temperature={temperature} scale={LNGTRAIN3D_SCALE} ticks={LNGTRAIN3D_TICKS} subject={subject} className="h-full min-h-48" />
-          </HudPanel>
-          <LngTrain3dStageCard state={state} colourBy={colourBy} onSelectUnit={selectUnit} />
+  return (
+    <Panel
+      className={className}
+      title={stage.title}
+      subtitle={`Stop ${state.stageIndex + 1} of ${LNGTRAIN3D_STAGES.length}`}
+      icon={
+        <span aria-hidden="true" className="flex size-10 items-center justify-center rounded-full bg-[var(--primary-background)] text-base font-semibold tabular-nums text-[color:var(--primary-foreground)]">
+          {state.stageIndex + 1}
+        </span>
+      }
+      actions={
+        <span className="text-base text-[color:var(--kit-text)]">
+          <LngTrain3dTemperatureChip temperature={stage.temperature} />
+        </span>
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <p className="text-sm text-[color:var(--kit-text-2)]">{stage.blurb}</p>
+        <dl className="grid grid-cols-3 gap-3 border-y border-[color:var(--kit-rule)] py-3">
+          {stage.figures.map((figure) => (
+            <div key={figure.label} data-tone={figure.tone ?? 'neutral'} className="flex min-w-0 flex-col">
+              <dt className="text-xs leading-4 text-[color:var(--kit-text-3)]">{figure.label}</dt>
+              <dd className={`text-2xl font-semibold tracking-tight tabular-nums ${figure.tone ? 'text-[color:var(--t-ink)]' : 'text-[color:var(--kit-text)]'}`}>{formatNumber(figure.value, figure.decimals)}</dd>
+              <dd className="text-xs text-[color:var(--kit-text-2)]">{figure.unit}</dd>
+            </div>
+          ))}
+        </dl>
+        <div className="flex min-h-0 flex-col gap-1">
+          <h4 className="text-sm font-semibold text-[color:var(--kit-text)]">Units at this stop</h4>
+          <ul className="-mx-3 flex min-h-0 flex-col overflow-y-auto">
+            {units.map((unit) => (
+              <li key={unit.id}>
+                <LngTrain3dUnitRow unit={unit} selected={unit.id === state.selectedUnitId} colourBy={colourBy} onSelect={() => dispatch({ type: 'goTo', stageIndex: state.stageIndex, unitId: unit.id })} />
+              </li>
+            ))}
+          </ul>
         </div>
+        <div className="mt-auto flex flex-col gap-2 border-t border-[color:var(--kit-rule)] pt-3">
+          <div className="flex items-baseline justify-between text-xs text-[color:var(--kit-text-2)]">
+            <span>Process temperature here</span>
+            <span className="tabular-nums">
+              {formatTemperature(LNGTRAIN3D_SCALE.warm)} to {formatTemperature(LNGTRAIN3D_SCALE.cold)}
+            </span>
+          </div>
+          <div role="img" aria-label={`Process temperature at this stop: ${formatTemperature(stage.temperature)}`} className="relative h-3 rounded-full" style={{ background: temperatureGradient('to right') }}>
+            <span
+              className="absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-[color:var(--kit-text)] bg-[var(--kit-surface)] shadow-[0_2px_6px_var(--effect-shadow-xl)]"
+              style={{ left: `${Math.min(97, Math.max(3, temperatureFraction(stage.temperature, LNGTRAIN3D_SCALE) * 100))}%` }}
+            />
+          </div>
+          {next ? (
+            <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'next' })} className="mt-1 w-full">
+              Next: {next.title} <IconArrowRight />
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'overview' })} className="mt-1 w-full">
+              <IconWorld /> Back to the whole site
+            </Button>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
 
-        <div className={`pointer-events-auto flex flex-col gap-2 rounded-xl p-3 ${LNGTRAIN3D_GLASS}`}>
-          <TourStepper
-            stages={LNGTRAIN3D_STAGES}
-            index={state.stageIndex}
-            mode={state.mode}
-            onSelect={(index) => dispatch({ type: 'goTo', stageIndex: index })}
-            onPrevious={() => dispatch({ type: 'previous' })}
-            onNext={() => dispatch({ type: 'next' })}
-            onResume={() => dispatch({ type: 'resume' })}
-            label="Tour along the process"
-          />
+/** The corner furniture of the scene: where the camera is, the legend, and the way back into the tour. */
+function LngTrain3dSceneOverlay({ state, dispatch, colourBy, onColourBy }: { state: TourState; dispatch: (action: TourAction) => void; colourBy: LngTrain3dColourBy; onColourBy?: (value: LngTrain3dColourBy) => void }) {
+  const stage = LNGTRAIN3D_STAGES[state.stageIndex];
+  const chip = 'pointer-events-auto rounded-full border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_88%,transparent)] px-3.5 py-2 shadow-[0_6px_16px_-10px_var(--effect-shadow-xl)] backdrop-blur-md';
+
+  return (
+    <div className="flex h-full flex-col justify-between p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className={`${chip} text-sm text-[color:var(--kit-text)]`}>
+          <span className="font-semibold">{stage ? stage.title : 'Whole site'}</span>
+          <span className="text-[color:var(--kit-text-2)]"> · {state.mode === 'free' ? 'free view' : stage ? `stop ${state.stageIndex + 1} of ${LNGTRAIN3D_STAGES.length}` : 'overview'}</span>
+        </p>
+        <div className="pointer-events-auto flex items-center gap-2">
+          {state.mode === 'free' ? (
+            <Button size="sm" onClick={() => dispatch({ type: 'resume' })}>
+              <IconPlayerPlay /> Resume tour
+            </Button>
+          ) : null}
+          <Button variant="outline" size="sm" disabled={state.stageIndex === -1 && state.mode === 'tour'} onClick={() => dispatch({ type: 'overview' })}>
+            <IconWorld /> Whole site
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <div className={chip}>
           <LngTrain3dLegend colourBy={colourBy} />
         </div>
+        {onColourBy ? (
+          <div className="pointer-events-auto">
+            <LngTrain3dColourSwitch value={colourBy} onChange={onColourBy} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function LngTrain3dAuraDark() {
+function LngTrain3dSceneFrame({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={`overflow-hidden rounded-[var(--kit-radius)] border border-[color:var(--kit-rule)] bg-[var(--kit-well)] shadow-[var(--kit-panel-shadow)] ${className}`}>{children}</div>;
+}
+
+function LngTrain3dTour({ initial = 2, still = false }: { initial?: number; still?: boolean }) {
+  const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, initial));
+  const [colourBy, setColourBy] = useState<LngTrain3dColourBy>('status');
+
   return (
-    <ThemeScope preset="aura-dark" className="w-full">
-      <LngTrain3dExperience initial={-1} />
-    </ThemeScope>
+    <LookScope look="studio">
+      <AppFrame
+        variant="topbar"
+        brand={{ name: 'Nordkapp LNG', detail: 'Train 1', mark: <IconSnowflake /> }}
+        nav={LNGTRAIN3D_NAV}
+        current="tour"
+        tools={<StatusPill tone="success">At rate · 560 t/h</StatusPill>}
+      >
+        <div className="flex flex-col gap-[var(--kit-gap)]">
+          <div className="grid h-[36rem] grid-cols-[minmax(0,1fr)_23rem] grid-rows-[minmax(0,1fr)] gap-[var(--kit-gap)]">
+            <LngTrain3dSceneFrame className="h-full">
+              <LngTrain3dScene
+                className="h-full"
+                state={state}
+                dispatch={dispatch}
+                colourBy={colourBy}
+                insets={{ top: 50, bottom: 50 }}
+                still={still}
+                overlay={<LngTrain3dSceneOverlay state={state} dispatch={dispatch} colourBy={colourBy} onColourBy={setColourBy} />}
+              />
+            </LngTrain3dSceneFrame>
+            <LngTrain3dStageCard key={state.stageIndex} state={state} dispatch={dispatch} colourBy={colourBy} className="min-h-0" />
+          </div>
+          <Panel title="From gas to ship" subtitle="The process in five stops. Pick one and the camera flies there." padding="default">
+            <LngTrain3dStrip state={state} dispatch={dispatch} />
+          </Panel>
+        </div>
+      </AppFrame>
+    </LookScope>
   );
 }
 
-function LngTrain3dHologram() {
+function LngTrainSignature() {
+  return <LngTrain3dTour />;
+}
+
+/** Another screen of the same product: the cold chain. The site coloured by temperature beside the profile it follows. */
+function LngTrainColdChain() {
+  const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, -1));
+  const { temperature, subject } = lngTrain3dReadings(state);
+
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <LngTrain3dExperience initial={2} initialColour="temperature" still />
-    </ThemeScope>
+    <LookScope look="studio">
+      <Canvas className="grid h-[40rem] grid-cols-[11rem_minmax(0,1fr)_24rem] grid-rows-[minmax(0,1fr)] gap-[var(--kit-gap)]">
+        <Panel title="Temperature" subtitle={temperature === null ? 'Whole site' : subject}>
+          <TemperatureRail temperature={temperature} scale={LNGTRAIN3D_SCALE} ticks={LNGTRAIN3D_TICKS} subject={subject} className="min-h-0 flex-1" />
+        </Panel>
+        <LngTrain3dSceneFrame className="h-full">
+          <LngTrain3dScene className="h-full" state={state} dispatch={dispatch} colourBy="temperature" insets={{ top: 50, bottom: 50 }} still overlay={<LngTrain3dSceneOverlay state={state} dispatch={dispatch} colourBy="temperature" />} />
+        </LngTrain3dSceneFrame>
+        <div className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-[var(--kit-gap)]">
+          <Panel
+            tone="info"
+            title="190 degrees colder"
+            subtitle="From pipeline to cargo tank"
+            icon={
+              <IconChip tone="info">
+                <IconSnowflake />
+              </IconChip>
+            }
+          >
+            <p className="text-sm text-[color:var(--kit-text-2)]">Almost all of the drop happens in one place: the main cryogenic exchanger takes the gas from 4 °C to −162 °C. Everything after it only has to keep the liquid cold.</p>
+          </Panel>
+          <Panel title="Temperature by stop" subtitle="Process temperature, °C">
+            <TrendLine
+              label="Process temperature at each of the five stops, from 28 degrees at the inlet to minus 162 at storage"
+              labels={LNGTRAIN3D_STAGES.map((stage) => stage.label)}
+              series={[{ id: 'temperature', label: 'Process temperature', values: LNGTRAIN3D_STAGES.map((stage) => stage.temperature), tone: 'info' }]}
+              limits={[{ value: 0, label: 'Freezing', tone: 'neutral' }]}
+              unit="°C"
+              yDomain={[-180, 40]}
+              height={230}
+              showLegend={false}
+            />
+            <ul className="mt-3 flex flex-wrap gap-1.5">
+              {LNGTRAIN3D_STAGES.map((stage, index) => (
+                <li key={stage.id}>
+                  <button
+                    type="button"
+                    aria-pressed={index === state.stageIndex}
+                    onClick={() => dispatch({ type: 'goTo', stageIndex: index })}
+                    className={`rounded-full border border-[color:var(--kit-rule)] px-3 py-1.5 text-sm font-medium text-[color:var(--kit-text)] hover:border-[color:var(--kit-rule-strong)] aria-pressed:border-transparent aria-pressed:bg-[var(--primary-background)] aria-pressed:text-[color:var(--primary-foreground)] ${LNGTRAIN3D_FOCUS}`}
+                  >
+                    {stage.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </div>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function LngTrain3dBlueprint() {
+/** The tour on a tablet: scene on top, the strip without its figures, and the stop below. */
+function LngTrainTablet() {
+  const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, 4));
+
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <LngTrain3dExperience initial={3} still />
-    </ThemeScope>
+    <LookScope look="studio" className="mx-auto w-full max-w-[48rem]">
+      <Canvas className="flex flex-col gap-[var(--kit-gap)]">
+        <LngTrain3dSceneFrame className="h-[24rem]">
+          <LngTrain3dScene className="h-full" state={state} dispatch={dispatch} colourBy="status" insets={{ top: 50, bottom: 50 }} still overlay={<LngTrain3dSceneOverlay state={state} dispatch={dispatch} colourBy="status" />} />
+        </LngTrain3dSceneFrame>
+        <LngTrain3dStrip state={state} dispatch={dispatch} compact />
+        <LngTrain3dStageCard key={state.stageIndex} state={state} dispatch={dispatch} colourBy="status" />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function LngTrain3dStage({ label, children, hologram = true }: { label: string; children: ReactNode; hologram?: boolean }) {
+function LngTrain3dPartStage({ label, children, footer }: { label: string; children: ReactNode; footer?: ReactNode }) {
   return (
-    <ThemeScope preset={hologram ? 'hologram' : 'aura-dark'} className="w-full">
-      <div className="h-72 w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <SceneCanvas label={label}>
-          <StillScene>{children}</StillScene>
-        </SceneCanvas>
-      </div>
-    </ThemeScope>
+    <LookScope look="studio" className="w-full">
+      <Canvas className="flex h-80 flex-col gap-3">
+        <LngTrain3dSceneFrame className="min-h-0 flex-1">
+          <SceneStage className="h-full">
+            <SceneCanvas label={label}>
+              <StillScene>{children}</StillScene>
+            </SceneCanvas>
+          </SceneStage>
+        </LngTrain3dSceneFrame>
+        {footer}
+      </Canvas>
+    </LookScope>
   );
 }
 
-function LngTrain3dPartExchanger() {
+function LngTrainPartStrip() {
+  const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, 1));
+
   return (
-    <LngTrain3dStage label="Main cryogenic heat exchanger, a tall insulated tower in a steel structure">
+    <LookScope look="studio" className="w-full">
+      <Canvas className="flex flex-col gap-3">
+        <Panel title="From gas to ship" subtitle={state.stageIndex < 0 ? 'Overview' : `Stop ${state.stageIndex + 1}: ${LNGTRAIN3D_STAGES[state.stageIndex].title}`}>
+          <LngTrain3dStrip state={state} dispatch={dispatch} />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function LngTrainPartStageCard() {
+  const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, 3));
+
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="flex h-[32rem] flex-col">
+        <LngTrain3dStageCard key={state.stageIndex} state={state} dispatch={dispatch} colourBy="status" />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function LngTrainPartRail() {
+  const [stop, setStop] = useState(1);
+  const stage = LNGTRAIN3D_STAGES[stop];
+
+  return (
+    <LookScope look="studio" className="w-full">
+      <Canvas className="flex h-[32rem] flex-col">
+        <Panel title="Temperature" subtitle={stage.title} footer={<Slider aria-label="Tour stop" value={[stop]} min={0} max={LNGTRAIN3D_STAGES.length - 1} step={1} onValueChange={(value) => setStop(value[0] ?? 0)} />}>
+          <TemperatureRail temperature={stage.temperature} scale={LNGTRAIN3D_SCALE} ticks={LNGTRAIN3D_TICKS} subject={stage.title} className="min-h-0 flex-1" />
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function LngTrainPartExchanger() {
+  return (
+    <LngTrain3dPartStage label="Main cryogenic heat exchanger, a tall insulated tower in a steel structure">
       <TurntableStage subjectSize={CRYOGENIC_EXCHANGER_SIZE} padding={0.72}>
         <CryogenicExchanger />
       </TurntableStage>
-    </LngTrain3dStage>
+    </LngTrain3dPartStage>
   );
 }
 
-function LngTrain3dPartCoolers() {
+function LngTrainPartTank() {
+  const [level, setLevel] = useState(92);
+
   return (
-    <LngTrain3dStage label="A bank of eight fin-fan air coolers on a pipe rack">
-      <TurntableStage subjectSize={airCoolerBankSize()} padding={0.62} view="isometric">
-        <AirCoolerBank />
+    <LngTrain3dPartStage
+      label={`Full-containment LNG tank with a level gauge showing ${level} percent`}
+      footer={
+        <div className="flex items-center gap-3">
+          <StatusPill tone={level > 90 ? 'warning' : 'success'}>
+            {level} % {level > 90 ? '· high level' : ''}
+          </StatusPill>
+          <Slider aria-label="Tank level" value={[level]} min={0} max={100} step={1} onValueChange={(value) => setLevel(value[0] ?? 0)} />
+        </div>
+      }
+    >
+      <TurntableStage subjectSize={containmentTankSize()} padding={1.05}>
+        <ContainmentTank fill={level / 100} tone={level > 90 ? 'warning' : undefined} />
       </TurntableStage>
-    </LngTrain3dStage>
+    </LngTrain3dPartStage>
   );
 }
 
-function LngTrain3dPartSlugCatcher() {
+function LngTrainPartCarrier() {
   return (
-    <LngTrain3dStage label="Finger-type slug catcher with six parallel pipes">
-      <TurntableStage subjectSize={slugCatcherSize()} padding={0.7} view="isometric">
-        <SlugCatcher />
-      </TurntableStage>
-    </LngTrain3dStage>
-  );
-}
-
-function LngTrain3dPartCarrier() {
-  return (
-    <LngTrain3dStage label="LNG carrier with four spherical tanks at a berth with loading arms">
+    <LngTrain3dPartStage label="LNG carrier with four spherical tanks at a berth with loading arms">
       <TurntableStage subjectSize={lngCarrierSize()} padding={0.62}>
         <LngCarrier rotation={[0, Math.PI / 2, 0]} position={[0, 0, 0]} />
         <LoadingArms position={[-8, 0, 0]} rotation={[0, 0, 0]} connected={3} />
       </TurntableStage>
-    </LngTrain3dStage>
+    </LngTrain3dPartStage>
   );
 }
 
-function LngTrain3dPartTank() {
-  const [level, setLevel] = useState(62);
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-3">
-        <div className="h-60 w-full">
-          <SceneCanvas label={`Full-containment LNG tank with a level gauge showing ${level} percent`}>
-            <StillScene>
-              <TurntableStage subjectSize={containmentTankSize()} padding={1.05}>
-                <ContainmentTank fill={level / 100} tone={level > 90 ? 'warning' : undefined} />
-              </TurntableStage>
-            </StillScene>
-          </SceneCanvas>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex w-24 shrink-0 flex-col">
-            <span className="text-xs text-muted-foreground">Tank level</span>
-            <ValueReadout value={level} unit="%" size="sm" tone={level > 90 ? 'warning' : 'neutral'} />
-          </div>
-          <Slider aria-label="Tank level" value={[level]} min={0} max={100} step={1} onValueChange={(value) => setLevel(value[0] ?? 0)} />
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
+function LngTrainPartLegends() {
+  const [colourBy, setColourBy] = useState<LngTrain3dColourBy>('temperature');
 
-function LngTrain3dPartThermometer() {
-  const [stop, setStop] = useState(1);
-  const temperatures = LNGTRAIN3D_STAGES.map((stage) => stage.temperature);
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-4">
-        <TemperatureRail temperature={temperatures[stop] ?? null} scale={LNGTRAIN3D_SCALE} ticks={LNGTRAIN3D_TICKS} subject={LNGTRAIN3D_STAGES[stop]?.title} className="h-56" />
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Stop: {LNGTRAIN3D_STAGES[stop]?.label}</span>
-          <Slider aria-label="Tour stop" value={[stop]} min={0} max={LNGTRAIN3D_STAGES.length - 1} step={1} onValueChange={(value) => setStop(value[0] ?? 0)} />
+    <LookScope look="studio" className="w-full">
+      <Canvas className="flex h-80 flex-col justify-center gap-5">
+        <LngTrain3dColourSwitch value={colourBy} onChange={setColourBy} />
+        <div>
+          <Panel padding="tight">
+            <LngTrain3dLegend colourBy={colourBy} />
+          </Panel>
         </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function LngTrain3dPartLegend() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full flex-col gap-5 rounded-xl border border-default bg-base-background p-4">
-        <LngTrain3dLegend colourBy="temperature" />
-        <LngTrain3dLegend colourBy="status" />
-      </div>
-    </ThemeScope>
-  );
-}
-
-function LngTrain3dPartStepper() {
-  const [state, dispatch] = useReducer(tourReducer, undefined, () => initialTourState(LNGTRAIN3D_STAGES.length, 1));
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-4">
-        <TourStepper
-          stages={LNGTRAIN3D_STAGES}
-          index={state.stageIndex}
-          mode={state.mode}
-          onSelect={(index) => dispatch({ type: 'goTo', stageIndex: index })}
-          onPrevious={() => dispatch({ type: 'previous' })}
-          onNext={() => dispatch({ type: 'next' })}
-          onResume={() => dispatch({ type: 'resume' })}
-        />
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'detach' })}>
-            Look around freely
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            {state.mode === 'free' ? 'Free view: the tour waits where you left it.' : `Following the tour: ${LNGTRAIN3D_STAGES[state.stageIndex]?.title ?? 'overview'}.`}
-          </span>
-        </div>
-      </div>
-    </ThemeScope>
+        <p className="text-sm text-[color:var(--kit-text-2)]">{colourBy === 'status' ? 'A ring on the ground carries the status; the equipment stays steel.' : 'The ground ring takes the colour of the process temperature at that unit.'}</p>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -581,173 +815,165 @@ export default definePage({
   id: 'lng-train-3d',
   title: 'LNG train',
   summary:
-    'A larger plant than Nordkapp: an LNG liquefaction train built along its process, from slug catcher to loading jetty. A tour flies the camera stop by stop while a card explains what happens and a thermometer follows the temperature down to minus 162 degrees.',
+    'A whole liquefaction site in 3D with the process laid out as a strip of five stops underneath. Stepping along the strip flies the camera from the inlet to the carrier at the jetty, and the card beside the scene explains each stop in plain words with its figures and units.',
   guidance: {
     use: [
-      'When the story has an order: a process, a pipeline, a journey the audience should follow in sequence.',
-      'With a landmark the eye can return to: the cold tower tells you where you are on any stop.',
-      'When one number changes along the route: a rail beside the scene keeps it in view at every stop.',
-      'Free orbit alongside the tour, with a clear way back, so guidance never traps people.',
+      'For a plant too large to take in at once, where a fixed route teaches the process better than free flight.',
+      'With the process as a strip in reading order under the scene, so position in the plant and position in the process are one thing.',
+      'With temperature shown twice: a swatch and a number on every stop, never colour alone.',
+      'For onboarding, visitor screens and shift briefings.',
     ],
     avoid: [
-      'Auto-playing tours: the user steps, the camera follows.',
-      'Colouring whole equipment by temperature: use ground rings and print the number too.',
-      'A tour without a keyboard path: the stepper and the unit list reach every stop.',
-      'Hiding the plan: keep the overview one click away.',
+      'Monitoring one machine: use the compressor digital twin.',
+      'Locking the camera. Grabbing the scene leaves the tour, and one button flies back to the stop.',
+      'Colouring the equipment itself. Status and temperature are ground rings; steel stays steel.',
+      'More than six or seven stops. Past that the strip stops being readable at a glance.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'Step through Inlet, Treatment, Liquefaction, Storage and Loading with the buttons along the bottom, or click any unit to jump to its stop. Drag to orbit, scroll to zoom: the tour pauses and Resume tour flies back. Switch Colour by to Temperature to ring every unit by its process temperature.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'Pick a stop in the strip, or use the arrows, and the camera flies there. Click a unit in the scene or in the card to select it. Drag the scene to look around; Resume tour brings you back. Whole site shows everything at once.',
       specimens: [
         {
-          id: 'LngTrain3dAuraDark',
-          title: 'LNG train tour',
-          note: 'Pick it when people should be led through a process in order, with the numbers that matter at each stop.',
+          id: 'LngTrainSignature',
+          title: 'LNG train',
+          note: 'Pick it to walk someone through a large plant in process order, one stop at a time.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'three/SceneCanvas.tsx',
+            'kit/AppFrame.tsx',
+            'kit/Panel.tsx',
+            'kit/scene/SceneStage.tsx',
+            'kit/StatusPill.tsx',
+            'kit/Legend.tsx',
+            'looks/LookScope.tsx',
             'three/plants/LngSite.tsx',
             'three/plants/lngSite.ts',
             'three/plants/tourState.ts',
-            'three/plants/TourStepper.tsx',
-            'three/plants/TemperatureRail.tsx',
             'three/plants/temperatureRamp.ts',
-            'three/plants/CryogenicExchanger.tsx',
-            'three/plants/AirCoolerBank.tsx',
-            'three/plants/SlugCatcher.tsx',
-            'three/plants/ContainmentTank.tsx',
-            'three/plants/LngCarrier.tsx',
-            'three/plants/LoadingArms.tsx',
-            'three/HudPanel.tsx',
-            'three/SceneLegend.tsx',
-            'industrial/ValueReadout.tsx',
-            'themes/ThemeScope.tsx',
+            'three/scenes/Jetty.tsx',
+            'three/SceneCanvas.tsx',
+            'three/useTokenColors.ts',
           ],
-          Component: LngTrain3dAuraDark,
+          Component: LngTrainSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same tour in a hologram theme at the liquefaction stop, coloured by temperature, and in a light blueprint theme at storage. Both render a single still frame.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The cold chain, where the site is coloured by temperature next to the profile it follows, and the tour on a tablet.',
       specimens: [
         {
-          id: 'LngTrain3dHologram',
-          title: 'Hologram, by temperature',
-          note: 'Pick it for a showroom or visitor-centre screen where the cold end should glow.',
+          id: 'LngTrainColdChain',
+          title: 'Cold chain',
+          note: 'Pick it to explain where the cold is made: the whole site by temperature, a thermometer rail and the profile by stop.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['three/plants/LngSite.tsx', 'three/plants/tourState.ts', 'three/plants/temperatureRamp.ts', 'three/scenes/StillScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: LngTrain3dHologram,
+          bleed: true,
+          uses: ['three/plants/LngSite.tsx', 'three/plants/TemperatureRail.tsx', 'three/plants/temperatureRamp.ts', 'kit/TrendLine.tsx', 'kit/Panel.tsx', 'kit/scene/SceneStage.tsx'],
+          Component: LngTrainColdChain,
         },
         {
-          id: 'LngTrain3dBlueprint',
-          title: 'Blueprint, in a light theme',
-          note: 'Pick it for engineering reviews in daylight: a pale plot plan with dark steel.',
+          id: 'LngTrainTablet',
+          title: 'Tablet',
+          note: 'Pick it for a briefing on a tablet: scene on top, the strip reduced to stop and temperature, the stop explained below.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['three/plants/LngSite.tsx', 'three/plants/tourState.ts', 'three/scenes/StillScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: LngTrain3dBlueprint,
+          uses: ['three/plants/LngSite.tsx', 'three/plants/tourState.ts', 'kit/Panel.tsx', 'kit/scene/SceneStage.tsx'],
+          Component: LngTrainTablet,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The new models on a turntable you can drag, and the tour controls on their own.',
+      description: 'The strip, the stop card, the thermometer and three landmarks of the site.',
       specimens: [
         {
-          id: 'LngTrain3dPartExchanger',
-          title: 'Cryogenic exchanger',
-          note: 'Pick it as the landmark of a liquefaction site: a tall insulated tower in an open steel structure.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/plants/CryogenicExchanger.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
-          Component: LngTrain3dPartExchanger,
-        },
-        {
-          id: 'LngTrain3dPartCoolers',
-          title: 'Air cooler bank',
-          note: 'Pick it for long rows of fin-fan coolers on a pipe rack, where one model per cooler would be too heavy.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['three/plants/AirCoolerBank.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
-          Component: LngTrain3dPartCoolers,
-        },
-        {
-          id: 'LngTrain3dPartSlugCatcher',
-          title: 'Slug catcher',
-          note: 'Pick it for the inlet of a gas plant: parallel sloping fingers with headers across them.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/plants/SlugCatcher.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
-          Component: LngTrain3dPartSlugCatcher,
-        },
-        {
-          id: 'LngTrain3dPartCarrier',
-          title: 'Carrier and loading arms',
-          note: 'Pick it to mark a berth as occupied: spherical tanks on deck and arms reaching the manifold.',
-          origin: 'custom',
-          size: 'lg',
-          align: 'stretch',
-          uses: ['three/plants/LngCarrier.tsx', 'three/plants/LoadingArms.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
-          Component: LngTrain3dPartCarrier,
-        },
-        {
-          id: 'LngTrain3dPartTank',
-          title: 'Containment tank with level',
-          note: 'Pick it when the wall hides the liquid: a gauge strip on the side reads the level.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/plants/ContainmentTank.tsx', 'three/TurntableStage.tsx', 'industrial/ValueReadout.tsx'],
-          Component: LngTrain3dPartTank,
-        },
-        {
-          id: 'LngTrain3dPartThermometer',
-          title: 'Temperature rail',
-          note: 'Pick it for one number that changes along a route: a marker slides to the value at the current stop.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/plants/TemperatureRail.tsx', 'three/plants/temperatureRamp.ts'],
-          Component: LngTrain3dPartThermometer,
-        },
-        {
-          id: 'LngTrain3dPartLegend',
-          title: 'Colour-by legends',
-          note: 'Pick the legend that matches the switch: a token ramp for temperature, status marks for state.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/plants/temperatureRamp.ts', 'three/SceneLegend.tsx'],
-          Component: LngTrain3dPartLegend,
-        },
-        {
-          id: 'LngTrain3dPartStepper',
-          title: 'Tour stepper',
-          note: 'Pick it to guide people along a route while leaving them free to look around and come back.',
+          id: 'LngTrainPartStrip',
+          title: 'Process strip',
+          note: 'Pick it as the control of a guided tour: one card per stop with its temperature and lead figure, the current one raised.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['three/plants/TourStepper.tsx', 'three/plants/tourState.ts', 'industrial/StatusIndicator.tsx'],
-          Component: LngTrain3dPartStepper,
+          bleed: true,
+          uses: ['three/plants/tourState.ts', 'three/plants/temperatureRamp.ts', 'kit/Panel.tsx'],
+          Component: LngTrainPartStrip,
+        },
+        {
+          id: 'LngTrainPartStageCard',
+          title: 'Stop card',
+          note: 'Pick it to explain a stop: what happens here in plain words, three figures, and the units as buttons.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: LngTrainPartStageCard,
+        },
+        {
+          id: 'LngTrainPartRail',
+          title: 'Temperature rail',
+          note: 'Pick a thermometer rail when one quantity changes along a route; the marker slides and the number is always printed.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['three/plants/TemperatureRail.tsx', 'three/plants/temperatureRamp.ts', 'kit/Panel.tsx'],
+          Component: LngTrainPartRail,
+        },
+        {
+          id: 'LngTrainPartLegends',
+          title: 'Colour by',
+          note: 'Pick one switch for what the ground rings mean, with the legend changing with it.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Legend.tsx', 'three/plants/temperatureRamp.ts'],
+          Component: LngTrainPartLegends,
+        },
+        {
+          id: 'LngTrainPartExchanger',
+          title: 'Cryogenic exchanger',
+          note: 'Pick it as the landmark of a liquefaction train: the tall cold tower every visitor asks about.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['three/plants/CryogenicExchanger.tsx', 'three/TurntableStage.tsx', 'kit/scene/SceneStage.tsx'],
+          Component: LngTrainPartExchanger,
+        },
+        {
+          id: 'LngTrainPartTank',
+          title: 'Containment tank',
+          note: 'Pick it for storage: the level shows on the side gauge and a high level takes the warning colour and a word.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['three/plants/ContainmentTank.tsx', 'three/TurntableStage.tsx', 'kit/StatusPill.tsx'],
+          Component: LngTrainPartTank,
+        },
+        {
+          id: 'LngTrainPartCarrier',
+          title: 'Carrier at the berth',
+          note: 'Pick it for the end of the chain: a carrier with spherical tanks and three of four loading arms connected.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['three/plants/LngCarrier.tsx', 'three/plants/LoadingArms.tsx', 'three/TurntableStage.tsx'],
+          Component: LngTrainPartCarrier,
         },
       ],
     },

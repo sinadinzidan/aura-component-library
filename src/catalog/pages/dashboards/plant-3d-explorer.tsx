@@ -1,62 +1,54 @@
 import { Button } from '@cognite/aura/components/button';
-import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import { Slider } from '@cognite/aura/components/slider';
 import { Switch } from '@cognite/aura/components/switch';
-import { IconArrowLeft, IconBell, IconPlus } from '@cognite/aura/icons';
+import {
+  IconAlertOctagon,
+  IconAlertTriangle,
+  IconArrowLeft,
+  IconBell,
+  IconBuildingFactory2,
+  IconChartLine,
+  IconChevronRight,
+  IconFlame,
+  IconInfoCircle,
+  IconLayoutSidebarRightCollapse,
+  IconLayoutSidebarRightExpand,
+  IconTool,
+} from '@cognite/aura/icons';
 import { useReducer, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 
-import { summarize } from '../../../library/industrial/charts/stats';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import type { TrendLimit } from '../../../library/industrial/charts/TrendChart';
-import { RadialGauge } from '../../../library/industrial/RadialGauge';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import {
-  formatLimit,
-  formatReading,
-  healthStatus,
-  qualityStatus,
-  runStateStatus,
-  severityStatus,
-  toneFromLimits,
-} from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Legend } from '../../../library/kit/Legend';
+import type { LegendItem } from '../../../library/kit/Legend';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { Stat } from '../../../library/kit/Stat';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber } from '../../../library/kit/tones';
+import type { StatusTone } from '../../../library/kit/tones';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import type { TrendLimit } from '../../../library/kit/TrendLine';
+import { LookScope } from '../../../library/looks/LookScope';
 import type { CameraView, Vec3 } from '../../../library/three/cameraTargets';
 import { CompressorSkid } from '../../../library/three/CompressorSkid';
-import { DrillBreadcrumb } from '../../../library/three/DrillBreadcrumb';
-import {
-  INITIAL_EXPLORER_STATE,
-  explorerBreadcrumb,
-  explorerFocusId,
-  explorerLevel,
-  explorerReducer,
-} from '../../../library/three/explorerState';
+import { INITIAL_EXPLORER_STATE, explorerBreadcrumb, explorerFocusId, explorerLevel, explorerReducer } from '../../../library/three/explorerState';
 import type { ExplorerAction, ExplorerState } from '../../../library/three/explorerState';
-import { FlareStack } from '../../../library/three/FlareStack';
-import { HorizontalVessel } from '../../../library/three/HorizontalVessel';
-import { HudPanel } from '../../../library/three/HudPanel';
 import { EQUIPMENT_SIZES, findNode } from '../../../library/three/plantLayout';
 import type { PlantLayout } from '../../../library/three/plantLayout';
 import { PlantScene } from '../../../library/three/PlantScene';
 import type { PlantNodeStatus, PlantSceneMarker } from '../../../library/three/PlantScene';
 import { SceneCanvas } from '../../../library/three/SceneCanvas';
-import { SceneLegend } from '../../../library/three/SceneLegend';
-import type { SceneLegendItem } from '../../../library/three/SceneLegend';
+import { StillScene } from '../../../library/three/scenes/StillScene';
 import { StorageTank } from '../../../library/three/StorageTank';
 import { TurntableStage } from '../../../library/three/TurntableStage';
-import { ALARMS, PLANT_KPIS, SENSORS, WORK_ORDERS, findAsset } from '../../data/plant';
-import type { Alarm, Asset, Sensor } from '../../data/plant';
-import { MINUTE, formatAgo, formatDate, makeSeries } from '../../data/series';
-import type { SeriesPoint } from '../../data/series';
+import { ALARMS, PLANT_KPIS, SENSORS, WORK_ORDERS, findAsset, findPerson } from '../../data/plant';
+import type { Alarm, Asset, Health, RunState, Sensor, Severity } from '../../data/plant';
+import { MINUTE, formatAgo, formatDate, formatTime, makeSeries, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './plant-3d-explorer.tsx?raw';
@@ -262,27 +254,47 @@ const PLANT3D_SENSOR_ANCHORS: Readonly<Record<string, Vec3>> = {
   'st-90001': [0, 0.45, 1],
 };
 
-const PLANT3D_SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 } as const;
+type Plant3dMark = { tone: StatusTone; label: string; shape: 'dot' | 'ring' | 'square' | 'diamond' };
 
-const PLANT3D_OPEN_ALARMS: readonly Alarm[] = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged').sort(
-  (a, b) => PLANT3D_SEVERITY_RANK[a.severity] - PLANT3D_SEVERITY_RANK[b.severity]
-);
+const PLANT3D_SEVERITY: Record<Severity, Plant3dMark & { rank: number }> = {
+  critical: { tone: 'critical', label: 'Critical', shape: 'diamond', rank: 0 },
+  high: { tone: 'warning', label: 'High', shape: 'square', rank: 1 },
+  medium: { tone: 'info', label: 'Medium', shape: 'dot', rank: 2 },
+  low: { tone: 'neutral', label: 'Low', shape: 'ring', rank: 3 },
+};
+
+const PLANT3D_RUN: Record<RunState, Plant3dMark> = {
+  running: { tone: 'success', label: 'Running', shape: 'dot' },
+  standby: { tone: 'neutral', label: 'Standby', shape: 'ring' },
+  stopped: { tone: 'neutral', label: 'Stopped', shape: 'ring' },
+  tripped: { tone: 'critical', label: 'Tripped', shape: 'diamond' },
+  maintenance: { tone: 'warning', label: 'Maintenance', shape: 'square' },
+};
+
+const PLANT3D_HEALTH: Record<Health, { tone: StatusTone; label: string }> = {
+  good: { tone: 'success', label: 'Good' },
+  watch: { tone: 'warning', label: 'Watch' },
+  poor: { tone: 'critical', label: 'Poor' },
+};
 
 const PLANT3D_ORDER_STATUS = {
-  open: 'Open',
-  planned: 'Planned',
-  'in-progress': 'In progress',
-  waiting: 'Waiting',
-  done: 'Done',
+  open: { label: 'Open', tone: 'neutral' },
+  planned: { label: 'Planned', tone: 'info' },
+  'in-progress': { label: 'In progress', tone: 'success' },
+  waiting: { label: 'Waiting', tone: 'warning' },
+  done: { label: 'Done', tone: 'neutral' },
 } as const;
 
-const PLANT3D_LEGEND: readonly SceneLegendItem[] = [
-  { kind: 'status', label: 'Tripped', tone: 'critical' },
-  { kind: 'status', label: 'Warning', tone: 'warning' },
-  { kind: 'status', label: 'Advisory', tone: 'info' },
-  { kind: 'status', label: 'Standby', tone: 'neutral' },
-  { kind: 'selection', label: 'Selected' },
-  { kind: 'flow', label: 'Flow' },
+const PLANT3D_OPEN_ALARMS: readonly Alarm[] = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged').sort(
+  (a, b) => PLANT3D_SEVERITY[a.severity].rank - PLANT3D_SEVERITY[b.severity].rank
+);
+
+const PLANT3D_LEGEND: readonly LegendItem[] = [
+  { label: 'Tripped', tone: 'critical' },
+  { label: 'Warning', tone: 'warning' },
+  { label: 'Advisory', tone: 'info' },
+  { label: 'Standby', tone: 'neutral' },
+  { label: 'Selected', tone: 'accent' },
 ];
 
 const PLANT3D_VIEWS: readonly { value: CameraView; label: string }[] = [
@@ -291,9 +303,18 @@ const PLANT3D_VIEWS: readonly { value: CameraView; label: string }[] = [
   { value: 'isometric', label: 'Isometric' },
 ];
 
-const PLANT3D_GLASS = 'border border-default bg-[color-mix(in_oklab,var(--card-background)_78%,transparent)] backdrop-blur-md';
+const PLANT3D_EXPORT_TREND = [...makeValues({ seed: 31, points: 24, base: 4.32, amplitude: 0.14, noise: 0.04, cycles: 1.2, decimals: 2 }), PLANT_KPIS.gasExport.value];
+
+/** A floating studio card: the same surface, border and shadow the kit panel uses. */
+const PLANT3D_CARD = 'rounded-xl border border-[var(--kit-rule)] bg-[var(--kit-surface)] shadow-[var(--kit-panel-shadow)]';
 
 const PLANT3D_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
+
+/** A list row that is one button: hover wash, pressed state, visible focus. */
+const PLANT3D_ROW = `flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-[var(--kit-well)] aria-pressed:bg-[color-mix(in_oklab,var(--kit-accent)_10%,transparent)] ${PLANT3D_FOCUS}`;
+
+/** Scene labels are plain DOM: keep them in the UI sans at a readable size. */
+const PLANT3D_SCENE_TYPE = '[&_.font-mono]:[font-family:inherit] [&_.font-mono]:tabular-nums [&_[data-slot=scene-label]>:first-child]:text-[0.8125rem]';
 
 function plant3dIsView(value: unknown): value is CameraView {
   return PLANT3D_VIEWS.some((view) => view.value === value);
@@ -320,10 +341,10 @@ function plant3dEquipmentStatus(asset: Asset): PlantNodeStatus | undefined {
   if (asset.state === 'tripped') return { tone: 'critical', shape: 'diamond', text: 'Tripped', pulse: true };
   if (asset.state === 'maintenance') return { tone: 'warning', shape: 'square', text: 'Maintenance' };
   // Standby and stopped are normal states for a spare: named on the label, with a neutral ring.
-  if (asset.state !== 'running') return { tone: 'neutral', shape: 'ring', text: runStateStatus(asset.state).label };
+  if (asset.state !== 'running') return { tone: 'neutral', shape: 'ring', text: PLANT3D_RUN[asset.state].label };
   const alarms = plant3dAlarmsOf([asset.id]);
   if (alarms.length === 0) return undefined;
-  const worst = severityStatus(alarms[0].severity);
+  const worst = PLANT3D_SEVERITY[alarms[0].severity];
   return { tone: worst.tone, shape: worst.shape, text: plant3dCount(alarms.length, 'alarm') };
 }
 
@@ -331,7 +352,7 @@ function plant3dAreaStatus(areaId: string): PlantNodeStatus {
   const alarms = plant3dAlarmsOf(plant3dAreaAssetIds(areaId));
   // Normal is quiet: an area without alarms shows only its name.
   if (alarms.length === 0) return {};
-  const worst = severityStatus(alarms[0].severity);
+  const worst = PLANT3D_SEVERITY[alarms[0].severity];
   return { tone: worst.tone, shape: worst.shape, text: plant3dCount(alarms.length, 'open alarm') };
 }
 
@@ -346,46 +367,46 @@ const PLANT3D_STATUSES: Readonly<Record<string, PlantNodeStatus>> = Object.fromE
     }),
 ]);
 
-function plant3dSensorTone(sensor: Sensor): Tone {
+/** Above the trip limit is critical, outside the operating band a warning, otherwise the accent. */
+function plant3dSensorTone(sensor: Sensor): StatusTone | 'accent' {
   if (sensor.quality === 'bad') return 'neutral';
-  return toneFromLimits(sensor.value, { low: sensor.lowLimit, high: sensor.highLimit, highHigh: sensor.highHighLimit });
+  if (sensor.highHighLimit !== undefined && sensor.value >= sensor.highHighLimit) return 'critical';
+  if (sensor.value > sensor.highLimit || sensor.value < sensor.lowLimit) return 'warning';
+  if (sensor.value > sensor.highLimit - (sensor.highLimit - sensor.lowLimit) * 0.1) return 'warning';
+  return 'accent';
 }
 
-function plant3dSensorValue(sensor: Sensor): number | null {
-  return sensor.quality === 'bad' ? null : sensor.value;
+function plant3dSensorWord(sensor: Sensor): string {
+  if (sensor.quality === 'bad') return 'Signal lost';
+  if (sensor.highHighLimit !== undefined && sensor.value >= sensor.highHighLimit) return 'Above trip limit';
+  if (sensor.value > sensor.highLimit) return 'Above high limit';
+  if (sensor.value < sensor.lowLimit) return 'Below low limit';
+  if (plant3dSensorTone(sensor) === 'warning') return 'Near high limit';
+  return 'In range';
+}
+
+function plant3dReading(sensor: Sensor): string {
+  return sensor.quality === 'bad' ? 'Bad quality' : `${formatNumber(sensor.value, sensor.decimals)} ${sensor.unit}`;
 }
 
 /** Last 24 hours for a tag, ending exactly on its current value. */
-function plant3dTrend(sensor: Sensor): SeriesPoint[] {
-  if (sensor.quality === 'bad') return [];
+function plant3dTrend(sensor: Sensor): { values: number[]; labels: string[] } {
   const span = sensor.highLimit - sensor.lowLimit;
-  const raw = makeSeries({
-    seed: sensor.seed,
-    points: 48,
-    base: sensor.value,
-    amplitude: sensor.value === 0 ? 0 : span * 0.05,
-    noise: sensor.value === 0 ? 0 : span * 0.025,
-    cycles: 1.5,
-    stepMs: 30 * MINUTE,
-    decimals: sensor.decimals + 1,
-  });
+  const still = sensor.value === 0 || sensor.quality === 'bad';
+  const raw = makeSeries({ seed: sensor.seed, points: 49, base: sensor.value, amplitude: still ? 0 : span * 0.05, noise: still ? 0 : span * 0.025, cycles: 1.5, stepMs: 30 * MINUTE, decimals: sensor.decimals + 1 });
   const shift = sensor.value - raw[raw.length - 1].v;
   const factor = 10 ** sensor.decimals;
-  return raw.map((point) => ({
-    t: point.t,
-    v: Math.round(Math.min(sensor.rangeMax, Math.max(sensor.rangeMin, point.v + shift)) * factor) / factor,
-  }));
+  return {
+    values: raw.map((point) => Math.round(Math.min(sensor.rangeMax, Math.max(sensor.rangeMin, point.v + shift)) * factor) / factor),
+    // The inspector is narrow: name every second tick so the times never collide.
+    labels: raw.map((point, index) => ((raw.length - 1 - index) % 14 === 0 ? formatTime(point.t) : '')),
+  };
 }
 
 function plant3dLimits(sensor: Sensor): TrendLimit[] {
   const limits: TrendLimit[] = [];
-  if (sensor.highHighLimit !== undefined) {
-    limits.push({ value: sensor.highHighLimit, label: `Trip ${formatLimit(sensor.highHighLimit, sensor.decimals)}`, tone: 'critical' });
-  }
-  limits.push({ value: sensor.highLimit, label: `High ${formatLimit(sensor.highLimit, sensor.decimals)}`, tone: 'warning' });
-  if (sensor.lowLimit > sensor.rangeMin) {
-    limits.push({ value: sensor.lowLimit, label: `Low ${formatLimit(sensor.lowLimit, sensor.decimals)}`, tone: 'warning' });
-  }
+  if (sensor.highHighLimit !== undefined) limits.push({ value: sensor.highHighLimit, label: 'Trip', tone: 'critical' });
+  limits.push({ value: sensor.highLimit, label: 'High', tone: 'warning' });
   return limits;
 }
 
@@ -405,339 +426,393 @@ function plant3dSelectAction(id: string): ExplorerAction | null {
   return null;
 }
 
-function Plant3dKpi({ label, value, unit, decimals, previous, goodDirection }: { label: string; value: number; unit: string; decimals: number; previous: number; goodDirection: 'up' | 'down' }) {
+function Plant3dSeverityIcon({ severity }: { severity: Severity }) {
+  if (severity === 'critical') return <IconAlertOctagon />;
+  if (severity === 'high') return <IconAlertTriangle />;
+  if (severity === 'medium') return <IconInfoCircle />;
+  return <IconBell />;
+}
+
+function Plant3dSection({ title, meta, children }: { title: string; meta?: string; children: ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <ValueReadout value={value} unit={unit} decimals={decimals} size="sm" />
-      <TrendDelta value={value} reference={previous} decimals={decimals} goodDirection={goodDirection} size="sm" />
-    </div>
+    <section className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <h4 className="text-sm font-semibold text-[var(--kit-text)]">{title}</h4>
+        {meta ? <span className="text-xs tabular-nums text-[var(--kit-text-3)]">{meta}</span> : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
-function Plant3dAlarmList({ alarms, onSelect }: { alarms: readonly Alarm[]; onSelect?: (assetId: string) => void }) {
-  if (alarms.length === 0) return <p className="text-sm text-muted-foreground">No open alarms.</p>;
+function Plant3dAlarmRows({ alarms, onSelect }: { alarms: readonly Alarm[]; onSelect?: (assetId: string) => void }) {
+  if (alarms.length === 0) return <p className="rounded-lg bg-[var(--kit-well)] px-3 py-2.5 text-sm text-[var(--kit-text-2)]">No open alarms. Everything here is inside its limits.</p>;
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-col">
       {alarms.map((alarm) => {
-        const body = (
-          <>
-            <span className="flex items-center justify-between gap-2">
-              <StatusIndicator {...severityStatus(alarm.severity)} size="sm" detail={alarm.state === 'acknowledged' ? 'acknowledged' : undefined} />
-              <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatAgo(alarm.raisedAt)}</span>
-            </span>
-            <span className="text-sm text-base-foreground">{alarm.message}</span>
-            <span className="flex flex-wrap gap-x-1.5 text-xs text-muted-foreground">
-              <span className="whitespace-nowrap font-mono">{alarm.sensorTag}</span>
-              <span className="whitespace-nowrap tabular-nums">
-                {alarm.value} · limit {alarm.limit}
-              </span>
-            </span>
-          </>
-        );
+        const severity = PLANT3D_SEVERITY[alarm.severity];
         return (
-          <li key={alarm.id}>
-            {onSelect ? (
-              <button
-                type="button"
-                onClick={() => onSelect(alarm.assetId)}
-                className={`-mx-1.5 flex w-[calc(100%+0.75rem)] flex-col gap-0.5 rounded-md px-1.5 py-1.5 text-left hover:bg-secondary-background ${PLANT3D_FOCUS}`}
-              >
-                {body}
-              </button>
-            ) : (
-              <div className="flex flex-col gap-0.5 py-1.5">{body}</div>
-            )}
-          </li>
+          <ListRow
+            key={alarm.id}
+            tone={severity.tone}
+            leading={
+              <IconChip tone={severity.tone} size="sm">
+                <Plant3dSeverityIcon severity={alarm.severity} />
+              </IconChip>
+            }
+            title={
+              onSelect ? (
+                <button type="button" onClick={() => onSelect(alarm.assetId)} className={`text-left after:absolute after:inset-0 hover:underline ${PLANT3D_FOCUS}`}>
+                  {alarm.message}
+                </button>
+              ) : (
+                alarm.message
+              )
+            }
+            meta={
+              <>
+                <TagId>{alarm.sensorTag}</TagId>
+                <span>
+                  {alarm.value} · limit {alarm.limit}
+                </span>
+              </>
+            }
+            trailing={formatAgo(alarm.raisedAt)}
+          />
         );
       })}
     </ul>
   );
 }
 
-function Plant3dPlantHud({ onSelectAsset }: { onSelectAsset?: (assetId: string) => void }) {
+function Plant3dPlantInspector({ onSelect }: { onSelect?: (id: string) => void }) {
   return (
     <>
-      <HudPanel title="Plant status" meta="14:00 UTC" className="shrink-0">
-        <div className="flex flex-col gap-0.5">
-          <StatusIndicator tone="warning" shape="square" label="Reduced capacity" size="sm" />
-          <span className="text-xs text-muted-foreground">Recompressor tripped 14 min ago</span>
-        </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-          <Plant3dKpi label="Availability" value={PLANT_KPIS.availability.value} unit="%" decimals={1} previous={PLANT_KPIS.availability.previous} goodDirection="up" />
-          <Plant3dKpi label="Gas export" value={PLANT_KPIS.gasExport.value} unit="MSm³/d" decimals={2} previous={PLANT_KPIS.gasExport.previous} goodDirection="up" />
-          <Plant3dKpi label="Flaring" value={PLANT_KPIS.flaring.value} unit="kSm³/d" decimals={1} previous={PLANT_KPIS.flaring.previous} goodDirection="down" />
-          <Plant3dKpi label="Energy intensity" value={PLANT_KPIS.energyIntensity.value} unit="kWh/boe" decimals={1} previous={PLANT_KPIS.energyIntensity.previous} goodDirection="down" />
-        </div>
-      </HudPanel>
-      <HudPanel title="Open alarms" meta={PLANT3D_OPEN_ALARMS.length}>
-        <Plant3dAlarmList alarms={PLANT3D_OPEN_ALARMS} onSelect={onSelectAsset} />
-      </HudPanel>
+      <Stat
+        variant="plain"
+        size="lg"
+        label="Gas export"
+        value={PLANT_KPIS.gasExport.value}
+        decimals={2}
+        unit={PLANT_KPIS.gasExport.unit}
+        delta={{ value: PLANT_KPIS.gasExport.value - PLANT_KPIS.gasExport.previous, decimals: 2, caption: 'vs yesterday' }}
+        target={`Plan ${formatNumber(PLANT_KPIS.gasExport.target, 2)}`}
+        sparkline={PLANT3D_EXPORT_TREND}
+      />
+      <Plant3dSection title="Areas" meta="Health score">
+        <ul className="-mx-2.5 flex flex-col">
+          {PLANT3D_LAYOUT.areas.map((area) => {
+            const asset = findAsset(area.id);
+            const status = PLANT3D_STATUSES[area.id];
+            if (!asset) return null;
+            return (
+              <li key={area.id}>
+                <button type="button" onClick={() => onSelect?.(area.id)} className={PLANT3D_ROW}>
+                  <RingGauge label={`${area.name} health`} value={asset.healthScore} unit="" size={44} tone={PLANT3D_HEALTH[asset.health].tone} hideLabel />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm font-medium text-[var(--kit-text)]">{area.name}</span>
+                    <TagId>{area.tag}</TagId>
+                  </span>
+                  {status?.tone && status.text ? <StatusPill tone={status.tone}>{status.text}</StatusPill> : <span className="text-xs text-[var(--kit-text-3)]">No alarms</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </Plant3dSection>
+      <Plant3dSection title="Open alarms" meta={`${PLANT3D_OPEN_ALARMS.length} open`}>
+        <Plant3dAlarmRows alarms={PLANT3D_OPEN_ALARMS.slice(0, 3)} onSelect={onSelect} />
+      </Plant3dSection>
     </>
   );
 }
 
-function Plant3dAreaHud({ areaId, selectedId, onSelectAsset }: { areaId: string; selectedId: string | null; onSelectAsset: (assetId: string) => void }) {
+function Plant3dAreaInspector({ areaId, onSelect }: { areaId: string; onSelect?: (id: string) => void }) {
   const area = PLANT3D_LAYOUT.areas.find((candidate) => candidate.id === areaId);
   const asset = findAsset(areaId);
   if (!area || !asset) return null;
+  const units = area.equipment.flatMap((equipment) => {
+    const unit = findAsset(equipment.id);
+    return unit ? [unit] : [];
+  });
   const alarms = plant3dAlarmsOf(plant3dAreaAssetIds(areaId));
+  const running = units.filter((unit) => unit.state === 'running').length;
 
   return (
     <>
-      <HudPanel title={area.name} meta={<span className="font-mono">{area.tag}</span>} className="shrink-0">
-        <div className="flex items-end justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs text-muted-foreground">Health score</span>
-            <ValueReadout value={asset.healthScore} unit="/ 100" size="md" tone={asset.health === 'good' ? 'neutral' : healthStatus(asset.health).tone} />
-          </div>
-          <StatusIndicator {...healthStatus(asset.health)} size="sm" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Units</span>
-          <ul className="flex flex-col gap-0.5">
-            {area.equipment.map((equipment) => {
-              const unit = findAsset(equipment.id);
-              if (!unit) return null;
-              return (
-                <li key={equipment.id}>
-                  <button
-                    type="button"
-                    aria-pressed={equipment.id === selectedId}
-                    onClick={() => onSelectAsset(equipment.id)}
-                    className={`-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${PLANT3D_FOCUS}`}
-                  >
-                    <span className="flex min-w-0 flex-col">
-                      <span className="font-mono text-xs text-base-foreground">{unit.tag}</span>
-                      <span className="text-xs text-muted-foreground">{unit.name}</span>
-                    </span>
-                    <StatusIndicator {...runStateStatus(unit.state)} size="sm" className="shrink-0" />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </HudPanel>
-      <HudPanel title="Open alarms" meta={alarms.length}>
-        <Plant3dAlarmList alarms={alarms} onSelect={onSelectAsset} />
-      </HudPanel>
+      <div className="flex items-center gap-4">
+        <RingGauge label="Area health" value={asset.healthScore} unit="" size={88} tone={PLANT3D_HEALTH[asset.health].tone} hideLabel />
+        <dl className="grid flex-1 grid-cols-2 gap-x-4 gap-y-2">
+          {[
+            { label: 'Health', value: PLANT3D_HEALTH[asset.health].label },
+            { label: 'Criticality', value: `Class ${asset.criticality}` },
+            { label: 'Running', value: `${running} of ${units.length}` },
+            { label: 'Open alarms', value: String(alarms.length) },
+          ].map((item) => (
+            <div key={item.label} className="flex flex-col">
+              <dt className="text-xs text-[var(--kit-text-3)]">{item.label}</dt>
+              <dd className="text-base font-semibold tabular-nums text-[var(--kit-text)]">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      <Plant3dSection title="Equipment" meta={plant3dCount(units.length, 'unit')}>
+        <ul className="-mx-2.5 flex flex-col">
+          {units.map((unit) => (
+            <li key={unit.id}>
+              <button type="button" onClick={() => onSelect?.(unit.id)} className={PLANT3D_ROW}>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm font-medium text-[var(--kit-text)]">{unit.name}</span>
+                  <TagId>{unit.tag}</TagId>
+                </span>
+                <span className="w-9 text-right text-sm font-medium tabular-nums text-[var(--kit-text-2)]">{unit.healthScore}</span>
+                <StatusPill tone={PLANT3D_RUN[unit.state].tone}>{PLANT3D_RUN[unit.state].label}</StatusPill>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Plant3dSection>
+      <Plant3dSection title="Alarms in this area" meta={`${alarms.length} open`}>
+        <Plant3dAlarmRows alarms={alarms.slice(0, 3)} onSelect={onSelect} />
+      </Plant3dSection>
     </>
-  );
-}
-
-function Plant3dReadingRow({ sensor, onSelect }: { sensor: Sensor; onSelect?: (sensorId: string) => void }) {
-  const tone = plant3dSensorTone(sensor);
-  const values = plant3dTrend(sensor).map((point) => point.v);
-  const body = (
-    <>
-      <span className="flex items-start justify-between gap-2">
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm text-base-foreground">{sensor.name}</span>
-          <span className="font-mono text-xs text-muted-foreground">{sensor.tag}</span>
-        </span>
-        {sensor.quality === 'bad' ? (
-          <StatusIndicator {...qualityStatus('bad')} label="Bad quality" size="sm" className="shrink-0" />
-        ) : (
-          <ValueReadout value={sensor.value} unit={sensor.unit} decimals={sensor.decimals} size="sm" tone={tone} className="shrink-0" />
-        )}
-      </span>
-      <Sparkline
-        values={values}
-        label={`${sensor.name}, last 24 hours`}
-        unit={sensor.unit}
-        decimals={sensor.decimals}
-        height={24}
-        tone={tone}
-        limit={tone === 'neutral' ? undefined : sensor.highLimit}
-        limitTone={tone === 'critical' ? 'critical' : 'warning'}
-        showLast
-      />
-    </>
-  );
-
-  if (!onSelect) return <div className="flex flex-col gap-1 py-1.5">{body}</div>;
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(sensor.id)}
-      aria-label={`Open ${sensor.name} ${sensor.tag}`}
-      className={`-mx-1.5 flex w-[calc(100%+0.75rem)] flex-col gap-1 rounded-md px-1.5 py-1.5 text-left hover:bg-secondary-background ${PLANT3D_FOCUS}`}
-    >
-      {body}
-    </button>
   );
 }
 
 function Plant3dEquipmentInspector({ asset, onSelectSensor }: { asset: Asset; onSelectSensor?: (sensorId: string) => void }) {
   const sensors = plant3dSensorsOf(asset.id);
-  const dials = sensors.filter((sensor) => sensor.quality !== 'bad').slice(0, 2);
   const alarms = plant3dAlarmsOf([asset.id]);
   const orders = WORK_ORDERS.filter((order) => order.assetId === asset.id && order.status !== 'done');
 
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <div>
-          <p className="font-mono text-sm font-medium text-base-foreground">{asset.tag}</p>
-          <p className="text-sm text-medium-foreground">{asset.name}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          <StatusIndicator {...runStateStatus(asset.state)} size="sm" pulse={asset.state === 'tripped'} />
-          <StatusIndicator {...healthStatus(asset.health)} label={`Health ${asset.healthScore}`} detail={healthStatus(asset.health).label.toLowerCase()} size="sm" />
-          <span className="text-xs text-muted-foreground">Criticality {asset.criticality}</span>
+      <div className="flex items-center gap-4">
+        <RingGauge label="Health score" value={asset.healthScore} unit="" size={88} tone={PLANT3D_HEALTH[asset.health].tone} hideLabel />
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <span className="text-xs text-[var(--kit-text-3)]">Health score, criticality {asset.criticality}</span>
+          <div className="flex flex-wrap gap-1.5">
+            <StatusPill tone={PLANT3D_RUN[asset.state].tone} size="lg">
+              {PLANT3D_RUN[asset.state].label}
+            </StatusPill>
+            <StatusPill tone={PLANT3D_HEALTH[asset.health].tone} variant="outline" size="lg">
+              {PLANT3D_HEALTH[asset.health].label}
+            </StatusPill>
+          </div>
         </div>
       </div>
-
-      {dials.length === 2 ? (
-        <div className="grid grid-cols-2 gap-2">
-          {dials.map((sensor) => (
-            <div key={sensor.id} className="flex justify-center">
-              <RadialGauge
-                label={sensor.name}
-                value={sensor.value}
-                min={sensor.rangeMin}
-                max={sensor.rangeMax}
-                unit={sensor.unit}
-                decimals={sensor.decimals}
-                limits={{ low: sensor.lowLimit, high: sensor.highLimit, highHigh: sensor.highHighLimit }}
-                size="sm"
-              />
-            </div>
-          ))}
-        </div>
+      {alarms.length > 0 ? (
+        <Plant3dSection title="Alarms" meta={`${alarms.length} open`}>
+          <Plant3dAlarmRows alarms={alarms.slice(0, 2)} />
+        </Plant3dSection>
       ) : null}
-
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Live readings</span>
+      <Plant3dSection title="Live readings" meta={sensors.length > 0 ? 'Pick one to pin it on the machine' : undefined}>
         {sensors.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No instruments are mapped to this unit yet.</p>
+          <p className="rounded-lg bg-[var(--kit-well)] px-3 py-2.5 text-sm text-[var(--kit-text-2)]">No instruments are mapped to this unit yet.</p>
         ) : (
+          <ul className="flex flex-col gap-3">
+            {sensors.slice(0, 4).map((sensor) => (
+              <li key={sensor.id} className="flex items-end gap-2">
+                {sensor.quality === 'bad' ? (
+                  <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                    <span className="text-sm font-medium text-[var(--kit-text)]">{sensor.name}</span>
+                    <StatusPill tone="neutral">Signal lost</StatusPill>
+                  </div>
+                ) : (
+                  <Meter
+                    className="min-w-0 flex-1"
+                    label={sensor.name}
+                    value={sensor.value}
+                    min={sensor.rangeMin}
+                    max={sensor.rangeMax}
+                    unit={sensor.unit}
+                    decimals={sensor.decimals}
+                    high={sensor.highLimit}
+                    tone={plant3dSensorTone(sensor)}
+                    hideScale
+                  />
+                )}
+                <Button variant="ghost" size="sm" aria-label={`Open the trend of ${sensor.name}`} onClick={() => onSelectSensor?.(sensor.id)}>
+                  <IconChartLine /> Trend
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Plant3dSection>
+      {orders.length > 0 ? (
+        <Plant3dSection title="Work orders" meta={`${orders.length} open`}>
           <ul className="flex flex-col">
-            {sensors.map((sensor) => (
-              <li key={sensor.id}>
-                <Plant3dReadingRow sensor={sensor} onSelect={onSelectSensor} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Open alarms</span>
-        <Plant3dAlarmList alarms={alarms} />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Work orders</span>
-        {orders.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No open work orders.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
             {orders.map((order) => (
-              <li key={order.id} className="flex flex-col gap-0.5">
-                <span className="text-sm text-base-foreground">{order.title}</span>
-                <span className="text-xs text-muted-foreground">
-                  <span className="font-mono">{order.id}</span> · {order.priority} · {PLANT3D_ORDER_STATUS[order.status]} · due {formatDate(order.dueAt)}
-                </span>
-              </li>
+              <ListRow
+                key={order.id}
+                leading={
+                  <IconChip tone="neutral" size="sm">
+                    <IconTool />
+                  </IconChip>
+                }
+                title={order.title}
+                meta={
+                  <>
+                    <TagId>{order.id}</TagId>
+                    <span>
+                      {findPerson(order.assigneeId)?.name ?? 'Unassigned'} · due {formatDate(order.dueAt)}
+                    </span>
+                  </>
+                }
+                trailing={<StatusPill tone={PLANT3D_ORDER_STATUS[order.status].tone}>{PLANT3D_ORDER_STATUS[order.status].label}</StatusPill>}
+              />
             ))}
           </ul>
-        )}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {alarms.some((alarm) => alarm.state === 'active') ? (
-          <Button size="sm">
-            <IconBell /> Acknowledge alarm
-          </Button>
-        ) : null}
-        <Button size="sm" variant="outline">
-          <IconPlus /> Create work order
-        </Button>
-      </div>
+        </Plant3dSection>
+      ) : null}
     </>
   );
 }
 
 function Plant3dSensorInspector({ sensor, onBack }: { sensor: Sensor; onBack?: () => void }) {
+  const asset = findAsset(sensor.assetId);
+  const trend = plant3dTrend(sensor);
   const tone = plant3dSensorTone(sensor);
-  const points = plant3dTrend(sensor);
-  const stats = summarize(points.map((point) => point.v));
-  const events = ALARMS.filter((alarm) => alarm.sensorTag === sensor.tag);
-  const reading = formatReading(plant3dSensorValue(sensor), sensor.unit, sensor.decimals);
+  const low = Math.min(...trend.values);
+  const high = Math.max(...trend.values);
+  const mean = trend.values.reduce((total, value) => total + value, 0) / trend.values.length;
 
   return (
     <>
       {onBack ? (
-        <div>
-          <Button variant="ghost" size="sm" onClick={onBack}>
-            <IconArrowLeft /> All readings
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 self-start">
+          <IconArrowLeft /> Back to {asset?.tag ?? 'equipment'}
+        </Button>
       ) : null}
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-sm font-medium text-base-foreground">{sensor.tag}</p>
-          <p className="text-sm text-medium-foreground">{sensor.name}</p>
-        </div>
-        <ValueReadout value={plant3dSensorValue(sensor)} unit={sensor.unit} decimals={sensor.decimals} size="md" tone={tone} className="shrink-0" />
-      </div>
-      <StatusIndicator {...qualityStatus(sensor.quality)} label={`Signal ${qualityStatus(sensor.quality).label.toLowerCase()}`} size="sm" />
-
-      {points.length > 0 ? (
-        <TrendChart
-          label={`${sensor.name} over the last 24 hours, now ${reading}`}
-          series={[{ key: sensor.id, label: sensor.name, points }]}
-          limits={plant3dLimits(sensor)}
-          unit={sensor.unit}
-          decimals={sensor.decimals}
-          maxTicks={3}
-          showLast
-          heightClassName="h-44"
-          className="w-full"
-        />
+      <Stat
+        variant="plain"
+        size="hero"
+        label={sensor.name}
+        value={sensor.quality === 'bad' ? 'No signal' : sensor.value}
+        decimals={sensor.decimals}
+        unit={sensor.quality === 'bad' ? undefined : sensor.unit}
+        tone={tone}
+        state={plant3dSensorWord(sensor)}
+        stateIcon={tone === 'accent' ? undefined : <IconAlertTriangle />}
+      />
+      {sensor.quality === 'bad' ? (
+        <p className="rounded-lg bg-[var(--kit-well)] px-3 py-2.5 text-sm text-[var(--kit-text-2)]">The transmitter stopped reporting 9 hours ago. A replacement is planned for 13 March.</p>
       ) : (
-        <p className="text-sm text-muted-foreground">No data in the last 24 hours. The transmitter reports bad quality.</p>
+        <>
+          <TrendLine
+            label={`${sensor.name} over the last 24 hours with its limits`}
+            series={[{ id: 'value', label: sensor.name, values: trend.values, tone: tone === 'accent' ? 'accent' : tone }]}
+            labels={trend.labels}
+            unit={sensor.unit}
+            decimals={sensor.decimals}
+            limits={plant3dLimits(sensor)}
+            height={210}
+            fill
+            showLegend={false}
+          />
+          <dl className="grid grid-cols-3 gap-3 rounded-lg bg-[var(--kit-well)] px-3 py-2.5">
+            {[
+              { label: '24 h low', value: low },
+              { label: '24 h average', value: mean },
+              { label: '24 h high', value: high },
+            ].map((item) => (
+              <div key={item.label} className="flex flex-col">
+                <dt className="text-xs text-[var(--kit-text-3)]">{item.label}</dt>
+                <dd className="text-base font-semibold tabular-nums text-[var(--kit-text)]">{formatNumber(item.value, sensor.decimals)}</dd>
+              </div>
+            ))}
+          </dl>
+          <Meter label="Position in the instrument range" value={sensor.value} min={sensor.rangeMin} max={sensor.rangeMax} unit={sensor.unit} decimals={sensor.decimals} high={sensor.highLimit} target={{ value: sensor.highLimit, label: 'High limit' }} tone={tone} />
+        </>
       )}
-
-      {stats ? (
-        <dl className="grid grid-cols-3 gap-2">
-          {[
-            { label: 'Min', value: stats.min },
-            { label: 'Mean', value: stats.mean },
-            { label: 'Max', value: stats.max },
-          ].map((stat) => (
-            <div key={stat.label} className="flex flex-col gap-0.5">
-              <dt className="text-xs text-muted-foreground">{stat.label}</dt>
-              <dd>
-                <ValueReadout value={stat.value} decimals={sensor.decimals} size="xs" />
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-
-      <dl className="flex flex-col gap-1 text-sm">
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Operating band</dt>
-          <dd className="tabular-nums text-base-foreground">
-            {formatLimit(sensor.lowLimit, sensor.decimals)} to {formatReading(sensor.highLimit, sensor.unit, Number.isInteger(sensor.highLimit) ? 0 : sensor.decimals)}
-          </dd>
-        </div>
-        {sensor.highHighLimit !== undefined ? (
-          <div className="flex justify-between gap-3">
-            <dt className="text-muted-foreground">Trip limit</dt>
-            <dd className="tabular-nums text-base-foreground">{formatReading(sensor.highHighLimit, sensor.unit, Number.isInteger(sensor.highHighLimit) ? 0 : sensor.decimals)}</dd>
-          </div>
-        ) : null}
-      </dl>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-muted-foreground">Events on this tag</span>
-        {events.length === 0 ? <p className="text-sm text-muted-foreground">No alarms in the last 7 days.</p> : <Plant3dAlarmList alarms={events} />}
-      </div>
     </>
+  );
+}
+
+/** The inspector card: its heading follows the drill level, its body is one of the four views above. */
+function Plant3dInspector({ state, dispatch, onCollapse, className = '' }: { state: ExplorerState; dispatch?: (action: ExplorerAction) => void; onCollapse?: () => void; className?: string }) {
+  const level = explorerLevel(state);
+  const asset = state.equipmentId ? findAsset(state.equipmentId) : undefined;
+  const area = state.areaId ? findAsset(state.areaId) : undefined;
+  const sensor = state.sensorId ? PLANT3D_SENSORS.find((candidate) => candidate.id === state.sensorId) : undefined;
+  const select = (id: string) => {
+    const action = plant3dSelectAction(id);
+    if (action) dispatch?.(action);
+  };
+  const heading =
+    level === 'sensor' && sensor
+      ? { title: sensor.tag, subtitle: asset?.name ?? 'Instrument' }
+      : level !== 'plant' && asset
+        ? { title: asset.name, subtitle: `${asset.tag} · ${area?.name ?? ''}` }
+        : level === 'area' && area
+          ? { title: area.name, subtitle: `${area.tag} · process area` }
+          : { title: 'Nordkapp plant', subtitle: 'Gas processing · 16 units' };
+
+  return (
+    <Panel
+      className={className}
+      title={heading.title}
+      subtitle={heading.subtitle}
+      icon={
+        <IconChip tone={level === 'plant' ? 'accent' : level === 'sensor' ? 'purple' : 'teal'}>
+          {level === 'plant' ? <IconBuildingFactory2 /> : level === 'sensor' ? <IconChartLine /> : <IconFlame />}
+        </IconChip>
+      }
+      actions={
+        onCollapse ? (
+          <Button variant="ghost" size="sm" onClick={onCollapse}>
+            <IconLayoutSidebarRightCollapse /> Hide
+          </Button>
+        ) : undefined
+      }
+    >
+      <div key={`${level}-${state.sensorId ?? state.equipmentId ?? state.areaId ?? 'plant'}`} className="@container -mr-2 min-h-0 flex-1 overflow-y-auto pr-2">
+        <div className="flex flex-col gap-5 @2xl:grid @2xl:grid-cols-2 @2xl:items-start @2xl:gap-x-8">
+          {level === 'sensor' && sensor ? (
+            <Plant3dSensorInspector sensor={sensor} onBack={dispatch ? () => dispatch({ type: 'up' }) : undefined} />
+          ) : level !== 'plant' && asset ? (
+            <Plant3dEquipmentInspector asset={asset} onSelectSensor={(sensorId) => dispatch?.({ type: 'selectSensor', sensorId })} />
+          ) : level === 'area' && state.areaId ? (
+            <Plant3dAreaInspector areaId={state.areaId} onSelect={select} />
+          ) : (
+            <Plant3dPlantInspector onSelect={select} />
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function Plant3dBreadcrumb({ state, dispatch }: { state: ExplorerState; dispatch: (action: ExplorerAction) => void }) {
+  const crumbs = explorerBreadcrumb(state, PLANT3D_LAYOUT.id, plant3dLabelOf);
+  return (
+    <nav aria-label="Plant drill-down path" className={`flex min-w-0 items-center gap-1 py-1.5 pl-1.5 pr-3 ${PLANT3D_CARD}`}>
+      <Button variant="ghost" size="sm" disabled={crumbs.length === 1} onClick={() => dispatch({ type: 'up' })} aria-label={crumbs.length === 1 ? 'Up one level (already at the plant)' : 'Up one level'}>
+        <IconArrowLeft />
+      </Button>
+      <ol className="flex min-w-0 items-center gap-1 text-sm">
+        {crumbs.map((crumb, index) => (
+          <li key={crumb.id} className="flex min-w-0 items-center gap-1">
+            {index > 0 ? <IconChevronRight aria-hidden="true" className="size-4 shrink-0 text-[var(--kit-text-3)]" /> : null}
+            {crumb.action ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (crumb.action) dispatch(crumb.action);
+                }}
+                className={`whitespace-nowrap rounded-md px-1.5 py-0.5 text-[var(--kit-text-2)] hover:bg-[var(--kit-well)] hover:text-[var(--kit-text)] ${PLANT3D_FOCUS}`}
+              >
+                {crumb.label}
+              </button>
+            ) : (
+              <span aria-current="location" className="whitespace-nowrap px-1.5 py-0.5 font-semibold tabular-nums text-[var(--kit-text)]">
+                {crumb.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
   );
 }
 
@@ -760,17 +835,51 @@ function Plant3dViewSwitch({ view, onChange }: { view: CameraView; onChange: (vi
   );
 }
 
+/** Bottom dock: one card per area with its health score, the keyboard path into the scene. */
+function Plant3dAreaDock({ areaId, onSelect }: { areaId: string | null; onSelect: (areaId: string) => void }) {
+  return (
+    <nav aria-label="Plant areas" className="grid w-full max-w-[43rem] grid-cols-4 gap-2">
+      {PLANT3D_LAYOUT.areas.map((area) => {
+        const asset = findAsset(area.id);
+        const status = PLANT3D_STATUSES[area.id];
+        const alarmCount = plant3dAlarmsOf(plant3dAreaAssetIds(area.id)).length;
+        if (!asset) return null;
+        return (
+          <button
+            key={area.id}
+            type="button"
+            aria-pressed={area.id === areaId}
+            aria-label={`${area.name}, health ${asset.healthScore}, ${status?.text ?? 'no open alarms'}`}
+            onClick={() => onSelect(area.id)}
+            className={`flex min-w-0 flex-col gap-1.5 p-3 text-left hover:border-[var(--kit-rule-strong)] aria-pressed:border-[var(--kit-accent)] aria-pressed:ring-2 aria-pressed:ring-[color-mix(in_oklab,var(--kit-accent)_25%,transparent)] ${PLANT3D_CARD} ${PLANT3D_FOCUS}`}
+          >
+            <span className="hidden whitespace-nowrap text-sm font-medium text-[var(--kit-text)] @[40rem]:block">{area.name}</span>
+            <span className="text-sm font-medium tabular-nums text-[var(--kit-text)] @[40rem]:hidden">{area.tag}</span>
+            <span className="flex items-end justify-between gap-2">
+              <span className="text-2xl font-semibold leading-none tabular-nums tracking-tight text-[var(--kit-text)]">{asset.healthScore}</span>
+              <StatusPill tone={status?.tone ?? 'success'}>
+                {status?.tone ? alarmCount : 'Clear'}
+                {status?.tone ? <span className="hidden @[40rem]:inline">{alarmCount === 1 ? ' alarm' : ' alarms'}</span> : null}
+              </StatusPill>
+            </span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 function Plant3dFallbackList() {
   return (
-    <ul className="flex flex-col gap-2 rounded-lg border border-default bg-card-background p-3">
+    <ul className="flex flex-col rounded-lg border border-default bg-card-background px-3">
       {PLANT3D_LAYOUT.areas.map((area) => {
         const status = PLANT3D_STATUSES[area.id];
         return (
-          <li key={area.id} className="flex items-center justify-between gap-3 text-sm">
-            <span className="min-w-0 truncate text-base-foreground">
-              <span className="font-mono text-xs text-muted-foreground">{area.tag}</span> {area.name}
+          <li key={area.id} className="flex items-center justify-between gap-3 border-b border-default py-2 text-sm last:border-b-0">
+            <span className="flex min-w-0 items-baseline gap-2 text-base-foreground">
+              {area.name} <TagId>{area.tag}</TagId>
             </span>
-            <StatusIndicator tone={status?.tone ?? 'neutral'} shape={status?.shape ?? 'ring'} label={status?.text ?? 'No open alarms'} size="sm" className="shrink-0" />
+            <StatusPill tone={status?.tone ?? 'success'}>{status?.text ?? 'No open alarms'}</StatusPill>
           </li>
         );
       })}
@@ -778,23 +887,37 @@ function Plant3dFallbackList() {
   );
 }
 
-function Plant3dExplorer({ initial = INITIAL_EXPLORER_STATE }: { initial?: ExplorerState }) {
+type Plant3dExplorerProps = {
+  initial?: ExplorerState;
+  /** `desk` docks the inspector beside the scene; `tablet` stacks it under the scene as a sheet. */
+  layout?: 'desk' | 'tablet';
+  initialView?: CameraView;
+  still?: boolean;
+};
+
+function Plant3dExplorer({ initial = INITIAL_EXPLORER_STATE, layout = 'desk', initialView = 'perspective', still = false }: Plant3dExplorerProps) {
+  // Archetype: scene-first — the plant fills the frame and everything else floats over it.
+  // Interaction: orbit, click an area and a unit; the inspector follows the drill level and can
+  //   be hidden to give the scene the whole frame.
   const [state, dispatch] = useReducer(explorerReducer, initial);
-  const [view, setView] = useState<CameraView>('perspective');
+  const [view, setView] = useState<CameraView>(initialView);
   const [showLabels, setShowLabels] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const desk = layout === 'desk';
 
   const level = explorerLevel(state);
-  const asset = state.equipmentId ? findAsset(state.equipmentId) : undefined;
   const sensor = state.sensorId ? PLANT3D_SENSORS.find((candidate) => candidate.id === state.sensorId) : undefined;
   const crumbs = explorerBreadcrumb(state, PLANT3D_LAYOUT.id, plant3dLabelOf);
+  const sensorTone = sensor ? plant3dSensorTone(sensor) : 'accent';
 
+  const act = (action: ExplorerAction) => {
+    dispatch(action);
+    // Picking a unit or a reading is a question; the inspector is where the answer is.
+    if (action.type === 'selectEquipment' || action.type === 'selectSensor') setInspectorOpen(true);
+  };
   const select = (id: string) => {
     const action = plant3dSelectAction(id);
-    if (action) dispatch(action);
-  };
-  const navigate = (id: string) => {
-    const action = crumbs.find((crumb) => crumb.id === id)?.action;
-    if (action) dispatch(action);
+    if (action) act(action);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
@@ -810,10 +933,11 @@ function Plant3dExplorer({ initial = INITIAL_EXPLORER_STATE }: { initial?: Explo
           equipmentId: state.equipmentId,
           anchor: PLANT3D_SENSOR_ANCHORS[sensor.id] ?? [0, 1, 0],
           tag: sensor.tag,
-          value: sensor.quality === 'bad' ? 'Bad quality' : formatReading(sensor.value, sensor.unit, sensor.decimals),
-          tone: plant3dSensorTone(sensor) === 'neutral' ? undefined : plant3dSensorTone(sensor),
+          value: plant3dReading(sensor),
+          tone: sensorTone === 'accent' ? undefined : sensorTone,
         }
       : null;
+  const insets = desk ? { top: 112, bottom: 150, left: 0, right: inspectorOpen ? 392 : 0 } : { top: 76, bottom: inspectorOpen ? 440 : 48, left: 0, right: 0 };
 
   return (
     <div
@@ -824,310 +948,203 @@ function Plant3dExplorer({ initial = INITIAL_EXPLORER_STATE }: { initial?: Explo
         if (event.target instanceof HTMLCanvasElement) event.currentTarget.focus({ preventScroll: true });
       }}
       data-level={level}
-      className="relative h-[46rem] w-full overflow-hidden rounded-xl border border-default bg-base-background outline-none"
+      className={`relative w-full overflow-hidden rounded-2xl border border-[var(--kit-rule)] bg-[var(--kit-canvas-bg)] outline-none ${desk ? 'h-[48rem]' : 'h-[60rem]'} ${PLANT3D_SCENE_TYPE}`}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,color-mix(in_oklab,var(--primary-background)_12%,transparent),transparent_65%)]"
-      />
-      <SceneCanvas
-        label={`3D model of the Nordkapp gas plant, showing ${crumbs.map((crumb) => crumb.label).join(', ')}`}
-        fallback={<Plant3dFallbackList />}
-      >
-        <PlantScene
-          layout={PLANT3D_LAYOUT}
-          statuses={PLANT3D_STATUSES}
-          focusId={explorerFocusId(state, PLANT3D_LAYOUT.id)}
-          view={view}
-          activeAreaId={state.areaId}
-          selectedId={state.equipmentId}
-          onSelect={select}
-          showLabels={showLabels}
-          marker={marker}
-          insets={{ top: 56, bottom: 60, left: 280, right: asset ? 344 : 0 }}
-        />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_40%_45%,color-mix(in_oklab,var(--kit-surface)_85%,transparent),transparent_70%)]" />
+      <SceneCanvas label={`3D model of the Nordkapp gas plant, showing ${crumbs.map((crumb) => crumb.label).join(', ')}`} fallback={<Plant3dFallbackList />}>
+        <StillScene still={still}>
+          <PlantScene
+            layout={PLANT3D_LAYOUT}
+            statuses={PLANT3D_STATUSES}
+            focusId={explorerFocusId(state, PLANT3D_LAYOUT.id)}
+            view={view}
+            activeAreaId={state.areaId}
+            selectedId={state.equipmentId}
+            onSelect={select}
+            showLabels={showLabels}
+            marker={marker}
+            insets={insets}
+          />
+        </StillScene>
       </SceneCanvas>
 
-      <div className="pointer-events-none absolute inset-3 z-30 flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <DrillBreadcrumb
-            crumbs={crumbs.map((crumb) => ({ id: crumb.id, label: crumb.label }))}
-            onNavigate={navigate}
-            onUp={() => dispatch({ type: 'up' })}
-            label="Plant drill-down path"
-            className="pointer-events-auto"
-          />
-          <div className={`pointer-events-auto flex shrink-0 items-center gap-3 rounded-lg px-2 py-1 ${PLANT3D_GLASS}`}>
-            <Plant3dViewSwitch view={view} onChange={setView} />
-            <Switch label="Labels" checked={showLabels} onCheckedChange={(checked) => setShowLabels(checked)} />
-          </div>
-        </div>
-
-        <div className="flex min-h-0 flex-1 justify-between gap-3">
-          <div className="pointer-events-auto flex min-h-0 w-64 shrink-0 flex-col gap-3 self-start max-h-full">
-            {state.areaId ? <Plant3dAreaHud areaId={state.areaId} selectedId={state.equipmentId} onSelectAsset={select} /> : <Plant3dPlantHud onSelectAsset={select} />}
-          </div>
-          {asset ? (
-            <HudPanel
-              key={asset.id}
-              title={sensor ? 'Sensor' : 'Equipment'}
-              actions={
-                <Button variant="ghost" size="sm" onClick={() => dispatch({ type: 'selectArea', areaId: asset.parentId ?? PLANT3D_LAYOUT.id })}>
-                  Close
+      <div className={`pointer-events-none absolute inset-4 z-30 flex gap-4 ${desk ? '' : 'flex-col'}`}>
+        <div className="@container flex min-h-0 min-w-0 flex-1 flex-col justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="pointer-events-auto min-w-0">
+              <Plant3dBreadcrumb state={state} dispatch={dispatch} />
+            </div>
+            <div className={`pointer-events-auto flex shrink-0 items-center gap-3 py-1.5 pl-1.5 pr-3 ${PLANT3D_CARD}`}>
+              <Plant3dViewSwitch view={view} onChange={setView} />
+              <Switch label="Labels" checked={showLabels} onCheckedChange={(checked) => setShowLabels(checked)} />
+              {inspectorOpen ? null : (
+                <Button variant="outline" size="sm" onClick={() => setInspectorOpen(true)}>
+                  <IconLayoutSidebarRightExpand /> Inspector
                 </Button>
-              }
-              className="pointer-events-auto w-80 shrink-0 self-start max-h-full motion-safe:transition-[opacity,translate] motion-safe:duration-300 motion-safe:starting:translate-x-4 motion-safe:starting:opacity-0"
-            >
-              {sensor ? (
-                <Plant3dSensorInspector sensor={sensor} onBack={() => dispatch({ type: 'up' })} />
-              ) : (
-                <Plant3dEquipmentInspector asset={asset} onSelectSensor={(sensorId) => dispatch({ type: 'selectSensor', sensorId })} />
               )}
-            </HudPanel>
-          ) : null}
-        </div>
-
-        <div className="flex items-end justify-between gap-3">
-          <nav aria-label="Plant areas" className="pointer-events-auto flex max-w-full shrink-0 flex-wrap gap-2">
-            {PLANT3D_LAYOUT.areas.map((area) => {
-              const status = PLANT3D_STATUSES[area.id];
-              const alarmCount = plant3dAlarmsOf(plant3dAreaAssetIds(area.id)).length;
-              return (
-                <button
-                  key={area.id}
-                  type="button"
-                  aria-label={`${area.name}, ${status?.text ?? 'no open alarms'}`}
-                  aria-pressed={area.id === state.areaId}
-                  onClick={() => dispatch({ type: 'selectArea', areaId: area.id })}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-base-foreground hover:border-emphasized aria-pressed:border-[var(--primary-background)] ${PLANT3D_GLASS} ${PLANT3D_FOCUS}`}
-                >
-                  {status?.tone ? <StatusDot tone={status.tone} shape={status.shape} size="sm" /> : null}
-                  <span className="whitespace-nowrap">{area.name}</span>
-                  {alarmCount > 0 ? (
-                    <span className="flex items-center gap-0.5 text-xs tabular-nums text-muted-foreground">
-                      <IconBell aria-hidden="true" className="size-3" />
-                      {alarmCount}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </nav>
-          <div className={`pointer-events-auto min-w-0 max-w-sm rounded-lg px-3 py-2 ${PLANT3D_GLASS}`}>
-            <SceneLegend items={PLANT3D_LEGEND} />
+            </div>
+          </div>
+          <div className="pointer-events-none flex flex-col items-start gap-2">
+            <div className="pointer-events-auto flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-[color-mix(in_oklab,var(--kit-surface)_82%,transparent)] px-2.5 py-1">
+              <span className="text-xs font-medium text-[var(--kit-text-2)]">Rings</span>
+              <Legend items={PLANT3D_LEGEND} />
+            </div>
+            {desk ? <span className="rounded-lg bg-[color-mix(in_oklab,var(--kit-surface)_82%,transparent)] px-2.5 py-1 text-xs font-medium text-[var(--kit-text-2)]">Health score by area</span> : null}
+            {desk ? (
+              <div className="pointer-events-auto w-full">
+                <Plant3dAreaDock areaId={state.areaId} onSelect={(areaId) => act({ type: 'selectArea', areaId })} />
+              </div>
+            ) : null}
           </div>
         </div>
+        {inspectorOpen ? (
+          <Plant3dInspector
+            state={state}
+            dispatch={act}
+            onCollapse={() => setInspectorOpen(false)}
+            className={`pointer-events-auto shrink-0 motion-safe:transition-[opacity,translate] motion-safe:duration-300 motion-safe:starting:opacity-0 ${desk ? 'h-full w-[23rem] motion-safe:starting:translate-x-4' : 'h-[25rem] w-full motion-safe:starting:translate-y-4'}`}
+          />
+        ) : null}
       </div>
     </div>
   );
 }
 
-function Plant3dExplorerHologram() {
+function Plant3dExplorerSignature() {
   return (
-    <ThemeScope preset="hologram" className="w-full">
+    <LookScope look="studio" className="w-full">
       <Plant3dExplorer />
-    </ThemeScope>
+    </LookScope>
   );
 }
 
-function Plant3dExplorerTron() {
+function Plant3dExplorerSensorDrill() {
   return (
-    <ThemeScope preset="tron" className="w-full">
-      <Plant3dExplorer initial={{ areaId: 'nk-23', equipmentId: null, sensorId: null }} />
-    </ThemeScope>
+    <LookScope look="studio" className="w-full">
+      <Plant3dExplorer initial={{ areaId: 'nk-23', equipmentId: '23-ka-9101', sensorId: 'vt-92540' }} still />
+    </LookScope>
   );
 }
 
-function Plant3dExplorerAuraDark() {
+function Plant3dExplorerTablet() {
   return (
-    <ThemeScope preset="aura-dark" className="w-full">
-      <Plant3dExplorer initial={{ areaId: 'nk-23', equipmentId: '23-ka-9101', sensorId: null }} />
-    </ThemeScope>
+    <LookScope look="studio" className="mx-auto w-full max-w-[52rem]">
+      <Plant3dExplorer initial={{ areaId: 'nk-23', equipmentId: '23-ka-9103', sensorId: null }} layout="tablet" initialView="isometric" still />
+    </LookScope>
   );
 }
 
-function Plant3dExplorerBlueprint() {
+function Plant3dPartFrame({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <Plant3dExplorer />
-    </ThemeScope>
+    <LookScope look="studio" className="w-full">
+      <div className={`flex w-full flex-col rounded-2xl bg-[var(--kit-canvas-bg)] p-4 ${className}`}>{children}</div>
+    </LookScope>
   );
 }
 
-function Plant3dStage({ label, children }: { label: string; children: ReactNode }) {
+function Plant3dExplorerPartPlant() {
+  const [state, dispatch] = useReducer(explorerReducer, INITIAL_EXPLORER_STATE);
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="h-72 w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <SceneCanvas label={label}>{children}</SceneCanvas>
-      </div>
-    </ThemeScope>
+    <Plant3dPartFrame className="h-[40rem]">
+      <Plant3dInspector state={state} dispatch={dispatch} className="h-full" />
+    </Plant3dPartFrame>
   );
 }
 
-function Plant3dPartVessel() {
+function Plant3dExplorerPartEquipment() {
+  const [state, dispatch] = useReducer(explorerReducer, { areaId: 'nk-23', equipmentId: '23-ka-9101', sensorId: null });
   return (
-    <Plant3dStage label="Horizontal separator vessel on a turntable stage">
-      <TurntableStage subjectSize={EQUIPMENT_SIZES['horizontal-vessel']}>
-        <HorizontalVessel />
-      </TurntableStage>
-    </Plant3dStage>
+    <Plant3dPartFrame className="h-[40rem]">
+      <Plant3dInspector state={state} dispatch={dispatch} className="h-full" />
+    </Plant3dPartFrame>
   );
 }
 
-function Plant3dPartCompressor() {
+function Plant3dExplorerPartSensor() {
   return (
-    <Plant3dStage label="Compressor skid with a pulsing critical status ring">
-      <TurntableStage subjectSize={EQUIPMENT_SIZES.compressor}>
-        <CompressorSkid tone="critical" pulse />
-      </TurntableStage>
-    </Plant3dStage>
+    <Plant3dPartFrame className="h-[40rem]">
+      <Plant3dInspector state={{ areaId: 'nk-23', equipmentId: '23-ka-9101', sensorId: 'tt-92532' }} className="h-full" />
+    </Plant3dPartFrame>
   );
 }
 
-function Plant3dPartFlare() {
+function Plant3dExplorerPartModel() {
   return (
-    <Plant3dStage label="Flare stack with a lit pilot flame">
-      <TurntableStage subjectSize={EQUIPMENT_SIZES.flare} padding={1}>
-        <FlareStack />
-      </TurntableStage>
-    </Plant3dStage>
-  );
-}
-
-function Plant3dPartTank() {
-  const [level, setLevel] = useState(62);
-
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-3">
-        <div className="h-72 w-full">
-          <SceneCanvas label={`Storage tank filled to ${level} percent`}>
-            <TurntableStage subjectSize={EQUIPMENT_SIZES['storage-tank']}>
-              <StorageTank fill={level / 100} tone={level > 85 ? 'warning' : undefined} />
+    <Plant3dPartFrame className="h-[40rem] gap-3">
+      <div className={`min-h-0 flex-1 overflow-hidden ${PLANT3D_CARD}`}>
+        <SceneCanvas label="Compressor skid with a critical status ring, on a turntable stage">
+          <StillScene>
+            <TurntableStage subjectSize={EQUIPMENT_SIZES.compressor}>
+              <CompressorSkid tone="critical" />
             </TurntableStage>
-          </SceneCanvas>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex w-28 shrink-0 flex-col">
-            <span className="text-xs text-muted-foreground">Tank level</span>
-            <ValueReadout value={level} unit="%" size="sm" tone={level > 85 ? 'warning' : 'neutral'} />
-          </div>
-          <Slider aria-label="Tank level" value={[level]} min={0} max={100} step={1} onValueChange={(value) => setLevel(value[0] ?? 0)} />
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Plant3dPartViewSwitch() {
-  const [view, setView] = useState<CameraView>('isometric');
-
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-3">
-        <div className="flex justify-end">
-          <Plant3dViewSwitch view={view} onChange={setView} />
-        </div>
-        <div className="h-72 w-full">
-          <SceneCanvas label={`Compressor skid in the ${view} view`}>
-            <TurntableStage subjectSize={EQUIPMENT_SIZES.compressor} view={view}>
-              <CompressorSkid />
-            </TurntableStage>
-          </SceneCanvas>
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Plant3dPartBreadcrumb() {
-  const [state, dispatch] = useReducer(explorerReducer, { areaId: 'nk-23', equipmentId: '23-ka-9101', sensorId: 'pt-92531' });
-  const crumbs = explorerBreadcrumb(state, PLANT3D_LAYOUT.id, plant3dLabelOf);
-
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full flex-col items-start gap-3 rounded-xl border border-default bg-base-background p-4">
-        <DrillBreadcrumb
-          crumbs={crumbs.map((crumb) => ({ id: crumb.id, label: crumb.label }))}
-          onNavigate={(id) => {
-            const action = crumbs.find((crumb) => crumb.id === id)?.action;
-            if (action) dispatch(action);
-          }}
-          onUp={() => dispatch({ type: 'up' })}
-        />
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">Level: {explorerLevel(state)}</span>
-          <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'selectEquipment', areaId: 'nk-23', equipmentId: '23-ka-9101' })}>
-            Drill to compressor
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'selectSensor', sensorId: 'pt-92531' })}>
-            Drill to sensor
-          </Button>
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Plant3dPartLegend() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full justify-center rounded-xl border border-default bg-base-background p-4">
-        <SceneLegend
-          orientation="vertical"
-          items={[
-            { kind: 'status', label: 'Tripped or critical alarm', tone: 'critical' },
-            { kind: 'status', label: 'Warning or maintenance', tone: 'warning' },
-            { kind: 'status', label: 'Advisory alarm', tone: 'info' },
-            { kind: 'status', label: 'Standby or stopped', tone: 'neutral' },
-            { kind: 'area', label: 'Area boundary' },
-            { kind: 'selection', label: 'Selected unit' },
-            { kind: 'flow', label: 'Flow direction' },
-          ]}
-        />
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Plant3dPartHud() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex h-[37rem] w-full justify-center rounded-xl border border-default bg-base-background bg-[radial-gradient(ellipse_at_50%_40%,color-mix(in_oklab,var(--primary-background)_18%,transparent),transparent_70%)] p-4">
-        <div className="flex max-h-full min-h-0 w-64 flex-col gap-3 self-start">
-          <Plant3dPlantHud />
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Plant3dPartInspector() {
-  const [sensorId, setSensorId] = useState<string | null>(null);
-  const asset = findAsset('23-ka-9101');
-  const sensor = PLANT3D_SENSORS.find((candidate) => candidate.id === sensorId);
-  if (!asset) return null;
-
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex h-[37rem] w-full justify-center rounded-xl border border-default bg-base-background bg-[radial-gradient(ellipse_at_50%_40%,color-mix(in_oklab,var(--primary-background)_18%,transparent),transparent_70%)] p-4">
-        <HudPanel title={sensor ? 'Sensor' : 'Equipment'} className="w-80 self-start max-h-full">
-          {sensor ? <Plant3dSensorInspector sensor={sensor} onBack={() => setSensorId(null)} /> : <Plant3dEquipmentInspector asset={asset} onSelectSensor={setSensorId} />}
-        </HudPanel>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Plant3dPartFallback() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="h-80 w-full overflow-hidden rounded-xl border border-default">
-        <SceneCanvas label="3D model of the Nordkapp gas plant" forceFallback fallback={<Plant3dFallbackList />}>
-          <PlantScene layout={PLANT3D_LAYOUT} />
+          </StillScene>
         </SceneCanvas>
       </div>
-    </ThemeScope>
+      <div className={`flex items-center justify-between gap-3 px-4 py-3 ${PLANT3D_CARD}`}>
+        <span className="flex min-w-0 flex-col">
+          <span className="text-sm font-semibold text-[var(--kit-text)]">Recompressor</span>
+          <TagId>23-KA-9103</TagId>
+        </span>
+        <StatusPill tone="critical" size="lg" icon={<IconAlertOctagon />}>
+          Tripped
+        </StatusPill>
+      </div>
+    </Plant3dPartFrame>
+  );
+}
+
+function Plant3dExplorerPartDock() {
+  const [areaId, setAreaId] = useState<string | null>('nk-23');
+  return (
+    <Plant3dPartFrame className="h-64 items-center justify-center gap-4">
+      <Plant3dAreaDock areaId={areaId} onSelect={(next) => setAreaId(next === areaId ? null : next)} />
+      <p className="text-sm text-[var(--kit-text-2)]">{areaId ? `The camera frames ${plant3dLabelOf(areaId).toLowerCase()}.` : 'The camera frames the whole plant.'}</p>
+    </Plant3dPartFrame>
+  );
+}
+
+function Plant3dExplorerPartTank() {
+  const [level, setLevel] = useState(62);
+  const tone = level > 90 ? 'warning' : 'accent';
+  return (
+    <Plant3dPartFrame className="h-64 gap-3">
+      <div className={`min-h-0 flex-1 overflow-hidden ${PLANT3D_CARD}`}>
+        <SceneCanvas label={`Storage tank filled to ${level} percent`}>
+          <StillScene>
+            <TurntableStage subjectSize={EQUIPMENT_SIZES['storage-tank']}>
+              <StorageTank fill={level / 100} tone={level > 90 ? 'warning' : undefined} />
+            </TurntableStage>
+          </StillScene>
+        </SceneCanvas>
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="w-24 shrink-0 text-sm font-semibold tabular-nums text-[var(--kit-text)]" data-tone={tone}>
+          Level {level} %
+        </span>
+        <Slider aria-label="Tank level" value={[level]} min={0} max={100} step={1} onValueChange={(value) => setLevel(value[0] ?? 0)} />
+      </div>
+    </Plant3dPartFrame>
+  );
+}
+
+function Plant3dExplorerPartToolbar() {
+  const [state, dispatch] = useReducer(explorerReducer, { areaId: 'nk-23', equipmentId: '23-ka-9101', sensorId: 'pt-92531' });
+  const [view, setView] = useState<CameraView>('perspective');
+  const [labels, setLabels] = useState(true);
+  return (
+    <Plant3dPartFrame className="gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <Plant3dBreadcrumb state={state} dispatch={dispatch} />
+        <div className={`flex items-center gap-3 py-1.5 pl-1.5 pr-3 ${PLANT3D_CARD}`}>
+          <Plant3dViewSwitch view={view} onChange={setView} />
+          <Switch label="Labels" checked={labels} onCheckedChange={(checked) => setLabels(checked)} />
+          <Button variant="outline" size="sm">
+            <IconLayoutSidebarRightExpand /> Inspector
+          </Button>
+        </div>
+      </div>
+      <Legend items={PLANT3D_LEGEND} />
+    </Plant3dPartFrame>
   );
 }
 
@@ -1135,33 +1152,33 @@ export default definePage({
   id: 'plant-3d-explorer',
   title: '3D plant explorer',
   summary:
-    'A gas plant you can fly through: start above the whole site, fly into an area, frame one machine and end on a single transmitter. Each altitude shows what matters there, and the panels around the scene always say where you are.',
+    'The Nordkapp gas plant as a scene you fly through. The 3D plant fills the frame; a breadcrumb, a view toolbar and an area dock float over it, and a collapsible inspector follows you from the plant to an area, a machine and one instrument.',
   guidance: {
     use: [
-      'When location is part of the question: where the trip is, what stands next to it, which line feeds it.',
-      'As a way into detail screens: the scene finds the machine, the inspector shows its numbers.',
-      'With a keyboard path beside the canvas: area buttons, the unit list and the breadcrumb reach every level.',
-      'Keep machines neutral and let rings, labels and panels carry state.',
+      'When where something is matters as much as what it reads: walkdowns, isolation planning, incident review.',
+      'With one inspector that changes with the drill level, so the scene stays the subject.',
+      'With a keyboard path beside the canvas: the area dock, the breadcrumb and the inspector lists reach everything.',
+      'When the inspector can be hidden, to give the scene the whole frame on a shared screen.',
     ],
     avoid: [
-      'Replacing a table or trend with 3D. Numbers still belong in the panels.',
-      'Colouring whole machines by status: it hides shape and fails without colour vision.',
-      'Labels on everything at once. Show areas from afar and units only inside the area in focus.',
-      'Motion that never stops. Flights, pulses and flames hold still under reduced motion.',
+      'As a monitoring page: a table shows forty readings better than forty labels in space.',
+      'Colouring whole machines by status. Use a ring and a word; steel stays neutral.',
+      'Small or monospaced labels in the scene. They are read at a glance, from a distance.',
+      'Panels that cover the selected unit: tell the scene how much room the overlays take.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
+      id: 'dashboard',
+      title: 'Dashboard',
       description:
-        'Drag to orbit, scroll to zoom, right-drag to pan. Click an area to fly in, a unit to inspect it, and a reading to find its transmitter on the machine. Escape or the arrow goes up one level.',
+        'Drag to orbit, scroll to zoom. Click an area on the plot plan or in the dock, then a unit, then Trend on a reading: the camera flies in and the inspector follows. Escape or the arrow goes one level up. Hide collapses the inspector.',
       specimens: [
         {
-          id: 'Plant3dExplorerHologram',
-          title: '3D plant explorer',
-          note: 'Pick it when people need to get from the state of the whole plant to one reading without losing their bearings.',
+          id: 'Plant3dExplorerSignature',
+          title: 'Plant explorer',
+          note: 'Pick it when people need to find equipment by where it stands and read its state without leaving the scene.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
@@ -1171,164 +1188,124 @@ export default definePage({
             'three/PlantScene.tsx',
             'three/plantLayout.ts',
             'three/explorerState.ts',
-            'three/DrillBreadcrumb.tsx',
-            'three/HudPanel.tsx',
-            'three/SceneLegend.tsx',
-            'industrial/ValueReadout.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/RadialGauge.tsx',
-            'industrial/Sparkline.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'themes/ThemeScope.tsx',
+            'kit/Panel.tsx',
+            'kit/Stat.tsx',
+            'kit/RingGauge.tsx',
+            'kit/Meter.tsx',
+            'kit/ListRow.tsx',
+            'kit/StatusPill.tsx',
+            'kit/TrendLine.tsx',
+            'kit/TagId.tsx',
+            'kit/Legend.tsx',
+            'looks/LookScope.tsx',
           ],
-          Component: Plant3dExplorerHologram,
+          Component: Plant3dExplorerSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same explorer in three more presets, each opened at a different depth. Scene colours are resolved from tokens, so the plant follows the theme.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The deepest drill level on a desk, and the same product on a tablet where the inspector becomes a sheet under the scene. Both render a still frame.',
       specimens: [
         {
-          id: 'Plant3dExplorerTron',
-          title: 'Tron, at area level',
-          note: 'Pick it for a command-centre wall: cyan lines, sharp corners and monospaced type.',
+          id: 'Plant3dExplorerSensorDrill',
+          title: 'Down to one instrument',
+          note: 'Pick it as the end of the journey: the reading is pinned on the machine and its 24-hour trend sits beside it.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['three/SceneCanvas.tsx', 'three/PlantScene.tsx', 'three/useTokenColors.ts', 'themes/ThemeScope.tsx'],
-          Component: Plant3dExplorerTron,
+          uses: ['three/PlantScene.tsx', 'three/explorerState.ts', 'three/scenes/StillScene.tsx', 'kit/TrendLine.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: Plant3dExplorerSensorDrill,
         },
         {
-          id: 'Plant3dExplorerAuraDark',
-          title: 'Aura dark, at equipment level',
-          note: 'Pick it inside a standard dark Aura app, where the scene should not out-shout the product around it.',
+          id: 'Plant3dExplorerTablet',
+          title: 'Tablet, inspector as a sheet',
+          note: 'Pick it for a field tablet: the scene keeps the top of the screen and the inspector lays its sections side by side below.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['three/SceneCanvas.tsx', 'three/PlantScene.tsx', 'three/useTokenColors.ts', 'themes/ThemeScope.tsx'],
-          Component: Plant3dExplorerAuraDark,
-        },
-        {
-          id: 'Plant3dExplorerBlueprint',
-          title: 'Blueprint, in a light theme',
-          note: 'Pick it for engineering tools used in daylight: a pale plot plan with dark steel and blue accents.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['three/SceneCanvas.tsx', 'three/PlantScene.tsx', 'three/useTokenColors.ts', 'themes/ThemeScope.tsx'],
-          Component: Plant3dExplorerBlueprint,
+          uses: ['three/PlantScene.tsx', 'three/explorerState.ts', 'three/scenes/StillScene.tsx', 'kit/Panel.tsx', 'kit/Meter.tsx', 'looks/LookScope.tsx'],
+          Component: Plant3dExplorerTablet,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The pieces on their own: equipment models on a turntable you can drag, and the panels that sit over the scene.',
+      description: 'The inspector at three drill levels, a model on a stage, and the floating controls on their own.',
       specimens: [
         {
-          id: 'Plant3dPartVessel',
-          title: 'Horizontal vessel',
-          note: 'Pick it for separators, drums and scrubbers that lie on saddles.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/HorizontalVessel.tsx', 'three/TurntableStage.tsx', 'three/SceneCanvas.tsx'],
-          Component: Plant3dPartVessel,
-        },
-        {
-          id: 'Plant3dPartCompressor',
-          title: 'Compressor skid, tripped',
-          note: 'Pick the status ring to show an abnormal state while the machine itself stays steel.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/CompressorSkid.tsx', 'three/StatusBeacon.tsx', 'three/TurntableStage.tsx', 'three/SceneCanvas.tsx'],
-          Component: Plant3dPartCompressor,
-        },
-        {
-          id: 'Plant3dPartFlare',
-          title: 'Flare stack',
-          note: 'Pick it as the landmark of a plant scene; the flame holds still under reduced motion.',
-          origin: 'custom',
-          size: 'sm',
-          align: 'stretch',
-          uses: ['three/FlareStack.tsx', 'three/TurntableStage.tsx', 'three/SceneCanvas.tsx'],
-          Component: Plant3dPartFlare,
-        },
-        {
-          id: 'Plant3dPartTank',
-          title: 'Storage tank with level',
-          note: 'Pick it when how full a tank is should be readable from the model itself.',
+          id: 'Plant3dExplorerPartPlant',
+          title: 'Inspector, plant level',
+          note: 'Pick it as the resting state: one headline figure, the areas by health and the worst open alarms.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['three/StorageTank.tsx', 'three/TurntableStage.tsx', 'three/SceneCanvas.tsx', 'industrial/ValueReadout.tsx'],
-          Component: Plant3dPartTank,
+          uses: ['kit/Panel.tsx', 'kit/Stat.tsx', 'kit/RingGauge.tsx', 'kit/ListRow.tsx', 'kit/StatusPill.tsx', 'three/explorerState.ts'],
+          Component: Plant3dExplorerPartPlant,
         },
         {
-          id: 'Plant3dPartViewSwitch',
-          title: 'View switch',
-          note: 'Pick it to offer fixed camera presets next to free orbiting: perspective, plan and isometric.',
+          id: 'Plant3dExplorerPartEquipment',
+          title: 'Inspector, equipment level',
+          note: 'Pick it for a selected machine: health, state, its alarms and live readings against their limits.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['three/cameraTargets.ts', 'three/CameraRig.tsx', 'three/TurntableStage.tsx', 'three/CompressorSkid.tsx'],
-          Component: Plant3dPartViewSwitch,
+          uses: ['kit/Panel.tsx', 'kit/Meter.tsx', 'kit/RingGauge.tsx', 'kit/ListRow.tsx', 'kit/StatusPill.tsx'],
+          Component: Plant3dExplorerPartEquipment,
         },
         {
-          id: 'Plant3dPartBreadcrumb',
-          title: 'Drill-down breadcrumb',
-          note: 'Pick it for any drill-down: it shows every level above and makes going up one click.',
+          id: 'Plant3dExplorerPartSensor',
+          title: 'Inspector, sensor level',
+          note: 'Pick it for one reading: the value with its judgement in words, a day of trend with limits, and where it sits in its range.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['kit/Panel.tsx', 'kit/Stat.tsx', 'kit/TrendLine.tsx', 'kit/Meter.tsx'],
+          Component: Plant3dExplorerPartSensor,
+        },
+        {
+          id: 'Plant3dExplorerPartModel',
+          title: 'Model with a status ring',
+          note: 'Pick it to show one machine and its state outside the plant: the ring carries the tone, the caption the word.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['three/CompressorSkid.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: Plant3dExplorerPartModel,
+        },
+        {
+          id: 'Plant3dExplorerPartDock',
+          title: 'Area dock',
+          note: 'Pick it as the keyboard path into a scene: one card per area with a health score and its alarm count.',
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['three/DrillBreadcrumb.tsx', 'three/explorerState.ts'],
-          Component: Plant3dPartBreadcrumb,
+          uses: ['kit/StatusPill.tsx'],
+          Component: Plant3dExplorerPartDock,
         },
         {
-          id: 'Plant3dPartLegend',
-          title: 'Scene legend',
-          note: 'Pick it whenever a scene encodes state: marks in 3D have no tooltip to explain them.',
+          id: 'Plant3dExplorerPartTank',
+          title: 'Tank with a level',
+          note: 'Pick it when a quantity is best understood as a filled volume: drag the level to see it.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['three/SceneLegend.tsx'],
-          Component: Plant3dPartLegend,
+          uses: ['three/StorageTank.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
+          Component: Plant3dExplorerPartTank,
         },
         {
-          id: 'Plant3dPartHud',
-          title: 'Plant HUD',
-          note: 'Pick glass panels for figures that float over a scene and must not hide it completely.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/HudPanel.tsx', 'industrial/ValueReadout.tsx', 'industrial/TrendDelta.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: Plant3dPartHud,
-        },
-        {
-          id: 'Plant3dPartInspector',
-          title: 'Equipment inspector',
-          note: 'Pick it as the detail side of a scene: state, readings you can open, alarms, work orders and actions.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/HudPanel.tsx', 'industrial/RadialGauge.tsx', 'industrial/Sparkline.tsx', 'industrial/charts/TrendChart.tsx'],
-          Component: Plant3dPartInspector,
-        },
-        {
-          id: 'Plant3dPartFallback',
-          title: 'Without WebGL',
-          note: 'Pick a fallback that lists the same items, so the screen still works where 3D cannot render.',
+          id: 'Plant3dExplorerPartToolbar',
+          title: 'Breadcrumb, view toolbar and legend',
+          note: 'Pick them as the only chrome a scene needs: where you are, how you look at it, and what the rings mean.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          uses: ['three/SceneCanvas.tsx', 'three/webgl.ts', 'industrial/StatusIndicator.tsx'],
-          Component: Plant3dPartFallback,
+          uses: ['three/explorerState.ts', 'kit/Legend.tsx'],
+          Component: Plant3dExplorerPartToolbar,
         },
       ],
     },

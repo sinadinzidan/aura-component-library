@@ -1,1113 +1,1479 @@
-import { Badge } from '@cognite/aura/components/badge';
+import { Avatar, AvatarFallback } from '@cognite/aura/components/avatar';
 import { Button } from '@cognite/aura/components/button';
 import { Search } from '@cognite/aura/components/search';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
 import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
-import {
-  IconAlarm,
+  IconAlertTriangle,
   IconArrowRight,
-  IconBinaryTree,
-  IconBook2,
+  IconBell,
+  IconBook,
   IconChartLine,
   IconClipboardList,
   IconCode,
   IconDatabase,
+  IconFileText,
+  IconFlame,
+  IconHome,
   IconLayoutDashboard,
-  IconLifebuoy,
-  IconPlugConnected,
-  IconShieldCheck,
+  IconListCheck,
+  IconPlayerPlay,
+  IconReport,
+  IconRobot,
+  IconRocket,
+  IconSchool,
+  IconSettings,
   IconSparkles,
   IconTool,
   IconUsers,
 } from '@cognite/aura/icons';
 import { useState } from 'react';
-import type { ReactNode } from 'react';
 
-import { AvatarGroup } from '../../../library/display/AvatarGroup';
-import { PersonAvatar } from '../../../library/display/PersonAvatar';
-import { StatusBadge } from '../../../library/display/StatusBadge';
-import { KpiTile } from '../../../library/industrial/KpiTile';
-import { severityStatus } from '../../../library/industrial/status';
-import type { Tone } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { StatRow } from '../../../library/patterns/collections/StatRow';
-import { BillingToggle } from '../../../library/patterns/product/BillingToggle';
-import type { BillingPeriod } from '../../../library/patterns/product/BillingToggle';
-import { FeatureCard } from '../../../library/patterns/product/FeatureCard';
-import { Hero } from '../../../library/patterns/product/Hero';
-import { PlanCard } from '../../../library/patterns/product/PlanCard';
-import { StatsBand } from '../../../library/patterns/product/StatsBand';
-import { SetupChecklist } from '../../../library/patterns/states/SetupChecklist';
-import type { SetupStep } from '../../../library/patterns/states/SetupChecklist';
-import { PageHeader } from '../../../library/patterns/structure/PageHeader';
-import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
-import type { SidebarNavGroup } from '../../../library/patterns/structure/SidebarNav';
-import { BrandMark } from '../../../library/templates-b/BrandMark';
-import { PageFrame } from '../../../library/templates-b/PageFrame';
-import { ShellPage } from '../../../library/templates-b/ShellPage';
-import { SiteBand } from '../../../library/templates-b/SiteBand';
-import { SitePage } from '../../../library/templates-b/SitePage';
-import { ALARMS, PEOPLE, PLANT_KPIS, SENSORS, WORK_ORDERS, findAsset } from '../../data/plant';
-import { formatAgo, formatDate, makeValues } from '../../data/series';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { DetailList } from '../../../library/kit/auth-pages/DetailList';
+import { Bars } from '../../../library/kit/Bars';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Donut } from '../../../library/kit/Donut';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip, type HeatRow } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { BrowserFrame } from '../../../library/kit/landing-pages/BrowserFrame';
+import { ChecklistItem } from '../../../library/kit/landing-pages/ChecklistItem';
+import { FeatureCard } from '../../../library/kit/landing-pages/FeatureCard';
+import { Hero } from '../../../library/kit/landing-pages/Hero';
+import { PriceCard, type PriceFeature } from '../../../library/kit/landing-pages/PriceCard';
+import { PullQuote } from '../../../library/kit/landing-pages/PullQuote';
+import { ReleaseEntry } from '../../../library/kit/landing-pages/ReleaseEntry';
+import { ListRow } from '../../../library/kit/ListRow';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { PEOPLE, PLANT_KPIS, WORK_ORDERS, findAsset } from '../../data/plant';
+import { formatDate, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './landing-pages.tsx?raw';
 
-const LANDING_LINK =
-  'rounded-sm font-medium text-link-foreground underline-offset-4 outline-none hover:underline focus-visible:shadow-focus-ring';
+const LAND_APP_NAV: AppFrameNavItem[] = [
+  { id: 'home', label: 'Home', icon: <IconHome /> },
+  { id: 'overview', label: 'Plant overview', icon: <IconLayoutDashboard /> },
+  { id: 'alarms', label: 'Alarms', icon: <IconBell />, badge: '4' },
+  { id: 'trends', label: 'Trends', icon: <IconChartLine /> },
+  { id: 'work', label: 'Work orders', icon: <IconClipboardList /> },
+  { id: 'reports', label: 'Reports', icon: <IconReport /> },
+];
 
-const LANDING_SITE_LINKS = [
+const LAND_RAIL_NAV: AppFrameNavItem[] = [
+  { id: 'team', label: 'Team', icon: <IconUsers /> },
+  { id: 'overview', label: 'Plant overview', icon: <IconLayoutDashboard /> },
+  { id: 'alarms', label: 'Alarms', icon: <IconBell />, badge: '4' },
+  { id: 'work', label: 'Work orders', icon: <IconClipboardList /> },
+  { id: 'settings', label: 'Settings', icon: <IconSettings /> },
+];
+
+const LAND_SITE_NAV: AppFrameNavItem[] = [
   { id: 'product', label: 'Product' },
   { id: 'solutions', label: 'Solutions' },
   { id: 'pricing', label: 'Pricing' },
   { id: 'docs', label: 'Docs' },
 ];
 
-const LANDING_AVAILABILITY = makeValues({ seed: 51, points: 30, base: 96.8, amplitude: 0.5, noise: 0.25, drift: -0.4, decimals: 1 });
-const LANDING_EXPORT = makeValues({ seed: 52, points: 30, base: 4.3, amplitude: 0.08, noise: 0.04, drift: 0.1, decimals: 2 });
+const LAND_ROLE_NAV: AppFrameNavItem[] = [
+  { id: 'problem', label: 'The problem' },
+  { id: 'method', label: 'The method' },
+  { id: 'proof', label: 'The proof' },
+  { id: 'start', label: 'Getting started' },
+];
 
-const LANDING_SHELL_NAV: readonly SidebarNavGroup[] = [
+const LAND_DOCS_NAV: AppFrameNavItem[] = [
+  { id: 'guides', label: 'Guides', icon: <IconBook /> },
+  { id: 'api', label: 'API reference', icon: <IconCode /> },
+  { id: 'learn', label: 'Courses', icon: <IconSchool /> },
+];
+
+const LAND_CATALOGUE_NAV: AppFrameNavItem[] = [
+  { id: 'catalogue', label: 'Catalogue', icon: <IconDatabase /> },
+  { id: 'mine', label: 'My products', icon: <IconListCheck /> },
+  { id: 'requests', label: 'Requests', icon: <IconFileText />, badge: '2' },
+];
+
+const LAND_RELEASE_NAV: AppFrameNavItem[] = [
+  { id: '2026.3', label: '2026.3 · March' },
+  { id: '2026.2', label: '2026.2 · February' },
+  { id: '2026.1', label: '2026.1 · January' },
+  { id: '2025.12', label: '2025.12 · December' },
+  { id: '2025.11', label: '2025.11 · November' },
+];
+
+const LAND_AVAILABILITY = makeValues({
+  seed: 41,
+  points: 28,
+  base: 96.8,
+  amplitude: 0.6,
+  noise: 0.25,
+});
+
+const LAND_DAYS = Array.from({ length: 28 }, (_, index) => `${index + 13 > 28 ? index - 15 : index + 13} ${index + 13 > 28 ? 'Mar' : 'Feb'}`);
+
+const LAND_VIBRATION = [5.9, 6.0, 6.0, 6.1, 6.1, 6.2, 6.3, 6.3, 6.5, 6.6, 6.8, 7.0, 7.3, 7.7];
+
+const LAND_VIBRATION_DAYS = ['27 Feb', '28 Feb', '1 Mar', '2 Mar', '3 Mar', '4 Mar', '5 Mar', '6 Mar', '7 Mar', '8 Mar', '9 Mar', '10 Mar', '11 Mar', '12 Mar'];
+
+type LandRecent = { id: string; name: string; kind: string; when: string };
+
+const LAND_RECENT: LandRecent[] = [
   {
-    id: 'main',
-    items: [
-      { id: 'home', label: 'Home', icon: <IconLayoutDashboard /> },
-      { id: 'alarms', label: 'Alarms', icon: <IconAlarm />, count: PLANT_KPIS.activeAlarms.value },
-      { id: 'assets', label: 'Assets', icon: <IconBinaryTree /> },
-      { id: 'trends', label: 'Trends', icon: <IconChartLine /> },
-      { id: 'orders', label: 'Work orders', icon: <IconTool />, count: PLANT_KPIS.openWorkOrders.value },
-    ],
+    id: 'r1',
+    name: 'Recompressor vibration, last 24 h',
+    kind: 'Trend',
+    when: '14 min ago',
+  },
+  {
+    id: 'r2',
+    name: 'Day shift handover, 12 March',
+    kind: 'Handover note',
+    when: '31 min ago',
+  },
+  {
+    id: 'r3',
+    name: 'Inspect recompressor drive-end bearing',
+    kind: 'Work order',
+    when: '1 h ago',
+  },
+  {
+    id: 'r4',
+    name: 'Weekly production report, week 10',
+    kind: 'Report',
+    when: 'Yesterday',
+  },
+  {
+    id: 'r5',
+    name: 'Compression train P&ID, sheet 3',
+    kind: 'Drawing',
+    when: 'Tuesday',
   },
 ];
 
-const LANDING_QUICK_ACTIONS = [
-  { id: 'ack', label: 'Work the alarm list', detail: '2 unacknowledged', icon: IconAlarm },
-  { id: 'order', label: 'Create a work order', detail: 'From an asset or an alarm', icon: IconTool },
-  { id: 'trend', label: 'Open a trend', detail: 'Any tag, last 24 hours', icon: IconChartLine },
-  { id: 'handover', label: 'Start shift handover', detail: 'Due at 15:00', icon: IconClipboardList },
-] as const;
-
-const LANDING_RECENT = [
-  { id: 'r1', kind: 'Trend', title: 'Drive-end vibration, 23-KA-9101', when: '12 min ago', icon: IconChartLine },
-  { id: 'r2', kind: 'Work order', title: 'WO-104482 Inspect recompressor drive-end bearing', when: '40 min ago', icon: IconTool },
-  { id: 'r3', kind: 'Dashboard', title: 'Gas compression overview', when: '2 h ago', icon: IconLayoutDashboard },
-  { id: 'r4', kind: 'Asset', title: '23-HA-9114 Interstage cooler', when: 'Yesterday', icon: IconBinaryTree },
-] as const;
-
-const LANDING_MY_ORDERS = WORK_ORDERS.filter((order) => order.status !== 'done').slice(0, 4);
-
-const LANDING_FEATURES = [
-  { id: 'model', icon: <IconBinaryTree />, title: 'One model of the plant', description: 'Assets, tags, documents and work orders are linked, so every screen starts from the same equipment.' },
-  { id: 'live', icon: <IconChartLine />, title: 'Live and historical together', description: 'Trends open at the current value and scroll back years without changing tools.' },
-  { id: 'alarms', icon: <IconAlarm />, title: 'Alarms with their context', description: 'Each alarm shows the trend that raised it, the limit it crossed and the work already planned.' },
-  { id: 'assistant', icon: <IconSparkles />, title: 'An assistant that cites', description: 'Ask in plain words. Answers point to the tags, events and documents they rest on.' },
-  { id: 'access', icon: <IconShieldCheck />, title: 'Access by area', description: 'People see the parts of the plant they work on. Writing to other systems always asks first.' },
-  { id: 'connect', icon: <IconPlugConnected />, title: 'Connected to what you run', description: 'Historians, SAP PM and document stores are read in place through extractors you can monitor.' },
+const LAND_RECENT_COLUMNS: DataTableColumn<LandRecent>[] = [
+  { id: 'name', header: 'Name', cell: (row) => row.name },
+  {
+    id: 'kind',
+    header: 'Type',
+    nowrap: true,
+    muted: true,
+    cell: (row) => row.kind,
+  },
+  {
+    id: 'when',
+    header: 'Opened',
+    nowrap: true,
+    numeric: true,
+    cell: (row) => row.when,
+  },
 ];
 
-const LANDING_FACTS = [
-  { id: 'series', value: '12 400', label: 'Time series', detail: 'Updated every second' },
-  { id: 'assets', value: '3 180', label: 'Assets in the hierarchy', detail: 'Across 4 sites' },
-  { id: 'docs', value: '41 000', label: 'Documents linked', detail: 'P&IDs, datasheets, procedures' },
-  { id: 'uptime', value: '99.95', unit: '%', label: 'Service availability', detail: 'Last 12 months' },
+const LAND_MY_ORDERS = WORK_ORDERS.filter((order) => order.status !== 'done').slice(0, 4);
+
+type LandStep = { id: string; title: string; detail: string };
+
+const LAND_STEPS: LandStep[] = [
+  {
+    id: 'profile',
+    title: 'Finish your profile',
+    detail: 'Role, shift and a photo. 1 minute.',
+  },
+  {
+    id: 'sites',
+    title: 'Pick the sites you follow',
+    detail: 'Their alarms and handovers land on your home page.',
+  },
+  {
+    id: 'alarm',
+    title: 'Acknowledge your first alarm',
+    detail: 'Open the alarm list and work one through. 3 minutes.',
+  },
+  {
+    id: 'trend',
+    title: 'Build a trend and save it',
+    detail: 'Three series from the compression train. 4 minutes.',
+  },
+  {
+    id: 'handover',
+    title: 'Write a handover note',
+    detail: 'Start from the draft the shift log prepared. 2 minutes.',
+  },
 ];
 
-type LandingRole = 'operator' | 'engineer' | 'planner';
-
-const LANDING_ROLES: Record<LandingRole, { label: string; title: string; description: string; day: readonly { id: string; title: string; description: string }[] }> = {
-  operator: {
-    label: 'Operator',
-    title: 'See what needs you, in the order it needs you',
-    description: 'The alarm list, the trend behind each alarm and the handover log in one place, built for the console.',
-    day: [
-      { id: 'a', title: 'Start from the alarm list', description: 'Most severe first, with value against limit on every row.' },
-      { id: 'b', title: 'Open the trend in one step', description: 'Each alarm leads to the tag that raised it, limits drawn in.' },
-      { id: 'c', title: 'Hand over what changed', description: 'The shift log is drafted from the alarms and work you touched.' },
-    ],
-  },
-  engineer: {
-    label: 'Engineer',
-    title: 'Find the cause without collecting the data first',
-    description: 'Compare tags across equipment, overlay events and keep the analysis as a notebook others can read.',
-    day: [
-      { id: 'a', title: 'Compare equipment side by side', description: 'The same measurement across all three compressors on one axis.' },
-      { id: 'b', title: 'Overlay alarms and work', description: 'See what happened on the trend, not in a separate list.' },
-      { id: 'c', title: 'Change a limit with review', description: 'Limit changes carry a reason and an approver.' },
-    ],
-  },
-  planner: {
-    label: 'Planner',
-    title: 'Plan the week around the condition of the plant',
-    description: 'Open work, due dates and equipment health in one backlog, so the urgent jobs are the ones that matter.',
-    day: [
-      { id: 'a', title: 'Sort the backlog by risk', description: 'Priority, criticality and health score on every work order.' },
-      { id: 'b', title: 'See what is overdue', description: 'Overdue jobs are marked in words, with the days they slipped.' },
-      { id: 'c', title: 'Assign from the same screen', description: 'Technicians and their load next to the unassigned work.' },
-    ],
-  },
+type LandProduct = {
+  id: string;
+  name: string;
+  kind: 'Dashboard' | 'Data set' | 'Agent';
+  owner: string;
+  summary: string;
+  state: string;
+  tone: Tone;
+  updated: string;
+  size: string;
 };
 
-const LANDING_RELEASES = [
+const LAND_PRODUCTS: LandProduct[] = [
   {
-    version: '2026.3',
-    date: '10 Mar 2026',
-    summary: 'Notebooks for analyses you keep, and quicker alarm handling.',
-    changes: [
-      { id: 'a', type: 'New', text: 'Notebooks: numbered questions with the chart and answer under each.' },
-      { id: 'b', type: 'Improved', text: 'Acknowledge several alarms at once from the alarm list.' },
-      { id: 'c', type: 'Fixed', text: 'Trend cursors no longer drift when a series has gaps.' },
-    ],
+    id: 'p1',
+    name: 'Plant overview',
+    kind: 'Dashboard',
+    owner: 'Operations',
+    summary: 'KPIs, alarms and work for the whole plant on one screen.',
+    state: 'Live',
+    tone: 'success',
+    updated: '14:00',
+    size: '64 users',
   },
   {
-    version: '2026.2',
-    date: '11 Feb 2026',
-    summary: 'Limit changes go through review.',
-    changes: [
-      { id: 'a', type: 'New', text: 'Alarm limit changes need a reason and an approver.' },
-      { id: 'b', type: 'Improved', text: 'Work order rows show the permit state.' },
-    ],
+    id: 'p2',
+    name: 'Compressor telemetry',
+    kind: 'Data set',
+    owner: 'Rotating equipment',
+    summary: 'Pressure, temperature and vibration for three compressor stages.',
+    state: 'Live',
+    tone: 'success',
+    updated: '13:59',
+    size: '412 series',
   },
   {
-    version: '2026.1',
-    date: '14 Jan 2026',
-    summary: 'A faster asset tree and fixes to export.',
-    changes: [
-      { id: 'a', type: 'Improved', text: 'The asset tree opens 3 180 assets without paging.' },
-      { id: 'b', type: 'Fixed', text: 'CSV export keeps the unit column for every tag.' },
-      { id: 'c', type: 'Fixed', text: 'Shelved alarms return at the time shown, in the plant time zone.' },
-    ],
-  },
-] as const;
-
-const LANDING_CHANGE_TYPES = ['All', 'New', 'Improved', 'Fixed'] as const;
-
-const LANDING_DOC_TOPICS = [
-  { id: 'start', icon: IconBook2, title: 'Getting started', description: 'Sign in, find an asset, open your first trend.', articles: 8 },
-  { id: 'alarms', icon: IconAlarm, title: 'Alarms', description: 'Severity, acknowledging, shelving and alarm rules.', articles: 14 },
-  { id: 'trends', icon: IconChartLine, title: 'Trends and charts', description: 'Limits, overlays, comparing tags and exporting.', articles: 21 },
-  { id: 'work', icon: IconTool, title: 'Work orders', description: 'Creating, planning and closing work with SAP PM.', articles: 12 },
-  { id: 'data', icon: IconDatabase, title: 'Data and extractors', description: 'Connecting historians and monitoring freshness.', articles: 17 },
-  { id: 'api', icon: IconCode, title: 'API and SDK', description: 'Query time series, assets and events from code.', articles: 33 },
-] as const;
-
-const LANDING_DOC_POPULAR = [
-  'Acknowledge and shelve an alarm',
-  'Compare the same tag across equipment',
-  'Create a work order from an alarm',
-  'Change an alarm limit with review',
-];
-
-const LANDING_SETUP: readonly SetupStep[] = [
-  { id: 'project', title: 'Open your project', done: true },
-  { id: 'source', title: 'Connect a data source', done: true },
-  {
-    id: 'area',
-    title: 'Choose your area of the plant',
-    description: 'The overview, alarm list and work orders start filtered to it. You can change it at any time.',
-    done: false,
-    actionLabel: 'Choose area',
-    hint: 'About 1 min',
+    id: 'p3',
+    name: 'Trip review',
+    kind: 'Agent',
+    owner: 'Reliability',
+    summary: 'Reads alarms and trends after a trip and drafts the review.',
+    state: 'Running',
+    tone: 'info',
+    updated: '13:47',
+    size: '3 runs today',
   },
   {
-    id: 'alerts',
-    title: 'Set up alarm notifications',
-    description: 'Pick the severities you want to hear about when you are away from the console.',
-    done: false,
-    actionLabel: 'Set up notifications',
-    hint: 'About 2 min',
+    id: 'p4',
+    name: 'Maintenance backlog',
+    kind: 'Dashboard',
+    owner: 'Maintenance',
+    summary: 'Open work by priority, age and area, with the overdue list.',
+    state: 'Live',
+    tone: 'success',
+    updated: '13:30',
+    size: '23 users',
   },
-  { id: 'team', title: 'Invite your shift', description: 'Add the people you hand over to.', done: false, actionLabel: 'Invite people', hint: 'Optional' },
+  {
+    id: 'p5',
+    name: 'Work order history',
+    kind: 'Data set',
+    owner: 'Maintenance',
+    summary: 'Every order since 2019 with cost, hours and failure codes.',
+    state: 'Stale',
+    tone: 'warning',
+    updated: '10 Mar',
+    size: '48 200 rows',
+  },
+  {
+    id: 'p6',
+    name: 'Handover writer',
+    kind: 'Agent',
+    owner: 'Operations',
+    summary: 'Drafts the shift handover from the log and the open alarms.',
+    state: 'Paused',
+    tone: 'neutral',
+    updated: '06:00',
+    size: '2 runs today',
+  },
 ];
 
-type LandingApp = { id: string; name: string; category: string; description: string; author: string; icon: typeof IconTool };
-
-const LANDING_APPS: readonly LandingApp[] = [
-  { id: 'compression', name: 'Gas compression overview', category: 'Operations', description: 'Stage pressures, temperatures and vibration for all three compressors.', author: 'Aisha Khan', icon: IconLayoutDashboard },
-  { id: 'alarm-kpi', name: 'Alarm performance', category: 'Operations', description: 'Alarm rate, standing alarms and chattering tags per shift.', author: 'Liv Wold', icon: IconAlarm },
-  { id: 'backlog', name: 'Maintenance backlog', category: 'Maintenance', description: 'Open work by priority, age and equipment criticality.', author: 'Magnus Solberg', icon: IconTool },
-  { id: 'energy', name: 'Energy intensity', category: 'Energy', description: 'kWh per boe by area, against the monthly target.', author: 'Aisha Khan', icon: IconChartLine },
-  { id: 'health', name: 'Rotating equipment health', category: 'Maintenance', description: 'Health scores and bearing trends for pumps and compressors.', author: 'Aisha Khan', icon: IconShieldCheck },
-  { id: 'freshness', name: 'Data freshness', category: 'Data', description: 'Extractor lag and tags that stopped reporting.', author: 'Jonas Nyberg', icon: IconDatabase },
+const LAND_PRICE_BASE: PriceFeature[] = [
+  { label: 'Alarms, trends and work orders', included: true },
+  { label: 'Shift handover with sign-off', included: true },
+  { label: 'Agents and notebooks', included: false },
+  { label: 'Single sign-on and audit log', included: false },
 ];
 
-const LANDING_APP_CATEGORIES = ['All', 'Operations', 'Maintenance', 'Energy', 'Data'] as const;
-
-type LandingService = { id: string; name: string; tone: Tone; state: string; uptime: number; badDays: readonly number[] };
-
-const LANDING_SERVICES: readonly LandingService[] = [
-  { id: 'app', name: 'Web application', tone: 'success', state: 'Operational', uptime: 100, badDays: [] },
-  { id: 'ingest', name: 'Time series ingestion', tone: 'warning', state: 'Degraded', uptime: 99.62, badDays: [17, 29] },
-  { id: 'api', name: 'API', tone: 'success', state: 'Operational', uptime: 99.98, badDays: [17] },
-  { id: 'assistant', name: 'Plant assistant', tone: 'success', state: 'Operational', uptime: 99.91, badDays: [8] },
-  { id: 'sap', name: 'SAP PM connection', tone: 'success', state: 'Operational', uptime: 100, badDays: [] },
+const LAND_PRICE_PLANT: PriceFeature[] = [
+  { label: 'Everything in Team', included: true },
+  { label: 'Agents and notebooks', included: true },
+  { label: 'Single sign-on and audit log', included: true },
+  { label: 'Dedicated region and support desk', included: false },
 ];
 
-const LANDING_DAYS = Array.from({ length: 30 }, (_, index) => index);
-
-const LANDING_INCIDENTS = [
-  { id: 'i1', date: '12 Mar, 13:20', title: 'Time series ingestion delayed', text: 'Values from the Nordkapp historian arrive up to 4 minutes late. The extractor is being restarted.', state: 'Investigating' },
-  { id: 'i2', date: '28 Feb, 02:10', title: 'API and ingestion interrupted', text: 'A database failover took 11 minutes. No data was lost; the backlog was ingested by 02:40.', state: 'Resolved' },
+const LAND_PRICE_FLEET: PriceFeature[] = [
+  { label: 'Everything in Plant', included: true },
+  { label: 'Fleet views across all sites', included: true },
+  { label: 'Dedicated region and support desk', included: true },
+  { label: 'Named reliability engineer', included: true },
 ];
 
-const LANDING_PLANS = [
+type LandCompare = {
+  id: string;
+  feature: string;
+  team: string;
+  plant: string;
+  fleet: string;
+};
+
+const LAND_COMPARE: LandCompare[] = [
+  {
+    id: 'c1',
+    feature: 'Time series kept',
+    team: '2 years',
+    plant: '10 years',
+    fleet: 'Unlimited',
+  },
+  {
+    id: 'c2',
+    feature: 'People included',
+    team: '15',
+    plant: '80',
+    fleet: 'Unlimited',
+  },
+  {
+    id: 'c3',
+    feature: 'Agent runs per month',
+    team: 'None',
+    plant: '2 000',
+    fleet: '20 000',
+  },
+  {
+    id: 'c4',
+    feature: 'Support response',
+    team: 'Next working day',
+    plant: '4 hours',
+    fleet: '30 minutes, all hours',
+  },
+];
+
+const LAND_COMPARE_COLUMNS: DataTableColumn<LandCompare>[] = [
+  { id: 'feature', header: 'What you get', cell: (row) => row.feature },
   {
     id: 'team',
-    name: 'Team',
-    description: 'One site, one control room.',
-    monthly: 1400,
-    features: [
-      { id: 'a', label: 'Up to 25 people' },
-      { id: 'b', label: '5 000 time series' },
-      { id: 'c', label: 'Alarms, trends and work orders' },
-      { id: 'd', label: 'Plant assistant', included: false },
-    ],
+    header: 'Team',
+    numeric: true,
+    width: 'w-1/4',
+    cell: (row) => row.team,
   },
   {
     id: 'plant',
-    name: 'Plant',
-    description: 'A whole plant, operations and maintenance.',
-    monthly: 3900,
-    highlight: 'Most plants pick this',
-    features: [
-      { id: 'a', label: 'Up to 150 people' },
-      { id: 'b', label: '25 000 time series' },
-      { id: 'c', label: 'Everything in Team' },
-      { id: 'd', label: 'Plant assistant with approvals' },
-    ],
+    header: 'Plant',
+    numeric: true,
+    width: 'w-1/4',
+    cell: (row) => row.plant,
   },
   {
-    id: 'enterprise',
-    name: 'Enterprise',
-    description: 'Several sites with shared engineering.',
-    monthly: null,
-    features: [
-      { id: 'a', label: 'Unlimited people and sites' },
-      { id: 'b', label: 'Time series by agreement' },
-      { id: 'c', label: 'Everything in Plant' },
-      { id: 'd', label: 'Single sign-on and audit export' },
-    ],
+    id: 'fleet',
+    header: 'Fleet',
+    numeric: true,
+    width: 'w-1/4',
+    cell: (row) => row.fleet,
   },
-] as const;
-
-const LANDING_TEAM = PEOPLE.slice(0, 5);
-
-const LANDING_PINNED = [
-  { id: 'p1', name: 'Gas compression overview', kind: 'Dashboard', updated: 'Updated 2 h ago' },
-  { id: 'p2', name: 'Compressor vibration, week 11', kind: 'Notebook', updated: 'Updated today' },
-  { id: 'p3', name: 'Bearing inspection procedure', kind: 'Document', updated: 'Rev. 4, Jan 2026' },
 ];
 
-const LANDING_ACTIVITY = [
-  { id: 'a1', person: PEOPLE[2], text: 'added a question to Compressor vibration, week 11', when: '13:58' },
-  { id: 'a2', person: PEOPLE[3], text: 'updated WO-104482 to 35 % done', when: '13:10' },
-  { id: 'a3', person: PEOPLE[4], text: 'pinned Gas compression overview', when: '09:42' },
-  { id: 'a4', person: PEOPLE[1], text: 'planned WO-104479 for tomorrow', when: 'Yesterday' },
+type LandService = {
+  id: string;
+  name: string;
+  state: string;
+  tone: Tone;
+  detail: string;
+};
+
+const LAND_SERVICES: LandService[] = [
+  {
+    id: 's1',
+    name: 'Web application',
+    state: 'Operational',
+    tone: 'success',
+    detail: '100 % · 90 days',
+  },
+  {
+    id: 's2',
+    name: 'Time series API',
+    state: 'Operational',
+    tone: 'success',
+    detail: '99.99 % · 90 days',
+  },
+  {
+    id: 'ingest',
+    name: 'Data ingestion',
+    state: 'Degraded',
+    tone: 'warning',
+    detail: 'Up to 4 min delay',
+  },
+  {
+    id: 's4',
+    name: 'Alarms',
+    state: 'Operational',
+    tone: 'success',
+    detail: '99.98 % · 90 days',
+  },
+  {
+    id: 's5',
+    name: 'Agents',
+    state: 'Operational',
+    tone: 'success',
+    detail: '99.91 % · 90 days',
+  },
+  {
+    id: 's6',
+    name: 'Sign-in',
+    state: 'Operational',
+    tone: 'success',
+    detail: '100 % · 90 days',
+  },
 ];
 
-function isLandingRole(value: unknown): value is LandingRole {
-  return value === 'operator' || value === 'engineer' || value === 'planner';
+const LAND_UPTIME: HeatRow[] = [
+  {
+    label: 'Web application',
+    values: makeValues({
+      seed: 71,
+      points: 30,
+      base: 0.1,
+      amplitude: 0.1,
+      noise: 0.1,
+      min: 0,
+      decimals: 0,
+    }),
+    tone: 'success',
+  },
+  {
+    label: 'Time series API',
+    values: makeValues({
+      seed: 72,
+      points: 30,
+      base: 0.3,
+      amplitude: 0.4,
+      noise: 0.5,
+      min: 0,
+      decimals: 0,
+    }),
+    tone: 'success',
+  },
+  {
+    label: 'Data ingestion',
+    values: [
+      ...makeValues({
+        seed: 73,
+        points: 29,
+        base: 0.6,
+        amplitude: 0.8,
+        noise: 0.9,
+        min: 0,
+        decimals: 0,
+      }),
+      4,
+    ],
+    tone: 'warning',
+  },
+  {
+    label: 'Agents',
+    values: makeValues({
+      seed: 74,
+      points: 30,
+      base: 0.5,
+      amplitude: 0.6,
+      noise: 0.8,
+      min: 0,
+      decimals: 0,
+    }),
+    tone: 'success',
+  },
+];
+
+function LandUser() {
+  return (
+    <div className="flex items-center gap-2.5">
+      <Avatar variant="decorative-2" aria-label="Ingrid Haugen">
+        <AvatarFallback>IH</AvatarFallback>
+      </Avatar>
+      <div className="text-sm leading-tight">
+        <p className="font-medium">Ingrid Haugen</p>
+        <p className="text-(color:--kit-text-3)">Day shift</p>
+      </div>
+    </div>
+  );
 }
 
-function landingPrice(monthly: number | null, period: BillingPeriod): string {
-  if (monthly === null) return 'Custom';
-  const value = period === 'annual' ? Math.round((monthly * 10) / 12) : monthly;
-  return `€ ${value.toLocaleString('en-GB').replace(',', ' ')}`;
-}
-
-function LandingSiteFooter() {
+function LandSiteActions() {
   return (
     <>
-      <span>Nordkapp operations workspace</span>
-      <span className="flex items-center gap-4">
-        <a href="#privacy" className={LANDING_LINK} onClick={(event) => event.preventDefault()}>
-          Privacy
-        </a>
-        <a href="#terms" className={LANDING_LINK} onClick={(event) => event.preventDefault()}>
-          Terms
-        </a>
-        <a href="#status" className={LANDING_LINK} onClick={(event) => event.preventDefault()}>
-          Status
-        </a>
-      </span>
+      <Button variant="ghost" size="sm">
+        Sign in
+      </Button>
+      <Button size="sm">Book a demo</Button>
     </>
   );
 }
 
-/** A panel with a title on the base surface: the unit the in-app pages are laid out from. */
-function LandingPanel({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
+function LandingTemplateInAppHome() {
   return (
-    <section className="flex min-w-0 flex-col gap-2">
-      <SectionHeader title={title} size="sm" as="h2" actions={action} />
-      {children}
-    </section>
+    <BrowserFrame url="nordkapp.test/home" look="studio" minHeight={760}>
+      <AppFrame
+        variant="sidebar"
+        brand={{ name: 'Nordkapp', detail: 'Operations', mark: <IconFlame /> }}
+        nav={LAND_APP_NAV}
+        current="home"
+        tools={<LandUser />}
+        title="Good afternoon, Ingrid"
+        subtitle="Thursday 12 March · day shift ends at 14:00 · 4 alarms need you"
+        actions={<Search className="w-64" aria-label="Search Nordkapp" placeholder="Search assets, tags, orders" />}
+      >
+        <Grid className="h-full grid-rows-[auto_auto_minmax(0,1fr)]">
+          <Panel
+            className="col-span-8"
+            tone="warning"
+            title="Nordkapp is at reduced capacity"
+            subtitle="Recompressor 23-KA-9103 tripped at 13:46"
+            icon={
+              <IconChip tone="warning">
+                <IconAlertTriangle />
+              </IconChip>
+            }
+            actions={
+              <Button size="sm">
+                Open plant overview <IconArrowRight />
+              </Button>
+            }
+          >
+            <div className="grid grid-cols-3 gap-6">
+              <Stat variant="plain" size="md" label="Gas export" value={PLANT_KPIS.gasExport.value} decimals={2} unit="MSm³/d" target="Plan 4.50" />
+              <Stat variant="plain" size="md" label="Availability" value={PLANT_KPIS.availability.value} decimals={1} unit="%" target="Target 97.5 %" />
+              <Stat variant="plain" size="md" label="Active alarms" value={PLANT_KPIS.activeAlarms.value} tone="critical" target="1 critical, 2 high" />
+            </div>
+          </Panel>
+          <Panel className="col-span-4" title="Your shift" subtitle="Control room 1">
+            <DetailList
+              items={[
+                { label: 'Hands over to', value: 'Liv Wold, 14:00' },
+                {
+                  label: 'Handover note',
+                  value: <StatusPill tone="warning">Draft</StatusPill>,
+                },
+                { label: 'Rounds done', value: '3 of 4' },
+              ]}
+            />
+          </Panel>
+
+          <FeatureCard
+            className="col-span-3"
+            tone="pink"
+            icon={<IconBell />}
+            title="Work the alarm list"
+            body="4 active, the oldest raised 2 days ago."
+            action={
+              <Button variant="outline" size="sm">
+                Open alarms
+              </Button>
+            }
+          />
+          <FeatureCard
+            className="col-span-3"
+            tone="blue"
+            icon={<IconFileText />}
+            title="Finish the handover"
+            body="The draft has 6 entries from the shift log."
+            action={
+              <Button variant="outline" size="sm">
+                Open draft
+              </Button>
+            }
+          />
+          <FeatureCard
+            className="col-span-3"
+            tone="teal"
+            icon={<IconListCheck />}
+            title="Start the last round"
+            body="Compression deck, 12 checkpoints, 25 minutes."
+            action={
+              <Button variant="outline" size="sm">
+                Start round
+              </Button>
+            }
+          />
+          <FeatureCard
+            className="col-span-3"
+            tone="amber"
+            icon={<IconTool />}
+            title="Report a fault"
+            body="Creates a work order with the asset attached."
+            action={
+              <Button variant="outline" size="sm">
+                New work order
+              </Button>
+            }
+          />
+
+          <Panel className="col-span-7" title="Continue where you left off" subtitle="Opened by you, newest first" padding="none">
+            <DataTable label="Recently opened" flush columns={LAND_RECENT_COLUMNS} rows={LAND_RECENT} rowKey={(row) => row.id} />
+          </Panel>
+          <Panel
+            className="col-span-5"
+            title="Work near you"
+            subtitle="Open orders on gas compression"
+            actions={
+              <Button variant="ghost" size="sm">
+                View all
+              </Button>
+            }
+          >
+            <ul className="flex flex-1 flex-col justify-between">
+              {LAND_MY_ORDERS.map((order) => (
+                <ListRow
+                  key={order.id}
+                  tone={order.priority === 'P1' ? 'critical' : 'neutral'}
+                  title={order.title}
+                  meta={
+                    <>
+                      <TagId>{findAsset(order.assetId)?.tag ?? ''}</TagId>
+                      <span>due {formatDate(order.dueAt)}</span>
+                    </>
+                  }
+                  trailing={<StatusPill tone={order.priority === 'P1' ? 'critical' : 'neutral'}>{order.priority}</StatusPill>}
+                />
+              ))}
+            </ul>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
-function LandingTemplateInAppHome() {
-  const [picked, setPicked] = useState<string | null>(null);
-  const { availability, gasExport, activeAlarms, openWorkOrders } = PLANT_KPIS;
-
+function LandingTemplateGettingStarted() {
+  const [done, setDone] = useState<readonly string[]>(['profile', 'sites']);
+  const toggle = (id: string, on: boolean) => setDone((current) => (on ? [...current, id] : current.filter((item) => item !== id)));
+  const percent = Math.round((done.length / LAND_STEPS.length) * 100);
   return (
-    <PageFrame title="In-app home" address="nordkapp.example/home" height="lg">
-      <ShellPage
-        product="Nordkapp"
-        nav={LANDING_SHELL_NAV}
-        activeId="home"
-        trail={['Nordkapp', 'Home']}
-        topbarEnd={<PersonAvatar name={PEOPLE[0].name} sizes="xsm" />}
+    <BrowserFrame url="nordkapp.test/welcome" look="soft" minHeight={800}>
+      <AppFrame
+        variant="topbar"
+        brand={{ name: 'Nordkapp', detail: 'Operations', mark: <IconFlame /> }}
+        tools={
+          <Button variant="ghost" size="sm">
+            Skip for now
+          </Button>
+        }
+        title="Welcome to Nordkapp, Ingrid"
+        subtitle="Five small steps and you have done everything a first shift needs."
       >
-        <div className="flex w-full flex-col gap-8">
-          <PageHeader as="h1" title="Home" description="Nordkapp production · day shift, 12 March" />
-          <StatRow
-            label="Plant status now"
-            stats={[
-              { id: 'availability', label: 'Availability', value: availability.value.toFixed(1), unit: '%', detail: `Target ${availability.target} %` },
-              { id: 'export', label: 'Gas export', value: gasExport.value.toFixed(2), unit: gasExport.unit, detail: `Target ${gasExport.target}` },
-              { id: 'alarms', label: 'Active alarms', value: activeAlarms.value, detail: '1 critical, unacknowledged' },
-              { id: 'orders', label: 'Open work orders', value: openWorkOrders.value, detail: '1 overdue' },
-            ]}
-          />
-          <LandingPanel title="Quick actions">
-            <ul className="grid grid-cols-2 gap-3 @4xl:grid-cols-4">
-              {LANDING_QUICK_ACTIONS.map((action) => (
-                <li key={action.id}>
-                  <button
-                    type="button"
-                    aria-pressed={picked === action.id}
-                    onClick={() => setPicked(action.id)}
-                    className="flex h-full w-full flex-col gap-2 rounded-xl bg-card-background p-4 text-left outline-none hover:bg-card-background-hover focus-visible:shadow-focus-ring"
-                  >
-                    <action.icon aria-hidden className="size-5 text-muted-foreground" />
-                    <span className="text-sm font-medium text-base-foreground">{action.label}</span>
-                    <span className="text-xs text-muted-foreground">{action.detail}</span>
-                  </button>
-                </li>
+        <Grid className="h-full grid-rows-[minmax(0,1fr)_auto]">
+          <Panel className="col-span-4" tone="purple" title="Your progress" subtitle={`${done.length} of ${LAND_STEPS.length} steps done`}>
+            <div className="flex flex-1 flex-col items-center justify-between gap-5">
+              <RingGauge label="Getting started" value={percent} size={168} tone="purple" hideLabel />
+              <p className="text-center text-base font-semibold">
+                {done.length === LAND_STEPS.length ? 'All done. Have a good shift.' : `About ${(LAND_STEPS.length - done.length) * 3} minutes left`}
+              </p>
+              <div className="flex w-full items-center gap-3 rounded-(--kit-radius-sm) bg-(--kit-surface) p-4">
+                <Avatar variant="decorative-4" aria-label="Liv Wold">
+                  <AvatarFallback>LW</AvatarFallback>
+                </Avatar>
+                <p className="text-sm">
+                  <span className="font-semibold">Liv Wold</span> is your shift supervisor. Ask her anything.
+                </p>
+              </div>
+            </div>
+          </Panel>
+          <Panel className="col-span-8" title="Your first five steps" subtitle="Tick them off as you go; each links to the right place">
+            <ul className="flex flex-1 flex-col *:flex-1">
+              {LAND_STEPS.map((step) => (
+                <ChecklistItem
+                  key={step.id}
+                  title={step.title}
+                  detail={step.detail}
+                  done={done.includes(step.id)}
+                  onToggle={(on) => toggle(step.id, on)}
+                  action={
+                    <Button variant="outline" size="sm">
+                      Start <IconArrowRight />
+                    </Button>
+                  }
+                />
               ))}
             </ul>
-          </LandingPanel>
-          <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-2">
-            <LandingPanel
-              title="Continue where you left off"
-              action={
-                <Button variant="ghost" size="sm">
-                  View history
-                </Button>
+          </Panel>
+
+          <FeatureCard
+            className="col-span-4"
+            tone="blue"
+            icon={<IconPlayerPlay />}
+            title="Three-minute tour"
+            body="A walk through the alarm list, trends and handover."
+            action={
+              <Button variant="outline" size="sm">
+                Watch the tour
+              </Button>
+            }
+          />
+          <FeatureCard
+            className="col-span-4"
+            tone="teal"
+            icon={<IconBook />}
+            title="Operator guide"
+            body="How Nordkapp names tags, areas and priorities."
+            action={
+              <Button variant="outline" size="sm">
+                Read the guide
+              </Button>
+            }
+          />
+          <FeatureCard
+            className="col-span-4"
+            tone="amber"
+            icon={<IconSparkles />}
+            title="Ask Atlas"
+            body="The assistant answers from the plant's own data."
+            action={
+              <Button variant="outline" size="sm">
+                Ask a question
+              </Button>
+            }
+          />
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function LandingTemplateTeamHome() {
+  return (
+    <BrowserFrame url="nordkapp.test/teams/day-shift" look="glass" minHeight={820}>
+      <AppFrame
+        variant="rail"
+        brand={{ name: 'Nordkapp', mark: <IconFlame /> }}
+        nav={LAND_RAIL_NAV}
+        current="team"
+        title="Day shift, control room 1"
+        subtitle="6 people · Nordkapp gas processing · week 11"
+        status={
+          <StatusPill tone="success" size="lg">
+            4 on shift now
+          </StatusPill>
+        }
+        actions={
+          <Button size="sm">
+            <IconUsers /> Invite
+          </Button>
+        }
+      >
+        <Grid className="h-full grid-rows-[auto_minmax(0,1fr)]">
+          <Panel className="col-span-8" title="Our four weeks" subtitle="Plant availability on the day shift, per cent">
+            <TrendArea
+              label="Plant availability on the day shift over the last four weeks against the target"
+              labels={LAND_DAYS}
+              unit="%"
+              decimals={1}
+              height={210}
+              series={[
+                {
+                  id: 'availability',
+                  label: 'Availability',
+                  values: LAND_AVAILABILITY,
+                  tone: 'accent',
+                },
+              ]}
+              limits={[{ value: 97.5, label: 'Target', tone: 'warning' }]}
+              headline={
+                <div className="flex gap-10">
+                  <Stat variant="plain" size="md" label="This week" value={96.4} decimals={1} unit="%" delta={{ value: -0.7, caption: 'vs last week' }} />
+                  <Stat
+                    variant="plain"
+                    size="md"
+                    label="Alarms handled"
+                    value={71}
+                    delta={{
+                      value: -12,
+                      decimals: 0,
+                      good: 'down',
+                      caption: 'vs last week',
+                    }}
+                  />
+                  <Stat variant="plain" size="md" label="Handovers signed" value="5 of 5" />
+                </div>
               }
-            >
-              <ul className="flex flex-col">
-                {LANDING_RECENT.map((item) => (
-                  <li key={item.id} className="flex items-center gap-3 border-b border-default py-2 last:border-b-0">
-                    <item.icon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm text-base-foreground">{item.title}</span>
-                      <span className="text-xs text-muted-foreground">{item.kind}</span>
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{item.when}</span>
-                  </li>
-                ))}
-              </ul>
-            </LandingPanel>
-            <LandingPanel
-              title="Work in your area"
-              action={
-                <Button variant="ghost" size="sm">
-                  View all
-                </Button>
-              }
-            >
-              <ul className="flex flex-col">
-                {LANDING_MY_ORDERS.map((order) => (
-                  <li key={order.id} className="flex items-center gap-3 border-b border-default py-2 last:border-b-0">
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate text-sm text-base-foreground">{order.title}</span>
-                      <span className="text-xs text-muted-foreground">
-                        <span className="font-mono">{order.id}</span> · due {formatDate(order.dueAt)}
-                      </span>
-                    </span>
-                    <StatusBadge status={order.status} outline />
-                  </li>
-                ))}
-              </ul>
-            </LandingPanel>
+            />
+          </Panel>
+          <Panel className="col-span-4" title="People" subtitle="Who is where">
+            <ul className="flex flex-1 flex-col justify-between">
+              {PEOPLE.slice(0, 5).map((person, index) => (
+                <ListRow
+                  key={person.id}
+                  leading={
+                    <Avatar variant={index % 2 === 0 ? 'decorative-2' : 'decorative-5'} aria-label={person.name}>
+                      <AvatarFallback>{person.initials}</AvatarFallback>
+                    </Avatar>
+                  }
+                  title={person.name}
+                  meta={person.role}
+                  trailing={<StatusPill tone={index < 4 ? 'success' : 'neutral'}>{index < 4 ? 'On shift' : 'Off'}</StatusPill>}
+                />
+              ))}
+            </ul>
+          </Panel>
+
+          <FeatureCard
+            className="col-span-4"
+            tone="sky"
+            icon={<IconLayoutDashboard />}
+            title="Compression watch"
+            body="The team's pinned board: three stages, their limits and the open alarms."
+            figure={{ value: '4', caption: 'alarms open' }}
+            action={
+              <Button variant="outline" size="sm">
+                Open board
+              </Button>
+            }
+          />
+          <FeatureCard
+            className="col-span-4"
+            tone="purple"
+            icon={<IconFileText />}
+            title="Handover, 12 March"
+            body="Draft by Ingrid Haugen. Recompressor trip and bearing inspection lead the note."
+            figure={{ value: '6', caption: 'entries so far' }}
+            action={
+              <Button variant="outline" size="sm">
+                Open draft
+              </Button>
+            }
+          />
+          <Panel className="col-span-4" title="Latest in the team" subtitle="Today">
+            <ul className="flex flex-1 flex-col justify-between">
+              <ListRow tone="critical" title="Ingrid acknowledged the recompressor trip" trailing="13:47" />
+              <ListRow tone="info" title="Tomás started WO-104482" trailing="13:52" />
+              <ListRow tone="success" title="Jonas finished the compression round" trailing="12:30" />
+            </ul>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function LandingTemplateCatalogue() {
+  const [kind, setKind] = useState('All');
+  const shown = LAND_PRODUCTS.filter((product) => kind === 'All' || product.kind === kind);
+  return (
+    <BrowserFrame url="nordkapp.test/catalogue" look="console" minHeight={720}>
+      <AppFrame
+        variant="topbar"
+        brand={{ name: 'Nordkapp', detail: 'Catalogue', mark: <IconFlame /> }}
+        nav={LAND_CATALOGUE_NAV}
+        current="catalogue"
+        padding="none"
+        tools={
+          <>
+            <span>{LAND_PRODUCTS.length} products</span>
+            <span className="font-medium tabular-nums">14:00:00 UTC</span>
+          </>
+        }
+      >
+        <Grid className="h-full grid-rows-[auto_minmax(0,1fr)]">
+          <div className="col-span-12 flex items-center gap-4 bg-base-background px-3.5 py-2.5">
+            <p className="text-xl font-semibold">Data and apps for Nordkapp</p>
+            <p className="flex-1 text-sm text-medium-foreground">
+              Showing {shown.length} of {LAND_PRODUCTS.length}
+            </p>
+            <SegmentedControl value={kind} onValueChange={(next) => setKind(String(next))}>
+              <SegmentedControlList size="small" aria-label="Kind of product">
+                <SegmentedControlButton value="All">All</SegmentedControlButton>
+                <SegmentedControlButton value="Dashboard">Dashboards</SegmentedControlButton>
+                <SegmentedControlButton value="Data set">Data sets</SegmentedControlButton>
+                <SegmentedControlButton value="Agent">Agents</SegmentedControlButton>
+              </SegmentedControlList>
+            </SegmentedControl>
+            <Search className="w-56" aria-label="Search the catalogue" placeholder="Search the catalogue" />
           </div>
-        </div>
-      </ShellPage>
-    </PageFrame>
+          <div className="col-span-12 grid auto-rows-fr grid-cols-3 gap-px">
+            {shown.map((product, index) => (
+              <Panel
+                key={product.id}
+                tone={product.tone === 'success' ? 'neutral' : product.tone}
+                title={product.name}
+                subtitle={product.kind}
+                actions={<StatusPill tone={product.tone}>{product.state}</StatusPill>}
+                footer={
+                  <span className="flex w-full items-center justify-between gap-3">
+                    <span>Owned by {product.owner}</span>
+                    <Button variant="outline" size="sm">
+                      Open
+                    </Button>
+                  </span>
+                }
+              >
+                <div className="flex flex-1 flex-col justify-between gap-4">
+                  <p className="text-sm text-medium-foreground">{product.summary}</p>
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs text-medium-foreground">Opens per day, last 14 days</p>
+                    <SparkLine
+                      values={makeValues({
+                        seed: 80 + index,
+                        points: 14,
+                        base: 30,
+                        amplitude: 9,
+                        noise: 5,
+                        min: 2,
+                        decimals: 0,
+                      })}
+                      label={`Opens per day of ${product.name}, last 14 days`}
+                      tone={product.tone === 'success' ? 'accent' : product.tone}
+                      className="h-14 w-full"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Stat variant="plain" size="sm" label="Updated" value={product.updated} />
+                    <Stat variant="plain" size="sm" label={product.kind === 'Data set' ? 'Size' : 'Use'} value={product.size} />
+                  </div>
+                </div>
+              </Panel>
+            ))}
+          </div>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function LandingTemplateProduct() {
-  const { availability, gasExport } = PLANT_KPIS;
-
   return (
-    <PageFrame title="Product landing" address="nordkapp.example" height="lg">
-      <SitePage
-        brand={<BrandMark name="Nordkapp" />}
-        links={LANDING_SITE_LINKS}
-        activeLinkId="product"
-        actions={
-          <>
-            <Button variant="ghost" size="sm">
-              Sign in
-            </Button>
-            <Button size="sm">Book a walkthrough</Button>
-          </>
-        }
-        footer={<LandingSiteFooter />}
+    <BrowserFrame url="nordkapp.test" look="poster" minHeight={860}>
+      <AppFrame
+        variant="masthead"
+        brand={{ name: 'Nordkapp' }}
+        nav={LAND_SITE_NAV}
+        current="product"
+        tools={<LandSiteActions />}
+        title="Run the plant from one screen."
+        subtitle="Alarms, trends, work orders and handover for process plants. Live in a week, on the data you already have."
       >
-        <SiteBand spacing="lg">
-          <Hero
-            as="h1"
-            align="center"
-            size="display"
-            eyebrow="Operations workspace for process plants"
-            title="Run the plant from one picture of it"
-            description="Operations, maintenance and engineering work from the same assets, tags and limits, with every number traceable to its source."
-            actions={
-              <>
-                <Button size="lg">Book a walkthrough</Button>
-                <Button size="lg" variant="ghost">
-                  See how it connects <IconArrowRight />
+        <Grid className="h-full">
+          <Panel className="col-span-5" tone="pink" title="See it on your own data" subtitle="A working plant overview in the first session">
+            <div className="flex flex-1 flex-col justify-between gap-6">
+              <p className="text-xl leading-snug font-bold">
+                Bring one compressor train. Leave with its alarms, limits and work orders on a screen your operators can read from the door.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button size="lg">
+                  Book a demo <IconArrowRight />
                 </Button>
-              </>
-            }
-            visual={
-              <div className="mx-auto grid w-full max-w-2xl grid-cols-1 gap-4 @2xl:grid-cols-2">
-                <KpiTile
-                  label="Availability"
-                  value={availability.value}
-                  unit="%"
-                  decimals={1}
-                  delta={{ reference: availability.previous, goodDirection: 'up', caption: 'vs yesterday' }}
-                  trend={{ values: LANDING_AVAILABILITY, label: 'Availability, last 30 days' }}
-                />
-                <KpiTile
-                  label="Gas export"
-                  value={gasExport.value}
-                  unit={gasExport.unit}
-                  decimals={2}
-                  delta={{ reference: gasExport.previous, goodDirection: 'up', caption: 'vs yesterday', decimals: 2 }}
-                  trend={{ values: LANDING_EXPORT, label: 'Gas export, last 30 days' }}
-                />
+                <Button size="lg" variant="outline">
+                  Take the tour
+                </Button>
               </div>
-            }
+            </div>
+          </Panel>
+          <Panel className="col-span-7" title="Seven days of export" subtitle="MSm³ per day against the 4.50 plan, as the plant overview shows it">
+            <Bars
+              label="Gas export per day over seven days against the plan"
+              categories={['Fri 6', 'Sat 7', 'Sun 8', 'Mon 9', 'Tue 10', 'Wed 11', 'Thu 12']}
+              series={[
+                {
+                  id: 'export',
+                  label: 'Gas export',
+                  values: [4.52, 4.49, 4.55, 4.47, 4.41, 4.21, 4.38],
+                },
+              ]}
+              tones={['blue', 'blue', 'blue', 'blue', 'blue', 'pink', 'pink']}
+              decimals={2}
+              limit={{ value: 4.5, label: 'Plan' }}
+              showValues
+              height={230}
+            />
+          </Panel>
+
+          <Stat className="col-span-4" size="lg" tone="amber" label="Fewer nuisance alarms" value={38} unit="%" target="After six months at Nordkapp" />
+          <Stat className="col-span-4" size="lg" tone="teal" label="Faster shift handover" value={12} unit="min" target="Per shift, three shifts a day" />
+          <Stat className="col-span-4" size="lg" tone="blue" label="Time series on one screen" value="212 600" target="Without moving the historian" />
+
+          <FeatureCard
+            className="col-span-4"
+            tone="green"
+            icon={<IconBell />}
+            title="Alarms that mean something"
+            body="Group, shelve and rationalise, with the trend behind every alarm one click away."
           />
-        </SiteBand>
-        <SiteBand label="Features">
-          <SectionHeader size="lg" as="h2" title="What the workspace gives each shift" description="Six things that are true on every screen." />
-          <div className="grid grid-cols-1 gap-x-8 gap-y-8 @2xl:grid-cols-2 @4xl:grid-cols-3">
-            {LANDING_FEATURES.map((feature) => (
-              <FeatureCard key={feature.id} icon={feature.icon} title={feature.title} description={feature.description} />
-            ))}
-          </div>
-        </SiteBand>
-        <SiteBand label="Nordkapp in numbers" spacing="sm">
-          <StatsBand label="Nordkapp in numbers" stats={LANDING_FACTS} />
-        </SiteBand>
-        <SiteBand surface="muted" label="Next step">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex min-w-0 flex-col gap-1">
-              <h2 className="text-xl font-semibold tracking-tight text-base-foreground">See it on your own tags</h2>
-              <p className="text-sm text-medium-foreground">A walkthrough takes 40 minutes and uses a read-only copy of your historian.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button>Book a walkthrough</Button>
-              <Button variant="ghost">Read the docs</Button>
-            </div>
-          </div>
-        </SiteBand>
-      </SitePage>
-    </PageFrame>
+          <FeatureCard
+            className="col-span-4"
+            tone="purple"
+            icon={<IconTool />}
+            title="Work that follows the asset"
+            body="Every order, document and drawing hangs on the equipment it belongs to."
+          />
+          <FeatureCard
+            className="col-span-4"
+            tone="sky"
+            icon={<IconRobot />}
+            title="Agents that show their work"
+            body="Trip reviews and handovers drafted from your data, with sources and an approval step."
+          />
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
-function LandingRoleVisual({ role }: { role: LandingRole }) {
-  if (role === 'operator') {
-    return (
-      <ul aria-label="Active alarms" className="flex flex-col">
-        {ALARMS.filter((alarm) => alarm.state !== 'cleared').slice(0, 4).map((alarm) => (
-          <li key={alarm.id} className="flex items-center gap-3 border-b border-default py-2 last:border-b-0">
-            <span className="w-20 shrink-0">
-              <StatusIndicator size="sm" {...severityStatus(alarm.severity)} />
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm text-base-foreground">{alarm.message}</span>
-              <span className="font-mono text-xs text-muted-foreground">{alarm.sensorTag}</span>
-            </span>
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatAgo(alarm.raisedAt)}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  }
-  if (role === 'engineer') {
-    return (
-      <ul aria-label="Compressor measurements" className="flex flex-col">
-        {SENSORS.slice(0, 4).map((sensor) => (
-          <li key={sensor.id} className="flex items-center gap-3 border-b border-default py-2 last:border-b-0">
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-sm text-base-foreground">{sensor.name}</span>
-              <span className="font-mono text-xs text-muted-foreground">{sensor.tag}</span>
-            </span>
-            <span className="shrink-0 text-sm tabular-nums text-base-foreground">
-              {sensor.value.toFixed(sensor.decimals)} <span className="text-muted-foreground">{sensor.unit}</span>
-            </span>
-            <span className="w-24 shrink-0 text-right text-xs tabular-nums text-muted-foreground">High {sensor.highLimit}</span>
-          </li>
-        ))}
-      </ul>
-    );
-  }
+function LandingTemplateRoleSolution() {
   return (
-    <ul aria-label="Open work orders" className="flex flex-col">
-      {WORK_ORDERS.filter((order) => order.status !== 'done').slice(0, 4).map((order) => (
-        <li key={order.id} className="flex items-center gap-3 border-b border-default py-2 last:border-b-0">
-          <Badge variant="secondary">{order.priority}</Badge>
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-sm text-base-foreground">{order.title}</span>
-            <span className="text-xs text-muted-foreground">{findAsset(order.assetId)?.name}</span>
-          </span>
-          <StatusBadge status={order.status} outline />
-        </li>
+    <BrowserFrame url="nordkapp.test/solutions/reliability" look="editorial" minHeight={860}>
+      <AppFrame
+        variant="masthead"
+        brand={{ name: 'Nordkapp' }}
+        nav={LAND_ROLE_NAV}
+        current="problem"
+        tools={<LandSiteActions />}
+        title="For the reliability engineer who is done exporting to spreadsheets."
+        subtitle="Find the bearing two weeks before it finds you, with the trends, the history and the work order in one place."
+      >
+        <Grid className="h-full">
+          <StatGroup columns={3} label="Results at Nordkapp" className="col-span-12">
+            <Stat variant="plain" size="lg" label="Mean time between failures" value={PLANT_KPIS.mtbf.value} unit="h" delta={{ value: 16, decimals: 0, caption: 'vs last year' }} />
+            <Stat variant="plain" size="lg" label="Trips seen coming" value="7 of 9" target="Flagged at least a week ahead" />
+            <Stat variant="plain" size="lg" label="Hours per review" value={1.5} decimals={1} unit="h" delta={{ value: -4.5, good: 'down', caption: 'from 6 hours' }} />
+          </StatGroup>
+
+          <Panel className="col-span-8" title="The climb is there two weeks early" subtitle="Drive-end vibration on the 1st stage compressor, mm/s, daily average.">
+            <TrendLine
+              label="Daily drive-end vibration on the 1st stage compressor over two weeks against its high limit"
+              labels={LAND_VIBRATION_DAYS}
+              unit="mm/s"
+              decimals={1}
+              height={250}
+              series={[
+                {
+                  id: 'vibration',
+                  label: 'Drive-end vibration',
+                  values: LAND_VIBRATION,
+                  tone: 'accent',
+                },
+              ]}
+              limits={[{ value: 7.1, label: 'High limit', tone: 'warning' }]}
+              notes={
+                <>
+                  <p>
+                    <span className="font-semibold">5 March.</span> The slope changes. Nordkapp flags it and opens a survey order.
+                  </p>
+                  <p>
+                    <span className="font-semibold">12 March.</span> The same bearing type fails on the recompressor. This one is already planned.
+                  </p>
+                </>
+              }
+            />
+          </Panel>
+          <div className="col-span-4 flex flex-col gap-(--kit-gap)">
+            <PullQuote
+              className="flex-1"
+              quote="I stopped building the same vibration chart every Monday. It is just there, with the limit and the history."
+              name="Aisha Khan"
+              role="Rotating equipment engineer, Nordkapp"
+              avatar={
+                <Avatar variant="decorative-3" aria-label="Aisha Khan">
+                  <AvatarFallback>AK</AvatarFallback>
+                </Avatar>
+              }
+            />
+            <div className="flex flex-wrap gap-3">
+              <Button size="lg">
+                Book a working session <IconArrowRight />
+              </Button>
+              <Button size="lg" variant="outline">
+                Read the method
+              </Button>
+            </div>
+          </div>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function LandingTemplatePricing() {
+  const [billing, setBilling] = useState('yearly');
+  const yearly = billing === 'yearly';
+  return (
+    <BrowserFrame url="nordkapp.test/pricing" look="studio" minHeight={860}>
+      <AppFrame
+        variant="topbar"
+        brand={{ name: 'Nordkapp', detail: 'Operations', mark: <IconFlame /> }}
+        nav={LAND_SITE_NAV}
+        current="pricing"
+        tools={<LandSiteActions />}
+        title="Priced per site, not per person"
+        subtitle="Everyone on the plant can sign in. Pay for the sites you connect."
+        actions={
+          <SegmentedControl value={billing} onValueChange={(next) => setBilling(String(next))}>
+            <SegmentedControlList size="small" aria-label="Billing period">
+              <SegmentedControlButton value="monthly">Monthly</SegmentedControlButton>
+              <SegmentedControlButton value="yearly">Yearly, 2 months free</SegmentedControlButton>
+            </SegmentedControlList>
+          </SegmentedControl>
+        }
+      >
+        <Grid className="h-full grid-rows-[minmax(0,1fr)_auto]">
+          <PriceCard
+            className="col-span-4"
+            name="Team"
+            description="One unit or one control room getting started."
+            price={yearly ? '€ 750' : '€ 900'}
+            period="per site, per month"
+            features={LAND_PRICE_BASE}
+            action={<Button variant="outline">Start a 30-day trial</Button>}
+          />
+          <PriceCard
+            className="col-span-4"
+            featured
+            featuredLabel="Most plants pick this"
+            name="Plant"
+            description="A whole site, with agents and single sign-on."
+            price={yearly ? '€ 1 900' : '€ 2 280'}
+            period="per site, per month"
+            features={LAND_PRICE_PLANT}
+            action={<Button>Start a 30-day trial</Button>}
+          />
+          <PriceCard
+            className="col-span-4"
+            name="Fleet"
+            description="Several sites, compared and run as one."
+            price="Let's talk"
+            period="from 4 sites"
+            features={LAND_PRICE_FLEET}
+            action={<Button variant="outline">Talk to sales</Button>}
+          />
+          <Panel className="col-span-12" title="Compare the plans" subtitle={yearly ? 'Yearly billing, prices exclude VAT' : 'Monthly billing, prices exclude VAT'} padding="none">
+            <DataTable label="Plan comparison" flush columns={LAND_COMPARE_COLUMNS} rows={LAND_COMPARE} rowKey={(row) => row.id} />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function LandDocList({ items }: { items: readonly { title: string; minutes: string }[] }) {
+  return (
+    <ul className="flex flex-1 flex-col justify-between">
+      {items.map((item) => (
+        <ListRow key={item.title} title={item.title} trailing={item.minutes} />
       ))}
     </ul>
   );
 }
 
-function LandingTemplateRoleSolution() {
-  const [role, setRole] = useState<LandingRole>('operator');
-  const content = LANDING_ROLES[role];
-
-  return (
-    <PageFrame title="Solution page for a role" address="nordkapp.example/solutions">
-      <SitePage brand={<BrandMark name="Nordkapp" />} links={LANDING_SITE_LINKS} activeLinkId="solutions" actions={<Button size="sm">Book a walkthrough</Button>}>
-        <SiteBand>
-          <SegmentedControl
-            value={role}
-            onValueChange={(value) => {
-              if (isLandingRole(value)) setRole(value);
-            }}
-          >
-            <SegmentedControlList aria-label="Role">
-              <SegmentedControlButton value="operator" tabContent="label-only">
-                Operator
-              </SegmentedControlButton>
-              <SegmentedControlButton value="engineer" tabContent="label-only">
-                Engineer
-              </SegmentedControlButton>
-              <SegmentedControlButton value="planner" tabContent="label-only">
-                Planner
-              </SegmentedControlButton>
-            </SegmentedControlList>
-          </SegmentedControl>
-          <div className="grid grid-cols-1 gap-8 @3xl:grid-cols-2">
-            <div className="flex flex-col gap-6">
-              <Hero as="h1" size="compact" eyebrow={`For the ${content.label.toLowerCase()}`} title={content.title} description={content.description} />
-              <ol className="flex flex-col gap-4">
-                {content.day.map((item, index) => (
-                  <li key={item.id}>
-                    <FeatureCard layout="inline" marker={String(index + 1)} title={item.title} description={item.description} as="h4" />
-                  </li>
-                ))}
-              </ol>
-            </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-default p-4">
-              <p className="text-xs font-medium text-muted-foreground">
-                {role === 'operator' ? 'The alarm list, live' : role === 'engineer' ? 'Measurements on 23-KA-9101' : 'The backlog, by priority'}
-              </p>
-              <LandingRoleVisual role={role} />
-            </div>
-          </div>
-        </SiteBand>
-      </SitePage>
-    </PageFrame>
-  );
-}
-
-function LandingTemplatePricing() {
-  const [period, setPeriod] = useState<BillingPeriod>('annual');
-
-  return (
-    <PageFrame title="Pricing" address="nordkapp.example/pricing" height="lg">
-      <SitePage brand={<BrandMark name="Nordkapp" />} links={LANDING_SITE_LINKS} activeLinkId="pricing" footer={<LandingSiteFooter />}>
-        <SiteBand>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <SectionHeader size="lg" as="h2" title="Pricing" description="Priced per plant, not per person. Every plan includes onboarding." />
-            </div>
-            <BillingToggle value={period} onValueChange={setPeriod} annualNote="Two months free" />
-          </div>
-          <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-3">
-            {LANDING_PLANS.map((plan) => (
-              <PlanCard
-                key={plan.id}
-                name={plan.name}
-                description={plan.description}
-                price={landingPrice(plan.monthly, period)}
-                period={plan.monthly === null ? undefined : 'per month'}
-                priceNote={plan.monthly === null ? 'Quoted per site' : period === 'annual' ? 'Billed annually' : 'Billed monthly'}
-                features={plan.features}
-                highlightLabel={'highlight' in plan ? plan.highlight : undefined}
-                action={
-                  <Button variant={'highlight' in plan ? 'default' : 'secondary'} className="w-full">
-                    {plan.monthly === null ? 'Talk to us' : `Choose ${plan.name}`}
-                  </Button>
-                }
-              />
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">Prices exclude VAT. Time series above the plan limit are billed per 1 000 per month.</p>
-        </SiteBand>
-      </SitePage>
-    </PageFrame>
-  );
-}
-
 function LandingTemplateDocsHome() {
-  const [query, setQuery] = useState('');
-  const term = query.trim().toLowerCase();
-  const topics = LANDING_DOC_TOPICS.filter((topic) => `${topic.title} ${topic.description}`.toLowerCase().includes(term));
-
   return (
-    <PageFrame title="Documentation home" address="docs.nordkapp.example" height="lg">
-      <SitePage
-        brand={<BrandMark name="Nordkapp" section="Docs" />}
-        links={[
-          { id: 'guides', label: 'Guides' },
-          { id: 'api', label: 'API reference' },
-          { id: 'releases', label: 'Release notes' },
-        ]}
-        activeLinkId="guides"
-        actions={
-          <Button variant="ghost" size="sm">
-            Open the app
-          </Button>
+    <BrowserFrame url="docs.nordkapp.test" look="blueprint" minHeight={820}>
+      <AppFrame
+        variant="topbar"
+        brand={{
+          name: 'Nordkapp',
+          detail: 'Documentation',
+          mark: <IconBook />,
+        }}
+        nav={LAND_DOCS_NAV}
+        current="guides"
+        tools={
+          <>
+            <span>
+              Version <span className="font-medium tabular-nums">2026.3</span>
+            </span>
+            <span>
+              Updated <span className="font-medium tabular-nums">10 Mar 2026</span>
+            </span>
+          </>
         }
       >
-        <SiteBand surface="muted" width="md">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-semibold tracking-tight text-base-foreground">Documentation</h1>
-              <p className="text-sm text-medium-foreground">Guides for the control room, maintenance and the people who connect the data.</p>
+        <Grid className="h-full grid-rows-[auto_minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="col-span-12 flex items-end justify-between gap-8">
+            <Hero title="How do I…?" lead="Guides, reference and courses for operators, engineers and developers on Nordkapp." />
+            <div className="flex w-96 shrink-0 flex-col gap-2">
+              <Search aria-label="Search the documentation" placeholder="Search 412 articles" />
+              <p className="text-sm text-(color:--kit-text-2)">Popular: alarm shelving, tag naming, trend limits</p>
             </div>
-            <Search
-              aria-label="Search the documentation"
-              placeholder="Search topics"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onClear={() => setQuery('')}
-            />
           </div>
-        </SiteBand>
-        <SiteBand width="md" label="Topics">
-          {topics.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No topic matches &ldquo;{query.trim()}&rdquo;. Try a shorter word, such as alarm or trend.</p>
-          ) : (
-            <ul className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-              {topics.map((topic) => (
-                <li key={topic.id}>
-                  <a
-                    href={`#${topic.id}`}
-                    onClick={(event) => event.preventDefault()}
-                    className="flex h-full items-start gap-3 rounded-xl border border-default p-4 outline-none hover:bg-base-background-hover focus-visible:shadow-focus-ring"
-                  >
-                    <topic.icon aria-hidden className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
-                    <span className="flex min-w-0 flex-1 flex-col gap-1">
-                      <span className="text-sm font-medium text-base-foreground">{topic.title}</span>
-                      <span className="text-sm text-medium-foreground">{topic.description}</span>
-                      <span className="text-xs tabular-nums text-muted-foreground">{topic.articles} articles</span>
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="grid grid-cols-1 gap-6 @2xl:grid-cols-2">
-            <LandingPanel title="Popular articles">
-              <ul className="flex flex-col gap-2 text-sm">
-                {LANDING_DOC_POPULAR.map((article) => (
-                  <li key={article}>
-                    <a href="#article" className={LANDING_LINK} onClick={(event) => event.preventDefault()}>
-                      {article}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </LandingPanel>
-            <LandingPanel title="Need a person?">
-              <p className="text-sm text-medium-foreground">Support answers on working days, 07:00 to 17:00 CET. Include the page address and the tag.</p>
-              <div>
-                <Button variant="secondary" size="sm">
-                  <IconLifebuoy /> Contact support
-                </Button>
-              </div>
-            </LandingPanel>
-          </div>
-        </SiteBand>
-      </SitePage>
-    </PageFrame>
-  );
-}
 
-function LandingTemplateGettingStarted() {
-  const [steps, setSteps] = useState<readonly SetupStep[]>(LANDING_SETUP);
+          <Panel className="col-span-4" title="Get started" subtitle="5 guides" icon={<IconRocket className="size-4.5" aria-hidden="true" />}>
+            <LandDocList
+              items={[
+                { title: 'Your first shift in Nordkapp', minutes: '6 min' },
+                { title: 'How tags and areas are named', minutes: '4 min' },
+                { title: 'Set up your home page', minutes: '3 min' },
+              ]}
+            />
+          </Panel>
+          <Panel className="col-span-4" title="Alarms and trends" subtitle="18 guides" icon={<IconBell className="size-4.5" aria-hidden="true" />}>
+            <LandDocList
+              items={[
+                { title: 'Acknowledge, shelve and suppress', minutes: '5 min' },
+                { title: 'Add limits and bands to a trend', minutes: '4 min' },
+                { title: 'Compare two periods', minutes: '3 min' },
+              ]}
+            />
+          </Panel>
+          <Panel className="col-span-4" title="Popular this week" subtitle="By readers" icon={<IconChartLine className="size-4.5" aria-hidden="true" />}>
+            <Bars
+              label="Most read articles this week"
+              orientation="horizontal"
+              categories={['Alarm shelving', 'Tag naming', 'Trend limits', 'Handover sign-off']}
+              series={[
+                {
+                  id: 'readers',
+                  label: 'Readers',
+                  values: [212, 164, 131, 97],
+                },
+              ]}
+              showValues
+              height={150}
+            />
+          </Panel>
 
-  return (
-    <PageFrame title="Getting started" address="nordkapp.example/getting-started">
-      <div className="flex min-h-full flex-col bg-muted-background">
-        <header className="flex items-center justify-between gap-4 px-6 py-4">
-          <BrandMark name="Nordkapp" />
-          <Button variant="ghost" size="sm">
-            Skip for now
-          </Button>
-        </header>
-        <div className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-6 px-6 pb-8 @3xl:grid-cols-5">
-          <div className="flex flex-col gap-4 rounded-xl bg-base-background p-6 @3xl:col-span-3">
-            <SetupChecklist
-              title="Get ready for your first shift"
-              description="Five steps, about five minutes. You can leave and pick up where you stopped."
-              steps={steps}
-              onStepAction={(id) => setSteps((current) => current.map((step) => (step.id === id ? { ...step, done: true } : step)))}
-              complete={
-                <div className="flex flex-col gap-3">
-                  <p className="text-sm text-medium-foreground">Everything is set. The overview opens filtered to your area.</p>
-                  <div className="flex gap-2">
-                    <Button size="sm">Open the overview</Button>
-                    <Button variant="ghost" size="sm" onClick={() => setSteps(LANDING_SETUP)}>
-                      Reset example
-                    </Button>
-                  </div>
-                </div>
-              }
+          <Panel className="col-span-4" title="Work and handover" subtitle="11 guides" icon={<IconClipboardList className="size-4.5" aria-hidden="true" />}>
+            <LandDocList
+              items={[
+                {
+                  title: 'Create a work order from an alarm',
+                  minutes: '3 min',
+                },
+                { title: 'Write and sign a handover note', minutes: '5 min' },
+                { title: 'Plan an inspection round', minutes: '7 min' },
+              ]}
             />
-          </div>
-          <aside aria-label="Help with setup" className="flex flex-col gap-6 py-6 @3xl:col-span-2">
-            <FeatureCard
-              layout="inline"
-              icon={<IconBook2 />}
-              title="Read the five-minute guide"
-              description="What the overview, the alarm list and a trend show, with pictures."
-              as="h4"
+          </Panel>
+          <Panel className="col-span-4" title="Build with the API" subtitle="42 references" icon={<IconCode className="size-4.5" aria-hidden="true" />}>
+            <LandDocList
+              items={[
+                {
+                  title: 'Authenticate with a service account',
+                  minutes: '4 min',
+                },
+                { title: 'Read time series in bulk', minutes: '8 min' },
+                { title: 'Model assets and relationships', minutes: '12 min' },
+              ]}
             />
-            <FeatureCard
-              layout="inline"
-              icon={<IconUsers />}
-              title="Ask your shift supervisor"
-              description={`${PEOPLE[4].name} set up this project and can change what you have access to.`}
-              as="h4"
-            />
-            <FeatureCard
-              layout="inline"
-              icon={<IconLifebuoy />}
-              title="Contact support"
-              description="Working days, 07:00 to 17:00 CET."
-              as="h4"
-            />
-          </aside>
-        </div>
-      </div>
-    </PageFrame>
-  );
-}
-
-function LandingTemplateCatalogue() {
-  const [category, setCategory] = useState<(typeof LANDING_APP_CATEGORIES)[number]>('All');
-  const [query, setQuery] = useState('');
-  const [added, setAdded] = useState<readonly string[]>(['compression']);
-  const term = query.trim().toLowerCase();
-  const apps = LANDING_APPS.filter(
-    (app) => (category === 'All' || app.category === category) && `${app.name} ${app.description}`.toLowerCase().includes(term)
-  );
-  const toggle = (id: string) => setAdded((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
-
-  return (
-    <PageFrame title="Catalogue grid" address="nordkapp.example/dashboards/catalogue" height="lg">
-      <div className="flex min-h-full bg-base-background">
-        <nav aria-label="Categories" className="flex w-48 shrink-0 flex-col gap-1 border-r border-default p-4">
-          <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">Categories</p>
-          {LANDING_APP_CATEGORIES.map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-current={item === category ? 'true' : undefined}
-              onClick={() => setCategory(item)}
-              className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm outline-none hover:bg-base-background-hover focus-visible:shadow-focus-ring ${item === category ? 'bg-secondary-background font-medium text-secondary-foreground' : 'text-medium-foreground'}`}
-            >
-              {item}
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {item === 'All' ? LANDING_APPS.length : LANDING_APPS.filter((app) => app.category === item).length}
-              </span>
-            </button>
-          ))}
-        </nav>
-        <div className="flex min-w-0 flex-1 flex-col gap-4 p-6">
-          <PageHeader
-            as="h1"
-            title="Dashboard catalogue"
-            description="Dashboards built by people at Nordkapp. Add one to your sidebar; it stays up to date with the original."
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="w-full max-w-xs">
-              <Search
-                aria-label="Search dashboards"
-                placeholder="Search dashboards"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onClear={() => setQuery('')}
+          </Panel>
+          <Panel className="col-span-4" title="Need a person?" subtitle="Support desk" icon={<IconUsers className="size-4.5" aria-hidden="true" />}>
+            <div className="flex flex-1 flex-col justify-between gap-4">
+              <DetailList
+                items={[
+                  { label: 'Open now', value: '06:00 to 22:00 UTC' },
+                  { label: 'Typical reply', value: '35 minutes' },
+                  {
+                    label: 'API status',
+                    value: <StatusPill tone="success">Operational</StatusPill>,
+                  },
+                ]}
               />
+              <Button variant="outline" className="w-full">
+                Contact support
+              </Button>
             </div>
-            <p className="text-xs tabular-nums text-muted-foreground" role="status">
-              {apps.length} of {LANDING_APPS.length} dashboards · {added.length} in your sidebar
-            </p>
-          </div>
-          {apps.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No dashboard matches. Clear the search or pick another category.</p>
-          ) : (
-            <ul className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
-              {apps.map((app) => {
-                const isAdded = added.includes(app.id);
-                return (
-                  <li key={app.id} className="flex flex-col gap-3 rounded-xl bg-card-background p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-base-background text-medium-foreground">
-                        <app.icon aria-hidden className="size-5" />
-                      </span>
-                      <div className="flex min-w-0 flex-1 flex-col">
-                        <h2 className="text-sm font-medium text-base-foreground">{app.name}</h2>
-                        <span className="text-xs text-muted-foreground">
-                          {app.category} · by {app.author}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="flex-1 text-sm text-medium-foreground">{app.description}</p>
-                    <div className="flex items-center justify-between gap-2">
-                      <Button variant={isAdded ? 'ghost' : 'secondary'} size="sm" aria-pressed={isAdded} onClick={() => toggle(app.id)}>
-                        {isAdded ? 'Remove from sidebar' : 'Add to sidebar'}
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        Preview
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </div>
-    </PageFrame>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function LandingTemplateReleaseNotes() {
-  const [type, setType] = useState<(typeof LANDING_CHANGE_TYPES)[number]>('All');
-
+  const [version, setVersion] = useState('2026.3');
   return (
-    <PageFrame title="Release notes" address="nordkapp.example/releases" height="lg">
-      <SitePage brand={<BrandMark name="Nordkapp" section="Releases" />} width="md" actions={<Button variant="ghost" size="sm">Subscribe by email</Button>}>
-        <SiteBand width="md">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-semibold tracking-tight text-base-foreground">Release notes</h1>
-              <p className="text-sm text-medium-foreground">What changed, newest first. Releases go out on the second Tuesday of the month.</p>
-            </div>
-            <div role="group" aria-label="Filter by type of change" className="flex items-center gap-1">
-              {LANDING_CHANGE_TYPES.map((item) => (
-                <Button key={item} variant={item === type ? 'secondary' : 'ghost'} size="sm" aria-pressed={item === type} onClick={() => setType(item)}>
-                  {item}
-                </Button>
-              ))}
-            </div>
+    <BrowserFrame url="nordkapp.test/whats-new" look="soft" minHeight={840}>
+      <AppFrame
+        variant="sidebar"
+        brand={{
+          name: 'Nordkapp',
+          detail: "What's new",
+          mark: <IconSparkles />,
+        }}
+        nav={LAND_RELEASE_NAV}
+        current={version}
+        onNavigate={setVersion}
+        tools={
+          <Button variant="outline" className="w-full">
+            <IconBell /> Email me releases
+          </Button>
+        }
+        title="What's new in Nordkapp"
+        subtitle={`Showing ${version} and the two releases before it. A release ships on the second Tuesday of each month.`}
+      >
+        <Grid className="h-full">
+          <div className="col-span-8 flex flex-col gap-(--kit-gap)">
+            <Panel className="h-auto" tone="purple">
+              <ReleaseEntry
+                latest
+                version="2026.3"
+                date="10 March 2026"
+                title="Shift handover with sign-off"
+                summary="The outgoing and incoming operator both sign the note, and open alarms are carried over automatically."
+                changes={[
+                  {
+                    kind: 'new',
+                    text: 'Sign a handover note as the outgoing and the incoming operator',
+                  },
+                  {
+                    kind: 'new',
+                    text: 'Open alarms and running work orders are added to the draft',
+                  },
+                  {
+                    kind: 'improved',
+                    text: 'Trends keep their limits and bands when shared',
+                  },
+                  {
+                    kind: 'fixed',
+                    text: 'Alarm counts on the home page now match the alarm list',
+                  },
+                ]}
+              />
+            </Panel>
+            <Panel className="h-auto">
+              <ReleaseEntry
+                version="2026.2"
+                date="10 February 2026"
+                title="Faster trends on long ranges"
+                changes={[
+                  {
+                    kind: 'improved',
+                    text: 'A year of one-minute data opens in under two seconds',
+                  },
+                  {
+                    kind: 'new',
+                    text: 'Compare any two periods on the same axis',
+                  },
+                  {
+                    kind: 'fixed',
+                    text: 'The legend no longer covers the last value',
+                  },
+                ]}
+              />
+            </Panel>
+            <Panel className="flex-1">
+              <ReleaseEntry
+                version="2026.1"
+                date="13 January 2026"
+                title="Agents ask before they act"
+                changes={[
+                  {
+                    kind: 'new',
+                    text: 'Review and approve every change an agent proposes',
+                  },
+                  {
+                    kind: 'improved',
+                    text: 'Agent runs show their steps and sources as they go',
+                  },
+                ]}
+              />
+            </Panel>
           </div>
-          <ol className="flex flex-col">
-            {LANDING_RELEASES.map((release) => {
-              const changes = release.changes.filter((change) => type === 'All' || change.type === type);
-              return (
-                <li key={release.version} className="grid grid-cols-1 gap-x-8 gap-y-2 border-t border-default py-6 @2xl:grid-cols-4">
-                  <div className="flex flex-col">
-                    <span className="text-base font-semibold tabular-nums text-base-foreground">{release.version}</span>
-                    <span className="text-xs tabular-nums text-muted-foreground">{release.date}</span>
-                  </div>
-                  <div className="flex flex-col gap-3 @2xl:col-span-3">
-                    <p className="text-sm font-medium text-base-foreground">{release.summary}</p>
-                    {changes.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">Nothing of this type in this release.</p>
-                    ) : (
-                      <ul className="flex flex-col gap-2">
-                        {changes.map((change) => (
-                          <li key={change.id} className="flex items-start gap-3 text-sm text-medium-foreground">
-                            <span className="w-20 shrink-0">
-                              <Badge variant="secondary" outline={change.type !== 'New'}>
-                                {change.type}
-                              </Badge>
-                            </span>
-                            <span className="min-w-0 flex-1">{change.text}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        </SiteBand>
-      </SitePage>
-    </PageFrame>
+          <div className="col-span-4 flex flex-col gap-(--kit-gap)">
+            <Panel className="h-auto" tone="teal" title="This quarter" subtitle="Changes by kind">
+              <Donut
+                label="Changes shipped this quarter by kind"
+                segments={[
+                  { label: 'New', value: 5, tone: 'green' },
+                  { label: 'Improved', value: 4, tone: 'blue' },
+                  { label: 'Fixed', value: 9, tone: 'amber' },
+                ]}
+                centerCaption="changes"
+                size={132}
+                legend="bottom"
+                className="w-full"
+              />
+            </Panel>
+            <Panel className="flex-1" tone="amber" title="Coming next" subtitle="Planned for April">
+              <ul className="flex flex-1 flex-col justify-between">
+                <ListRow
+                  title="Inspection rounds on a phone"
+                  meta={
+                    <>
+                      <StatusPill tone="info">In test</StatusPill>
+                      <span>Offline, with photos</span>
+                    </>
+                  }
+                />
+                <ListRow
+                  title="Alarm rationalisation review"
+                  meta={
+                    <>
+                      <StatusPill tone="neutral">Planned</StatusPill>
+                      <span>Chattering and stale alarms</span>
+                    </>
+                  }
+                />
+                <ListRow
+                  title="Fleet view for four sites"
+                  meta={
+                    <>
+                      <StatusPill tone="neutral">Planned</StatusPill>
+                      <span>All of Nordkapp Energi</span>
+                    </>
+                  }
+                />
+              </ul>
+            </Panel>
+          </div>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
 function LandingTemplateStatus() {
   return (
-    <PageFrame title="Status page" address="status.nordkapp.example" height="lg">
-      <SitePage
-        brand={<BrandMark name="Nordkapp" section="Status" />}
-        width="md"
-        actions={<Button variant="secondary" size="sm">Subscribe to updates</Button>}
-        footer={<span className="tabular-nums">Checked every minute. Last check 14:00 UTC, 12 Mar 2026.</span>}
+    <BrowserFrame url="status.nordkapp.test" look="signal" minHeight={800}>
+      <AppFrame
+        brand={{ name: 'Nordkapp' }}
+        title="Nordkapp status"
+        subtitle="Region westeurope-1 · Thursday 12 March · 14:00 UTC"
+        status={
+          <>
+            <StatusPill tone="success" size="lg">
+              5 operational
+            </StatusPill>
+            <StatusPill tone="warning" size="lg">
+              1 degraded
+            </StatusPill>
+          </>
+        }
       >
-        <SiteBand width="md">
-          <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-warning-background p-4 text-warning-foreground">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-base font-semibold">One service is degraded</h1>
-              <p className="text-sm">Time series ingestion is delayed by up to 4 minutes. Everything else is working.</p>
+        <Grid className="h-full grid-rows-[auto_auto_minmax(0,1fr)]">
+          <Panel className="col-span-8" tone="warning">
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <p className="text-lg font-semibold">Right now</p>
+              <div className="flex items-center gap-5">
+                <IconAlertTriangle className="size-16 shrink-0" stroke={2.2} aria-hidden="true" />
+                <p className="text-6xl leading-none font-extrabold tracking-tighter">Data is arriving late</p>
+              </div>
+              <p className="max-w-2xl text-xl font-medium">
+                Time series from two sites are up to 4 minutes behind since 13:20. Alarms, sign-in and the application are not affected.
+              </p>
             </div>
-            <span className="text-xs tabular-nums">Since 13:20 UTC</span>
-          </div>
-          <section aria-labelledby="landing-status-services" className="flex flex-col gap-2">
-            <SectionHeader size="sm" as="h2" title="Services" description="Each bar is one day, oldest on the left. Days with an incident are marked." />
-            <ul id="landing-status-services" className="flex flex-col">
-              {LANDING_SERVICES.map((service) => (
-                <li key={service.id} className="flex flex-col gap-2 border-b border-default py-3 last:border-b-0">
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm font-medium text-base-foreground">{service.name}</span>
-                    <StatusIndicator size="sm" tone={service.tone} label={service.state} shape={service.tone === 'success' ? 'dot' : 'diamond'} />
-                  </div>
-                  <div
-                    role="img"
-                    aria-label={`${service.name}: ${service.uptime.toFixed(2)} % uptime over 30 days, ${service.badDays.length} days with an incident`}
-                    className="flex h-6 items-end gap-0.5"
-                  >
-                    {LANDING_DAYS.map((day) => (
-                      <span
-                        key={day}
-                        className={`flex-1 rounded-sm ${service.badDays.includes(day) ? 'h-6 bg-warning-foreground-strong' : 'h-4 bg-medium-background'}`}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between gap-4 text-xs tabular-nums text-muted-foreground">
-                    <span>30 days ago</span>
-                    <span>
-                      {service.uptime.toFixed(2)} % uptime · {service.badDays.length === 0 ? 'no incidents' : `${service.badDays.length} ${service.badDays.length === 1 ? 'day' : 'days'} with an incident`}
-                    </span>
-                    <span>Today</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-          <section className="flex flex-col gap-2">
-            <SectionHeader size="sm" as="h2" title="Incidents" />
-            <ul className="flex flex-col">
-              {LANDING_INCIDENTS.map((incident) => (
-                <li key={incident.id} className="flex flex-col gap-1 border-b border-default py-3 last:border-b-0">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-base-foreground">{incident.title}</span>
-                    <Badge variant={incident.state === 'Resolved' ? 'secondary' : 'warning'}>{incident.state}</Badge>
-                  </div>
-                  <p className="text-sm text-medium-foreground">{incident.text}</p>
-                  <span className="text-xs tabular-nums text-muted-foreground">{incident.date} UTC</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </SiteBand>
-      </SitePage>
-    </PageFrame>
-  );
-}
+          </Panel>
+          <Stat className="col-span-4" size="hero" tone="success" label="Uptime, last 90 days" value={99.96} decimals={2} unit="%" target="Commitment 99.9 %" />
 
-function LandingTemplateTeamHome() {
-  const [joined, setJoined] = useState(false);
+          <div className="col-span-12 grid grid-cols-6 gap-(--kit-gap)">
+            {LAND_SERVICES.map((service) => (
+              <Stat key={service.id} size="sm" tone={service.tone} label={service.name} state={service.state} value={service.detail} />
+            ))}
+          </div>
 
-  return (
-    <PageFrame title="Team space home" address="nordkapp.example/spaces/rotating-equipment">
-      <div className="flex min-h-full flex-col bg-base-background">
-        <div className="bg-muted-background">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-6">
-            <PageHeader
-              as="h1"
-              title="Rotating equipment"
-              description="Compressors, pumps and turbines at Nordkapp: their health, the open work and what the team is looking into."
-              leading={
-                <span className="flex size-10 items-center justify-center rounded-lg bg-base-background text-medium-foreground">
-                  <IconUsers aria-hidden className="size-5" />
-                </span>
-              }
-              meta={
-                <span className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <AvatarGroup people={LANDING_TEAM} max={4} sizes="xsm" label="Members" />
-                  <span className="tabular-nums">{LANDING_TEAM.length + (joined ? 1 : 0)} members</span>
-                </span>
-              }
-              actions={
-                <Button variant={joined ? 'secondary' : 'default'} size="sm" aria-pressed={joined} onClick={() => setJoined(!joined)}>
-                  {joined ? 'Leave space' : 'Join space'}
-                </Button>
-              }
-            />
-          </div>
-        </div>
-        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 px-6 py-6 @3xl:grid-cols-3">
-          <div className="flex flex-col gap-8 @3xl:col-span-2">
-            <LandingPanel title="Pinned">
-              <ul className="grid grid-cols-1 gap-3 @2xl:grid-cols-3">
-                {LANDING_PINNED.map((item) => (
-                  <li key={item.id} className="flex flex-col gap-1 rounded-xl bg-card-background p-4">
-                    <span className="text-xs text-muted-foreground">{item.kind}</span>
-                    <span className="text-sm font-medium text-base-foreground">{item.name}</span>
-                    <span className="text-xs text-muted-foreground">{item.updated}</span>
-                  </li>
-                ))}
-              </ul>
-            </LandingPanel>
-            <LandingPanel title="Recent activity">
-              <ul className="flex flex-col">
-                {LANDING_ACTIVITY.map((entry) => (
-                  <li key={entry.id} className="flex items-center gap-3 border-b border-default py-2 last:border-b-0">
-                    <PersonAvatar name={entry.person.name} sizes="xsm" />
-                    <p className="min-w-0 flex-1 text-sm text-medium-foreground">
-                      <span className="font-medium text-base-foreground">{entry.person.name}</span> {entry.text}
-                    </p>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{entry.when}</span>
-                  </li>
-                ))}
-              </ul>
-            </LandingPanel>
-          </div>
-          <div className="flex flex-col gap-8">
-            <LandingPanel title="Members">
-              <ul className="flex flex-col gap-3">
-                {LANDING_TEAM.map((person) => (
-                  <li key={person.id} className="flex items-center gap-3">
-                    <PersonAvatar name={person.name} sizes="xsm" />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-sm text-base-foreground">{person.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">{person.role}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </LandingPanel>
-            <LandingPanel title="About">
-              <p className="text-sm text-medium-foreground">Owned by {PEOPLE[2].name}. Open to everyone in Nordkapp production.</p>
-            </LandingPanel>
-          </div>
-        </div>
-      </div>
-    </PageFrame>
+          <Panel className="col-span-7" title="Incidents per day" subtitle="Last 30 days, minutes of disruption">
+            <div className="flex flex-1 flex-col justify-center">
+              <HeatStrip label="Minutes of disruption per day by service over the last 30 days" rows={LAND_UPTIME} axis={['30 days ago', 'Today']} size="lg" />
+            </div>
+          </Panel>
+          <Panel className="col-span-5" title="Updates" subtitle="This incident">
+            <ul className="flex flex-1 flex-col justify-between">
+              <ListRow tone="warning" title="Backlog is draining; delay down to 4 minutes" trailing="13:55" />
+              <ListRow tone="warning" title="Cause found: a full queue on one ingestion node" trailing="13:38" />
+              <ListRow tone="critical" title="Investigating delayed time series from two sites" trailing="13:24" />
+            </ul>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
@@ -1115,18 +1481,18 @@ export default definePage({
   id: 'landing-pages',
   title: 'Landing pages',
   summary:
-    'Whole pages people land on: the home inside the app, public product and pricing pages, documentation, release notes, a catalogue and a status page. Each is assembled from the product patterns and framed at page size.',
+    'The first page of a product, a space or a site: in-app homes, onboarding, catalogues, marketing pages, documentation, release notes and status. Each is a whole page in a different look, with the chrome and composition that look calls for.',
   guidance: {
     use: [
-      'Open an in-app home with status and the next things to do, not with a greeting.',
-      'Use a live component as the visual on a product page; it says more than a screenshot.',
-      'Keep one primary action per page and repeat it, in the same words, at the end.',
-      'Cap text columns at a reading width even when the page is wide.',
+      'Lead with the one thing the reader came for: the state of the plant, the next step, the promise, the search box.',
+      'Give every block a job and an action; a landing page is a set of doors.',
+      'Use real figures and names from the product instead of slogans.',
+      'Match the look to the reader: studio for daily use, poster and editorial for persuasion, signal for status.',
     ],
     avoid: [
-      'The display typeface anywhere but the hero of the product landing page.',
-      'Claims without a number someone could check.',
-      'Decorative colour to separate sections; change the surface or add space.',
+      'A hero with a headline and nothing under it but white space.',
+      'More than one primary action competing in the same view.',
+      'Feature grids of identical cards with stock icons and no evidence.',
     ],
   },
   source,
@@ -1134,57 +1500,54 @@ export default definePage({
     {
       id: 'in-app',
       title: 'Inside the app',
-      description: 'Pages a signed-in person starts from.',
+      description: 'Where a signed-in person lands.',
       specimens: [
         {
           id: 'LandingTemplateInAppHome',
           title: 'In-app home',
-          note: 'The page behind the product logo: status now, quick actions and recent work, with no greeting.',
+          note: 'Pick it as the first page after sign-in: the state of the plant, what needs you and where you left off.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/ShellPage.tsx',
-            'patterns/collections/StatRow.tsx',
-            'patterns/structure/PageHeader.tsx',
-            'patterns/structure/SectionHeader.tsx',
-            'display/StatusBadge.tsx',
+            'kit/landing-pages/BrowserFrame.tsx',
+            'kit/AppFrame.tsx',
+            'kit/landing-pages/FeatureCard.tsx',
+            'kit/Panel.tsx',
+            'kit/DataTable.tsx',
+            'kit/ListRow.tsx',
+            'kit/auth-pages/DetailList.tsx',
           ],
           Component: LandingTemplateInAppHome,
         },
         {
           id: 'LandingTemplateGettingStarted',
           title: 'Getting started',
-          note: 'Use for the first visit: a checklist that tracks progress, with help beside it and a way to skip.',
+          note: 'Pick it for a new person in their first week: a short checklist with progress and somewhere to learn more.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/BrandMark.tsx', 'patterns/states/SetupChecklist.tsx', 'patterns/product/FeatureCard.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/landing-pages/ChecklistItem.tsx', 'kit/landing-pages/FeatureCard.tsx', 'kit/RingGauge.tsx'],
           Component: LandingTemplateGettingStarted,
         },
         {
           id: 'LandingTemplateTeamHome',
           title: 'Team space home',
-          note: 'Pick it for a team or space: who is in it, what is pinned and what happened lately.',
+          note: 'Pick it as the home of a team or shift: its numbers, its people and what it has pinned.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'patterns/structure/PageHeader.tsx', 'display/AvatarGroup.tsx', 'display/PersonAvatar.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/TrendArea.tsx', 'kit/landing-pages/FeatureCard.tsx', 'kit/ListRow.tsx', 'kit/Stat.tsx'],
           Component: LandingTemplateTeamHome,
         },
         {
           id: 'LandingTemplateCatalogue',
           title: 'Catalogue grid',
-          note: 'Use for a marketplace of dashboards or apps: categories on the left, search and a card grid on the right.',
+          note: 'Pick it to browse dashboards, data sets and agents: dense tiles with owner, freshness and state, filtered by kind.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'patterns/structure/PageHeader.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx', 'kit/SparkLine.tsx', 'kit/StatusPill.tsx'],
           Component: LandingTemplateCatalogue,
         },
       ],
@@ -1192,61 +1555,36 @@ export default definePage({
     {
       id: 'product',
       title: 'Product pages',
-      description: 'Public pages that explain and sell.',
+      description: 'Pages that persuade someone who is not a user yet.',
       specimens: [
         {
           id: 'LandingTemplateProduct',
           title: 'Product landing',
-          note: 'The front page of a product: hero with a live visual, features, numbers and a closing action band.',
+          note: 'Pick it as the front page of a product: one promise, one action, proof in numbers and three reasons.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/SitePage.tsx',
-            'templates-b/SiteBand.tsx',
-            'templates-b/BrandMark.tsx',
-            'patterns/product/Hero.tsx',
-            'patterns/product/FeatureCard.tsx',
-            'patterns/product/StatsBand.tsx',
-            'industrial/KpiTile.tsx',
-          ],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/landing-pages/FeatureCard.tsx', 'kit/Bars.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
           Component: LandingTemplateProduct,
         },
         {
           id: 'LandingTemplateRoleSolution',
           title: 'Solution page for a role',
-          note: 'Pick it when the same product is explained to operators, engineers and planners; the role switch changes text and the live example.',
+          note: 'Pick it to speak to one role: their problem in their words, an annotated chart as proof and a colleague quoted.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/SitePage.tsx',
-            'templates-b/SiteBand.tsx',
-            'patterns/product/Hero.tsx',
-            'patterns/product/FeatureCard.tsx',
-            'industrial/StatusIndicator.tsx',
-          ],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/landing-pages/PullQuote.tsx', 'kit/TrendLine.tsx', 'kit/StatGroup.tsx'],
           Component: LandingTemplateRoleSolution,
         },
         {
           id: 'LandingTemplatePricing',
           title: 'Pricing',
-          note: 'Use when plans are public: a billing switch and three plans with one recommended in words.',
+          note: 'Pick it when plans differ by scope: three cards with one recommended, a billing switch and a comparison table.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/SitePage.tsx',
-            'templates-b/SiteBand.tsx',
-            'patterns/product/PlanCard.tsx',
-            'patterns/product/BillingToggle.tsx',
-          ],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/landing-pages/PriceCard.tsx', 'kit/DataTable.tsx'],
           Component: LandingTemplatePricing,
         },
       ],
@@ -1254,45 +1592,36 @@ export default definePage({
     {
       id: 'reference',
       title: 'Reference pages',
-      description: 'Pages people return to for facts.',
+      description: 'Pages people come back to for answers.',
       specimens: [
         {
           id: 'LandingTemplateDocsHome',
           title: 'Documentation home',
-          note: 'The entrance to the docs: search first, then topics with article counts and a route to a person.',
+          note: 'Pick it as the front page of documentation: search first, then sections with their most useful articles.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/SitePage.tsx', 'templates-b/SiteBand.tsx', 'templates-b/BrandMark.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/landing-pages/Hero.tsx', 'kit/Panel.tsx', 'kit/ListRow.tsx', 'kit/Bars.tsx'],
           Component: LandingTemplateDocsHome,
         },
         {
           id: 'LandingTemplateReleaseNotes',
           title: 'Release notes',
-          note: 'Use for a changelog: versions down the page, changes labelled new, improved or fixed, filterable by type.',
+          note: 'Pick it for a changelog people read: versions in the sidebar, each change labelled new, improved or fixed.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates-b/PageFrame.tsx', 'templates-b/SitePage.tsx', 'templates-b/SiteBand.tsx', 'templates-b/BrandMark.tsx'],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/landing-pages/ReleaseEntry.tsx', 'kit/Donut.tsx', 'kit/ListRow.tsx'],
           Component: LandingTemplateReleaseNotes,
         },
         {
           id: 'LandingTemplateStatus',
           title: 'Status page',
-          note: 'Pick it for a public service status: the overall state in words, each service with 30 days of history, then incidents.',
+          note: 'Pick it for service status: the state in words first, every service as a tile in its state, then the history.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates-b/PageFrame.tsx',
-            'templates-b/SitePage.tsx',
-            'templates-b/SiteBand.tsx',
-            'industrial/StatusIndicator.tsx',
-            'patterns/structure/SectionHeader.tsx',
-          ],
+          bleed: true,
+          uses: ['kit/landing-pages/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/Stat.tsx', 'kit/HeatStrip.tsx', 'kit/ListRow.tsx', 'kit/Panel.tsx'],
           Component: LandingTemplateStatus,
         },
       ],

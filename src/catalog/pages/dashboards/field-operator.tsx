@@ -1,684 +1,912 @@
 import { Button } from '@cognite/aura/components/button';
-import { Input } from '@cognite/aura/components/input';
-import { Progress } from '@cognite/aura/components/progress';
 import {
   IconAlertTriangle,
+  IconArrowBackUp,
   IconCheck,
-  IconChevronLeft,
-  IconChevronRight,
   IconCircleCheck,
+  IconClipboardCheck,
   IconCloudOff,
+  IconCloudUpload,
+  IconFlag,
+  IconMap,
+  IconMapPin,
   IconMinus,
   IconPlayerSkipForward,
   IconPlus,
-  IconRefresh,
-  IconX,
+  IconRoute,
+  IconScan,
+  IconUser,
 } from '@cognite/aura/icons';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { DashboardFrame } from '../../../library/dashboards/DashboardFrame';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { CheckpointRow } from '../../../library/industrial/workflows/CheckpointRow';
-import type { CheckpointResult } from '../../../library/industrial/workflows/CheckpointRow';
-import { isWithinLimits } from '../../../library/industrial/workflows/workflow';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { Canvas } from '../../../library/kit/Canvas';
+import { Donut } from '../../../library/kit/Donut';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber, type Tone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
 import { definePage } from '../../types';
 
 import source from './field-operator.tsx?raw';
 
-type FieldOpReadingSpec = { unit: string; low: number; high: number; decimals: number; step: number; last: string };
+type FoResult = 'ok' | 'flag' | 'skip';
 
-type FieldOpCheckpoint = {
+type FoReading = {
+  value: number;
+  unit: string;
+  low: number;
+  high: number;
+  max: number;
+  decimals: number;
+};
+
+type FoTask = {
   id: string;
-  name: string;
   tag: string;
-  /** Where to stand and what to look at. */
+  title: string;
+  where: string;
   instruction: string;
-  reading?: FieldOpReadingSpec;
-  /** Position on the route map, in the map's own 320 by 170 grid. */
-  x: number;
-  y: number;
+  expected: string;
+  reading?: FoReading;
+  minutes: number;
 };
 
-type FieldOpAnswer = Exclude<CheckpointResult, 'pending'>;
-
-type FieldOpResults = Readonly<Record<string, FieldOpAnswer>>;
-
-type FieldOpReadings = Readonly<Record<string, string>>;
-
-const FIELD_OP_CHECKPOINTS: readonly FieldOpCheckpoint[] = [
-  { id: 'lube', name: 'Lube oil pressure', tag: '23-KA-9101', instruction: '1st stage compressor. Read the local gauge on the lube oil skid.', reading: { unit: 'barg', low: 1.8, high: 2.6, decimals: 1, step: 0.1, last: '2.3 barg on the night round' }, x: 36, y: 66 },
-  { id: 'bearing', name: 'Bearing temperature', tag: '23-KA-9101', instruction: '1st stage compressor. Measure the drive-end bearing housing with the handheld probe.', reading: { unit: '°C', low: 40, high: 85, decimals: 0, step: 1, last: '76 °C on the night round' }, x: 100, y: 66 },
-  { id: 'flanges', name: 'Cooler flanges', tag: '23-HA-9114', instruction: 'Interstage cooler. Look for leaks or frost at the inlet and outlet flanges.', x: 164, y: 66 },
-  { id: 'isolation', name: 'Isolation tag', tag: '23-KA-9103', instruction: 'Recompressor. Confirm the lock and tag from WO-104482 are in place.', x: 164, y: 122 },
-  { id: 'seal', name: 'Seal pot level', tag: '27-PA-2001A', instruction: 'Export pump A. Read the level in the seal pot sight glass.', reading: { unit: '%', low: 40, high: 80, decimals: 0, step: 5, last: '65 % on the night round' }, x: 290, y: 58 },
-  { id: 'barrier', name: 'Area barrier', tag: '40-PA-4001', instruction: 'Cooling water pump. Check the barrier and sign around the pump under maintenance.', x: 290, y: 118 },
+const FO_TASKS: FoTask[] = [
+  {
+    id: 't1',
+    tag: '23-KA-9101',
+    title: 'Lube oil level, 1st stage compressor',
+    where: 'Compressor hall, level 1',
+    instruction: 'Read the sight glass on the reservoir with the pump running.',
+    expected: 'Between the two marks',
+    minutes: 3,
+  },
+  {
+    id: 't2',
+    tag: '23-VT-92540',
+    title: 'Drive-end vibration, 1st stage compressor',
+    where: 'Compressor hall, level 1',
+    instruction: 'Hold the probe on the marked pad for ten seconds and enter the steady value.',
+    expected: 'Below 7.1 mm/s',
+    reading: {
+      value: 6.8,
+      unit: 'mm/s',
+      low: 0,
+      high: 7.1,
+      max: 15,
+      decimals: 1,
+    },
+    minutes: 4,
+  },
+  {
+    id: 't3',
+    tag: '23-PT-92531',
+    title: 'Discharge pressure, local gauge',
+    where: 'Compressor hall, level 1',
+    instruction: 'Compare the local gauge with the transmitter reading on the tablet.',
+    expected: '40 to 52 barg',
+    reading: {
+      value: 48.6,
+      unit: 'barg',
+      low: 40,
+      high: 52,
+      max: 60,
+      decimals: 1,
+    },
+    minutes: 2,
+  },
+  {
+    id: 't4',
+    tag: '23-HA-9114',
+    title: 'Interstage cooler, tube leaks',
+    where: 'Cooler deck, north side',
+    instruction: 'Walk both headers and check the drip trays for condensate.',
+    expected: 'Dry trays, no frost',
+    minutes: 5,
+  },
+  {
+    id: 't5',
+    tag: '23-TT-91141',
+    title: 'Cooler outlet temperature',
+    where: 'Cooler deck, north side',
+    instruction: 'Read the local thermometer in the outlet pocket and enter the value.',
+    expected: '20 to 40 °C',
+    reading: {
+      value: 38.9,
+      unit: '°C',
+      low: 20,
+      high: 40,
+      max: 60,
+      decimals: 1,
+    },
+    minutes: 3,
+  },
+  {
+    id: 't6',
+    tag: '23-KA-9102',
+    title: 'Seal gas panel, 2nd stage compressor',
+    where: 'Compressor hall, level 2',
+    instruction: 'Check that the differential pressure indicator is in the green band.',
+    expected: 'Green band',
+    minutes: 3,
+  },
+  {
+    id: 't7',
+    tag: '23-KA-9103',
+    title: 'Recompressor isolation tags',
+    where: 'Compressor hall, level 2',
+    instruction: 'Confirm all four isolation tags from permit 2291 are still in place.',
+    expected: '4 tags, seals intact',
+    minutes: 4,
+  },
+  {
+    id: 't8',
+    tag: '23-GT-9001',
+    title: 'Turbine enclosure, fire and gas detectors',
+    where: 'Turbine enclosure',
+    instruction: 'Check the status lamp on each of the three detectors by the door.',
+    expected: '3 green lamps',
+    minutes: 4,
+  },
+  {
+    id: 't9',
+    tag: '27-IT-20013',
+    title: 'Motor current, export pump A',
+    where: 'Export pump house',
+    instruction: 'Read the ammeter on the local control station.',
+    expected: '40 to 95 A',
+    reading: {
+      value: 86.2,
+      unit: 'A',
+      low: 40,
+      high: 95,
+      max: 120,
+      decimals: 1,
+    },
+    minutes: 3,
+  },
+  {
+    id: 't10',
+    tag: '40-PA-4001',
+    title: 'Cooling water pump barrier',
+    where: 'Utility area',
+    instruction: 'Check that the barrier and the permit board are in place around the pump.',
+    expected: 'Barrier closed, permit displayed',
+    minutes: 4,
+  },
 ];
 
-const FIELD_OP_AREAS = [
-  { id: 'nk-23', label: 'NK-23 Gas compression', x: 4, y: 12, width: 190, height: 146, labelAt: 'top' },
-  { id: 'nk-27', label: 'NK-27 Export', x: 202, y: 12, width: 114, height: 68, labelAt: 'top' },
-  { id: 'nk-40', label: 'NK-40 Cooling', x: 202, y: 88, width: 114, height: 70, labelAt: 'bottom' },
-] as const;
-
-const FIELD_OP_ANSWERS: readonly { id: FieldOpAnswer; label: string; variant: 'default' | 'destructive' | 'secondary' }[] = [
-  { id: 'pass', label: 'Pass', variant: 'default' },
-  { id: 'fail', label: 'Fail', variant: 'destructive' },
-  { id: 'skip', label: 'Skip', variant: 'secondary' },
-];
-
-const FIELD_OP_SEED_RESULTS: FieldOpResults = { lube: 'pass' };
-
-const FIELD_OP_SEED_READINGS: FieldOpReadings = { lube: '2.2', bearing: '78' };
-
-function fieldOpNumber(text: string | undefined): number | null {
-  if (text === undefined || text.trim() === '') return null;
-  const value = Number(text.replace(',', '.'));
-  return Number.isFinite(value) ? value : null;
-}
-
-function fieldOpLimits(spec: FieldOpReadingSpec): string {
-  return `${spec.low.toFixed(spec.decimals)} to ${spec.high.toFixed(spec.decimals)} ${spec.unit}`;
-}
-
-function fieldOpResult(results: FieldOpResults, id: string): CheckpointResult {
-  return results[id] ?? 'pending';
-}
-
-type FieldOpDeviceProps = { label: string; children: ReactNode };
-
-/** A tablet in portrait, drawn from tokens: fixed aspect, thick bezel, content that scrolls inside. */
-function FieldOpDevice({ label, children }: FieldOpDeviceProps) {
-  return (
-    <div
-      role="group"
-      aria-label={label}
-      className="flex aspect-[3/5] min-w-72 max-w-md flex-1 flex-col overflow-hidden rounded-3xl border-8 border-emphasized bg-base-background"
-    >
-      {children}
-    </div>
-  );
-}
-
-function FieldOpOfflineBar({ saved }: { saved: number }) {
-  return (
-    <div className="flex shrink-0 items-center justify-between gap-3 bg-medium-background px-4 py-2 text-xs text-medium-foreground">
-      <span className="font-medium">Nordkapp</span>
-      <span className="flex items-center gap-1.5">
-        <IconCloudOff aria-hidden="true" className="size-4 shrink-0" />
-        Offline · {saved} {saved === 1 ? 'result' : 'results'} saved on this tablet
-      </span>
-    </div>
-  );
-}
-
-type FieldOpProgressProps = { title: string; position: number; total: number; done: number };
-
-function FieldOpProgressHeader({ title, position, total, done }: FieldOpProgressProps) {
-  return (
-    <header className="flex w-full shrink-0 flex-col gap-2 px-4 pb-3 pt-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h4 className="text-base font-semibold text-base-foreground">{title}</h4>
-        <span className="shrink-0 text-sm tabular-nums text-medium-foreground">
-          {position > total ? 'Summary' : `Checkpoint ${position} of ${total}`}
-        </span>
-      </div>
-      <Progress value={done} max={total} aria-label={`${title} progress`} aria-valuetext={`${done} of ${total} checkpoints recorded`} />
-      <span className="text-xs tabular-nums text-muted-foreground">
-        {done} of {total} recorded
-      </span>
-    </header>
-  );
-}
-
-type FieldOpReadingEntryProps = {
-  checkpoint: FieldOpCheckpoint;
-  spec: FieldOpReadingSpec;
-  text: string;
-  onChange: (text: string) => void;
+const FO_START: Record<string, FoResult> = {
+  t1: 'ok',
+  t2: 'flag',
+  t3: 'ok',
+  t4: 'ok',
 };
 
-/** A number, its unit and plus and minus keys big enough for gloves, judged against the limits as it is typed. */
-function FieldOpReadingEntry({ checkpoint, spec, text, onChange }: FieldOpReadingEntryProps) {
-  const value = fieldOpNumber(text);
-  const within = value === null ? null : isWithinLimits(value, spec.low, spec.high);
-  const nudge = (direction: 1 | -1) => {
-    const from = value ?? spec.low;
-    onChange((from + direction * spec.step).toFixed(spec.decimals));
+const FO_RESULT_TONE: Record<FoResult, Tone> = {
+  ok: 'success',
+  flag: 'warning',
+  skip: 'neutral',
+};
+
+const FO_RESULT_LABEL: Record<FoResult, string> = {
+  ok: 'OK',
+  flag: 'Flagged',
+  skip: 'Skipped',
+};
+
+const FO_STACK_TONES: Tone[] = ['teal', 'amber'];
+
+function foLowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function foCount(results: Record<string, FoResult>, result: FoResult): number {
+  return FO_TASKS.filter((task) => results[task.id] === result).length;
+}
+
+/** The round both devices share: answers so far, the checkpoint that is up, and the three moves. */
+function useFoRound(start: Record<string, FoResult>) {
+  const [results, setResults] = useState(start);
+  const [order, setOrder] = useState<string[]>(Object.keys(start));
+  const current = FO_TASKS.find((task) => !(task.id in results));
+  const done = FO_TASKS.length - FO_TASKS.filter((task) => !(task.id in results)).length;
+  return {
+    results,
+    current,
+    done,
+    upcoming: FO_TASKS.filter((task) => !(task.id in results)).slice(1),
+    minutesLeft: FO_TASKS.filter((task) => !(task.id in results)).reduce((sum, task) => sum + task.minutes, 0),
+    answer: (result: FoResult) => {
+      if (!current) return;
+      setResults((before) => ({ ...before, [current.id]: result }));
+      setOrder((before) => [...before, current.id]);
+    },
+    undo: () => {
+      const last = order[order.length - 1];
+      if (!last) return;
+      setOrder((before) => before.slice(0, -1));
+      setResults((before) => Object.fromEntries(Object.entries(before).filter(([id]) => id !== last)));
+    },
+    canUndo: order.length > 0,
   };
+}
 
+type FoRound = ReturnType<typeof useFoRound>;
+
+/** A drawn device around a screen, so a mobile layout can be judged at its real width. */
+function FoDevice({ kind, label, children, className = '' }: { kind: 'phone' | 'tablet'; label: string; children: ReactNode; className?: string }) {
+  const phone = kind === 'phone';
   return (
-    <div className="flex w-full flex-col gap-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <span className="text-sm font-medium text-base-foreground">Reading in {spec.unit}</span>
-        <span className="text-xs text-muted-foreground">Last: {spec.last}</span>
-      </div>
-      <div className="flex w-full items-center gap-2">
-        <Button variant="outline" size="icon-lg" className="size-12 shrink-0" aria-label={`Lower reading by ${spec.step} ${spec.unit}`} onClick={() => nudge(-1)}>
-          <IconMinus />
-        </Button>
-        <Input
-          className="h-12 min-w-0 flex-1 text-center"
-          aria-label={`${checkpoint.name} reading in ${spec.unit}`}
-          inputMode="decimal"
-          placeholder="No reading"
-          value={text}
-          onChange={(event) => onChange(event.target.value)}
+    <figure className={`flex min-w-0 flex-col gap-3 ${className}`}>
+      <div
+        className={`relative flex min-h-0 flex-1 flex-col bg-[var(--mountain-900)] shadow-[0_30px_60px_-30px_var(--effect-shadow-xl)] ${phone ? 'rounded-[2.75rem] p-2.5' : 'rounded-[2.25rem] p-3.5'}`}
+      >
+        <span
+          aria-hidden="true"
+          className={`absolute left-1/2 -translate-x-1/2 rounded-full bg-[var(--mountain-700)] ${phone ? 'top-4 z-10 h-5 w-24 bg-[var(--mountain-900)]' : 'top-1.5 size-1.5'}`}
         />
-        <Button variant="outline" size="icon-lg" className="size-12 shrink-0" aria-label={`Raise reading by ${spec.step} ${spec.unit}`} onClick={() => nudge(1)}>
-          <IconPlus />
-        </Button>
+        <div className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-base-background ${phone ? 'rounded-[2.2rem]' : 'rounded-[1.5rem]'}`}>{children}</div>
       </div>
-      <p aria-live="polite" className="flex items-start gap-1.5 text-sm">
-        {within === null ? (
-          <span className="text-muted-foreground">Limits {fieldOpLimits(spec)}</span>
-        ) : within ? (
-          <>
-            <IconCircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-medium-foreground" />
-            <span className="text-medium-foreground">Within limits {fieldOpLimits(spec)}</span>
-          </>
-        ) : (
-          <>
-            <IconAlertTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-foreground-strong" />
-            <span className="font-medium text-warning-foreground-strong">
-              Outside limits {fieldOpLimits(spec)}. Measure again or record a fail.
-            </span>
-          </>
-        )}
-      </p>
+      <figcaption className="text-center text-sm font-medium text-medium-foreground">{label}</figcaption>
+    </figure>
+  );
+}
+
+function FoStatusBar({ phone = false, queued }: { phone?: boolean; queued: number }) {
+  return (
+    <div className={`flex items-center justify-between gap-3 text-sm font-semibold text-base-foreground ${phone ? 'px-6 pt-3.5 pb-1' : 'px-6 py-3'}`}>
+      <span className="tabular-nums">14:00</span>
+      {phone ? null : <span className="text-medium-foreground">Round B-12 · Gas compression · Day shift</span>}
+      <span className="flex items-center gap-1.5 text-medium-foreground">
+        <IconCloudOff className="size-4" aria-hidden="true" />
+        {phone ? queued : `Offline · ${queued} queued`}
+      </span>
     </div>
   );
 }
 
-type FieldOpResultButtonsProps = { name: string; result: CheckpointResult; onResult: (answer: FieldOpAnswer) => void };
+const FO_DOCK = [
+  { id: 'round', label: 'Round', icon: <IconRoute aria-hidden="true" /> },
+  { id: 'map', label: 'Map', icon: <IconMap aria-hidden="true" /> },
+  { id: 'scan', label: 'Scan', icon: <IconScan aria-hidden="true" /> },
+  { id: 'findings', label: 'Findings', icon: <IconFlag aria-hidden="true" /> },
+  { id: 'me', label: 'Me', icon: <IconUser aria-hidden="true" /> },
+];
 
-function FieldOpResultButtons({ name, result, onResult }: FieldOpResultButtonsProps) {
+/** Thumb-reach navigation along the bottom of a handheld screen. */
+function FoDock({ current = 'round', findings = 0, labels = true }: { current?: string; findings?: number; labels?: boolean }) {
   return (
-    <div role="group" aria-label={`Result for ${name}`} className="grid w-full grid-cols-3 gap-2">
-      {FIELD_OP_ANSWERS.map((answer) => (
-        <Button
-          key={answer.id}
-          variant={result === answer.id ? answer.variant : 'outline'}
-          size="lg"
-          className="h-12 w-full"
-          aria-pressed={result === answer.id}
-          onClick={() => onResult(answer.id)}
-        >
-          {answer.id === 'pass' ? <IconCheck /> : null}
-          {answer.id === 'fail' ? <IconX /> : null}
-          {answer.id === 'skip' ? <IconPlayerSkipForward /> : null}
-          {answer.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
-type FieldOpCheckpointCardProps = {
-  checkpoint: FieldOpCheckpoint;
-  position: number;
-  result: CheckpointResult;
-  text: string;
-  onReading: (text: string) => void;
-  onResult: (answer: FieldOpAnswer) => void;
-};
-
-/** One checkpoint at a time: where, what to do, the reading, then one of three answers. */
-function FieldOpCheckpointCard({ checkpoint, position, result, text, onReading, onResult }: FieldOpCheckpointCardProps) {
-  return (
-    <article aria-label={`Checkpoint ${position}, ${checkpoint.name}`} className="flex w-full flex-col gap-4 rounded-2xl bg-card-background p-4">
-      <div className="flex items-start gap-3">
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-medium-background text-base font-semibold tabular-nums text-base-foreground">
-          {position}
-        </span>
-        <div className="min-w-0">
-          <h5 className="text-xl font-semibold text-base-foreground">{checkpoint.name}</h5>
-          <p className="font-mono text-sm text-muted-foreground">{checkpoint.tag}</p>
-        </div>
-      </div>
-      <p className="text-sm text-medium-foreground">{checkpoint.instruction}</p>
-      {checkpoint.reading ? (
-        <FieldOpReadingEntry checkpoint={checkpoint} spec={checkpoint.reading} text={text} onChange={onReading} />
-      ) : null}
-      <FieldOpResultButtons name={checkpoint.name} result={result} onResult={onResult} />
-      {result === 'fail' ? (
-        <p className="text-sm text-medium-foreground">A deviation is raised on {checkpoint.tag} when the round is submitted.</p>
-      ) : null}
-    </article>
-  );
-}
-
-type FieldOpActionBarProps = {
-  previousLabel: string;
-  nextLabel: string;
-  onPrevious?: () => void;
-  onNext: () => void;
-  /** Why Previous cannot be used, shown instead of a disabled button with no reason. */
-  hint?: string;
-};
-
-/** The bar that stays at the bottom of the screen: back on the left, the way forward on the right. */
-function FieldOpActionBar({ previousLabel, nextLabel, onPrevious, onNext, hint }: FieldOpActionBarProps) {
-  return (
-    <footer className="flex w-full shrink-0 flex-col gap-2 border-t border-default bg-base-background p-3">
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
-      <div className="grid w-full grid-cols-2 gap-2">
-        <Button variant="outline" size="lg" className="h-12 w-full" disabled={!onPrevious} onClick={onPrevious}>
-          <IconChevronLeft /> {previousLabel}
-        </Button>
-        <Button size="lg" className="h-12 w-full" onClick={onNext}>
-          {nextLabel} <IconChevronRight />
-        </Button>
-      </div>
-    </footer>
-  );
-}
-
-type FieldOpSummaryProps = { results: FieldOpResults; readings: FieldOpReadings; submitted: boolean };
-
-function FieldOpSummary({ results, readings, submitted }: FieldOpSummaryProps) {
-  const count = (answer: CheckpointResult) =>
-    FIELD_OP_CHECKPOINTS.filter((checkpoint) => fieldOpResult(results, checkpoint.id) === answer).length;
-  const figures = [
-    { label: 'Pass', value: count('pass') },
-    { label: 'Fail', value: count('fail') },
-    { label: 'Skipped', value: count('skip') },
-    { label: 'Not checked', value: count('pending') },
-  ];
-
-  return (
-    <section aria-label="Round summary" className="flex w-full flex-col gap-3 rounded-2xl bg-card-background p-4">
-      <h5 className="text-xl font-semibold text-base-foreground">Round summary</h5>
-      <dl className="grid grid-cols-4 gap-2">
-        {figures.map((figure) => (
-          <div key={figure.label} className="min-w-0">
-            <dd className="text-2xl font-semibold tabular-nums text-base-foreground">{figure.value}</dd>
-            <dt className="text-xs text-muted-foreground">{figure.label}</dt>
-          </div>
-        ))}
-      </dl>
-      <ol className="flex w-full flex-col">
-        {FIELD_OP_CHECKPOINTS.map((checkpoint, index) => {
-          const value = fieldOpNumber(readings[checkpoint.id]);
+    <nav aria-label="Sections" className="flex justify-center px-3 pt-1 pb-3">
+      <ul className="flex items-center gap-1 rounded-full bg-muted-background p-1.5">
+        {FO_DOCK.map((item) => {
+          const active = item.id === current;
           return (
-            <li key={checkpoint.id} className="border-t border-default">
-              <CheckpointRow
-                index={index + 1}
-                name={checkpoint.name}
-                tag={checkpoint.tag}
-                result={fieldOpResult(results, checkpoint.id)}
-                note={
-                  checkpoint.reading && value !== null
-                    ? `${value.toFixed(checkpoint.reading.decimals)} ${checkpoint.reading.unit}, ${
-                        isWithinLimits(value, checkpoint.reading.low, checkpoint.reading.high) ? 'within' : 'outside'
-                      } ${fieldOpLimits(checkpoint.reading)}`
-                    : undefined
-                }
-              />
+            <li key={item.id}>
+              <button
+                type="button"
+                aria-current={active ? 'page' : undefined}
+                aria-label={labels ? undefined : item.label}
+                className={`relative flex items-center gap-2 rounded-full py-2.5 text-sm font-semibold [&>svg]:size-5 ${labels ? 'px-3.5' : 'px-3'} ${active ? 'bg-primary-background text-primary-foreground' : 'text-medium-foreground hover:text-base-foreground'}`}
+              >
+                {item.icon}
+                {labels || active ? <span>{item.label}</span> : null}
+                {item.id === 'findings' && findings > 0 ? (
+                  <span
+                    className={`flex size-5 items-center justify-center rounded-full bg-warning-foreground text-xs font-bold text-warning-background ${labels ? '' : 'absolute -top-1.5 -right-1'}`}
+                  >
+                    {findings}
+                  </span>
+                ) : null}
+              </button>
             </li>
           );
         })}
-      </ol>
-      <p aria-live="polite" className="flex items-start gap-1.5 text-sm text-medium-foreground">
-        {submitted ? <IconCircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : <IconCloudOff aria-hidden="true" className="mt-0.5 size-4 shrink-0" />}
-        {submitted
-          ? 'Round submitted. It is queued on this tablet and syncs when you are back online.'
-          : 'Saved on this tablet. Submit to queue the round for sync.'}
-      </p>
-    </section>
+      </ul>
+    </nav>
   );
 }
 
-function FieldOpRouteMap({ index, results }: { index: number; results: FieldOpResults }) {
-  const route = FIELD_OP_CHECKPOINTS.map((checkpoint) => `${checkpoint.x},${checkpoint.y}`).join(' ');
-  const current = FIELD_OP_CHECKPOINTS[index];
+/** Today's round as one ring: how far, how it went, how long is left. */
+function FoProgress({ round, size = 212 }: { round: FoRound; size?: number }) {
+  const flagged = foCount(round.results, 'flag');
   return (
-    <svg
-      viewBox="0 0 320 170"
-      role="img"
-      aria-label={`Route map of the morning round: six stops across gas compression, export and cooling water. ${current ? `You are at stop ${index + 1}, ${current.name}.` : 'All stops visited.'}`}
-      className="h-auto w-full"
-    >
-      {FIELD_OP_AREAS.map((area) => (
-        <g key={area.id}>
-          <rect x={area.x} y={area.y} width={area.width} height={area.height} rx="8" className="fill-muted-background stroke-emphasized" strokeWidth="1" />
-          <text x={area.x + 8} y={area.labelAt === 'top' ? area.y + 18 : area.y + area.height - 8} className="fill-muted-foreground text-xs">
-            {area.label}
-          </text>
-        </g>
-      ))}
-      <polyline points={route} fill="none" strokeWidth="2" strokeDasharray="5 4" className="stroke-muted-foreground" />
-      {FIELD_OP_CHECKPOINTS.map((checkpoint, position) => {
-        const here = position === index;
-        const recorded = fieldOpResult(results, checkpoint.id) !== 'pending';
-        return (
-          <g key={checkpoint.id}>
-            {here ? <circle cx={checkpoint.x} cy={checkpoint.y} r="17" fill="none" strokeWidth="2" className="stroke-base-foreground" /> : null}
-            <circle
-              cx={checkpoint.x}
-              cy={checkpoint.y}
-              r="12"
-              strokeWidth="1.5"
-              className={here ? 'fill-base-foreground stroke-base-foreground' : recorded ? 'fill-medium-background stroke-emphasized' : 'fill-base-background stroke-emphasized'}
-            />
-            <text
-              x={checkpoint.x}
-              y={checkpoint.y + 4}
-              textAnchor="middle"
-              className={`text-xs font-semibold tabular-nums ${here ? 'fill-base-background' : 'fill-base-foreground'}`}
-            >
-              {position + 1}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-const FIELD_OP_RESULT_WORD: Record<CheckpointResult, string> = { pass: 'Pass', fail: 'Fail', skip: 'Skipped', pending: 'Not checked' };
-
-const FIELD_OP_MARKER: Record<CheckpointResult, string> = {
-  pass: 'bg-success-background text-success-foreground',
-  fail: 'bg-critical-background text-critical-foreground',
-  skip: 'border border-dashed border-emphasized text-muted-foreground',
-  pending: 'border border-emphasized text-muted-foreground',
-};
-
-type FieldOpRouteRowProps = {
-  checkpoint: FieldOpCheckpoint;
-  position: number;
-  result: CheckpointResult;
-  here: boolean;
-  onOpen: () => void;
-};
-
-/** One stop in the task list. The whole row is the touch target and opens that checkpoint. */
-function FieldOpRouteRow({ checkpoint, position, result, here, onOpen }: FieldOpRouteRowProps) {
-  return (
-    <button
-      type="button"
-      aria-current={here ? 'step' : undefined}
-      aria-label={`Open checkpoint ${position}, ${checkpoint.name}, ${FIELD_OP_RESULT_WORD[result]}`}
-      className={`flex min-h-14 w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left outline-none hover:bg-muted-background focus-visible:shadow-focus-ring ${
-        here ? 'bg-medium-background' : ''
-      }`}
-      onClick={onOpen}
-    >
-      <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ${FIELD_OP_MARKER[result]}`}>
-        {result === 'pass' ? <IconCheck aria-hidden="true" className="size-4" /> : null}
-        {result === 'fail' ? <IconX aria-hidden="true" className="size-4" /> : null}
-        {result === 'skip' ? <IconMinus aria-hidden="true" className="size-4" /> : null}
-        {result === 'pending' ? position : null}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="text-sm font-medium text-base-foreground">{checkpoint.name}</span>
-        <span className="font-mono text-xs text-muted-foreground">
-          {checkpoint.tag}
-          {here ? <span className="font-sans"> · you are here</span> : null}
-        </span>
-      </span>
-      <span className={`shrink-0 text-xs ${result === 'fail' ? 'font-medium text-critical-foreground-strong' : 'text-medium-foreground'}`}>
-        {FIELD_OP_RESULT_WORD[result]}
-      </span>
-      <IconChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-    </button>
-  );
-}
-
-type FieldOpRouteScreenProps = { index: number; results: FieldOpResults; onOpen: (index: number) => void };
-
-/** The second screen: where the round goes and how far it is, with a way to jump to any stop. */
-function FieldOpRouteScreen({ index, results, onOpen }: FieldOpRouteScreenProps) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h4 className="text-base font-semibold text-base-foreground">Route</h4>
-        <span className="text-sm text-medium-foreground">6 stops · about 35 min</span>
+    <div className="@container flex flex-1 flex-col items-center justify-between gap-5">
+      <div className="self-stretch">
+        <p className="text-lg font-bold text-base-foreground">Today&apos;s round</p>
+        <p className="text-sm text-medium-foreground">Gas compression · 10 checkpoints</p>
       </div>
-      <FieldOpRouteMap index={index} results={results} />
-      <ol aria-label="Checkpoints on the route" className="flex w-full flex-col">
-        {FIELD_OP_CHECKPOINTS.map((checkpoint, position) => (
-          <li key={checkpoint.id}>
-            <FieldOpRouteRow
-              checkpoint={checkpoint}
-              position={position + 1}
-              result={fieldOpResult(results, checkpoint.id)}
-              here={position === index}
-              onOpen={() => onOpen(position)}
-            />
-          </li>
-        ))}
-      </ol>
+      <div className="hidden @[13.5rem]:block">
+        <RingGauge label="Checkpoints done" value={round.done} max={FO_TASKS.length} unit={`of ${FO_TASKS.length}`} size={size} tone="purple" hideLabel />
+      </div>
+      <div className="@[13.5rem]:hidden">
+        <RingGauge label="Checkpoints done" value={round.done} max={FO_TASKS.length} unit={`of ${FO_TASKS.length}`} size={164} tone="purple" hideLabel />
+      </div>
+      <dl className="grid w-full grid-cols-3 gap-1.5 text-center">
+        <div className="rounded-2xl bg-base-background px-1 py-2.5">
+          <dd className="text-2xl font-bold text-base-foreground tabular-nums">{foCount(round.results, 'ok')}</dd>
+          <dt className="text-xs font-medium text-medium-foreground">OK</dt>
+        </div>
+        <div className="rounded-2xl bg-base-background px-1 py-2.5">
+          <dd className={`text-2xl font-bold tabular-nums ${flagged > 0 ? 'text-warning-foreground-strong' : 'text-base-foreground'}`}>{flagged}</dd>
+          <dt className="text-xs font-medium text-medium-foreground">Flagged</dt>
+        </div>
+        <div className="rounded-2xl bg-base-background px-1 py-2.5">
+          <dd className="text-2xl font-bold text-base-foreground tabular-nums">{round.minutesLeft}</dd>
+          <dt className="text-xs font-medium whitespace-nowrap text-medium-foreground">min left</dt>
+        </div>
+      </dl>
     </div>
   );
 }
 
-function useFieldOpRound(initialIndex: number, initialResults: FieldOpResults, initialReadings: FieldOpReadings) {
-  const [index, setIndex] = useState(initialIndex);
-  const [results, setResults] = useState<FieldOpResults>(initialResults);
-  const [readings, setReadings] = useState<FieldOpReadings>(initialReadings);
-  const [submitted, setSubmitted] = useState(false);
-  const total = FIELD_OP_CHECKPOINTS.length;
-
-  return {
-    index,
-    results,
-    readings,
-    submitted,
-    total,
-    done: Object.keys(results).length,
-    open: (next: number) => setIndex(Math.max(0, Math.min(next, total))),
-    setResult: (id: string, answer: FieldOpAnswer) => {
-      setSubmitted(false);
-      setResults((current) => ({ ...current, [id]: answer }));
-    },
-    setReading: (id: string, text: string) => setReadings((current) => ({ ...current, [id]: text })),
-    submit: () => setSubmitted(true),
-    restart: () => {
-      setIndex(0);
-      setResults({});
-      setReadings({});
-      setSubmitted(false);
-    },
-  };
+function FoReadingMeter({ reading, label }: { reading: FoReading; label: string }) {
+  const out = reading.value > reading.high || reading.value < reading.low;
+  const close = !out && reading.value > reading.high - (reading.high - reading.low) * 0.12;
+  return (
+    <Meter
+      label={label}
+      value={reading.value}
+      max={reading.max}
+      unit={reading.unit}
+      decimals={reading.decimals}
+      high={reading.high}
+      low={reading.low > 0 ? reading.low : undefined}
+      target={{ value: reading.high, label: 'Limit' }}
+      tone={out ? 'critical' : close ? 'warning' : 'success'}
+    />
+  );
 }
 
-type FieldOpRound = ReturnType<typeof useFieldOpRound>;
+function FoAnswers({ round }: { round: FoRound }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 @[21rem]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <Button size="lg" className="col-span-2 @[21rem]:col-span-1" onClick={() => round.answer('ok')}>
+        <IconCheck /> Looks right
+      </Button>
+      <Button size="lg" variant="outline" onClick={() => round.answer('flag')}>
+        <IconFlag /> Flag it
+      </Button>
+      <Button size="lg" variant="ghost" onClick={() => round.answer('skip')}>
+        <IconPlayerSkipForward /> Skip
+      </Button>
+    </div>
+  );
+}
 
-/** The round screen: offline bar, progress, one checkpoint or the summary, and the sticky action bar. */
-function FieldOpRoundScreen({ round }: { round: FieldOpRound }) {
-  const checkpoint = FIELD_OP_CHECKPOINTS[round.index];
-  const last = round.index === round.total - 1;
+/** The checkpoint that is up, on top of the ones that follow. Answering it deals the next card. */
+function FoTaskStack({ round, compact = false }: { round: FoRound; compact?: boolean }) {
+  const task = round.current;
+  if (!task) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-[1.75rem] bg-success-background p-6 text-center">
+        <IconCircleCheck className="size-14 text-success-foreground" aria-hidden="true" />
+        <p className="text-2xl font-bold text-success-foreground">Round complete</p>
+        <p className="max-w-xs text-sm text-success-foreground">
+          {foCount(round.results, 'ok')} looked right, {foCount(round.results, 'flag')} flagged, {foCount(round.results, 'skip')} skipped. Answers upload when
+          the tablet is back on the network.
+        </p>
+        <div className="mt-2 flex gap-2">
+          <Button size="lg">
+            <IconCloudUpload /> Submit round
+          </Button>
+          <Button size="lg" variant="outline" onClick={round.undo}>
+            <IconArrowBackUp /> Undo last
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  const position = FO_TASKS.findIndex((candidate) => candidate.id === task.id) + 1;
+  return (
+    <div className="@container flex min-h-0 flex-1 flex-col">
+      <article
+        key={task.id}
+        className="relative z-20 flex flex-1 flex-col gap-3.5 rounded-[1.75rem] bg-base-background p-5 shadow-[0_18px_40px_-22px_var(--effect-shadow-xl),0_1px_2px_var(--effect-shadow-md)] ring-1 ring-[var(--kit-rule)]"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <span className="rounded-full bg-primary-background px-3 py-1 text-sm font-bold text-primary-foreground tabular-nums">
+            {position} of {FO_TASKS.length}
+          </span>
+          <TagId variant="chip">{task.tag}</TagId>
+        </div>
+        <div>
+          <h3 className={`font-bold text-balance text-base-foreground ${compact ? 'text-xl leading-6' : 'text-2xl leading-8'}`}>{task.title}</h3>
+          <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-medium-foreground">
+            <IconMapPin className="size-4 shrink-0" aria-hidden="true" />
+            {task.where} · about {task.minutes} min
+          </p>
+        </div>
+        <p className="text-base leading-6 text-base-foreground">{task.instruction}</p>
+        {compact && task.reading ? null : (
+          <p className="flex items-center gap-2.5 rounded-2xl bg-muted-background px-4 py-3 text-sm text-base-foreground">
+            <IconClipboardCheck className="size-5 shrink-0 text-medium-foreground" aria-hidden="true" />
+            <span>
+              <span className="block text-xs font-medium text-medium-foreground">Expected</span>
+              <span className="font-semibold">{task.expected}</span>
+            </span>
+          </p>
+        )}
+        {task.reading ? (
+          <FoReadingMeter reading={task.reading} label={compact ? `Expected ${foLowerFirst(task.expected)}` : 'Last reading, yesterday'} />
+        ) : null}
+        <div className="mt-auto">
+          <FoAnswers round={round} />
+        </div>
+      </article>
+      {round.upcoming.slice(0, compact ? 1 : 2).map((next, index) => (
+        <div
+          key={next.id}
+          aria-hidden="true"
+          className={`kit-tone-${FO_STACK_TONES[index] ?? 'teal'} relative -mt-5 items-end justify-between gap-3 rounded-b-[1.75rem] px-5 pt-8 pb-3 text-sm font-semibold ${index === 0 ? 'z-10 mx-4 flex' : 'mx-9 hidden @[21rem]:flex'}`}
+          style={{ background: 'var(--t-soft)', color: 'var(--t-on-soft)' }}
+        >
+          <span className="min-w-0">
+            Then: {next.tag}
+            {compact ? null : <span className="hidden @[21rem]:inline"> · {next.where}</span>}
+          </span>
+          <span className="shrink-0 tabular-nums">{next.minutes} min</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
+function FoUndo({ round }: { round: FoRound }) {
+  return (
+    <Button variant="ghost" size="sm" disabled={!round.canUndo} onClick={round.undo}>
+      <IconArrowBackUp /> Undo last answer
+    </Button>
+  );
+}
+
+function FoTabletRound({ round }: { round: FoRound }) {
   return (
     <>
-      <FieldOpOfflineBar saved={round.done} />
-      <FieldOpProgressHeader title="Morning round" position={round.index + 1} total={round.total} done={round.done} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-3">
-        {checkpoint ? (
-          <FieldOpCheckpointCard
-            checkpoint={checkpoint}
-            position={round.index + 1}
-            result={fieldOpResult(round.results, checkpoint.id)}
-            text={round.readings[checkpoint.id] ?? ''}
-            onReading={(text) => round.setReading(checkpoint.id, text)}
-            onResult={(answer) => round.setResult(checkpoint.id, answer)}
-          />
-        ) : (
-          <FieldOpSummary results={round.results} readings={round.readings} submitted={round.submitted} />
-        )}
+      <FoStatusBar queued={round.done} />
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-4 px-5 pb-1">
+        <Panel tone="purple">
+          <FoProgress round={round} />
+        </Panel>
+        <div className="flex min-h-0 flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-base-foreground">Next up</p>
+            <FoUndo round={round} />
+          </div>
+          <FoTaskStack round={round} />
+        </div>
       </div>
-      {checkpoint ? (
-        <FieldOpActionBar
-          previousLabel="Previous"
-          nextLabel={last ? 'Finish' : 'Next'}
-          onPrevious={round.index > 0 ? () => round.open(round.index - 1) : undefined}
-          onNext={() => round.open(round.index + 1)}
-          hint={round.index === 0 ? 'This is the first checkpoint, so there is no previous one.' : undefined}
-        />
-      ) : (
-        <FieldOpActionBar
-          previousLabel="Review"
-          nextLabel={round.submitted ? 'Submitted' : 'Submit round'}
-          onPrevious={() => round.open(round.total - 1)}
-          onNext={round.submit}
-        />
-      )}
+      <FoDock findings={foCount(round.results, 'flag')} />
     </>
   );
 }
 
-/**
- * Archetype: a tablet task flow in a device frame — not a wide dashboard.
- * Dominant element: the round screen with one large checkpoint card at a time.
- * Interaction: stepping. Previous and Next move through the checkpoints, a reading is typed or
- * nudged and judged against its limits, Pass, Fail or Skip records the answer, and the last step
- * is a summary to submit; the second tablet shows the route and jumps to any stop.
- */
-function FieldOpDashboard() {
-  const round = useFieldOpRound(1, FIELD_OP_SEED_RESULTS, FIELD_OP_SEED_READINGS);
-
+function FoPhoneRound({ round }: { round: FoRound }) {
   return (
-    <DashboardFrame
-      title="Field operator"
-      subtitle="Morning round · gas compression and export · Tomás Barros, Crew A"
-      status={<StatusIndicator tone="neutral" shape="ring" label="Offline" detail={`${round.done} of ${round.total} recorded`} />}
-      actions={
-        <Button variant="outline" className="h-11" onClick={round.restart}>
-          <IconRefresh /> Restart round
+    <>
+      <FoStatusBar phone queued={round.done} />
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-3.5 pt-5">
+        <div
+          className="kit-tone-purple flex items-center gap-4 rounded-[1.5rem] px-4 py-3"
+          style={{
+            background: 'color-mix(in oklab, var(--t-soft) 72%, var(--kit-surface))',
+          }}
+        >
+          <RingGauge label="Checkpoints done" value={round.done} max={FO_TASKS.length} unit={`of ${FO_TASKS.length}`} size={84} tone="purple" hideLabel />
+          <div className="min-w-0">
+            <p className="text-base font-bold text-base-foreground">Round B-12</p>
+            <p className="text-sm text-medium-foreground">{round.current ? `${round.minutesLeft} min left` : 'All checkpoints answered'}</p>
+            {foCount(round.results, 'flag') > 0 ? (
+              <StatusPill tone="warning" icon={<IconFlag />} className="mt-1.5">
+                {foCount(round.results, 'flag')} flagged
+              </StatusPill>
+            ) : null}
+          </div>
+        </div>
+        <FoTaskStack round={round} compact />
+      </div>
+      <FoDock findings={foCount(round.results, 'flag')} labels={false} />
+    </>
+  );
+}
+
+function FieldOperatorSignature() {
+  const round = useFoRound(FO_START);
+  return (
+    <LookScope look="soft">
+      <Canvas className="flex h-[52rem] items-stretch gap-6">
+        <FoDevice kind="tablet" label="Tablet, landscape" className="flex-1">
+          <FoTabletRound round={round} />
+        </FoDevice>
+        <FoDevice kind="phone" label="Phone, same round" className="w-[19.5rem] shrink-0">
+          <FoPhoneRound round={round} />
+        </FoDevice>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FieldOperatorSummary() {
+  const round = useFoRound({
+    t1: 'ok',
+    t2: 'flag',
+    t3: 'ok',
+    t4: 'ok',
+    t5: 'flag',
+    t6: 'ok',
+    t7: 'ok',
+    t8: 'ok',
+    t9: 'ok',
+    t10: 'skip',
+  });
+  const [submitted, setSubmitted] = useState(false);
+  return (
+    <LookScope look="soft">
+      <Canvas className="flex h-[53rem] items-stretch justify-center">
+        <FoDevice kind="tablet" label="Tablet, round summary" className="w-full max-w-5xl">
+          <FoStatusBar queued={submitted ? 0 : 10} />
+          <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-4 px-5 pb-1">
+            <div className="flex min-h-0 flex-col gap-4">
+              <Panel tone="green" title="Round B-12 answered" subtitle="Gas compression · 38 min · 1.9 km walked">
+                <div className="flex flex-1 items-center">
+                  <Donut
+                    label="Answers by result"
+                    centerCaption="answers"
+                    size={150}
+                    className="w-full"
+                    segments={[
+                      {
+                        label: 'Looked right',
+                        value: foCount(round.results, 'ok'),
+                        tone: 'success',
+                      },
+                      {
+                        label: 'Flagged',
+                        value: foCount(round.results, 'flag'),
+                        tone: 'warning',
+                      },
+                      {
+                        label: 'Skipped',
+                        value: foCount(round.results, 'skip'),
+                        tone: 'neutral',
+                      },
+                    ]}
+                  />
+                </div>
+              </Panel>
+              <div
+                className={`flex items-center gap-3 rounded-[1.75rem] p-4 ${submitted ? 'bg-success-background text-success-foreground' : 'bg-muted-background text-base-foreground'}`}
+              >
+                {submitted ? (
+                  <IconCircleCheck className="size-8 shrink-0" aria-hidden="true" />
+                ) : (
+                  <IconCloudOff className="size-8 shrink-0 text-medium-foreground" aria-hidden="true" />
+                )}
+                <p className="min-w-0 flex-1 text-sm">
+                  <span className="block text-base font-bold">{submitted ? 'Round submitted' : 'Offline, 10 answers queued'}</span>
+                  {submitted ? 'Two notifications raised for the flagged checkpoints.' : 'Submit now; answers upload at the next access point.'}
+                </p>
+                <Button size="lg" variant={submitted ? 'outline' : 'default'} onClick={() => setSubmitted((before) => !before)}>
+                  {submitted ? 'Reopen' : 'Submit round'}
+                </Button>
+              </div>
+            </div>
+            <Panel title="Checkpoints" subtitle="In walking order" padding="tight">
+              <ol className="flex flex-1 flex-col justify-between gap-1">
+                {FO_TASKS.map((task, index) => {
+                  const result = round.results[task.id] ?? 'skip';
+                  return (
+                    <li key={task.id} className={`flex items-center gap-3 rounded-2xl px-3 py-1.5 ${result === 'flag' ? 'bg-warning-background' : ''}`}>
+                      <span className="w-5 text-sm font-bold text-medium-foreground tabular-nums">{index + 1}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-base-foreground">{task.title}</span>
+                        <span className="block text-xs text-medium-foreground">
+                          {task.tag} ·{' '}
+                          {task.reading
+                            ? `${formatNumber(task.reading.value, task.reading.decimals)} ${task.reading.unit} · expected ${foLowerFirst(task.expected)}`
+                            : task.expected}
+                        </span>
+                      </span>
+                      <StatusPill
+                        tone={FO_RESULT_TONE[result]}
+                        icon={result === 'ok' ? <IconCheck /> : result === 'flag' ? <IconFlag /> : <IconPlayerSkipForward />}
+                      >
+                        {FO_RESULT_LABEL[result]}
+                      </StatusPill>
+                    </li>
+                  );
+                })}
+              </ol>
+            </Panel>
+          </div>
+          <FoDock current="findings" findings={foCount(round.results, 'flag')} />
+        </FoDevice>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+const FO_SEVERITIES = ['Observe', 'Fix this week', 'Stop and call'];
+
+/** A numeric entry with large steps, judged against its limits while it is entered. */
+function FoReadingEntry({ task }: { task: FoTask & { reading: FoReading } }) {
+  const [value, setValue] = useState(task.reading.value);
+  const step = task.reading.decimals > 0 ? 0.1 : 1;
+  const out = value > task.reading.high || value < task.reading.low;
+  const change = (direction: 1 | -1) =>
+    setValue((before) => Number(Math.min(task.reading.max, Math.max(0, before + direction * step)).toFixed(task.reading.decimals)));
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <Button size="icon-lg" variant="outline" aria-label={`Lower by ${step} ${task.reading.unit}`} onClick={() => change(-1)}>
+          <IconMinus />
         </Button>
-      }
-    >
-      <div className="flex w-full flex-wrap items-start justify-center gap-6 rounded-xl bg-muted-background p-6">
-        <FieldOpDevice label="Tablet, round in progress">
-          <FieldOpRoundScreen round={round} />
-        </FieldOpDevice>
-        <FieldOpDevice label="Tablet, route and task list">
-          <FieldOpOfflineBar saved={round.done} />
-          <FieldOpRouteScreen index={round.index} results={round.results} onOpen={round.open} />
-        </FieldOpDevice>
+        <p className="text-center">
+          <span className="block text-6xl leading-none font-bold tracking-tight text-base-foreground tabular-nums">
+            {formatNumber(value, task.reading.decimals)}
+          </span>
+          <span className="mt-1 block text-base font-medium text-medium-foreground">{task.reading.unit}</span>
+        </p>
+        <Button size="icon-lg" variant="outline" aria-label={`Raise by ${step} ${task.reading.unit}`} onClick={() => change(1)}>
+          <IconPlus />
+        </Button>
       </div>
-    </DashboardFrame>
-  );
-}
-
-function FieldOperatorDashSignature() {
-  return (
-    <ThemeScope preset="field" className="w-full">
-      <FieldOpDashboard />
-    </ThemeScope>
-  );
-}
-
-function FieldOperatorDashFieldNight() {
-  return (
-    <ThemeScope preset="field-night" className="w-full">
-      <FieldOpDashboard />
-    </ThemeScope>
-  );
-}
-
-function FieldOperatorDashAura() {
-  return (
-    <ThemeScope preset="aura" className="w-full">
-      <FieldOpDashboard />
-    </ThemeScope>
-  );
-}
-
-function FieldOperatorDashAccessible() {
-  return (
-    <ThemeScope preset="accessible" className="w-full">
-      <FieldOpDashboard />
-    </ThemeScope>
-  );
-}
-
-function FieldOperatorDashRound() {
-  const round = useFieldOpRound(4, { lube: 'pass', bearing: 'pass', flanges: 'pass', isolation: 'pass' }, { lube: '2.2', bearing: '78', seal: '35' });
-  return (
-    <FieldOpDevice label="Tablet, reading outside its limits">
-      <FieldOpRoundScreen round={round} />
-    </FieldOpDevice>
-  );
-}
-
-function FieldOperatorDashRoute() {
-  const round = useFieldOpRound(3, { lube: 'pass', bearing: 'fail', flanges: 'skip' }, {});
-  return (
-    <FieldOpDevice label="Tablet, route and task list">
-      <FieldOpOfflineBar saved={round.done} />
-      <FieldOpRouteScreen index={round.index} results={round.results} onOpen={round.open} />
-    </FieldOpDevice>
-  );
-}
-
-function FieldOperatorDashSummary() {
-  const round = useFieldOpRound(
-    6,
-    { lube: 'pass', bearing: 'fail', flanges: 'pass', isolation: 'pass', seal: 'pass', barrier: 'skip' },
-    { lube: '2.2', bearing: '91', seal: '60' }
-  );
-  return (
-    <FieldOpDevice label="Tablet, round summary">
-      <FieldOpRoundScreen round={round} />
-    </FieldOpDevice>
-  );
-}
-
-function FieldOperatorDashCheckpoint() {
-  const [result, setResult] = useState<CheckpointResult>('pending');
-  return (
-    <div className="w-full max-w-md">
-      <FieldOpCheckpointCard
-        checkpoint={FIELD_OP_CHECKPOINTS[3]}
-        position={4}
-        result={result}
-        text=""
-        onReading={() => undefined}
-        onResult={setResult}
-      />
+      <FoReadingMeter reading={{ ...task.reading, value }} label={`Expected ${foLowerFirst(task.expected)}`} />
+      <StatusPill size="lg" tone={out ? 'critical' : 'success'} icon={out ? <IconAlertTriangle /> : <IconCircleCheck />} className="self-center">
+        {out ? 'Outside limits, flag it' : 'Within limits'}
+      </StatusPill>
     </div>
   );
 }
 
-function FieldOperatorDashReading() {
-  const [text, setText] = useState('91');
-  const checkpoint = FIELD_OP_CHECKPOINTS[1];
+function foWithReading(task: FoTask | undefined): (FoTask & { reading: FoReading }) | null {
+  return task?.reading ? { ...task, reading: task.reading } : null;
+}
+
+const FO_VIBRATION = foWithReading(FO_TASKS[1]);
+
+const FO_QUEUE = [
+  {
+    id: 'q1',
+    title: 'Lube oil level',
+    detail: 'Looked right · 13:22',
+    state: 'Sent',
+  },
+  {
+    id: 'q2',
+    title: 'Drive-end vibration',
+    detail: '6.8 mm/s · flagged · 13:27',
+    state: 'Sent',
+  },
+  {
+    id: 'q3',
+    title: 'Discharge pressure',
+    detail: '48.6 barg · 13:31',
+    state: 'Queued',
+  },
+  {
+    id: 'q4',
+    title: 'Interstage cooler',
+    detail: 'Looked right · 13:38',
+    state: 'Queued',
+  },
+  {
+    id: 'q5',
+    title: 'Photo, drip tray',
+    detail: '2.4 MB · 13:39',
+    state: 'Queued',
+  },
+];
+
+function FieldOperatorPhones() {
+  const [severity, setSeverity] = useState('Fix this week');
+  const [online, setOnline] = useState(false);
   return (
-    <div className="w-full max-w-xs">
-      {checkpoint.reading ? <FieldOpReadingEntry checkpoint={checkpoint} spec={checkpoint.reading} text={text} onChange={setText} /> : null}
-    </div>
+    <LookScope look="soft">
+      <Canvas className="grid h-[48rem] grid-cols-3 justify-items-center gap-6">
+        <FoDevice kind="phone" label="Enter a reading" className="w-full max-w-[20.5rem]">
+          <FoStatusBar phone queued={4} />
+          <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 pt-6">
+            <div>
+              <TagId variant="chip">23-VT-92540</TagId>
+              <h3 className="mt-2 text-xl leading-6 font-bold text-base-foreground">Drive-end vibration, 1st stage compressor</h3>
+              <p className="mt-1 text-sm text-medium-foreground">Hold the probe on the marked pad for ten seconds.</p>
+            </div>
+            <div
+              className="kit-tone-purple rounded-[1.75rem] p-4"
+              style={{
+                background: 'color-mix(in oklab, var(--t-soft) 72%, var(--kit-surface))',
+              }}
+            >
+              {FO_VIBRATION ? <FoReadingEntry task={FO_VIBRATION} /> : null}
+            </div>
+            <Button size="lg" className="mt-auto w-full">
+              <IconCheck /> Save reading
+            </Button>
+          </div>
+          <FoDock labels={false} />
+        </FoDevice>
+
+        <FoDevice kind="phone" label="Flag a finding" className="w-full max-w-[20.5rem]">
+          <FoStatusBar phone queued={5} />
+          <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 pt-6">
+            <div className="flex items-center gap-3">
+              <IconChip tone="warning" size="lg">
+                <IconFlag />
+              </IconChip>
+              <div>
+                <h3 className="text-xl leading-6 font-bold text-base-foreground">Flag a finding</h3>
+                <p className="text-sm text-medium-foreground">
+                  Cooler outlet temperature <span className="block font-medium tabular-nums">23-TT-91141</span>
+                </p>
+              </div>
+            </div>
+            <div className="rounded-[1.75rem] bg-warning-background p-4 text-warning-foreground">
+              <p className="text-4xl font-bold tabular-nums">38.9 °C</p>
+              <p className="text-sm font-medium">1.1 °C under the 40 °C limit and rising since 09:00</p>
+            </div>
+            <fieldset>
+              <legend className="mb-2 text-sm font-bold text-base-foreground">How urgent is it?</legend>
+              <div className="flex flex-col gap-2">
+                {FO_SEVERITIES.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={severity === option}
+                    onClick={() => setSeverity(option)}
+                    className={`flex items-center justify-between rounded-full px-4 py-3 text-base font-semibold ${severity === option ? 'bg-primary-background text-primary-foreground' : 'bg-muted-background text-base-foreground'}`}
+                  >
+                    {option}
+                    {severity === option ? <IconCheck className="size-5" aria-hidden="true" /> : null}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <p className="rounded-2xl bg-muted-background px-4 py-3 text-sm text-base-foreground">Fins on the north bank look fouled. Photo attached.</p>
+            <Button size="lg" className="mt-auto w-full">
+              Raise notification
+            </Button>
+          </div>
+          <FoDock current="findings" findings={2} labels={false} />
+        </FoDevice>
+
+        <FoDevice kind="phone" label="Sync queue" className="w-full max-w-[20.5rem]">
+          <FoStatusBar phone queued={online ? 0 : 3} />
+          <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 pt-6">
+            <div
+              className={`flex items-center gap-3 rounded-[1.75rem] p-4 ${online ? 'bg-success-background text-success-foreground' : 'bg-info-background text-info-foreground'}`}
+            >
+              {online ? <IconCircleCheck className="size-9 shrink-0" aria-hidden="true" /> : <IconCloudOff className="size-9 shrink-0" aria-hidden="true" />}
+              <p className="text-sm font-medium">
+                <span className="block text-xl font-bold">{online ? 'All sent' : '3 waiting to send'}</span>
+                {online ? 'Synced at the pump house access point.' : 'No coverage in the compressor hall.'}
+              </p>
+            </div>
+            <ul className="flex flex-col gap-2">
+              {FO_QUEUE.map((item) => {
+                const sent = online || item.state === 'Sent';
+                return (
+                  <li key={item.id} className="flex items-center gap-3 rounded-2xl bg-muted-background px-4 py-2.5">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-base-foreground">{item.title}</span>
+                      <span className="block text-xs text-medium-foreground">{item.detail}</span>
+                    </span>
+                    <StatusPill tone={sent ? 'success' : 'info'}>{sent ? 'Sent' : 'Queued'}</StatusPill>
+                  </li>
+                );
+              })}
+            </ul>
+            <Button size="lg" variant="outline" className="mt-auto w-full" onClick={() => setOnline((before) => !before)}>
+              <IconCloudUpload /> {online ? 'Go offline again' : 'Try to send now'}
+            </Button>
+          </div>
+          <FoDock current="me" labels={false} />
+        </FoDevice>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function FieldOperatorDashProgress() {
+function FieldOperatorProgress() {
+  const round = useFoRound(FO_START);
   return (
-    <div className="flex w-full max-w-xs flex-col overflow-hidden rounded-2xl border border-default">
-      <FieldOpOfflineBar saved={3} />
-      <FieldOpProgressHeader title="Morning round" position={4} total={6} done={3} />
-    </div>
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[31rem] flex-col">
+        <Panel tone="purple" className="flex-1">
+          <FoProgress round={round} size={200} />
+        </Panel>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function FieldOperatorDashActions() {
-  const [result, setResult] = useState<CheckpointResult>('fail');
-  const [step, setStep] = useState(2);
+function FieldOperatorTaskStack() {
+  const round = useFoRound({ t1: 'ok' });
   return (
-    <div className="flex w-full max-w-xs flex-col gap-4">
-      <FieldOpResultButtons name="Cooler flanges" result={result} onResult={setResult} />
-      <div className="overflow-hidden rounded-2xl border border-default">
-        <FieldOpActionBar
-          previousLabel="Previous"
-          nextLabel="Next"
-          onPrevious={step > 1 ? () => setStep(step - 1) : undefined}
-          onNext={() => setStep(Math.min(step + 1, 6))}
-          hint={`Checkpoint ${step} of 6`}
-        />
-      </div>
-    </div>
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[50rem] flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-base-foreground">Next up</p>
+          <FoUndo round={round} />
+        </div>
+        <FoTaskStack round={round} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FieldOperatorReadingEntry() {
+  const task = foWithReading(FO_TASKS[4]);
+  return (
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[31rem] flex-col">
+        <Panel tone="amber" className="flex-1" title="Cooler outlet temperature" subtitle="23-TT-91141 · enter the local reading">
+          {task ? <FoReadingEntry task={task} /> : null}
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FieldOperatorDock() {
+  return (
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-full flex-wrap items-center justify-center gap-6">
+        <div className="rounded-[1.75rem] bg-base-background px-3 pt-2">
+          <FoDock findings={1} />
+        </div>
+        <div className="rounded-[1.75rem] bg-base-background px-3 pt-2">
+          <FoDock current="findings" findings={2} labels={false} />
+        </div>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FieldOperatorComplete() {
+  const round = useFoRound({
+    t1: 'ok',
+    t2: 'flag',
+    t3: 'ok',
+    t4: 'ok',
+    t5: 'ok',
+    t6: 'ok',
+    t7: 'ok',
+    t8: 'ok',
+    t9: 'ok',
+    t10: 'skip',
+  });
+  return (
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[31rem] flex-col">
+        <FoTaskStack round={round} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FieldOperatorPhoneFrame() {
+  const round = useFoRound({
+    t1: 'ok',
+    t2: 'flag',
+    t3: 'ok',
+    t4: 'ok',
+    t5: 'flag',
+    t6: 'ok',
+  });
+  return (
+    <LookScope look="soft" className="w-full">
+      <Canvas className="flex h-[50rem] justify-center">
+        <FoDevice kind="phone" label="Phone frame" className="w-full max-w-[20.5rem]">
+          <FoPhoneRound round={round} />
+        </FoDevice>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -686,19 +914,17 @@ export default definePage({
   id: 'field-operator',
   title: 'Field operator',
   summary:
-    'A round done on a tablet with gloves on: one checkpoint at a time, a reading judged against its limits as it is entered, three large answers, and a summary to submit when the tablet is back online.',
+    'An inspection round on handheld devices: the round as one large progress ring, the next checkpoint as the top card of a stack with three large answers, shown on a tablet and a phone that share the same round.',
   guidance: {
     use: [
-      'For rounds, inspections and checklists done standing up, outdoors or with gloves.',
-      'One decision per screen, with the action bar always at the bottom.',
-      'Every control at least 44 px tall, with a text label, and nothing that needs hover.',
-      'Say that work is saved on the device before people ask.',
+      'For work done standing up, with gloves on, one item at a time.',
+      'One card, one decision: answer it and the next card is dealt.',
+      'Say what is expected on the card, so a reading is judged where it is taken.',
     ],
     avoid: [
-      'A wide dashboard squeezed onto a tablet; show one task and the way to the next.',
-      'Swipe-only navigation; Previous and Next are buttons.',
-      'Judging a reading only after the round is submitted.',
-      'Blocking the round on a missing answer; let it be skipped and show it in the summary.',
+      'Tables, hover states and small targets; everything is a thumb-sized pill.',
+      'Hiding the offline state: say how many answers are queued and when they will send.',
+      'A separate layout per device; the phone is the tablet with the ring folded into the header.',
     ],
   },
   source,
@@ -706,139 +932,120 @@ export default definePage({
     {
       id: 'dashboard',
       title: 'Dashboard',
-      description: 'Shown in the Field theme, as two tablets: the round in progress and its route. Step through with Previous and Next.',
+      description: 'Answer the top card with Looks right, Flag it or Skip: the ring fills, the next card is dealt, and both devices follow. Undo steps back.',
       specimens: [
         {
-          id: 'FieldOperatorDashSignature',
-          title: 'Field operator',
-          note: 'Pick it for operator rounds and inspections carried out on a tablet or phone on site.',
+          id: 'FieldOperatorSignature',
+          title: 'Round on tablet and phone',
+          note: 'Pick it for rounds, checklists and inspections carried out in the field on shared or personal devices.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'dashboards/DashboardFrame.tsx',
-            'industrial/workflows/CheckpointRow.tsx',
-            'industrial/workflows/workflow.ts',
-            'industrial/StatusIndicator.tsx',
-            'themes/ThemeScope.tsx',
-          ],
-          Component: FieldOperatorDashSignature,
+          bleed: true,
+          uses: ['kit/Canvas.tsx', 'kit/Panel.tsx', 'kit/RingGauge.tsx', 'kit/Meter.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: FieldOperatorSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same two tablets, unchanged, in three more presets.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'What the operator sees at the end of the round, and three phone screens along the way.',
       specimens: [
         {
-          id: 'FieldOperatorDashFieldNight',
-          title: 'Field night',
-          note: 'Pick it for night rounds, where a bright screen ruins night vision.',
+          id: 'FieldOperatorSummary',
+          title: 'Round summary',
+          note: 'Pick it as the last screen of a round: every answer in walking order and one button to submit.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: FieldOperatorDashFieldNight,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Donut.tsx', 'kit/StatusPill.tsx', 'looks/LookScope.tsx'],
+          Component: FieldOperatorSummary,
         },
         {
-          id: 'FieldOperatorDashAura',
-          title: 'Aura',
-          note: 'Pick it when the round is used indoors on the same devices as the rest of the product.',
+          id: 'FieldOperatorPhones',
+          title: 'Reading, finding and sync',
+          note: 'Pick these for the three moments that need their own screen on a phone: entering a value, flagging, and sending.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: FieldOperatorDashAura,
-        },
-        {
-          id: 'FieldOperatorDashAccessible',
-          title: 'Accessible',
-          note: 'Pick it for maximum legibility: high contrast and extra space.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['themes/ThemeScope.tsx', 'themes/themes.css'],
-          Component: FieldOperatorDashAccessible,
+          bleed: true,
+          uses: ['kit/Meter.tsx', 'kit/StatusPill.tsx', 'kit/IconChip.tsx', 'kit/TagId.tsx', 'looks/LookScope.tsx'],
+          Component: FieldOperatorPhones,
         },
       ],
     },
     {
-      id: 'panels',
-      title: 'Screens and parts',
-      description: 'Each screen and part on its own, ready to drop into another field flow.',
+      id: 'parts',
+      title: 'Parts',
+      description: 'The cards and the chrome of the handheld screens on their own.',
       specimens: [
         {
-          id: 'FieldOperatorDashRound',
-          title: 'Reading outside limits',
-          note: 'Pick it to show how a checkpoint reads when the value entered breaks a limit.',
-          origin: 'custom',
-          size: 'md',
-          surface: 'muted',
-          uses: ['industrial/workflows/workflow.ts'],
-          Component: FieldOperatorDashRound,
-        },
-        {
-          id: 'FieldOperatorDashRoute',
-          title: 'Route and task list',
-          note: 'Pick it as the overview screen of a round: the map, the stops and a way to jump to one.',
-          origin: 'custom',
-          size: 'md',
-          surface: 'muted',
-          uses: ['industrial/workflows/CheckpointRow.tsx'],
-          Component: FieldOperatorDashRoute,
-        },
-        {
-          id: 'FieldOperatorDashSummary',
-          title: 'Summary screen',
-          note: 'Pick it as the last step: counts, every checkpoint with its result, and one submit.',
-          origin: 'custom',
-          size: 'md',
-          surface: 'muted',
-          uses: ['industrial/workflows/CheckpointRow.tsx'],
-          Component: FieldOperatorDashSummary,
-        },
-        {
-          id: 'FieldOperatorDashCheckpoint',
-          title: 'Checkpoint without a reading',
-          note: 'Pick it for a visual check: the instruction and the three answers are enough.',
+          id: 'FieldOperatorTaskStack',
+          title: 'Task card stack',
+          note: 'Pick it to keep attention on one task while showing that more follow.',
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          surface: 'muted',
-          Component: FieldOperatorDashCheckpoint,
+          bleed: true,
+          uses: ['kit/Meter.tsx', 'kit/TagId.tsx'],
+          Component: FieldOperatorTaskStack,
         },
         {
-          id: 'FieldOperatorDashReading',
+          id: 'FieldOperatorPhoneFrame',
+          title: 'Phone screen',
+          note: 'Pick the frame to review a handheld layout at its real width.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/RingGauge.tsx', 'kit/StatusPill.tsx'],
+          Component: FieldOperatorPhoneFrame,
+        },
+        {
+          id: 'FieldOperatorProgress',
+          title: 'Round progress',
+          note: 'Pick it when progress through a fixed list is the main thing to know.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/RingGauge.tsx'],
+          Component: FieldOperatorProgress,
+        },
+        {
+          id: 'FieldOperatorReadingEntry',
           title: 'Reading entry',
-          note: 'Pick it wherever a number is typed in the field and must be judged at once.',
+          note: 'Pick it for a value typed with gloves on: two large steps and a verdict against the limits.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['industrial/workflows/workflow.ts'],
-          Component: FieldOperatorDashReading,
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/Meter.tsx', 'kit/StatusPill.tsx'],
+          Component: FieldOperatorReadingEntry,
         },
         {
-          id: 'FieldOperatorDashProgress',
-          title: 'Progress header',
-          note: 'Pick it at the top of a step-by-step task, with the offline state above it.',
+          id: 'FieldOperatorComplete',
+          title: 'Round complete',
+          note: 'Pick it as the end state of a card stack: the result in words and the one thing left to do.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          Component: FieldOperatorDashProgress,
+          bleed: true,
+          uses: ['kit/Canvas.tsx'],
+          Component: FieldOperatorComplete,
         },
         {
-          id: 'FieldOperatorDashActions',
-          title: 'Answers and action bar',
-          note: 'Pick them together: three large answers in the content, Previous and Next pinned below.',
+          id: 'FieldOperatorDock',
+          title: 'Bottom dock',
+          note: 'Pick it as the navigation of a handheld screen: with labels on a tablet, icons only on a phone.',
           origin: 'custom',
-          size: 'sm',
+          size: 'full',
           align: 'stretch',
-          Component: FieldOperatorDashActions,
+          bleed: true,
+          uses: ['kit/Canvas.tsx'],
+          Component: FieldOperatorDock,
         },
       ],
     },

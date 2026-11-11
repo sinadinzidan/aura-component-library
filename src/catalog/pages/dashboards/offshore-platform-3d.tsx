@@ -1,40 +1,45 @@
 import { Button } from '@cognite/aura/components/button';
+import { Slider } from '@cognite/aura/components/slider';
 import { Switch } from '@cognite/aura/components/switch';
-import { IconUsers, IconX } from '@cognite/aura/icons';
+import { IconAlertOctagon, IconAlertTriangle, IconArrowsMaximize, IconArrowsMinimize, IconCircleCheck, IconInfoCircle, IconStack2, IconX } from '@cognite/aura/icons';
 import { useReducer, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { runStateStatus } from '../../../library/industrial/status';
-import type { RunState, Tone } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { DataTable } from '../../../library/kit/DataTable';
+import type { DataTableColumn } from '../../../library/kit/DataTable';
+import { Legend } from '../../../library/kit/Legend';
+import type { LegendItem } from '../../../library/kit/Legend';
+import { Meter } from '../../../library/kit/Meter';
+import type { DeckStackLevel } from '../../../library/kit/offshore-platform-3d/deckLevels';
+import { DeckStack } from '../../../library/kit/offshore-platform-3d/DeckStack';
+import { Panel } from '../../../library/kit/Panel';
+import { SparkLine } from '../../../library/kit/SparkLine';
+import { Stat } from '../../../library/kit/Stat';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import { formatNumber } from '../../../library/kit/tones';
+import type { StatusTone } from '../../../library/kit/tones';
+import { LookScope } from '../../../library/looks/LookScope';
 import { CompressorSkid } from '../../../library/three/CompressorSkid';
 import { HorizontalVessel } from '../../../library/three/HorizontalVessel';
 import type { PlantNodeStatus } from '../../../library/three/PlantScene';
 import { PumpSkid } from '../../../library/three/PumpSkid';
 import { SceneCanvas } from '../../../library/three/SceneCanvas';
-import { SceneLegend } from '../../../library/three/SceneLegend';
-import type { SceneLegendItem } from '../../../library/three/SceneLegend';
 import { DeckModule } from '../../../library/three/scenes/DeckModule';
 import { Derrick } from '../../../library/three/scenes/Derrick';
 import { explodeOffsets } from '../../../library/three/scenes/explode';
-import { ExplodeControl } from '../../../library/three/scenes/ExplodeControl';
 import { ExplodeLift } from '../../../library/three/scenes/ExplodeLift';
-import { FlareBoom } from '../../../library/three/scenes/FlareBoom';
 import { Helideck } from '../../../library/three/scenes/Helideck';
 import { LivingQuarters } from '../../../library/three/scenes/LivingQuarters';
 import { OffshorePlatform } from '../../../library/three/scenes/OffshorePlatform';
-import { PedestalCrane } from '../../../library/three/scenes/PedestalCrane';
 import { PlatformJacket } from '../../../library/three/scenes/PlatformJacket';
 import { findLevel, findPlatformEquipment } from '../../../library/three/scenes/platformLayout';
 import type { PlatformLayout } from '../../../library/three/scenes/platformLayout';
 import { INITIAL_PLATFORM_STATE, platformDepth, platformReducer } from '../../../library/three/scenes/platformState';
-import type { PlatformState } from '../../../library/three/scenes/platformState';
+import type { PlatformAction, PlatformState } from '../../../library/three/scenes/platformState';
 import { StillScene } from '../../../library/three/scenes/StillScene';
 import { TurntableStage } from '../../../library/three/TurntableStage';
+import type { RunState } from '../../data/plant';
 import { makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
@@ -99,7 +104,7 @@ const PLATFORM3D_LAYOUT: PlatformLayout = {
   ],
 };
 
-type Platform3dReading = { label: string; value: number; unit: string; decimals: number; tone?: Tone; seed: number };
+type Platform3dReading = { label: string; value: number; unit: string; decimals: number; tone?: StatusTone; seed: number };
 
 type Platform3dEquipment = { name: string; state: RunState; note: string; readings: readonly Platform3dReading[] };
 
@@ -252,17 +257,62 @@ const PLATFORM3D_BEDS = 60;
 
 const PLATFORM3D_ON_BOARD = PLATFORM3D_MANNING.reduce((total, level) => total + level.onBoard, 0);
 
-const PLATFORM3D_LEGEND: readonly SceneLegendItem[] = [
-  { kind: 'status', label: 'Tripped', tone: 'critical' },
-  { kind: 'status', label: 'Warning', tone: 'warning' },
-  { kind: 'status', label: 'Advisory', tone: 'info' },
-  { kind: 'status', label: 'Standby', tone: 'neutral' },
-  { kind: 'selection', label: 'Selected' },
+const PLATFORM3D_RUN: Record<RunState, { tone: StatusTone; label: string }> = {
+  running: { tone: 'success', label: 'Running' },
+  standby: { tone: 'neutral', label: 'Standby' },
+  stopped: { tone: 'neutral', label: 'Stopped' },
+  tripped: { tone: 'critical', label: 'Tripped' },
+  maintenance: { tone: 'warning', label: 'Maintenance' },
+};
+
+const PLATFORM3D_ELEVATION: Readonly<Record<string, string>> = { upper: '+25 m', main: '+18 m', cellar: '+12 m', jacket: 'Sea level' };
+
+const PLATFORM3D_CARRIES: Readonly<Record<string, string>> = {
+  upper: 'Power, gas cooling, drilling, quarters and helideck',
+  main: 'Separation and export compression',
+  cellar: 'Export pumps, drains and the riser valve',
+  jacket: 'Legs, bracing and risers to the seabed',
+};
+
+/** The deck rail, top deck first, the way the platform stands. */
+const PLATFORM3D_DECKS: readonly DeckStackLevel[] = PLATFORM3D_MANNING.map((level) => ({
+  id: level.levelId,
+  name: findLevel(PLATFORM3D_LAYOUT, level.levelId)?.name ?? level.levelId,
+  elevation: PLATFORM3D_ELEVATION[level.levelId] ?? '',
+  detail: PLATFORM3D_CARRIES[level.levelId],
+  people: level.onBoard,
+  alarms: [
+    { tone: 'critical' as const, count: level.critical, label: 'critical' },
+    { tone: 'warning' as const, count: level.warning, label: 'warning' },
+    { tone: 'info' as const, count: level.advisory, label: 'advisory' },
+  ].filter((alarm) => alarm.count > 0),
+  weight: level.levelId === 'jacket' ? 1.25 : 1,
+}));
+
+type Platform3dRow = { id: string; levelId: string; tag: string; name: string; state: RunState; note: string; tone: StatusTone };
+
+/** Every tagged unit, top deck first, with the tone of its scene status. */
+const PLATFORM3D_ROWS: readonly Platform3dRow[] = [...PLATFORM3D_LAYOUT.levels].reverse().flatMap((level) =>
+  level.equipment.flatMap((equipment) => {
+    const detail = PLATFORM3D_EQUIPMENT[equipment.id];
+    if (!detail) return [];
+    const tone = PLATFORM3D_STATUSES[equipment.id]?.tone ?? 'neutral';
+    return [{ id: equipment.id, levelId: level.id, tag: equipment.tag, name: detail.name, state: detail.state, note: detail.note, tone }];
+  })
+);
+
+const PLATFORM3D_LEGEND: readonly LegendItem[] = [
+  { label: 'Tripped', tone: 'critical' },
+  { label: 'Warning', tone: 'warning' },
+  { label: 'Advisory', tone: 'info' },
+  { label: 'Standby', tone: 'neutral' },
+  { label: 'Selected', tone: 'accent' },
 ];
 
-const PLATFORM3D_GLASS = 'border border-default bg-[color-mix(in_oklab,var(--card-background)_82%,transparent)] backdrop-blur-md';
-
 const PLATFORM3D_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
+
+/** Scene labels are plain DOM: keep them in the UI sans at a readable size. */
+const PLATFORM3D_SCENE_TYPE = '[&_.font-mono]:[font-family:inherit] [&_.font-mono]:tabular-nums [&_[data-slot=scene-label]>:first-child]:text-[0.8125rem]';
 
 function platform3dLevelName(levelId: string): string {
   return findLevel(PLATFORM3D_LAYOUT, levelId)?.name ?? levelId;
@@ -275,202 +325,227 @@ function platform3dTrend(reading: Platform3dReading): number[] {
   return raw.map((value) => Math.max(0, value + shift));
 }
 
-function Platform3dAlarmMarks({ level }: { level: Platform3dManning }) {
-  const total = level.critical + level.warning + level.advisory;
-  if (total === 0) return <span className="text-xs text-muted-foreground">No alarms</span>;
+/** One segment of the title strip: a caption over a figure, between hairlines. */
+function Platform3dFact({ label, value }: { label: string; value: string }) {
   return (
-    <span className="flex items-center gap-2 text-xs tabular-nums text-medium-foreground">
-      {level.critical > 0 ? (
-        <span className="flex items-center gap-1">
-          <StatusDot tone="critical" shape="diamond" size="sm" label="Critical alarms" />
-          {level.critical}
-        </span>
-      ) : null}
-      {level.warning > 0 ? (
-        <span className="flex items-center gap-1">
-          <StatusDot tone="warning" shape="square" size="sm" label="Warnings" />
-          {level.warning}
-        </span>
-      ) : null}
-      {level.advisory > 0 ? (
-        <span className="flex items-center gap-1">
-          <StatusDot tone="info" shape="dot" size="sm" label="Advisories" />
-          {level.advisory}
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
-function Platform3dDeckSelector({ levelId, onIsolate }: { levelId: string | null; onIsolate: (levelId: string) => void }) {
-  return (
-    <div role="group" aria-label="Isolate a level" className="flex flex-col gap-1">
-      {PLATFORM3D_MANNING.map((level) => {
-        const status = PLATFORM3D_STATUSES[level.levelId];
-        const name = platform3dLevelName(level.levelId);
-        return (
-          <button
-            key={level.levelId}
-            type="button"
-            aria-pressed={level.levelId === levelId}
-            aria-label={`${name}${status?.text ? `, ${status.text}` : ''}`}
-            onClick={() => onIsolate(level.levelId)}
-            className={`flex items-center justify-between gap-2 rounded-lg border border-default px-3 py-2 text-left text-sm text-base-foreground hover:border-emphasized aria-pressed:border-[var(--primary-background)] aria-pressed:bg-[color-mix(in_oklab,var(--primary-background)_14%,transparent)] ${PLATFORM3D_FOCUS}`}
-          >
-            <span className="whitespace-nowrap">{name.replace(' deck', '')}</span>
-            {status?.tone ? <StatusDot tone={status.tone} shape={status.shape} size="sm" /> : null}
-          </button>
-        );
-      })}
+    <div className="flex h-full flex-col justify-center border-l border-[var(--kit-rule)] px-4">
+      <span className="text-xs leading-tight text-[var(--kit-text-3)]">{label}</span>
+      <span className="whitespace-nowrap text-sm font-semibold tabular-nums leading-tight text-[var(--kit-text)]">{value}</span>
     </div>
   );
 }
 
-function Platform3dManningStrip({ levelId, onIsolate }: { levelId: string | null; onIsolate?: (levelId: string) => void }) {
+function Platform3dExplode({ amount, dispatch }: { amount: number; dispatch: (action: PlatformAction) => void }) {
+  const percent = Math.round(amount * 100);
+  const exploded = amount > 0.5;
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-end justify-between gap-2">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-xs text-muted-foreground">Personnel on board</span>
-          <ValueReadout value={PLATFORM3D_ON_BOARD} unit={`of ${PLATFORM3D_BEDS} beds`} size="md" />
-        </div>
-        <IconUsers aria-hidden="true" className="size-4 text-muted-foreground" />
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[0.8125rem] font-semibold text-[var(--kit-text)]">Deck separation</span>
+        <span className="text-sm font-semibold tabular-nums text-[var(--kit-text)]">{percent} %</span>
       </div>
-      <ul className="flex flex-col">
-        {PLATFORM3D_MANNING.map((level) => {
-          const name = platform3dLevelName(level.levelId);
-          const row = (
-            <>
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-sm text-base-foreground">{name}</span>
-                <span className="flex items-center gap-1 text-sm tabular-nums text-base-foreground">
-                  {level.onBoard}
-                  <span className="text-xs text-muted-foreground">on board</span>
-                </span>
-              </span>
-              <span className="flex h-1 overflow-hidden rounded-full bg-secondary-background" aria-hidden="true">
-                <span className="bg-chart-1-450" style={{ width: `${(level.onBoard / PLATFORM3D_ON_BOARD) * 100}%` }} />
-              </span>
-              <Platform3dAlarmMarks level={level} />
-            </>
-          );
-          return (
-            <li key={level.levelId}>
-              {onIsolate ? (
-                <button
-                  type="button"
-                  aria-pressed={level.levelId === levelId}
-                  onClick={() => onIsolate(level.levelId)}
-                  className={`-mx-1.5 flex w-[calc(100%+0.75rem)] flex-col gap-1.5 rounded-md px-1.5 py-2 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${PLATFORM3D_FOCUS}`}
-                >
-                  {row}
-                </button>
-              ) : (
-                <div className="flex flex-col gap-1.5 py-2">{row}</div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      <Slider aria-label="Deck separation" value={[percent]} min={0} max={100} step={1} onValueChange={(value) => dispatch({ type: 'setExplode', amount: (value[0] ?? 0) / 100 })} />
+      <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'toggleExplode' })} className="w-full">
+        {exploded ? <IconArrowsMinimize /> : <IconArrowsMaximize />}
+        {exploded ? 'Assemble decks' : 'Explode decks'}
+      </Button>
     </div>
   );
 }
 
-function Platform3dEquipmentList({ levelId, selectedId, onSelect }: { levelId: string; selectedId: string | null; onSelect: (levelId: string, equipmentId: string) => void }) {
-  const level = findLevel(PLATFORM3D_LAYOUT, levelId);
-  if (!level) return null;
+function Platform3dEquipmentTable({ levelId, selectedId, onSelect }: { levelId: string | null; selectedId: string | null; onSelect?: (levelId: string, equipmentId: string) => void }) {
+  const rows = levelId ? PLATFORM3D_ROWS.filter((row) => row.levelId === levelId) : PLATFORM3D_ROWS;
+  const columns: DataTableColumn<Platform3dRow>[] = [
+    {
+      id: 'tag',
+      header: 'Tag',
+      nowrap: true,
+      cell: (row) => (
+        <button
+          type="button"
+          aria-pressed={row.id === selectedId}
+          aria-label={`${row.tag}, ${row.name}`}
+          onClick={() => onSelect?.(row.levelId, row.id)}
+          className={`-mx-1 px-1 hover:underline aria-pressed:bg-[color-mix(in_oklab,var(--kit-line-accent)_24%,transparent)] aria-pressed:shadow-[inset_0_-2px_0_var(--kit-line-accent)] ${PLATFORM3D_FOCUS}`}
+        >
+          <TagId>{row.tag}</TagId>
+        </button>
+      ),
+    },
+    { id: 'name', header: 'Unit', nowrap: true, cell: (row) => row.name },
+    { id: 'state', header: 'State', nowrap: true, cell: (row) => <StatusPill tone={PLATFORM3D_RUN[row.state].tone}>{PLATFORM3D_RUN[row.state].label}</StatusPill> },
+  ];
+  if (rows.length === 0) {
+    return <p className="p-3.5 text-sm text-[var(--kit-text-2)]">The jacket carries no tagged equipment: legs, bracing and risers only.</p>;
+  }
+  return <DataTable flush label={levelId ? `Equipment on the ${platform3dLevelName(levelId).toLowerCase()}` : 'Equipment on all decks'} columns={columns} rows={rows} rowKey={(row) => row.id} rowTone={(row) => (row.tone === 'neutral' ? undefined : row.tone)} />;
+}
+
+/** What an isolated deck adds up to, as four figures under its equipment table. */
+function Platform3dDeckFacts({ levelId }: { levelId: string }) {
+  const rows = PLATFORM3D_ROWS.filter((row) => row.levelId === levelId);
+  const manning = PLATFORM3D_MANNING.find((level) => level.levelId === levelId);
+  const alarms = manning ? manning.critical + manning.warning + manning.advisory : 0;
+  const facts = [
+    { label: 'On board', value: String(manning?.onBoard ?? 0), tone: 'neutral' as const },
+    { label: 'Units running', value: `${rows.filter((row) => row.state === 'running').length} of ${rows.length}`, tone: 'neutral' as const },
+    { label: 'Open alarms', value: String(alarms), tone: manning && manning.critical > 0 ? ('critical' as const) : manning && manning.warning > 0 ? ('warning' as const) : ('neutral' as const) },
+    { label: 'Elevation', value: PLATFORM3D_ELEVATION[levelId] ?? '', tone: 'neutral' as const },
+  ];
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">Equipment on {level.name.toLowerCase()}</span>
-      {level.equipment.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tagged equipment. Next structural inspection 2 Apr.</p>
-      ) : (
-        <ul className="flex flex-col">
-          {level.equipment.map((equipment) => {
-            const info = PLATFORM3D_EQUIPMENT[equipment.id];
-            const status = PLATFORM3D_STATUSES[equipment.id];
-            return (
-              <li key={equipment.id}>
-                <button
-                  type="button"
-                  aria-pressed={equipment.id === selectedId}
-                  onClick={() => onSelect(level.id, equipment.id)}
-                  className={`-mx-1.5 flex w-[calc(100%+0.75rem)] items-center justify-between gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${PLATFORM3D_FOCUS}`}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="font-mono text-xs text-base-foreground">{equipment.tag}</span>
-                    <span className="text-xs text-muted-foreground">{info?.name}</span>
-                  </span>
-                  {status?.tone ? <StatusDot tone={status.tone} shape={status.shape} size="sm" label={status.text} /> : null}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <dl className="grid grid-cols-2 gap-px border-t border-[var(--kit-rule)] bg-[var(--kit-rule)]">
+      {facts.map((fact) => (
+        <div key={fact.label} data-tone={fact.tone} className="flex flex-col gap-0.5 bg-[var(--kit-surface)] px-3.5 py-2.5">
+          <dt className="text-[0.8125rem] text-[var(--kit-text-2)]">{fact.label}</dt>
+          <dd className={`text-2xl font-medium leading-none tabular-nums ${fact.tone === 'neutral' ? 'text-[var(--kit-text)]' : 'text-[var(--t-ink)]'}`}>{fact.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
-function Platform3dReadout({ equipmentId, onClose }: { equipmentId: string; onClose?: () => void }) {
+/** The faceplate of one unit: state, the operator's note and three live readings with their trend. */
+function Platform3dFaceplate({ equipmentId, onClose }: { equipmentId: string; onClose?: () => void }) {
   const found = findPlatformEquipment(PLATFORM3D_LAYOUT, equipmentId);
-  const info = PLATFORM3D_EQUIPMENT[equipmentId];
-  if (!found || !info) return null;
-  const lead = info.readings.find((reading) => reading.tone) ?? info.readings[0];
+  const detail = PLATFORM3D_EQUIPMENT[equipmentId];
+  if (!found || !detail) return null;
+  const run = PLATFORM3D_RUN[detail.state];
+  // The title strip takes the tone of what is wrong with the unit, if anything is.
+  const tone = PLATFORM3D_STATUSES[equipmentId]?.tone ?? 'neutral';
 
   return (
-    <section aria-label={`${found.equipment.tag} readout`} className={`flex flex-col gap-3 rounded-xl px-4 py-3 ${PLATFORM3D_GLASS}`}>
-      <div className="flex items-center gap-x-4 gap-y-1">
-        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-          <span className="font-mono text-sm font-medium text-base-foreground">{found.equipment.tag}</span>
-          <span className="text-sm text-medium-foreground">{info.name}</span>
-        </p>
-        <StatusIndicator {...runStateStatus(info.state)} size="sm" pulse={info.state === 'tripped'} className="shrink-0" />
-        <span className="ml-auto hidden min-w-0 truncate text-xs text-muted-foreground @2xl:block">{info.note}</span>
-        {onClose ? (
-          <Button variant="ghost" size="sm" onClick={onClose} className="ml-auto shrink-0 @2xl:ml-0">
-            <IconX /> Close
-          </Button>
-        ) : null}
+    <Panel
+      className="h-full"
+      tone={tone}
+      title={detail.name}
+      subtitle={found.equipment.tag}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <StatusPill tone={run.tone} size="lg" icon={detail.state === 'tripped' ? <IconAlertOctagon /> : undefined}>
+            {run.label}
+          </StatusPill>
+          <span className="min-w-0 flex-1 text-[0.8125rem] leading-snug text-[var(--kit-text-2)]">
+            {found.level.name} · {detail.note}
+          </span>
+          {onClose ? (
+            <Button variant="outline" size="sm" onClick={onClose}>
+              <IconX /> Close
+            </Button>
+          ) : null}
+        </div>
+        <dl className="flex min-h-0 flex-1 flex-col justify-between">
+          {detail.readings.map((reading) => (
+            <div key={reading.label} data-tone={reading.tone ?? 'neutral'} className="flex items-center justify-between gap-3 border-t border-[var(--kit-rule)] py-1.5">
+              <div className="flex min-w-0 flex-col">
+                <dt className="whitespace-nowrap text-[0.8125rem] text-[var(--kit-text-2)]">{reading.label}</dt>
+                <dd className="flex items-baseline gap-1.5">
+                  <span className={`text-[1.75rem] font-medium leading-none tabular-nums ${reading.tone ? 'text-[var(--t-ink)]' : 'text-[var(--kit-text)]'}`}>{formatNumber(reading.value, reading.decimals)}</span>
+                  <span className="text-[0.8125rem] text-[var(--kit-text-3)]">{reading.unit}</span>
+                  {reading.tone ? <span className="text-[0.8125rem] font-semibold text-[var(--t-ink)]">{reading.tone === 'critical' ? 'Above trip' : reading.tone === 'warning' ? 'High' : 'Watch'}</span> : null}
+                </dd>
+              </div>
+              <div className="w-28 shrink-0">
+                <SparkLine values={platform3dTrend(reading)} label={`${reading.label}, last 6 hours`} tone={reading.tone ?? 'accent'} />
+              </div>
+            </div>
+          ))}
+        </dl>
       </div>
-      <div className="grid grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,1.2fr)] items-end gap-x-4 border-t border-default pt-3">
-        {info.readings.map((reading) => (
-          <div key={reading.label} className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs text-muted-foreground">{reading.label}</span>
-            <ValueReadout value={reading.value} unit={reading.unit} decimals={reading.decimals} size="sm" tone={reading.tone ?? 'neutral'} />
+    </Panel>
+  );
+}
+
+/** What the lower right panel shows while nothing is selected: who is on board and what is open. */
+function Platform3dStatusPanel() {
+  const critical = PLATFORM3D_MANNING.reduce((total, level) => total + level.critical, 0);
+  const warning = PLATFORM3D_MANNING.reduce((total, level) => total + level.warning, 0);
+  const advisory = PLATFORM3D_MANNING.reduce((total, level) => total + level.advisory, 0);
+  return (
+    <Panel className="h-full" title="Platform status" subtitle="Select a unit to open its faceplate">
+      <div className="flex min-h-0 flex-1 flex-col justify-between gap-3">
+        <div className="flex items-end justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="text-[0.8125rem] text-[var(--kit-text-2)]">Personnel on board</span>
+            <span className="flex items-baseline gap-1.5">
+              <span className="text-5xl font-medium leading-none tabular-nums text-[var(--kit-text)]">{PLATFORM3D_ON_BOARD}</span>
+              <span className="text-sm text-[var(--kit-text-3)]">of {PLATFORM3D_BEDS} beds</span>
+            </span>
           </div>
-        ))}
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-muted-foreground">{lead.label}, 36 h</span>
-          <Sparkline values={platform3dTrend(lead)} label={`${lead.label}, last 36 hours`} unit={lead.unit} decimals={lead.decimals} height={24} tone={lead.tone ?? 'neutral'} showLast />
+          <StatusPill tone="success" size="lg" icon={<IconCircleCheck />}>
+            Helideck open
+          </StatusPill>
+        </div>
+        <Meter label="Bed capacity used" value={PLATFORM3D_ON_BOARD} max={PLATFORM3D_BEDS} unit="beds" tone="accent" hideScale />
+        <div className="grid grid-cols-3 gap-px bg-[var(--kit-rule)]">
+          {[
+            { tone: 'critical' as const, count: critical, label: 'Critical', icon: <IconAlertOctagon aria-hidden="true" className="size-4" /> },
+            { tone: 'warning' as const, count: warning, label: 'Warning', icon: <IconAlertTriangle aria-hidden="true" className="size-4" /> },
+            { tone: 'info' as const, count: advisory, label: 'Advisory', icon: <IconInfoCircle aria-hidden="true" className="size-4" /> },
+          ].map((item) => (
+            <div key={item.label} data-tone={item.tone} className="flex flex-col gap-1 bg-[var(--t-solid)] px-3 py-2 text-[var(--t-on-solid)]">
+              <span className="flex items-center gap-1.5 text-[0.8125rem] font-semibold">
+                {item.icon}
+                {item.label}
+              </span>
+              <span className="text-3xl font-semibold leading-none tabular-nums">{item.count}</span>
+            </div>
+          ))}
         </div>
       </div>
-    </section>
+    </Panel>
   );
 }
 
 function Platform3dFallbackList() {
   return (
-    <ul className="flex flex-col gap-2 rounded-lg border border-default bg-card-background p-3">
-      {PLATFORM3D_MANNING.map((level) => {
-        const status = PLATFORM3D_STATUSES[level.levelId];
-        return (
-          <li key={level.levelId} className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-base-foreground">{platform3dLevelName(level.levelId)}</span>
-            <StatusIndicator tone={status?.tone ?? 'neutral'} shape={status?.shape ?? 'ring'} label={status?.text ?? 'No open alarms'} size="sm" className="shrink-0" />
-          </li>
-        );
-      })}
+    <ul className="flex flex-col border border-default bg-card-background px-3">
+      {PLATFORM3D_DECKS.map((level) => (
+        <li key={level.id} className="flex items-center justify-between gap-3 border-b border-default py-2 text-sm last:border-b-0">
+          <span className="text-base-foreground">{level.name}</span>
+          <span className="flex gap-1">
+            {level.alarms.length === 0 ? <StatusPill tone="success">Normal</StatusPill> : level.alarms.map((alarm) => <StatusPill key={alarm.label} tone={alarm.tone}>{`${alarm.count} ${alarm.label}`}</StatusPill>)}
+          </span>
+        </li>
+      ))}
     </ul>
   );
 }
 
-function Platform3dExperience({ initial = INITIAL_PLATFORM_STATE, still = false }: { initial?: PlatformState; still?: boolean }) {
+function Platform3dScene({ state, dispatch, showLabels, still, bottomInset = 56 }: { state: PlatformState; dispatch: (action: PlatformAction) => void; showLabels: boolean; still: boolean; bottomInset?: number }) {
+  const level = state.levelId ? findLevel(PLATFORM3D_LAYOUT, state.levelId) : undefined;
+  return (
+    <SceneCanvas
+      label={`3D model of the Valhall Sør platform, ${level ? `${level.name.toLowerCase()} isolated` : 'all levels'}, decks ${Math.round(state.explode * 100)} percent separated`}
+      fallback={<Platform3dFallbackList />}
+      onPointerMissed={() => dispatch({ type: 'clearEquipment' })}
+    >
+      <StillScene still={still}>
+        <OffshorePlatform
+          layout={PLATFORM3D_LAYOUT}
+          explode={state.explode}
+          levelId={state.levelId}
+          selectedId={state.equipmentId}
+          statuses={PLATFORM3D_STATUSES}
+          onSelectLevel={(levelId) => dispatch({ type: 'isolate', levelId })}
+          onSelectEquipment={(levelId, equipmentId) => dispatch({ type: 'selectEquipment', levelId, equipmentId })}
+          showLabels={showLabels}
+          insets={{ top: 8, bottom: bottomInset }}
+        />
+      </StillScene>
+    </SceneCanvas>
+  );
+}
+
+function Platform3dConsole({ initial = INITIAL_PLATFORM_STATE, still = false }: { initial?: PlatformState; still?: boolean }) {
+  // Archetype: operator console — a title strip, a deck selector rail, the scene, and a table
+  //   over a faceplate, all edge to edge on hairlines.
+  // Interaction: pick a deck in the rail (or its label in the scene) to isolate it; the table
+  //   narrows to that deck, and picking a unit opens its faceplate. Separation lifts the decks apart.
   const [state, dispatch] = useReducer(platformReducer, initial);
   const [showLabels, setShowLabels] = useState(true);
   const depth = platformDepth(state);
   const level = state.levelId ? findLevel(PLATFORM3D_LAYOUT, state.levelId) : undefined;
-  const selected = state.equipmentId ? findPlatformEquipment(PLATFORM3D_LAYOUT, state.equipmentId) : null;
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape' && (depth !== 'platform' || state.explode > 0)) {
@@ -488,82 +563,71 @@ function Platform3dExperience({ initial = INITIAL_PLATFORM_STATE, still = false 
         if (event.target instanceof HTMLCanvasElement) event.currentTarget.focus({ preventScroll: true });
       }}
       data-depth={depth}
-      className="flex h-[46rem] w-full flex-col overflow-hidden rounded-xl border border-default bg-base-background outline-none"
+      className={`flex h-[48rem] w-full flex-col gap-px overflow-hidden bg-[var(--kit-canvas-bg)] text-[var(--kit-text)] outline-none ${PLATFORM3D_SCENE_TYPE}`}
     >
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-default px-4 py-2.5">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <h3 className="text-sm font-semibold text-base-foreground">Valhall Sør</h3>
-          <span className="text-xs text-muted-foreground">Production platform · North Sea</span>
+      <header className="flex h-14 shrink-0 items-stretch bg-[var(--kit-surface)]">
+        <div className="flex items-center gap-3 px-4">
+          <span aria-hidden="true" className="flex size-8 items-center justify-center bg-[var(--kit-line-accent)] text-[var(--kit-surface)]">
+            <IconStack2 className="size-5" />
+          </span>
+          <div className="flex flex-col">
+            <h3 className="text-base font-semibold leading-tight text-[var(--kit-text)]">Valhall Sør</h3>
+            <span className="whitespace-nowrap text-xs leading-tight text-[var(--kit-text-3)]">Production platform · North Sea</span>
+          </div>
         </div>
-        <div className="flex items-center gap-5">
-          <StatusIndicator tone="warning" shape="square" label="Reduced export" detail="compressor B tripped" size="sm" />
+        <div data-tone="warning" className="flex items-center gap-2.5 bg-[var(--t-solid)] px-4 text-[var(--t-on-solid)]">
+          <IconAlertTriangle aria-hidden="true" className="size-5" />
+          <div className="flex flex-col">
+            <span className="whitespace-nowrap text-base font-semibold leading-tight">Reduced export</span>
+            <span className="whitespace-nowrap text-xs leading-tight">Compressor B tripped 14 min ago</span>
+          </div>
+        </div>
+        <div className="hidden min-w-0 flex-1 items-stretch overflow-hidden @4xl:flex">
+          <Platform3dFact label="Gas export" value="6.8 MSm³/d" />
+          <Platform3dFact label="Wind" value="14 m/s NW" />
+          <Platform3dFact label="Wave height" value="2.1 m" />
+        </div>
+        <div className="ml-auto flex items-center gap-4 border-l border-[var(--kit-rule)] px-4">
           <Switch label="Labels" checked={showLabels} onCheckedChange={(checked) => setShowLabels(checked)} />
+          <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-[var(--kit-text)]">14:00 UTC</span>
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <aside aria-label="Decks and separation" className="flex w-48 shrink-0 flex-col gap-4 border-r border-default p-3">
-          <div className="flex flex-col gap-2">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Decks</span>
-            <Platform3dDeckSelector levelId={state.levelId} onIsolate={(levelId) => dispatch({ type: 'isolate', levelId })} />
-            <Button variant="ghost" size="sm" disabled={state.levelId === null} onClick={() => dispatch({ type: 'up' })} className="w-full">
-              Show all levels
+      <div className="flex min-h-0 flex-1 gap-px">
+        <aside aria-label="Deck selector" className="flex w-56 shrink-0 flex-col gap-px">
+          <Panel className="min-h-0 flex-1" padding="none" title="Decks" subtitle="Pick one to isolate it">
+            <DeckStack label="Decks of Valhall Sør, top first" levels={PLATFORM3D_DECKS} selectedId={state.levelId} onSelect={(levelId) => dispatch({ type: 'isolate', levelId })} className="flex-1" />
+          </Panel>
+          <div className="flex shrink-0 flex-col gap-3 bg-[var(--kit-surface)] p-3.5">
+            <Platform3dExplode amount={state.explode} dispatch={dispatch} />
+            <Button variant="ghost" size="sm" disabled={state.levelId === null} onClick={() => dispatch({ type: 'reset' })} className="w-full">
+              {state.levelId === null ? 'All decks shown' : 'Show all decks'}
             </Button>
           </div>
-          <ExplodeControl amount={state.explode} onAmountChange={(amount) => dispatch({ type: 'setExplode', amount })} onToggle={() => dispatch({ type: 'toggleExplode' })} className="flex-1 border-t border-default pt-4" />
         </aside>
 
-        <div className="relative min-w-0 flex-1">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,color-mix(in_oklab,var(--primary-background)_12%,transparent),transparent_70%)]"
-          />
-          <SceneCanvas
-            label={`3D model of the Valhall Sør platform, ${level ? `${level.name.toLowerCase()} isolated` : 'all levels'}, decks ${Math.round(state.explode * 100)} percent separated`}
-            fallback={<Platform3dFallbackList />}
-            onPointerMissed={() => dispatch({ type: 'clearEquipment' })}
-          >
-            <StillScene still={still}>
-              <OffshorePlatform
-                layout={PLATFORM3D_LAYOUT}
-                explode={state.explode}
-                levelId={state.levelId}
-                selectedId={state.equipmentId}
-                statuses={PLATFORM3D_STATUSES}
-                onSelectLevel={(levelId) => dispatch({ type: 'isolate', levelId })}
-                onSelectEquipment={(levelId, equipmentId) => dispatch({ type: 'selectEquipment', levelId, equipmentId })}
-                showLabels={showLabels}
-                insets={{ bottom: selected ? 140 : 44 }}
-              />
-            </StillScene>
-          </SceneCanvas>
-
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 flex flex-col gap-2">
-            {selected && state.equipmentId ? (
-              <div key={state.equipmentId} className="@container pointer-events-auto motion-safe:transition-[opacity,translate] motion-safe:duration-300 motion-safe:starting:translate-y-3 motion-safe:starting:opacity-0">
-                <Platform3dReadout equipmentId={state.equipmentId} onClose={() => dispatch({ type: 'clearEquipment' })} />
-              </div>
-            ) : (
-              <p className={`self-start rounded-lg px-3 py-1.5 text-xs text-medium-foreground ${PLATFORM3D_GLASS}`}>
-                {level ? (level.equipment.length > 0 ? `Select equipment on the ${level.name.toLowerCase()} to read it.` : 'The jacket carries no tagged equipment.') : 'Separate the decks, or pick one to isolate it.'}
-              </p>
-            )}
+        <div className="relative min-w-0 flex-1 bg-[var(--kit-surface)]">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,color-mix(in_oklab,var(--kit-line-accent)_14%,transparent),transparent_70%)]" />
+          <Platform3dScene state={state} dispatch={dispatch} showLabels={showLabels} still={still} />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[var(--kit-rule)] bg-[color-mix(in_oklab,var(--kit-surface)_88%,transparent)] px-3.5 py-2">
+            <p className="whitespace-nowrap text-[0.8125rem] text-[var(--kit-text-2)]">
+              <span className="font-semibold text-[var(--kit-text)]">{level ? `${level.name} isolated` : 'All decks'}</span>
+              {' · '}
+              {state.explode === 0 ? 'assembled' : `${Math.round(state.explode * 100)} % separated`}
+            </p>
+            <Legend items={PLATFORM3D_LEGEND} />
           </div>
         </div>
 
-        <aside aria-label="Personnel and alarms" className="flex w-60 shrink-0 flex-col gap-4 overflow-y-auto border-l border-default p-3">
-          <Platform3dManningStrip levelId={state.levelId} onIsolate={(levelId) => dispatch({ type: 'isolate', levelId })} />
-          {state.levelId ? (
-            <div className="border-t border-default pt-3">
-              <Platform3dEquipmentList
-                levelId={state.levelId}
-                selectedId={state.equipmentId}
-                onSelect={(levelId, equipmentId) => dispatch({ type: 'selectEquipment', levelId, equipmentId })}
-              />
+        <aside aria-label="Equipment and faceplate" className="flex w-[23rem] shrink-0 flex-col gap-px">
+          <Panel className="min-h-0 flex-1" padding="none" title="Equipment" subtitle={level ? level.name : 'All decks'}>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <Platform3dEquipmentTable levelId={state.levelId} selectedId={state.equipmentId} onSelect={(levelId, equipmentId) => dispatch({ type: 'selectEquipment', levelId, equipmentId })} />
             </div>
-          ) : null}
-          <div className="mt-auto border-t border-default pt-3">
-            <SceneLegend items={PLATFORM3D_LEGEND} />
+            {state.levelId ? <Platform3dDeckFacts levelId={state.levelId} /> : null}
+          </Panel>
+          <div className="h-[19rem] shrink-0">
+            {state.equipmentId ? <Platform3dFaceplate key={state.equipmentId} equipmentId={state.equipmentId} onClose={() => dispatch({ type: 'clearEquipment' })} /> : <Platform3dStatusPanel />}
           </div>
         </aside>
       </div>
@@ -571,115 +635,133 @@ function Platform3dExperience({ initial = INITIAL_PLATFORM_STATE, still = false 
   );
 }
 
-function Platform3dHologram() {
+function OffshorePlatform3dSignature() {
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <Platform3dExperience />
-    </ThemeScope>
+    <LookScope look="console" className="@container w-full">
+      <Platform3dConsole />
+    </LookScope>
   );
 }
 
-function Platform3dTron() {
+function OffshorePlatform3dIsolated() {
   return (
-    <ThemeScope preset="tron" className="w-full">
-      <Platform3dExperience initial={{ explode: 1, levelId: null, equipmentId: null }} still />
-    </ThemeScope>
+    <LookScope look="console" className="@container w-full">
+      <Platform3dConsole initial={{ explode: 0.7, levelId: 'main', equipmentId: '23-ka-2102' }} still />
+    </LookScope>
   );
 }
 
-function Platform3dBlueprint() {
+/** The same platform for a wall screen: every deck is a tile filled with its state. */
+function OffshorePlatform3dWall() {
+  const [state, dispatch] = useReducer(platformReducer, { explode: 0.45, levelId: null, equipmentId: null });
+  const tiles: readonly { id: string; tone: StatusTone; state: string; detail: string; icon: ReactNode }[] = [
+    { id: 'upper', tone: 'info', state: 'Advisory', detail: 'Turbine exhaust spread widening', icon: <IconInfoCircle /> },
+    { id: 'main', tone: 'critical', state: 'Tripped', detail: 'Export compressor B · high vibration', icon: <IconAlertOctagon /> },
+    { id: 'cellar', tone: 'success', state: 'Normal', detail: 'Export pumps on duty', icon: <IconCircleCheck /> },
+    { id: 'jacket', tone: 'success', state: 'Normal', detail: 'Structure and risers', icon: <IconCircleCheck /> },
+  ];
   return (
-    <ThemeScope preset="blueprint" className="w-full">
-      <Platform3dExperience initial={{ explode: 0.6, levelId: 'main', equipmentId: '23-ka-2102' }} still />
-    </ThemeScope>
-  );
-}
-
-function Platform3dStage({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="h-72 w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <SceneCanvas label={label}>
-          <StillScene>{children}</StillScene>
-        </SceneCanvas>
+    <LookScope look="signal" className="w-full">
+      <div className={`grid h-[44rem] w-full grid-cols-[minmax(0,5fr)_minmax(0,7fr)] grid-rows-[auto_minmax(0,1fr)] gap-2 bg-[var(--kit-canvas-bg)] p-2 ${PLATFORM3D_SCENE_TYPE}`}>
+        <div data-tone="warning" className="col-span-2 flex items-center justify-between gap-6 rounded-[var(--kit-radius)] bg-[var(--t-vivid)] px-6 py-4 text-[var(--t-on-vivid)]">
+          <div className="flex items-center gap-4">
+            <IconAlertTriangle aria-hidden="true" className="size-10" />
+            <div className="flex flex-col">
+              <span className="text-4xl font-extrabold leading-none tracking-tight">Reduced export</span>
+              <span className="mt-1 text-base font-medium">Valhall Sør · one of two export compressors running</span>
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-5xl font-extrabold leading-none tabular-nums tracking-tight">{PLATFORM3D_ON_BOARD}</span>
+            <span className="text-base font-medium">on board</span>
+          </div>
+        </div>
+        <div className="grid min-h-0 grid-rows-4 gap-2">
+          {tiles.map((tile) => (
+            <Stat
+              key={tile.id}
+              label={platform3dLevelName(tile.id)}
+              value={PLATFORM3D_MANNING.find((level) => level.levelId === tile.id)?.onBoard ?? 0}
+              unit="on board"
+              tone={tile.tone}
+              state={tile.state}
+              stateIcon={tile.icon}
+              target={tile.detail}
+              size="md"
+            />
+          ))}
+        </div>
+        <div className="relative min-h-0 overflow-hidden rounded-[var(--kit-radius)] bg-[var(--kit-surface)]">
+          <Platform3dScene state={state} dispatch={dispatch} showLabels still bottomInset={16} />
+        </div>
       </div>
-    </ThemeScope>
+    </LookScope>
   );
 }
 
-function Platform3dPartJacket() {
+function Platform3dPartFrame({ children, className = '' }: { children: ReactNode; className?: string }) {
   return (
-    <Platform3dStage label="Platform jacket with battered legs, cross-bracing and risers">
-      <TurntableStage subjectSize={[34, 24, 22]} padding={0.95}>
-        <PlatformJacket topSize={[22, 14]} baseSize={[32, 22]} topY={24} bottomY={0} />
-      </TurntableStage>
-    </Platform3dStage>
+    <LookScope look="console" className="w-full">
+      <div className={`flex w-full gap-px bg-[var(--kit-canvas-bg)] p-px text-[var(--kit-text)] ${className}`}>{children}</div>
+    </LookScope>
   );
 }
 
-function Platform3dPartDerrick() {
+function OffshorePlatform3dPartDecks() {
+  const [levelId, setLevelId] = useState<string | null>('main');
   return (
-    <Platform3dStage label="Drilling derrick on its drill floor">
-      <TurntableStage subjectSize={[9, 30, 9]} padding={0.9}>
-        <Derrick />
-      </TurntableStage>
-    </Platform3dStage>
+    <Platform3dPartFrame className="h-[26rem]">
+      <Panel className="min-w-0 flex-1" padding="none" title="Decks" subtitle={levelId ? `${platform3dLevelName(levelId)} isolated` : 'All decks shown'}>
+        <DeckStack label="Decks of Valhall Sør, top first" levels={PLATFORM3D_DECKS} selectedId={levelId} onSelect={(next) => setLevelId(next === levelId ? null : next)} className="flex-1" />
+      </Panel>
+    </Platform3dPartFrame>
   );
 }
 
-function Platform3dPartHelideck() {
+function OffshorePlatform3dPartTable() {
+  const [selectedId, setSelectedId] = useState<string | null>('20-va-2001');
   return (
-    <Platform3dStage label="Living quarters with a helideck on the roof">
-      <TurntableStage subjectSize={[18, 15, 18]} padding={1.2}>
-        <LivingQuarters position={[-2, 0, 0]} />
-        <Helideck position={[2.5, 13.7, 0]} />
-      </TurntableStage>
-    </Platform3dStage>
+    <Platform3dPartFrame className="h-[26rem]">
+      <Panel className="min-w-0 flex-1" padding="none" title="Equipment" subtitle="All decks, top first">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <Platform3dEquipmentTable levelId={null} selectedId={selectedId} onSelect={(_levelId, equipmentId) => setSelectedId(equipmentId === selectedId ? null : equipmentId)} />
+        </div>
+      </Panel>
+    </Platform3dPartFrame>
   );
 }
 
-function Platform3dPartDeck() {
+function OffshorePlatform3dPartFaceplate() {
   return (
-    <Platform3dStage label="Deck module carrying a separator, a compressor and two pumps">
-      <TurntableStage subjectSize={[32, 9, 20]} padding={0.62}>
-        <group position={[0, 0.7, 0]}>
-          <DeckModule size={[30, 7, 18]}>
-            <HorizontalVessel position={[-8, 0, -4]} scale={0.8} tone="warning" />
-            <CompressorSkid position={[7, 0, -4]} scale={0.8} />
-            <PumpSkid position={[-9, 0, 5]} />
-            <PumpSkid position={[-3, 0, 5]} />
-          </DeckModule>
-        </group>
-      </TurntableStage>
-    </Platform3dStage>
+    <Platform3dPartFrame className="h-[19rem]">
+      <div className="min-w-0 flex-1">
+        <Platform3dFaceplate equipmentId="23-ka-2102" />
+      </div>
+    </Platform3dPartFrame>
   );
 }
 
-function Platform3dPartBooms() {
+function OffshorePlatform3dPartStatus() {
   return (
-    <Platform3dStage label="Flare boom with a lit flare and a pedestal crane on a deck edge">
-      <TurntableStage subjectSize={[44, 22, 14]} padding={0.6}>
-        <group position={[8, 0.7, 0]}>
-          <DeckModule size={[22, 0, 12]} handrail>
-            <FlareBoom position={[-11, 1, 0]} rotationY={Math.PI} length={22} />
-            <PedestalCrane position={[5, 0, 0]} rotationY={0.4} boom={16} />
-          </DeckModule>
-        </group>
-      </TurntableStage>
-    </Platform3dStage>
+    <Platform3dPartFrame className="h-[19rem]">
+      <div className="min-w-0 flex-1">
+        <Platform3dStatusPanel />
+      </div>
+    </Platform3dPartFrame>
   );
 }
 
-function Platform3dPartExplode() {
-  const [amount, setAmount] = useState(0.5);
-  const offsets = explodeOffsets(3, amount, 6);
-
+function OffshorePlatform3dPartExplode() {
+  const [state, dispatch] = useReducer(platformReducer, { explode: 0.5, levelId: null, equipmentId: null });
+  const offsets = explodeOffsets(3, state.explode, 6);
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex h-80 w-full gap-4 rounded-xl border border-default bg-base-background p-3">
-        <ExplodeControl amount={amount} onAmountChange={setAmount} onToggle={() => setAmount(amount > 0.5 ? 0 : 1)} noun="modules" className="w-40 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <SceneCanvas label={`Three stacked modules, ${Math.round(amount * 100)} percent separated`}>
+    <Platform3dPartFrame className="h-80">
+      <div className="flex w-52 shrink-0 flex-col justify-center bg-[var(--kit-surface)] p-3.5">
+        <Platform3dExplode amount={state.explode} dispatch={dispatch} />
+      </div>
+      <div className="min-w-0 flex-1 bg-[var(--kit-surface)]">
+        <SceneCanvas label={`Three stacked modules, ${Math.round(state.explode * 100)} percent separated`}>
+          <StillScene>
             <TurntableStage subjectSize={[22, 26, 14]} padding={0.72}>
               {offsets.map((offset, index) => (
                 <ExplodeLift key={index} y={offset}>
@@ -693,52 +775,54 @@ function Platform3dPartExplode() {
                 </ExplodeLift>
               ))}
             </TurntableStage>
-          </SceneCanvas>
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Platform3dPartDecks() {
-  const [levelId, setLevelId] = useState<string | null>('main');
-  const toggle = (next: string) => setLevelId(next === levelId ? null : next);
-
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="flex w-full gap-4 rounded-xl border border-default bg-base-background p-3">
-        <div className="flex w-36 shrink-0 flex-col gap-2">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Decks</span>
-          <Platform3dDeckSelector levelId={levelId} onIsolate={toggle} />
-        </div>
-        <div className="min-w-0 flex-1 border-l border-default px-4">
-          <Platform3dManningStrip levelId={levelId} onIsolate={toggle} />
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Platform3dPartReadout() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="@container flex w-full flex-col gap-3 rounded-xl border border-default bg-base-background bg-[radial-gradient(ellipse_at_50%_40%,color-mix(in_oklab,var(--primary-background)_18%,transparent),transparent_70%)] p-4">
-        <Platform3dReadout equipmentId="23-ka-2102" />
-        <Platform3dReadout equipmentId="20-va-2001" />
-      </div>
-    </ThemeScope>
-  );
-}
-
-function Platform3dPartFallback() {
-  return (
-    <ThemeScope preset="hologram" className="w-full">
-      <div className="h-80 w-full overflow-hidden rounded-xl border border-default">
-        <SceneCanvas label="3D model of the Valhall Sør platform" forceFallback fallback={<Platform3dFallbackList />}>
-          <OffshorePlatform layout={PLATFORM3D_LAYOUT} />
+          </StillScene>
         </SceneCanvas>
       </div>
-    </ThemeScope>
+    </Platform3dPartFrame>
+  );
+}
+
+function Platform3dStage({ label, caption, children }: { label: string; caption: string; children: ReactNode }) {
+  return (
+    <Platform3dPartFrame className="h-80 flex-col">
+      <div className="min-h-0 flex-1 bg-[var(--kit-surface)]">
+        <SceneCanvas label={label}>
+          <StillScene>{children}</StillScene>
+        </SceneCanvas>
+      </div>
+      <p className="bg-[var(--kit-surface)] px-3.5 py-2 text-[0.8125rem] text-[var(--kit-text-2)]">{caption}</p>
+    </Platform3dPartFrame>
+  );
+}
+
+function OffshorePlatform3dPartJacket() {
+  return (
+    <Platform3dStage label="Platform jacket with battered legs, cross-bracing and risers" caption="Jacket: four battered legs, bracing and risers.">
+      <TurntableStage subjectSize={[34, 24, 22]} padding={0.95}>
+        <PlatformJacket topSize={[22, 14]} baseSize={[32, 22]} topY={24} bottomY={0} />
+      </TurntableStage>
+    </Platform3dStage>
+  );
+}
+
+function OffshorePlatform3dPartDerrick() {
+  return (
+    <Platform3dStage label="Drilling derrick on its drill floor" caption="Derrick: the landmark that says which end is which.">
+      <TurntableStage subjectSize={[9, 30, 9]} padding={0.9}>
+        <Derrick />
+      </TurntableStage>
+    </Platform3dStage>
+  );
+}
+
+function OffshorePlatform3dPartQuarters() {
+  return (
+    <Platform3dStage label="Living quarters with a helideck on the roof" caption="Living quarters and helideck, upper deck east.">
+      <TurntableStage subjectSize={[18, 15, 18]} padding={1.2}>
+        <LivingQuarters position={[-2, 0, 0]} />
+        <Helideck position={[2.5, 13.7, 0]} />
+      </TurntableStage>
+    </Platform3dStage>
   );
 }
 
@@ -746,33 +830,33 @@ export default definePage({
   id: 'offshore-platform-3d',
   title: 'Offshore platform',
   summary:
-    'A production platform you can take apart. Slide the decks away from each other to see what stands on each one, isolate a deck to walk it, and read any machine from a card docked under the model — with people on board and alarms per deck always in view.',
+    'Valhall Sør as an operator console. A deck selector rail stands beside the 3D platform the way the structure stands; picking a deck isolates it in the scene and narrows the equipment table, and picking a unit opens its faceplate.',
   guidance: {
     use: [
-      'For stacked structures where one level hides the next: platforms, modules, multi-storey process buildings.',
-      'When the question is "what is on that deck, and is anyone there": the model answers where, the strips answer who and what.',
-      'With the deck buttons and the equipment list as the keyboard path to everything the pointer can reach.',
-      'Keep the readout compact and docked, so the model stays the subject.',
+      'For stacked structures, where the level is the first question: platforms, process modules, buildings.',
+      'With a rail that mirrors the structure top to bottom, so picking a deck needs no reading.',
+      'With state as filled blocks and edge bars: an operator finds the tripped unit before reading a word.',
+      'With separation as a slider, so people can stop where the deck they need is clear of the others.',
     ],
     avoid: [
-      'An exploded view of a single-level plant. Nothing is hidden, so nothing is gained.',
-      'Labels on every deck at once. Name the levels from afar and the equipment only on the isolated deck.',
-      'Hiding the other decks completely. Ghosting them keeps the sense of where the isolated deck sits.',
-      'Explode animation that cannot be stopped. It runs once per change and jumps under reduced motion.',
+      'Exploding by default: the assembled platform is the picture people recognise.',
+      'Hiding the other decks when one is isolated. Ghost them, so the place in the structure stays readable.',
+      'A faceplate that covers the scene. Dock it under the table.',
+      'Monospaced tags. The UI sans with tabular figures reads faster at console density.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
+      id: 'dashboard',
+      title: 'Dashboard',
       description:
-        'Drag to orbit, scroll to zoom. Use the slider or the button to separate the decks. Pick a deck on the left to isolate it, then click equipment on it to dock its readout. Escape steps back.',
+        'Pick a deck in the rail, or click its label in the scene, to isolate it: the other decks ghost and the table lists only that deck. Pick a tag in the table or a unit on the isolated deck to open its faceplate. Drag Deck separation to lift the decks apart. Escape steps back.',
       specimens: [
         {
-          id: 'Platform3dHologram',
-          title: 'Offshore platform',
-          note: 'Pick it when decks hide each other and people need to see inside a stacked installation without losing its shape.',
+          id: 'OffshorePlatform3dSignature',
+          title: 'Platform console',
+          note: 'Pick it for a control room that watches one installation all shift and needs to get from a deck to a unit in two clicks.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
@@ -782,142 +866,133 @@ export default definePage({
             'three/scenes/OffshorePlatform.tsx',
             'three/scenes/platformLayout.ts',
             'three/scenes/platformState.ts',
-            'three/scenes/explode.ts',
-            'three/scenes/ExplodeControl.tsx',
-            'three/scenes/ExplodeLift.tsx',
-            'three/SceneLegend.tsx',
-            'industrial/ValueReadout.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/Sparkline.tsx',
-            'themes/ThemeScope.tsx',
+            'kit/offshore-platform-3d/DeckStack.tsx',
+            'kit/Panel.tsx',
+            'kit/DataTable.tsx',
+            'kit/StatusPill.tsx',
+            'kit/SparkLine.tsx',
+            'kit/Meter.tsx',
+            'kit/TagId.tsx',
+            'kit/Legend.tsx',
+            'looks/LookScope.tsx',
           ],
-          Component: Platform3dHologram,
+          Component: OffshorePlatform3dSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same platform in two more presets, opened in different states and held still. Scene colours are resolved from tokens, so steel, sea and flare follow the theme.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The detail state with the main deck isolated and the tripped compressor on its faceplate, and the same platform recomposed for a wall screen. Both render a still frame.',
       specimens: [
         {
-          id: 'Platform3dTron',
-          title: 'Tron, fully exploded',
-          note: 'Pick it for a command wall: cyan structure on near-black with every deck floating clear of the next.',
+          id: 'OffshorePlatform3dIsolated',
+          title: 'Main deck isolated, unit selected',
+          note: 'Pick it as the working state during an upset: decks apart, one deck solid, one faceplate open.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['three/SceneCanvas.tsx', 'three/scenes/OffshorePlatform.tsx', 'three/scenes/StillScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: Platform3dTron,
+          uses: ['three/scenes/OffshorePlatform.tsx', 'three/scenes/platformState.ts', 'three/scenes/StillScene.tsx', 'kit/offshore-platform-3d/DeckStack.tsx', 'kit/DataTable.tsx', 'looks/LookScope.tsx'],
+          Component: OffshorePlatform3dIsolated,
         },
         {
-          id: 'Platform3dBlueprint',
-          title: 'Blueprint, main deck isolated',
-          note: 'Pick it for engineering tools in daylight: a pale drawing-board look with one deck in focus and a machine read out.',
+          id: 'OffshorePlatform3dWall',
+          title: 'Wall screen, state per deck',
+          note: 'Pick it for the screen everyone passes: each deck is a tile filled with its state, stacked like the platform beside it.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
           surface: 'muted',
-          uses: ['three/SceneCanvas.tsx', 'three/scenes/OffshorePlatform.tsx', 'three/scenes/StillScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: Platform3dBlueprint,
+          uses: ['three/scenes/OffshorePlatform.tsx', 'three/scenes/StillScene.tsx', 'kit/Stat.tsx', 'looks/LookScope.tsx'],
+          Component: OffshorePlatform3dWall,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The pieces on their own: structures on a turntable you can drag, the explode control, and the panels around the scene.',
+      description: 'The rail, the table and the two lower panels on their own, the separation control with a stack to try it on, and three platform models.',
       specimens: [
         {
-          id: 'Platform3dPartJacket',
+          id: 'OffshorePlatform3dPartDecks',
+          title: 'Deck selector rail',
+          note: 'Pick it to choose a level of a stacked structure: elevation, people and open alarms on each block.',
+          origin: 'custom',
+          size: 'sm',
+          align: 'stretch',
+          uses: ['kit/offshore-platform-3d/DeckStack.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx'],
+          Component: OffshorePlatform3dPartDecks,
+        },
+        {
+          id: 'OffshorePlatform3dPartTable',
+          title: 'Equipment table',
+          note: 'Pick it as the keyboard path to every unit: status-banded rows, the tag is the button.',
+          origin: 'custom',
+          size: 'lg',
+          align: 'stretch',
+          uses: ['kit/DataTable.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx', 'kit/TagId.tsx'],
+          Component: OffshorePlatform3dPartTable,
+        },
+        {
+          id: 'OffshorePlatform3dPartFaceplate',
+          title: 'Faceplate',
+          note: 'Pick it for one unit: its state as a block, the note from the log and three readings with their trend.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['kit/Panel.tsx', 'kit/StatusPill.tsx', 'kit/SparkLine.tsx'],
+          Component: OffshorePlatform3dPartFaceplate,
+        },
+        {
+          id: 'OffshorePlatform3dPartStatus',
+          title: 'Platform status',
+          note: 'Pick it as the resting state of the faceplate slot: people on board and open alarms by class.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          uses: ['kit/Panel.tsx', 'kit/Meter.tsx', 'kit/StatusPill.tsx'],
+          Component: OffshorePlatform3dPartStatus,
+        },
+        {
+          id: 'OffshorePlatform3dPartExplode',
+          title: 'Separation control',
+          note: 'Pick it for any exploded view: one button for all or nothing, a slider for anything between.',
+          origin: 'custom',
+          size: 'full',
+          align: 'stretch',
+          uses: ['three/scenes/explode.ts', 'three/scenes/ExplodeLift.tsx', 'three/scenes/DeckModule.tsx', 'three/scenes/platformState.ts', 'three/TurntableStage.tsx'],
+          Component: OffshorePlatform3dPartExplode,
+        },
+        {
+          id: 'OffshorePlatform3dPartJacket',
           title: 'Jacket',
-          note: 'Pick it as the substructure of any fixed platform; the legs run on below a sea plane.',
+          note: 'Pick it as the base of a fixed platform: battered legs, bracing and risers down to the seabed.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['three/scenes/PlatformJacket.tsx', 'three/scenes/latticeGeometry.ts', 'three/TurntableStage.tsx'],
-          Component: Platform3dPartJacket,
+          uses: ['three/scenes/PlatformJacket.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
+          Component: OffshorePlatform3dPartJacket,
         },
         {
-          id: 'Platform3dPartDerrick',
+          id: 'OffshorePlatform3dPartDerrick',
           title: 'Derrick',
-          note: 'Pick it as the landmark of a drilling installation; it is a lattice of struts, so it stays light.',
+          note: 'Pick it as the landmark of a drilling platform, so every view has an obvious up and front.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['three/scenes/Derrick.tsx', 'three/scenes/LatticeFrame.tsx', 'three/TurntableStage.tsx'],
-          Component: Platform3dPartDerrick,
+          uses: ['three/scenes/Derrick.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
+          Component: OffshorePlatform3dPartDerrick,
         },
         {
-          id: 'Platform3dPartHelideck',
+          id: 'OffshorePlatform3dPartQuarters',
           title: 'Quarters and helideck',
-          note: 'Pick them together to mark the safe end of a platform and give the model its orientation.',
+          note: 'Pick it to mark where people are: the accommodation block with the helideck on its roof.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['three/scenes/Helideck.tsx', 'three/scenes/LivingQuarters.tsx', 'three/TurntableStage.tsx'],
-          Component: Platform3dPartHelideck,
-        },
-        {
-          id: 'Platform3dPartDeck',
-          title: 'Deck module',
-          note: 'Pick it to carry equipment on a level: a plate on girders with columns up to the deck above.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/scenes/DeckModule.tsx', 'three/HorizontalVessel.tsx', 'three/CompressorSkid.tsx', 'three/PumpSkid.tsx'],
-          Component: Platform3dPartDeck,
-        },
-        {
-          id: 'Platform3dPartBooms',
-          title: 'Flare boom and crane',
-          note: 'Pick lattice booms for anything cantilevered off a deck edge: flares, cranes, bridges.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/scenes/FlareBoom.tsx', 'three/scenes/PedestalCrane.tsx', 'three/scenes/DeckModule.tsx'],
-          Component: Platform3dPartBooms,
-        },
-        {
-          id: 'Platform3dPartExplode',
-          title: 'Explode control',
-          note: 'Pick it for any exploded view: one button for all or nothing, a vertical slider for everything between.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['three/scenes/ExplodeControl.tsx', 'three/scenes/ExplodeLift.tsx', 'three/scenes/explode.ts', 'three/scenes/DeckModule.tsx'],
-          Component: Platform3dPartExplode,
-        },
-        {
-          id: 'Platform3dPartDecks',
-          title: 'Deck selector and manning',
-          note: 'Pick it beside a stacked model: the buttons isolate a level, the strip says who is there and what is alarming.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/StatusDot.tsx', 'industrial/ValueReadout.tsx'],
-          Component: Platform3dPartDecks,
-        },
-        {
-          id: 'Platform3dPartReadout',
-          title: 'Docked equipment readout',
-          note: 'Pick a low, wide card under the model when the detail is three numbers and a trend, not a full inspector.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['industrial/ValueReadout.tsx', 'industrial/StatusIndicator.tsx', 'industrial/Sparkline.tsx'],
-          Component: Platform3dPartReadout,
-        },
-        {
-          id: 'Platform3dPartFallback',
-          title: 'Without WebGL',
-          note: 'Pick a fallback that lists the same levels and their state, so the screen still works where 3D cannot render.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['three/SceneCanvas.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: Platform3dPartFallback,
+          uses: ['three/scenes/LivingQuarters.tsx', 'three/scenes/Helideck.tsx', 'three/TurntableStage.tsx', 'three/scenes/StillScene.tsx'],
+          Component: OffshorePlatform3dPartQuarters,
         },
       ],
     },

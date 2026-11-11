@@ -1,21 +1,21 @@
 import { Button } from '@cognite/aura/components/button';
-import {
-  SegmentedControl,
-  SegmentedControlButton,
-  SegmentedControlList,
-} from '@cognite/aura/components/segmented-control';
-import { IconWorld, IconX } from '@cognite/aura/icons';
+import { SegmentedControl, SegmentedControlButton, SegmentedControlList } from '@cognite/aura/components/segmented-control';
+import { IconActivity, IconAlertOctagon, IconAlertTriangle, IconAnchor, IconArrowUpRight, IconPlayerPlay, IconTool, IconWorld, IconX } from '@cognite/aura/icons';
 import { useReducer } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { formatValue } from '../../../library/industrial/status';
-import type { DotShape, Tone } from '../../../library/industrial/status';
-import { StatusDot } from '../../../library/industrial/StatusDot';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { TrendDelta } from '../../../library/industrial/TrendDelta';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { ThemeScope } from '../../../library/themes/ThemeScope';
+import { Canvas } from '../../../library/kit/Canvas';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Delta } from '../../../library/kit/Delta';
+import { IconChip } from '../../../library/kit/IconChip';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SceneStage } from '../../../library/kit/scene/SceneStage';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { formatNumber, type StatusTone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import { LookScope } from '../../../library/looks/LookScope';
 import { SceneCanvas } from '../../../library/three/SceneCanvas';
 import { WORLD_OUTLINES } from '../../../library/three/scenes/continents';
 import { FleetGlobe } from '../../../library/three/scenes/FleetGlobe';
@@ -92,17 +92,20 @@ const FLEETGLOBE_CARGO: readonly { id: string; from: string; name: string; to: L
   { id: 'cargo-cove-point', from: 'hammerfest', name: 'Cove Point', to: { lat: 38.4, lon: -76.4 } },
 ];
 
-const FLEETGLOBE_STATES: Readonly<Record<FleetGlobeState, { label: string; tone: Tone; shape: DotShape }>> = {
-  producing: { label: 'Producing', tone: 'success', shape: 'dot' },
-  reduced: { label: 'Reduced', tone: 'warning', shape: 'square' },
-  'shut-in': { label: 'Shut in', tone: 'critical', shape: 'diamond' },
-  'start-up': { label: 'Start-up', tone: 'info', shape: 'dot' },
-  maintenance: { label: 'Maintenance', tone: 'neutral', shape: 'ring' },
+type FleetGlobeStateMeta = { label: string; tone: StatusTone; dot: NonNullable<GlobeSite['dot']>; icon: ReactNode };
+
+const FLEETGLOBE_STATES: Readonly<Record<FleetGlobeState, FleetGlobeStateMeta>> = {
+  producing: { label: 'Producing', tone: 'success', dot: 'dot', icon: <IconActivity /> },
+  reduced: { label: 'Reduced', tone: 'warning', dot: 'square', icon: <IconAlertTriangle /> },
+  'shut-in': { label: 'Shut in', tone: 'critical', dot: 'diamond', icon: <IconAlertOctagon /> },
+  'start-up': { label: 'Start-up', tone: 'info', dot: 'dot', icon: <IconPlayerPlay /> },
+  maintenance: { label: 'Maintenance', tone: 'neutral', dot: 'ring', icon: <IconTool /> },
 };
 
 const FLEETGLOBE_RADIUS = 10;
 
-const FLEETGLOBE_OVERVIEW: GlobeView = { lat: 50, lon: 4, distance: FLEETGLOBE_RADIUS * 3.4 };
+/** The home view: close enough that the shelf fills the screen, far enough that it still reads as a globe. */
+const FLEETGLOBE_OVERVIEW: GlobeView = { lat: 58, lon: 6, distance: FLEETGLOBE_RADIUS * 2.45 };
 
 const FLEETGLOBE_MAX_PRODUCTION = Math.max(...FLEETGLOBE_SITES.map((site) => site.production));
 
@@ -113,10 +116,6 @@ type FleetGlobeFilter = (typeof FLEETGLOBE_FILTERS)[number];
 function fleetGlobeIsFilter(value: unknown): value is FleetGlobeFilter {
   return FLEETGLOBE_FILTERS.some((filter) => filter === value);
 }
-
-const FLEETGLOBE_GLASS = 'border border-default bg-[color-mix(in_oklab,var(--card-background)_82%,transparent)] backdrop-blur-md';
-
-const FLEETGLOBE_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--ring-default)]';
 
 function fleetGlobeSite(id: string | null): FleetGlobeSite | undefined {
   return FLEETGLOBE_SITES.find((site) => site.id === id);
@@ -190,7 +189,7 @@ function fleetGlobeMarkers(filter: FleetGlobeFilter): GlobeSite[] {
       size: site.kind === 'Terminal' ? 0.075 : markerRadius(site.production, FLEETGLOBE_MAX_PRODUCTION, 0.045, 0.11),
       tone: status.tone,
       status: status.label,
-      dot: status.shape,
+      dot: status.dot,
       shape: site.kind === 'Platform' ? 'dot' : 'diamond',
       pulse: abnormal,
       dimmed: !fleetGlobeInFilter(site, filter),
@@ -210,7 +209,112 @@ function fleetGlobeRoutes(filter: FleetGlobeFilter): GlobeRoute[] {
   return [...exports, ...cargo];
 }
 
-function FleetGlobeFilterSwitch({ value, onChange }: { value: FleetGlobeFilter; onChange: (filter: FleetGlobeFilter) => void }) {
+const FLEETGLOBE_FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring-default)]';
+
+const FLEETGLOBE_STATE_ORDER: readonly FleetGlobeState[] = ['shut-in', 'reduced', 'start-up', 'maintenance', 'producing'];
+
+function fleetGlobeTotals(filter: FleetGlobeFilter): { production: number; plan: number; sites: number } {
+  const sites = FLEETGLOBE_SITES.filter((site) => filter === 'All' || site.region === filter);
+  return { production: sites.reduce((sum, site) => sum + site.production, 0), plan: sites.reduce((sum, site) => sum + site.plan, 0), sites: sites.length };
+}
+
+const FLEETGLOBE_WEEK = ['Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
+
+/** One label per six-hour point of the last seven days, ending today, Thursday. */
+function fleetGlobeDays(): string[] {
+  return Array.from({ length: 28 }, (_, index) => FLEETGLOBE_WEEK[Math.floor(index / 4)]);
+}
+
+type FleetGlobeSceneProps = {
+  state: FleetGlobeUi;
+  dispatch: (action: FleetGlobeAction) => void;
+  insets?: { top?: number; right?: number; bottom?: number; left?: number };
+  still?: boolean;
+};
+
+function FleetGlobeScene({ state, dispatch, insets, still = false }: FleetGlobeSceneProps) {
+  const selected = fleetGlobeSite(state.selectedId);
+
+  return (
+    <SceneCanvas
+      label={`Globe showing ${FLEETGLOBE_SITES.length} sites on the Norwegian continental shelf${selected ? `, centred on ${selected.name}` : state.filter === 'All' ? '' : `, ${state.filter} in focus`}`}
+      fallback={<FleetGlobeFallbackList />}
+      camera={{ fov: 40, near: 0.5, far: 400 }}
+    >
+      <StillScene still={still}>
+        <FleetGlobe
+          sites={fleetGlobeMarkers(state.filter)}
+          routes={fleetGlobeRoutes(state.filter)}
+          outlines={WORLD_OUTLINES}
+          radius={FLEETGLOBE_RADIUS}
+          view={fleetGlobeView(state)}
+          viewKey={state.resets}
+          spinning={state.spinning && !still}
+          selectedId={state.selectedId}
+          onSelect={(id) => dispatch({ type: 'select', id })}
+          onInteract={() => dispatch({ type: 'interact' })}
+          onClear={() => dispatch({ type: 'clear' })}
+          insets={insets}
+        />
+      </StillScene>
+    </SceneCanvas>
+  );
+}
+
+function FleetGlobeFallbackList() {
+  return (
+    <ul className="flex flex-col gap-2 rounded-xl border border-default bg-card-background p-4">
+      {FLEETGLOBE_SITES.slice(0, 6).map((site) => (
+        <li key={site.id} className="flex items-baseline justify-between gap-4 text-sm">
+          <span className="text-base-foreground">{site.name}</span>
+          <span className="text-medium-foreground">{FLEETGLOBE_STATES[site.state].label}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The fleet in one sentence: the figure that matters, what it is measured against, and the states in words. */
+function FleetGlobeHeadline({ filter }: { filter: FleetGlobeFilter }) {
+  const totals = fleetGlobeTotals(filter);
+  const sites = FLEETGLOBE_SITES.filter((site) => filter === 'All' || site.region === filter);
+
+  return (
+    <div className="pointer-events-auto flex max-w-sm flex-col gap-3 [text-shadow:0_1px_14px_var(--mountain-black)]">
+      <div className="flex items-center gap-3">
+        <IconChip tone="accent" size="lg">
+          <IconWorld />
+        </IconChip>
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-[color:var(--kit-text)]">Fleet today</h2>
+          <p className="text-sm text-[color:var(--kit-text-2)]">{filter === 'All' ? 'Norwegian continental shelf' : filter} · 14:00 UTC</p>
+        </div>
+      </div>
+      <p className="flex items-baseline gap-2">
+        <span className="text-6xl font-semibold tracking-tight tabular-nums text-[color:var(--kit-text)]">{formatNumber(totals.production)}</span>
+        <span className="text-lg text-[color:var(--kit-text-2)]">kboe/d</span>
+      </p>
+      <p className="text-sm text-[color:var(--kit-text-2)]">
+        <span className="font-semibold tabular-nums text-[color:var(--kit-text)]">{formatNumber((totals.production / Math.max(totals.plan, 1)) * 100)} %</span> of the {formatNumber(totals.plan)} kboe/d plan, from{' '}
+        {totals.sites} sites.
+      </p>
+      <ul aria-label="Sites by state" className="flex flex-wrap gap-2">
+        {FLEETGLOBE_STATE_ORDER.map((state) => {
+          const count = sites.filter((site) => site.state === state).length;
+          return count > 0 ? (
+            <li key={state}>
+              <StatusPill tone={FLEETGLOBE_STATES[state].tone} icon={FLEETGLOBE_STATES[state].icon}>
+                {count} {FLEETGLOBE_STATES[state].label.toLowerCase()}
+              </StatusPill>
+            </li>
+          ) : null;
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function FleetGlobeRegionSwitch({ value, onChange }: { value: FleetGlobeFilter; onChange: (filter: FleetGlobeFilter) => void }) {
   return (
     <SegmentedControl
       value={value}
@@ -218,7 +322,7 @@ function FleetGlobeFilterSwitch({ value, onChange }: { value: FleetGlobeFilter; 
         if (fleetGlobeIsFilter(next)) onChange(next);
       }}
     >
-      <SegmentedControlList size="small" aria-label="Region">
+      <SegmentedControlList aria-label="Region">
         {FLEETGLOBE_FILTERS.map((filter) => (
           <SegmentedControlButton key={filter} value={filter}>
             {filter}
@@ -229,35 +333,182 @@ function FleetGlobeFilterSwitch({ value, onChange }: { value: FleetGlobeFilter; 
   );
 }
 
-function FleetGlobeSiteList({ filter, selectedId, onSelect }: { filter: FleetGlobeFilter; selectedId: string | null; onSelect: (id: string) => void }) {
+function FleetGlobeAlarms({ site }: { site: FleetGlobeSite }) {
+  if (fleetGlobeAlarmCount(site) === 0) return <StatusPill tone="success">No open alarms</StatusPill>;
   return (
-    <ul aria-label="Sites" className="flex flex-col">
+    <ul aria-label="Open alarms" className="flex flex-wrap gap-1.5">
+      {site.alarms.critical > 0 ? (
+        <li>
+          <StatusPill tone="critical" icon={<IconAlertOctagon />}>
+            {site.alarms.critical} critical
+          </StatusPill>
+        </li>
+      ) : null}
+      {site.alarms.high > 0 ? (
+        <li>
+          <StatusPill tone="warning" icon={<IconAlertTriangle />}>
+            {site.alarms.high} high
+          </StatusPill>
+        </li>
+      ) : null}
+      {site.alarms.medium > 0 ? (
+        <li>
+          <StatusPill tone="info">{site.alarms.medium} medium</StatusPill>
+        </li>
+      ) : null}
+    </ul>
+  );
+}
+
+/** The card a picked site opens: state, production against plan, availability, alarms and a week of output. */
+function FleetGlobeSiteCard({ site, onClose, className }: { site: FleetGlobeSite; onClose?: () => void; className?: string }) {
+  const status = FLEETGLOBE_STATES[site.state];
+  const terminal = fleetGlobeSite(site.exportTo);
+  const feeders = FLEETGLOBE_SITES.filter((other) => other.exportTo === site.id);
+  const produces = site.kind !== 'Terminal' && site.plan > 0;
+
+  return (
+    <Panel
+      className={className}
+      tone={status.tone === 'success' ? 'neutral' : status.tone}
+      title={site.name}
+      subtitle={`${site.kind} · ${site.region}`}
+      icon={<IconChip tone={status.tone}>{site.kind === 'Terminal' ? <IconAnchor /> : status.icon}</IconChip>}
+      actions={
+        onClose ? (
+          <Button variant="ghost" size="icon-sm" aria-label={`Close ${site.name}`} onClick={onClose}>
+            <IconX />
+          </Button>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-1 flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <div>
+            <StatusPill tone={status.tone} size="lg" icon={status.icon}>
+              {status.label}
+            </StatusPill>
+          </div>
+          <p className="text-sm text-[color:var(--kit-text-2)]">{site.note}</p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          {produces ? (
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-[color:var(--kit-text-2)]">Production</span>
+              <span className="flex items-baseline gap-2">
+                <span className="text-5xl font-semibold tracking-tight tabular-nums text-[color:var(--kit-text)]">{formatNumber(site.production)}</span>
+                <span className="text-sm text-[color:var(--kit-text-2)]">kboe/d</span>
+              </span>
+              <span className="flex items-center gap-2 text-sm text-[color:var(--kit-text-2)]">
+                <Delta value={site.production - site.plan} decimals={0} /> vs plan {formatNumber(site.plan)}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              <span className="text-sm text-[color:var(--kit-text-2)]">{site.kind === 'Terminal' ? 'Receiving from' : 'Production'}</span>
+              <span className="flex items-baseline gap-2">
+                <span className="text-5xl font-semibold tracking-tight tabular-nums text-[color:var(--kit-text)]">{site.kind === 'Terminal' ? feeders.length : 0}</span>
+                <span className="text-sm text-[color:var(--kit-text-2)]">{site.kind === 'Terminal' ? 'sites' : 'kboe/d'}</span>
+              </span>
+              <span className="text-sm text-[color:var(--kit-text-2)]">{site.kind === 'Terminal' ? feeders.map((feeder) => feeder.name).join(', ') : 'Nothing planned during the turnaround'}</span>
+            </div>
+          )}
+          <RingGauge label="Availability" value={site.availability} decimals={0} size={96} tone={site.availability >= 95 ? 'success' : site.availability >= 85 ? 'warning' : 'critical'} />
+        </div>
+
+        {produces ? (
+          <>
+            <Meter label="Against plan" value={site.production} max={Math.max(site.plan, site.production) * 1.15} unit="kboe/d" target={{ value: site.plan, label: 'Plan' }} tone={status.tone === 'success' ? 'accent' : status.tone} />
+            <TrendArea
+              label={`${site.name} production over the last seven days against plan`}
+              labels={fleetGlobeDays()}
+              series={[{ id: site.id, label: 'Production', values: fleetGlobeTrend(site), tone: status.tone === 'success' ? 'accent' : status.tone }]}
+              limits={[{ value: site.plan, label: 'Plan', tone: 'neutral' }]}
+              unit="kboe/d"
+              height={128}
+              showLegend={false}
+            />
+          </>
+        ) : null}
+
+        <div className="mt-auto flex flex-col gap-2">
+          <FleetGlobeAlarms site={site} />
+          {terminal ? (
+            <p className="flex items-center gap-1.5 text-sm text-[color:var(--kit-text-2)]">
+              <IconArrowUpRight className="size-4 shrink-0" />
+              <span>
+                Exports to <span className="font-medium text-[color:var(--kit-text)]">{terminal.name}</span>, <span className="tabular-nums">{formatNumber(greatCircleKm(site, terminal))} km</span>
+              </span>
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+/** What the right side shows before a site is picked: the sites that are not simply producing. */
+function FleetGlobeAttention({ filter, onSelect, className }: { filter: FleetGlobeFilter; onSelect: (id: string) => void; className?: string }) {
+  const sites = FLEETGLOBE_STATE_ORDER.flatMap((state) => FLEETGLOBE_SITES.filter((site) => site.state === state && state !== 'producing' && fleetGlobeInFilter(site, filter)));
+
+  return (
+    <Panel className={className} title="Needs attention" subtitle={`${sites.length} of ${fleetGlobeTotals(filter).sites} sites are off plan`} padding="tight">
+      <ul className="flex flex-col gap-1">
+        {sites.map((site) => {
+          const status = FLEETGLOBE_STATES[site.state];
+          return (
+            <li key={site.id}>
+              <button
+                type="button"
+                data-tone={status.tone}
+                onClick={() => onSelect(site.id)}
+                className={`flex w-full items-center gap-3 rounded-[var(--kit-radius-sm)] px-3 py-2.5 text-left hover:bg-[var(--kit-track)] ${FLEETGLOBE_FOCUS}`}
+              >
+                <IconChip tone={status.tone} size="sm">
+                  {status.icon}
+                </IconChip>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm font-semibold text-[color:var(--kit-text)]">{site.name}</span>
+                  <span className="truncate text-xs text-[color:var(--kit-text-2)]">{site.note}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block text-base font-semibold tabular-nums text-[color:var(--kit-text)]">{formatNumber(site.production)}</span>
+                  <span className="block text-xs tabular-nums text-[color:var(--kit-text-3)]">of {formatNumber(site.plan)}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
+/** Every site as a chip: the keyboard path onto the globe. */
+function FleetGlobeDock({ filter, selectedId, onSelect }: { filter: FleetGlobeFilter; selectedId: string | null; onSelect: (id: string) => void }) {
+  return (
+    <ul
+      aria-label="Sites"
+      className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2 rounded-[var(--kit-radius)] border border-[color:var(--kit-rule)] bg-[color-mix(in_oklab,var(--card-background)_66%,transparent)] p-2 shadow-[0_18px_40px_-20px_var(--opacity-black-60)] backdrop-blur-xl"
+    >
       {FLEETGLOBE_SITES.map((site) => {
         const status = FLEETGLOBE_STATES[site.state];
-        const inFilter = fleetGlobeInFilter(site, filter);
+        const active = fleetGlobeInFilter(site, filter);
         return (
           <li key={site.id}>
             <button
               type="button"
+              data-tone={status.tone}
               aria-pressed={site.id === selectedId}
-              aria-label={`${site.name}, ${site.region}, ${status.label.toLowerCase()}${site.kind === 'Terminal' ? '' : `, ${site.production} thousand barrels a day`}`}
+              aria-label={`${site.name}, ${status.label.toLowerCase()}${site.kind === 'Terminal' ? ', terminal' : `, ${site.production} thousand barrels a day`}`}
+              disabled={!active}
               onClick={() => onSelect(site.id)}
-              className={`-mx-1.5 flex w-[calc(100%+0.75rem)] flex-col gap-1 rounded-md px-1.5 py-2 text-left hover:bg-secondary-background aria-pressed:bg-secondary-background ${inFilter ? '' : 'opacity-45'} ${FLEETGLOBE_FOCUS}`}
+              className={`flex h-10 items-center gap-2 rounded-[var(--kit-radius-sm)] border border-transparent px-3 text-sm font-medium text-[color:var(--kit-text)] hover:bg-[var(--kit-track)] disabled:opacity-40 aria-pressed:border-[var(--primary-background)] aria-pressed:bg-[color-mix(in_oklab,var(--primary-background)_18%,transparent)] ${FLEETGLOBE_FOCUS}`}
             >
-              <span className="flex items-baseline justify-between gap-2">
-                <span className="min-w-0 truncate text-sm text-base-foreground">{site.name}</span>
-                {site.kind === 'Terminal' ? (
-                  <span className="shrink-0 text-xs text-muted-foreground">Terminal</span>
-                ) : (
-                  <span className="shrink-0 text-sm tabular-nums text-base-foreground">
-                    {site.production} <span className="text-xs text-muted-foreground">kboe/d</span>
-                  </span>
-                )}
-              </span>
-              <span className="flex items-center justify-between gap-2">
-                <StatusIndicator tone={status.tone} shape={status.shape} label={status.label} size="sm" className="shrink-0" />
-                <span className="min-w-0 truncate text-xs text-muted-foreground">{site.region}</span>
-              </span>
+              <span aria-hidden="true" className={`size-2.5 shrink-0 bg-[var(--t-line)] ${site.kind === 'Platform' ? 'rounded-full' : 'rotate-45'}`} />
+              {site.name}
+              {site.kind === 'Terminal' ? null : <span className="tabular-nums text-[color:var(--kit-text-3)]">{formatNumber(site.production)}</span>}
             </button>
           </li>
         );
@@ -266,300 +517,173 @@ function FleetGlobeSiteList({ filter, selectedId, onSelect }: { filter: FleetGlo
   );
 }
 
-function FleetGlobeStat({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="flex flex-col gap-0.5">{children}</dd>
-    </div>
-  );
-}
-
-function FleetGlobeSiteCard({ site, onClose }: { site: FleetGlobeSite; onClose?: () => void }) {
-  const status = FLEETGLOBE_STATES[site.state];
-  const terminal = fleetGlobeSite(site.exportTo);
-  const feeders = FLEETGLOBE_SITES.filter((other) => other.exportTo === site.id);
-
-  return (
-    <section aria-label={`${site.name} site card`} className={`flex flex-col gap-3 rounded-xl p-3 ${FLEETGLOBE_GLASS}`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h4 className="text-sm font-semibold text-base-foreground">{site.name}</h4>
-          <p className="text-xs text-muted-foreground">
-            {site.kind} · {site.region}
-          </p>
-        </div>
-        {onClose ? (
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            <IconX /> Close
-          </Button>
-        ) : null}
-      </div>
-      <div className="flex flex-col gap-0.5">
-        <StatusIndicator tone={status.tone} shape={status.shape} label={status.label} size="sm" pulse={site.state === 'shut-in'} />
-        <span className="text-xs text-muted-foreground">{site.note}</span>
-      </div>
-
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-3 border-t border-default pt-3">
-        {site.kind === 'Terminal' ? (
-          <FleetGlobeStat label="Receiving from">
-            <ValueReadout value={feeders.length} unit="sites" size="sm" />
-          </FleetGlobeStat>
-        ) : (
-          <FleetGlobeStat label="Production">
-            <ValueReadout value={site.production} unit="kboe/d" size="sm" tone={site.state === 'shut-in' ? 'critical' : 'neutral'} />
-            <TrendDelta value={site.production} reference={site.plan} decimals={0} goodDirection="up" caption="vs plan" size="sm" />
-          </FleetGlobeStat>
-        )}
-        <FleetGlobeStat label="Availability">
-          <ValueReadout value={site.availability} unit="%" decimals={1} size="sm" />
-        </FleetGlobeStat>
-      </dl>
-
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">Open alarms</span>
-        {fleetGlobeAlarmCount(site) === 0 ? (
-          <span className="text-sm text-muted-foreground">None</span>
-        ) : (
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums text-base-foreground">
-            <span className="flex items-center gap-1.5 whitespace-nowrap">
-              <StatusDot tone="critical" shape="diamond" size="sm" />
-              {site.alarms.critical} critical
-            </span>
-            <span className="flex items-center gap-1.5 whitespace-nowrap">
-              <StatusDot tone="warning" shape="square" size="sm" />
-              {site.alarms.high} high
-            </span>
-            <span className="flex items-center gap-1.5 whitespace-nowrap">
-              <StatusDot tone="info" shape="dot" size="sm" />
-              {site.alarms.medium} medium
-            </span>
-          </span>
-        )}
-      </div>
-
-      {site.kind === 'Terminal' ? null : (
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Production, last 7 days</span>
-          <Sparkline values={fleetGlobeTrend(site)} label={`${site.name} production over the last 7 days`} unit="kboe/d" decimals={0} height={32} tone={site.state === 'shut-in' ? 'critical' : 'neutral'} variant="area" showLast />
-        </div>
-      )}
-
-      {terminal ? (
-        <p className="border-t border-default pt-3 text-xs text-muted-foreground">
-          Exports to <span className="text-base-foreground">{terminal.name}</span>, <span className="tabular-nums">{formatValue(greatCircleKm(site, terminal), 0)} km</span> along the great circle.
-        </p>
-      ) : null}
-    </section>
-  );
-}
-
-function FleetGlobeLegend() {
-  const item = 'flex items-center gap-1.5 whitespace-nowrap';
-  return (
-    <ul aria-label="Globe legend" className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-medium-foreground">
-      {Object.values(FLEETGLOBE_STATES).map((status) => (
-        <li key={status.label} className={item}>
-          <StatusDot tone={status.tone} shape={status.shape} size="md" />
-          {status.label}
-        </li>
-      ))}
-      <li className={item}>
-        <span aria-hidden="true" className="h-0.5 w-4 bg-base-foreground" />
-        Export route
-      </li>
-    </ul>
-  );
-}
-
-function FleetGlobeTotals({ filter }: { filter: FleetGlobeFilter }) {
-  const producing = FLEETGLOBE_SITES.filter((site) => site.kind !== 'Terminal');
-  const total = producing.reduce((sum, site) => sum + site.production, 0);
-  const plan = producing.reduce((sum, site) => sum + site.plan, 0);
-  const onStream = producing.filter((site) => site.production > 0).length;
-  const alarms = FLEETGLOBE_SITES.reduce((sum, site) => sum + fleetGlobeAlarmCount(site), 0);
-
-  return (
-    <div className="flex flex-wrap items-stretch gap-x-8 gap-y-3">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-xs text-muted-foreground">Fleet production</span>
-        <ValueReadout value={total} unit="kboe/d" size="md" />
-        <TrendDelta value={total} reference={plan} decimals={0} goodDirection="up" caption="vs plan" size="sm" />
-      </div>
-      {FLEETGLOBE_FILTERS.slice(1).map((region) => {
-        const regional = producing.filter((site) => site.region === region).reduce((sum, site) => sum + site.production, 0);
-        const active = filter === region;
-        return (
-          <div key={region} className={`flex min-w-36 flex-1 flex-col gap-1.5 border-l pl-4 ${active ? 'border-[var(--primary-background)]' : 'border-default'}`}>
-            <span className={`text-xs ${active ? 'text-base-foreground' : 'text-muted-foreground'}`}>{region}</span>
-            <ValueReadout value={regional} unit="kboe/d" size="sm" />
-            <span className="flex h-1 overflow-hidden rounded-full bg-secondary-background" role="img" aria-label={`${formatValue((regional / total) * 100, 0)} percent of fleet production`}>
-              <span className="bg-chart-1-450" style={{ width: `${(regional / total) * 100}%` }} />
-            </span>
-          </div>
-        );
-      })}
-      <div className="flex flex-col gap-0.5 border-l border-default pl-4">
-        <span className="text-xs text-muted-foreground">On stream</span>
-        <ValueReadout value={onStream} unit={`of ${producing.length} sites`} size="sm" />
-      </div>
-      <div className="flex flex-col gap-0.5 border-l border-default pl-4">
-        <span className="text-xs text-muted-foreground">Open alarms</span>
-        <ValueReadout value={alarms} size="sm" />
-      </div>
-    </div>
-  );
-}
-
-function FleetGlobeFallbackList() {
-  return (
-    <ul className="flex flex-col gap-2 rounded-lg border border-default bg-card-background p-3">
-      {FLEETGLOBE_SITES.map((site) => (
-        <li key={site.id} className="flex items-center justify-between gap-3 text-sm">
-          <span className="min-w-0 truncate text-base-foreground">{site.name}</span>
-          <StatusIndicator {...FLEETGLOBE_STATES[site.state]} size="sm" className="shrink-0" />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function FleetGlobeExperience({ initial = FLEETGLOBE_INITIAL, still = false }: { initial?: FleetGlobeUi; still?: boolean }) {
+function FleetGlobeBoard({ initial = FLEETGLOBE_INITIAL, still = false }: { initial?: FleetGlobeUi; still?: boolean }) {
   const [state, dispatch] = useReducer(fleetGlobeReducer, initial);
   const selected = fleetGlobeSite(state.selectedId);
-  const untouched = !selected && state.filter === 'All' && state.spinning;
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape' && state.selectedId) {
-      event.preventDefault();
-      dispatch({ type: 'clear' });
-    }
-  };
+  const select = (id: string) => dispatch({ type: 'select', id });
 
   return (
-    <div
-      tabIndex={-1}
-      onKeyDown={onKeyDown}
-      onPointerDownCapture={(event) => {
-        // Orbit controls swallow the pointer event, so take focus by hand to keep Escape working.
-        if (event.target instanceof HTMLCanvasElement) event.currentTarget.focus({ preventScroll: true });
-      }}
-      className="flex h-[46rem] w-full flex-col overflow-hidden rounded-xl border border-default bg-base-background outline-none"
-    >
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-default px-4 py-2.5">
-        <div className="flex min-w-0 items-baseline gap-3">
-          <h3 className="text-sm font-semibold text-base-foreground">Fleet</h3>
-          <span className="text-xs text-muted-foreground">Norwegian continental shelf · {FLEETGLOBE_SITES.length} sites</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <FleetGlobeFilterSwitch value={state.filter} onChange={(filter) => dispatch({ type: 'filter', filter })} />
-          <Button variant="outline" size="sm" disabled={untouched && !still} onClick={() => dispatch({ type: 'overview' })}>
-            <IconWorld /> Show whole globe
-          </Button>
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,color-mix(in_oklab,var(--primary-background)_16%,transparent),transparent_62%)]"
-          />
-          <SceneCanvas
-            label={`Globe showing ${FLEETGLOBE_SITES.length} sites on the Norwegian continental shelf${selected ? `, centred on ${selected.name}` : state.filter === 'All' ? '' : `, ${state.filter} in focus`}`}
-            fallback={<FleetGlobeFallbackList />}
-            camera={{ fov: 40, near: 0.5, far: 400 }}
-          >
-            <StillScene still={still}>
-              <FleetGlobe
-                sites={fleetGlobeMarkers(state.filter)}
-                routes={fleetGlobeRoutes(state.filter)}
-                outlines={WORLD_OUTLINES}
-                radius={FLEETGLOBE_RADIUS}
-                view={fleetGlobeView(state)}
-                viewKey={state.resets}
-                spinning={state.spinning && !still}
-                selectedId={state.selectedId}
-                onSelect={(id) => dispatch({ type: 'select', id })}
-                onInteract={() => dispatch({ type: 'interact' })}
-                onClear={() => dispatch({ type: 'clear' })}
-                insets={{ left: selected ? 332 : 0, bottom: 36 }}
-              />
-            </StillScene>
-          </SceneCanvas>
-
-          <div className="pointer-events-none absolute inset-3 z-30 flex flex-col justify-between gap-3">
-            <div className="flex items-start">
-              {selected ? (
-                <div key={selected.id} className="pointer-events-auto w-80 motion-safe:transition-[opacity,translate] motion-safe:duration-300 motion-safe:starting:-translate-x-3 motion-safe:starting:opacity-0">
-                  <FleetGlobeSiteCard site={selected} onClose={() => dispatch({ type: 'clear' })} />
+    <LookScope look="glass">
+      <Canvas padding="none" className="h-[54rem]">
+        <SceneStage
+          className="h-full"
+          onEscape={() => dispatch({ type: 'clear' })}
+          overlay={
+            <div className="flex h-full flex-col justify-between gap-4 p-6">
+              <div className="flex min-h-0 flex-1 items-start justify-between gap-4">
+                <FleetGlobeHeadline filter={state.filter} />
+                <div className="flex max-h-full min-h-0 w-[22rem] shrink-0 flex-col items-end gap-3">
+                  <div className="pointer-events-auto flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'overview' })}>
+                      <IconWorld /> Whole fleet
+                    </Button>
+                  </div>
+                  <div className="pointer-events-auto w-full">
+                    {selected ? (
+                      <FleetGlobeSiteCard key={selected.id} site={selected} onClose={() => dispatch({ type: 'clear' })} />
+                    ) : (
+                      <FleetGlobeAttention filter={state.filter} onSelect={select} />
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <p className={`rounded-lg px-3 py-1.5 text-xs text-medium-foreground ${FLEETGLOBE_GLASS}`}>
-                  {state.spinning && !still ? 'Turning slowly. Drag to take over, or pick a site.' : 'Drag to rotate. Pick a site to bring it front and centre.'}
-                </p>
-              )}
+              </div>
+              <div className="flex flex-col items-center gap-3">
+                <div className="pointer-events-auto">
+                  <FleetGlobeRegionSwitch value={state.filter} onChange={(filter) => dispatch({ type: 'filter', filter })} />
+                </div>
+                <FleetGlobeDock filter={state.filter} selectedId={state.selectedId} onSelect={select} />
+              </div>
             </div>
-            <div className={`pointer-events-auto self-start rounded-lg px-3 py-1.5 ${FLEETGLOBE_GLASS}`}>
-              <FleetGlobeLegend />
-            </div>
-          </div>
+          }
+        >
+          <FleetGlobeScene state={state} dispatch={dispatch} insets={{ right: 340, bottom: 150, left: 160 }} still={still} />
+        </SceneStage>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FleetGlobeSignature() {
+  return <FleetGlobeBoard />;
+}
+
+/** The detail state: one region in focus and the card of the site that is shut in. */
+function FleetGlobeBarents() {
+  return <FleetGlobeBoard initial={{ selectedId: 'tromsoflaket', filter: 'Barents Sea', spinning: false, resets: 0 }} still />;
+}
+
+const FLEETGLOBE_COLUMNS = (selectedId: string | null, onSelect: (id: string) => void): DataTableColumn<FleetGlobeSite>[] => [
+  {
+    id: 'site',
+    header: 'Site',
+    cell: (site) => (
+      <button type="button" aria-pressed={site.id === selectedId} onClick={() => onSelect(site.id)} className={`flex items-center gap-2 text-left font-semibold underline-offset-4 hover:underline aria-pressed:underline ${FLEETGLOBE_FOCUS}`}>
+        <span aria-hidden="true" className={`size-2 shrink-0 ${site.id === selectedId ? 'bg-[var(--primary-background)]' : 'bg-transparent'}`} />
+        {site.name}
+      </button>
+    ),
+    nowrap: true,
+  },
+  { id: 'region', header: 'Region', cell: (site) => site.region, muted: true, nowrap: true },
+  { id: 'state', header: 'State', cell: (site) => <StatusPill tone={FLEETGLOBE_STATES[site.state].tone}>{FLEETGLOBE_STATES[site.state].label}</StatusPill> },
+  { id: 'production', header: 'kboe/d', cell: (site) => (site.kind === 'Terminal' ? '–' : formatNumber(site.production)), numeric: true },
+  { id: 'plan', header: 'Plan', cell: (site) => (site.kind === 'Terminal' ? '–' : formatNumber(site.plan)), numeric: true, muted: true },
+  { id: 'availability', header: 'Avail. %', cell: (site) => formatNumber(site.availability, 1), numeric: true },
+  { id: 'alarms', header: 'Alarms', cell: (site) => fleetGlobeAlarmCount(site), numeric: true },
+];
+
+/** The same fleet for a control room: the register is the screen and the globe only locates the row. */
+function FleetGlobeRegister() {
+  const [state, dispatch] = useReducer(fleetGlobeReducer, { selectedId: 'valhall-sor', filter: 'All', spinning: false, resets: 0 });
+  const selected = fleetGlobeSite(state.selectedId);
+  const select = (id: string) => dispatch({ type: 'select', id });
+  const totals = fleetGlobeTotals('All');
+
+  return (
+    <LookScope look="console">
+      <Canvas padding="none" className="grid h-[38rem] grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-px bg-[var(--kit-rule)]">
+        <Panel title="Fleet register" subtitle={`${formatNumber(totals.production)} of ${formatNumber(totals.plan)} kboe/d · 10 sites`} padding="none">
+          <DataTable
+            label="Sites of the fleet with state, production, plan, availability and open alarms"
+            columns={FLEETGLOBE_COLUMNS(state.selectedId, select)}
+            rows={FLEETGLOBE_STATE_ORDER.flatMap((order) => FLEETGLOBE_SITES.filter((site) => site.state === order))}
+            rowKey={(site) => site.id}
+            rowTone={(site) => (site.state === 'producing' ? undefined : FLEETGLOBE_STATES[site.state].tone)}
+            flush
+          />
+        </Panel>
+        <Panel title="Locator" subtitle={selected ? `${selected.name} · ${selected.note}` : 'Pick a row to find the site'} tone={selected ? FLEETGLOBE_STATES[selected.state].tone : 'neutral'} padding="none">
+          <SceneStage className="min-h-0 flex-1" onEscape={() => dispatch({ type: 'clear' })}>
+            <FleetGlobeScene state={state} dispatch={dispatch} still />
+          </SceneStage>
+        </Panel>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FleetGlobePartStage({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas padding="none" className="h-72">
+        <SceneStage className="h-full">
+          <SceneCanvas label={label} camera={{ fov: 40, near: 0.5, far: 400 }}>
+            <StillScene>{children}</StillScene>
+          </SceneCanvas>
+        </SceneStage>
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FleetGlobePartCard() {
+  const site = fleetGlobeSite('nordkapp') ?? FLEETGLOBE_SITES[0];
+
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-[40rem] flex-col">
+        <FleetGlobeSiteCard site={site} />
+      </Canvas>
+    </LookScope>
+  );
+}
+
+function FleetGlobePartAttention() {
+  const [state, dispatch] = useReducer(fleetGlobeReducer, { selectedId: null, filter: 'All', spinning: false, resets: 0 });
+  const selected = fleetGlobeSite(state.selectedId);
+
+  return (
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-[40rem] flex-col gap-4">
+        <div>
+          <FleetGlobeAttention filter={state.filter} onSelect={(id) => dispatch({ type: 'select', id })} />
         </div>
-
-        <aside aria-label="Site list" className="flex w-72 shrink-0 flex-col gap-2 overflow-y-auto border-l border-default p-3">
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sites</span>
-          <FleetGlobeSiteList filter={state.filter} selectedId={state.selectedId} onSelect={(id) => dispatch({ type: 'select', id })} />
-        </aside>
-      </div>
-
-      <footer className="shrink-0 border-t border-default px-4 py-3">
-        <FleetGlobeTotals filter={state.filter} />
-      </footer>
-    </div>
+        <p className="text-sm text-[color:var(--kit-text-2)]">{selected ? `Opens the card of ${selected.name} and swings the globe to it.` : 'Picking a row opens that site and swings the globe to it.'}</p>
+      </Canvas>
+    </LookScope>
   );
 }
 
-function FleetGlobeTron() {
+function FleetGlobePartDock() {
+  const [state, dispatch] = useReducer(fleetGlobeReducer, { selectedId: 'utsira-sor', filter: 'North Sea', spinning: false, resets: 0 });
+
   return (
-    <ThemeScope preset="tron" className="w-full">
-      <FleetGlobeExperience />
-    </ThemeScope>
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-72 flex-col items-center justify-center gap-4">
+        <FleetGlobeRegionSwitch value={state.filter} onChange={(filter) => dispatch({ type: 'filter', filter })} />
+        <FleetGlobeDock filter={state.filter} selectedId={state.selectedId} onSelect={(id) => dispatch({ type: 'select', id })} />
+      </Canvas>
+    </LookScope>
   );
 }
 
-function FleetGlobeHologram() {
+function FleetGlobePartHeadline() {
   return (
-    <ThemeScope preset="hologram" className="w-full">
-      <FleetGlobeExperience initial={{ selectedId: 'valhall-sor', filter: 'All', spinning: false, resets: 0 }} still />
-    </ThemeScope>
-  );
-}
-
-function FleetGlobeAuraDark() {
-  return (
-    <ThemeScope preset="aura-dark" className="w-full">
-      <FleetGlobeExperience initial={{ selectedId: null, filter: 'Barents Sea', spinning: false, resets: 0 }} still />
-    </ThemeScope>
-  );
-}
-
-function FleetGlobeStage({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <ThemeScope preset="tron" className="w-full">
-      <div className="relative h-72 w-full overflow-hidden rounded-xl border border-default bg-base-background">
-        <SceneCanvas label={label} camera={{ fov: 40, near: 0.5, far: 400 }}>
-          <StillScene>{children}</StillScene>
-        </SceneCanvas>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function FleetGlobePartGlobe() {
-  return (
-    <FleetGlobeStage label="Globe with a latitude and longitude grid and stylised coastlines, centred on Europe">
-      <FleetGlobe sites={[]} outlines={WORLD_OUTLINES} radius={FLEETGLOBE_RADIUS} view={{ lat: 42, lon: 10, distance: FLEETGLOBE_RADIUS * 3.3 }} />
-    </FleetGlobeStage>
+    <LookScope look="glass" className="w-full">
+      <Canvas className="flex h-72 flex-col justify-center">
+        <FleetGlobeHeadline filter="All" />
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -573,9 +697,9 @@ function FleetGlobePartMarkers() {
   ];
 
   return (
-    <FleetGlobeStage label="Site markers in five statuses and sizes, with one selected">
+    <FleetGlobePartStage label="Site markers in five states and sizes, with one selected">
       <FleetGlobe sites={sites} outlines={WORLD_OUTLINES} radius={FLEETGLOBE_RADIUS} view={{ lat: 61, lon: 5, distance: FLEETGLOBE_RADIUS * 1.75 }} selectedId="b" />
-    </FleetGlobeStage>
+    </FleetGlobePartStage>
   );
 }
 
@@ -588,68 +712,21 @@ function FleetGlobePartArcs() {
   ];
 
   return (
-    <FleetGlobeStage label="Three great-circle arcs of different lengths; longer hops rise higher">
+    <FleetGlobePartStage label="Three great-circle arcs of different lengths; longer hops rise higher">
       <FleetGlobe sites={[{ id: 'stord', name: 'Stord terminal', lat: stord.lat, lon: stord.lon, size: 0.075, shape: 'diamond' }]} routes={routes} outlines={WORLD_OUTLINES} radius={FLEETGLOBE_RADIUS} view={{ lat: 46, lon: -22, distance: FLEETGLOBE_RADIUS * 3.2 }} />
-    </FleetGlobeStage>
-  );
-}
-
-function FleetGlobePartList() {
-  const [state, dispatch] = useReducer(fleetGlobeReducer, { selectedId: 'tromsoflaket', filter: 'All', spinning: false, resets: 0 });
-
-  return (
-    <ThemeScope preset="tron" className="w-full">
-      <div className="flex h-[38rem] w-full flex-col gap-3 rounded-xl border border-default bg-base-background p-3">
-        <FleetGlobeFilterSwitch value={state.filter} onChange={(filter) => dispatch({ type: 'filter', filter })} />
-        <div className="min-h-0 flex-1 overflow-y-auto px-1.5">
-          <FleetGlobeSiteList filter={state.filter} selectedId={state.selectedId} onSelect={(id) => dispatch({ type: 'select', id })} />
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function FleetGlobePartCard() {
-  const site = fleetGlobeSite('tromsoflaket');
-  const terminal = fleetGlobeSite('stord');
-  if (!site || !terminal) return null;
-
-  return (
-    <ThemeScope preset="tron" className="w-full">
-      <div className="@container flex h-[38rem] w-full items-start justify-center gap-3 overflow-y-auto rounded-xl border border-default bg-base-background bg-[radial-gradient(circle_at_50%_40%,color-mix(in_oklab,var(--primary-background)_18%,transparent),transparent_70%)] p-4">
-        <div className="w-80 shrink-0">
-          <FleetGlobeSiteCard site={site} />
-        </div>
-        <div className="hidden w-80 shrink-0 @3xl:block">
-          <FleetGlobeSiteCard site={terminal} />
-        </div>
-      </div>
-    </ThemeScope>
-  );
-}
-
-function FleetGlobePartTotals() {
-  return (
-    <ThemeScope preset="tron" className="w-full">
-      <div className="flex w-full flex-col gap-4 rounded-xl border border-default bg-base-background p-4">
-        <FleetGlobeTotals filter="North Sea" />
-        <div className="border-t border-default pt-3">
-          <FleetGlobeLegend />
-        </div>
-      </div>
-    </ThemeScope>
+    </FleetGlobePartStage>
   );
 }
 
 function FleetGlobePartFallback() {
   return (
-    <ThemeScope preset="tron" className="w-full">
-      <div className="h-[32rem] w-full overflow-hidden rounded-xl border border-default">
-        <SceneCanvas label="Globe showing the fleet on the Norwegian continental shelf" forceFallback fallback={<FleetGlobeFallbackList />}>
+    <LookScope look="glass" className="w-full">
+      <Canvas className="h-72">
+        <SceneCanvas label="Globe showing the fleet" forceFallback fallback={<FleetGlobeFallbackList />} camera={{ fov: 40, near: 0.5, far: 400 }}>
           <FleetGlobe sites={[]} view={FLEETGLOBE_OVERVIEW} />
         </SceneCanvas>
-      </div>
-    </ThemeScope>
+      </Canvas>
+    </LookScope>
   );
 }
 
@@ -657,158 +734,163 @@ export default definePage({
   id: 'fleet-globe',
   title: 'Fleet globe',
   summary:
-    'The whole fleet on a globe you can spin. Sites glow in their status colour and scale with production, export routes arc to the terminals, and picking a site swings the globe round to put it front and centre with its card beside it.',
+    'A whole fleet on a globe that fills the screen. Markers are sized by production and coloured by state, arcs show where each site exports to, and picking a site swings the globe to it and opens its card. Every site is also a chip in the dock, so nothing depends on the pointer.',
   guidance: {
     use: [
-      'For a fleet spread over sea areas, when where a site lies explains its weather, its export route and its neighbours.',
-      'As the way in: the globe finds the site, the card and the list carry the numbers.',
-      'With the site list as the keyboard path — every marker has a row that selects it and turns the globe.',
-      'With one label at a time. The selected site is named in the scene; the rest are named in the list.',
+      'When the story is geographic: sites spread over a shelf or a continent and routes between them.',
+      'With one headline figure for the fleet and the states in words, so the answer is there before anyone touches the globe.',
+      'With a card for one picked site; the globe labels only that site, so labels never pile up.',
+      'On a wall or in a review, where a slowly turning globe is an asset rather than a distraction.',
     ],
     avoid: [
-      'A globe for a handful of sites in one field. A plot plan or a map tile shows that better.',
-      'Reading production off marker size. Size ranks sites at a glance; the figures are in the list.',
-      'Rotation that never stops. The idle spin ends on the first interaction and never starts under reduced motion.',
-      'Textures and real map data in a control-room tool. A stylised outline is enough to say where.',
+      'Comparing sites number by number: use the register, where the globe only locates the row.',
+      'A single plant or a handful of sites in one field: a map or the 3D plant explorer shows more.',
+      'Leaving the spin on once the user has touched anything.',
+      'State by marker colour alone: the dock, the card and the pills all say the state in words.',
     ],
   },
   source,
   sections: [
     {
-      id: 'experience',
-      title: 'Experience',
-      description:
-        'The globe turns slowly until you touch it. Drag to rotate, scroll to zoom. Click a marker or a row in the site list to bring that site front and centre and open its card. Filter by region to dim the rest. Escape closes the card.',
+      id: 'dashboard',
+      title: 'Dashboard',
+      description: 'The globe turns slowly until you touch it. Drag to rotate, pick a marker, a chip in the dock or a row under Needs attention to open a site, and switch region to light only that part of the shelf. Escape closes the card.',
       specimens: [
         {
-          id: 'FleetGlobeTron',
+          id: 'FleetGlobeSignature',
           title: 'Fleet globe',
-          note: 'Pick it when a fleet-wide overview should start from geography and lead to one site in a single move.',
+          note: 'Pick it as the opening view of a fleet: the total, what is off plan, and one click to any site.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
+          bleed: true,
           uses: [
-            'three/SceneCanvas.tsx',
+            'kit/scene/SceneStage.tsx',
+            'kit/Panel.tsx',
+            'kit/StatusPill.tsx',
+            'kit/RingGauge.tsx',
+            'kit/Meter.tsx',
+            'kit/TrendArea.tsx',
+            'looks/LookScope.tsx',
             'three/scenes/FleetGlobe.tsx',
-            'three/scenes/Globe.tsx',
-            'three/scenes/GlobeControls.tsx',
-            'three/scenes/SiteMarker.tsx',
-            'three/scenes/GreatCircleArc.tsx',
-            'three/scenes/geo.ts',
             'three/scenes/globeFocus.ts',
+            'three/scenes/geo.ts',
             'three/scenes/continents.ts',
-            'industrial/ValueReadout.tsx',
-            'industrial/StatusIndicator.tsx',
-            'industrial/Sparkline.tsx',
-            'themes/ThemeScope.tsx',
+            'three/SceneCanvas.tsx',
           ],
-          Component: FleetGlobeTron,
+          Component: FleetGlobeSignature,
         },
       ],
     },
     {
-      id: 'themes',
-      title: 'In other themes',
-      description: 'The same globe in two more presets, opened in other states and held still. Sphere, grid, coastlines and markers take their colours from tokens.',
+      id: 'variations',
+      title: 'Other screens',
+      description: 'The detail state with a site card open on one region, and the fleet register for a control room, where the table leads and the globe locates.',
       specimens: [
         {
-          id: 'FleetGlobeHologram',
-          title: 'Hologram, one site in focus',
-          note: 'Pick it for a digital-twin look: soft teal on black, here swung round to Valhall Sør with its card open.',
+          id: 'FleetGlobeBarents',
+          title: 'Site card open',
+          note: 'Pick it to see the detail state: the Barents Sea in focus and the card of the site that is shut in.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['three/SceneCanvas.tsx', 'three/scenes/FleetGlobe.tsx', 'three/scenes/StillScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: FleetGlobeHologram,
+          bleed: true,
+          uses: ['kit/scene/SceneStage.tsx', 'kit/Panel.tsx', 'kit/RingGauge.tsx', 'kit/Meter.tsx', 'kit/TrendArea.tsx', 'three/scenes/FleetGlobe.tsx'],
+          Component: FleetGlobeBarents,
         },
         {
-          id: 'FleetGlobeAuraDark',
-          title: 'Aura dark, one region',
-          note: 'Pick it inside a standard dark Aura app; here the Barents Sea filter dims every other site and route.',
+          id: 'FleetGlobeRegister',
+          title: 'Fleet register',
+          note: 'Pick it when operators compare sites row by row: a dense table sorted by state, with a small globe that finds the selected row.',
           origin: 'custom',
           size: 'full',
           align: 'stretch',
-          surface: 'muted',
-          uses: ['three/SceneCanvas.tsx', 'three/scenes/FleetGlobe.tsx', 'three/scenes/StillScene.tsx', 'themes/ThemeScope.tsx'],
-          Component: FleetGlobeAuraDark,
+          bleed: true,
+          uses: ['kit/DataTable.tsx', 'kit/Panel.tsx', 'kit/StatusPill.tsx', 'kit/scene/SceneStage.tsx', 'three/scenes/FleetGlobe.tsx', 'looks/LookScope.tsx'],
+          Component: FleetGlobeRegister,
         },
       ],
     },
     {
       id: 'parts',
       title: 'Parts',
-      description: 'The pieces on their own: globes you can drag, and the panels around the scene.',
+      description: 'The overlays around the globe and the pieces of the globe itself.',
       specimens: [
         {
-          id: 'FleetGlobePartGlobe',
-          title: 'Globe',
-          note: 'Pick it as the stage for anything placed by latitude and longitude; grid and coastlines are plain lines.',
+          id: 'FleetGlobePartCard',
+          title: 'Site card',
+          note: 'Pick it as what a picked site opens: state, production against plan, availability, alarms and where it exports to.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/RingGauge.tsx', 'kit/Meter.tsx', 'kit/TrendArea.tsx', 'kit/Delta.tsx', 'kit/StatusPill.tsx'],
+          Component: FleetGlobePartCard,
+        },
+        {
+          id: 'FleetGlobePartAttention',
+          title: 'Needs attention',
+          note: 'Pick it for the empty state of a selection panel: instead of a hint, list what is worth selecting.',
+          origin: 'custom',
+          size: 'md',
+          align: 'stretch',
+          bleed: true,
+          uses: ['kit/Panel.tsx', 'kit/IconChip.tsx'],
+          Component: FleetGlobePartAttention,
+        },
+        {
+          id: 'FleetGlobePartDock',
+          title: 'Site dock',
+          note: 'Pick a dock of chips as the keyboard path onto a globe; chips outside the region are disabled, not removed.',
+          origin: 'custom',
+          size: 'lg',
+          align: 'stretch',
+          bleed: true,
+          uses: ['three/scenes/globeFocus.ts'],
+          Component: FleetGlobePartDock,
+        },
+        {
+          id: 'FleetGlobePartHeadline',
+          title: 'Fleet headline',
+          note: 'Pick one very large figure with its plan in a sentence instead of a row of tiles over a scene.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['three/scenes/Globe.tsx', 'three/scenes/continents.ts', 'three/scenes/geo.ts'],
-          Component: FleetGlobePartGlobe,
+          bleed: true,
+          uses: ['kit/StatusPill.tsx', 'kit/IconChip.tsx'],
+          Component: FleetGlobePartHeadline,
         },
         {
           id: 'FleetGlobePartMarkers',
           title: 'Site markers',
-          note: 'Pick status colour for state, size for a ranking value and a diamond for a different kind of place.',
+          note: 'Pick markers sized by production and coloured by state; a diamond marks a terminal and only the selected one is labelled.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['three/scenes/SiteMarker.tsx', 'three/scenes/geo.ts', 'three/SceneLabel.tsx'],
+          bleed: true,
+          uses: ['three/scenes/SiteMarker.tsx', 'three/scenes/FleetGlobe.tsx', 'three/SceneLabel.tsx'],
           Component: FleetGlobePartMarkers,
         },
         {
           id: 'FleetGlobePartArcs',
-          title: 'Great-circle arcs',
-          note: 'Pick an arc for a route between two places; it rises with distance, so long hauls read at a glance.',
+          title: 'Route arcs',
+          note: 'Pick great-circle arcs for export routes; longer hops rise higher so they never cut through the globe.',
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
+          bleed: true,
           uses: ['three/scenes/GreatCircleArc.tsx', 'three/scenes/geo.ts'],
           Component: FleetGlobePartArcs,
         },
         {
-          id: 'FleetGlobePartList',
-          title: 'Site list with region filter',
-          note: 'Pick it beside the globe as the readable, keyboard-reachable twin of the markers.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/StatusIndicator.tsx'],
-          Component: FleetGlobePartList,
-        },
-        {
-          id: 'FleetGlobePartCard',
-          title: 'Site card',
-          note: 'Pick it for the focused site: state, production against plan, availability, alarms, a week of trend and the export route.',
-          origin: 'custom',
-          size: 'md',
-          align: 'stretch',
-          uses: ['industrial/ValueReadout.tsx', 'industrial/TrendDelta.tsx', 'industrial/Sparkline.tsx', 'three/scenes/geo.ts'],
-          Component: FleetGlobePartCard,
-        },
-        {
-          id: 'FleetGlobePartTotals',
-          title: 'Fleet totals strip',
-          note: 'Pick it under the globe so the sum of the fleet stays in view while one site is in focus.',
-          origin: 'custom',
-          size: 'full',
-          align: 'stretch',
-          uses: ['industrial/ValueReadout.tsx', 'industrial/TrendDelta.tsx', 'industrial/StatusDot.tsx'],
-          Component: FleetGlobePartTotals,
-        },
-        {
           id: 'FleetGlobePartFallback',
           title: 'Without WebGL',
-          note: 'Pick a fallback that lists the same sites and their state, so the fleet is readable where 3D cannot render.',
+          note: 'Pick a fallback that still names the sites and their states where a globe cannot render.',
           origin: 'custom',
-          size: 'full',
+          size: 'sm',
           align: 'stretch',
-          uses: ['three/SceneCanvas.tsx', 'industrial/StatusIndicator.tsx'],
+          bleed: true,
+          uses: ['three/SceneCanvas.tsx', 'three/webgl.ts'],
           Component: FleetGlobePartFallback,
         },
       ],

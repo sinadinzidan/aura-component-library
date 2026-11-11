@@ -32,7 +32,7 @@ type BarsProps = {
   className?: string;
 };
 
-const TICK = { fontSize: 12, fill: 'var(--kit-text-3)' };
+const TICK = { fontSize: 12, fill: 'var(--kit-text-2)' };
 const INITIAL = { width: 640, height: 240 };
 
 type TipEntry = { dataKey?: unknown; value?: unknown };
@@ -77,10 +77,13 @@ export function Bars({
   const top = ticks[ticks.length - 1] ?? peak;
   const valueWidth = formatNumber(top, decimals).length * 7.6 + 12;
   const limitText = limit ? `${limit.label} ${formatNumber(limit.value, decimals)}${suffix}` : '';
+  // With values written on the bars, the limit label moves to the right margin, level with its line.
+  const limitOutside = Boolean(limit) && showValues && !horizontal;
+  const limitWidth = limitOutside ? limitText.length * 7 + 14 : 0;
   const radius = Math.min(chart.barRadius, 14);
   const legend: LegendItem[] = series.map((entry) => ({ label: entry.label, tone: entry.tone ?? 'accent' }));
   const axisLine = chart.axisLine ? { stroke: 'var(--kit-rule-strong)' } : false;
-  const categoryAxis = { dataKey: 'c', type: 'category', tick: { ...TICK, fill: 'var(--kit-text-2)' }, tickLine: false, axisLine, tickMargin: 8 } as const;
+  const categoryAxis = { dataKey: 'c', type: 'category', tick: TICK, tickLine: false, axisLine, tickMargin: 8 } as const;
   const valueAxis = {
     type: 'number',
     tick: TICK,
@@ -107,13 +110,13 @@ export function Bars({
           // Recharts applies the gap on both sides of a band, so half the unfilled share goes on each.
           barCategoryGap={`${Math.round((1 - chart.barFill) * 50)}%`}
           barGap={look === 'poster' ? 0 : 3}
-          margin={{ top: limit ? 26 : showValues ? 22 : 8, right: horizontal ? (showValues ? valueWidth + 28 : 12) : 8, bottom: 0, left: 0 }}
+          margin={{ top: limit ? 26 : showValues ? 22 : 8, right: horizontal ? (showValues ? valueWidth + 28 : 12) : 8 + limitWidth, bottom: 0, left: 0 }}
         >
           {chart.grid === 'none' ? null : (
             <CartesianGrid
               horizontal={!horizontal}
               vertical={horizontal}
-              stroke="var(--kit-rule)"
+              stroke="var(--kit-grid)"
               strokeDasharray={look === 'console' ? '1 4' : undefined}
             />
           )}
@@ -186,7 +189,7 @@ export function Bars({
               strokeDasharray={look === 'blueprint' ? '10 3 2 3' : '5 4'}
               label={{
                 value: limitText,
-                position: horizontal ? 'top' : 'insideBottomRight',
+                position: horizontal ? 'top' : limitOutside ? 'right' : 'insideBottomRight',
                 // A halo in the surface colour keeps the label readable over bars and values.
                 stroke: 'var(--kit-halo)',
                 strokeWidth: 4,

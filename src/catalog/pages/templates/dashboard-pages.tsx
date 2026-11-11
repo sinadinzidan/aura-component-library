@@ -1,993 +1,954 @@
 import { Button } from '@cognite/aura/components/button';
-import { CheckboxGroup, CheckboxItem, CheckboxItemControl, CheckboxItemLabel } from '@cognite/aura/components/checkbox';
 import {
   SegmentedControl,
   SegmentedControlButton,
   SegmentedControlList,
 } from '@cognite/aura/components/segmented-control';
-import { Skeleton } from '@cognite/aura/components/skeleton';
-import { Switch } from '@cognite/aura/components/switch';
-import { Tabs, TabsList, TabsPanel, TabsTrigger } from '@cognite/aura/components/tabs';
-import { IconBuildingFactory2, IconChevronRight, IconDownload, IconPlus, IconRefresh, IconX } from '@cognite/aura/icons';
+import {
+  IconActivity,
+  IconAlertTriangle,
+  IconBell,
+  IconBolt,
+  IconChartBar,
+  IconChartLine,
+  IconCircleCheck,
+  IconClipboardList,
+  IconDownload,
+  IconFlame,
+  IconGauge,
+  IconLayoutDashboard,
+  IconPlus,
+  IconRefresh,
+  IconSettings,
+  IconTable,
+  IconTopologyStar3,
+  IconTrendingDown,
+} from '@cognite/aura/icons';
 import { useState } from 'react';
-import type { ReactNode } from 'react';
 
-import { DashboardPanel } from '../../../library/dashboards/DashboardPanel';
-import { StatusBadge } from '../../../library/display/StatusBadge';
-import { SkeletonTable } from '../../../library/feedback/SkeletonTable';
-import { Figure } from '../../../library/industrial/analytics/Figure';
-import { CategoryChart } from '../../../library/industrial/charts/CategoryChart';
-import { TimeRangeSwitch } from '../../../library/industrial/charts/TimeRangeSwitch';
-import { TrendChart } from '../../../library/industrial/charts/TrendChart';
-import { KpiTile } from '../../../library/industrial/KpiTile';
-import { SeverityBadge } from '../../../library/industrial/operations/SeverityBadge';
-import { ProgressRing } from '../../../library/industrial/ProgressRing';
-import { Sparkline } from '../../../library/industrial/Sparkline';
-import { formatValue, healthStatus, runStateStatus, toneFromLimits } from '../../../library/industrial/status';
-import { StatusIndicator } from '../../../library/industrial/StatusIndicator';
-import { ValueReadout } from '../../../library/industrial/ValueReadout';
-import { BreakdownList } from '../../../library/patterns/collections/BreakdownList';
-import { DataTable } from '../../../library/patterns/collections/DataTable';
-import type { DataTableColumn } from '../../../library/patterns/collections/DataTable';
-import { IconAction } from '../../../library/patterns/collections/IconAction';
-import { StatRow } from '../../../library/patterns/collections/StatRow';
-import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
-import { PageHeader } from '../../../library/patterns/structure/PageHeader';
-import { SectionHeader } from '../../../library/patterns/structure/SectionHeader';
-import { Table } from '../../../library/primitives/table/Table';
-import { TableBody } from '../../../library/primitives/table/TableBody';
-import { TableCell } from '../../../library/primitives/table/TableCell';
-import { TableHead } from '../../../library/primitives/table/TableHead';
-import { TableHeader } from '../../../library/primitives/table/TableHeader';
-import { TableRow } from '../../../library/primitives/table/TableRow';
-import { AppShell } from '../../../library/templates/AppShell';
-import { AppTopbar } from '../../../library/templates/AppTopbar';
-import type { AppTopbarCrumb } from '../../../library/templates/AppTopbar';
-import { ContentContainer } from '../../../library/templates/ContentContainer';
-import { TemplateFrame } from '../../../library/templates/TemplateFrame';
-import { TwoColumn } from '../../../library/templates/TwoColumn';
-import { ALARMS, ASSETS, PEOPLE, PLANT_KPIS, SENSORS, WORK_ORDERS, childrenOf, findAsset } from '../../data/plant';
-import type { Asset, RunState } from '../../data/plant';
-import { DAY, formatAgo, formatDate, makeSeries, makeValues } from '../../data/series';
+import { BrowserFrame } from '../../../library/kit/app-shells/BrowserFrame';
+import { Crumbs } from '../../../library/kit/app-shells/Crumbs';
+import { Pane } from '../../../library/kit/app-shells/Pane';
+import { Panes } from '../../../library/kit/app-shells/Panes';
+import { PersonChip } from '../../../library/kit/app-shells/PersonChip';
+import { TabStrip } from '../../../library/kit/app-shells/TabStrip';
+import { AppFrame, type AppFrameNavItem } from '../../../library/kit/AppFrame';
+import { Bars } from '../../../library/kit/Bars';
+import { Callout } from '../../../library/kit/dashboard-pages/Callout';
+import { CompareRow } from '../../../library/kit/dashboard-pages/CompareRow';
+import { FilterGroup } from '../../../library/kit/dashboard-pages/FilterGroup';
+import { SkeletonBlock } from '../../../library/kit/dashboard-pages/SkeletonBlock';
+import { DataTable, type DataTableColumn } from '../../../library/kit/DataTable';
+import { Donut } from '../../../library/kit/Donut';
+import { EmptyPanel } from '../../../library/kit/EmptyPanel';
+import { ChoiceCards } from '../../../library/kit/form-and-settings/ChoiceCards';
+import { Grid } from '../../../library/kit/Grid';
+import { HeatStrip, type HeatRow } from '../../../library/kit/HeatStrip';
+import { IconChip } from '../../../library/kit/IconChip';
+import { PickList } from '../../../library/kit/list-and-detail/PickList';
+import { Meter } from '../../../library/kit/Meter';
+import { Panel } from '../../../library/kit/Panel';
+import { RingGauge } from '../../../library/kit/RingGauge';
+import { SectionHeader } from '../../../library/kit/SectionHeader';
+import { Stat } from '../../../library/kit/Stat';
+import { StatGroup } from '../../../library/kit/StatGroup';
+import { StatusPill } from '../../../library/kit/StatusPill';
+import { TagId } from '../../../library/kit/TagId';
+import type { Tone } from '../../../library/kit/tones';
+import { TrendArea } from '../../../library/kit/TrendArea';
+import { TrendLine } from '../../../library/kit/TrendLine';
+import { ALARMS, ASSETS, PLANT_KPIS, childrenOf, findAsset, type Alarm, type Asset } from '../../data/plant';
+import { formatAgo, formatTime, makeSeries, makeValues } from '../../data/series';
 import { definePage } from '../../types';
 
 import source from './dashboard-pages.tsx?raw';
 
-const DASHBOARD_USER = PEOPLE[0];
-const DASHBOARD_AREAS = childrenOf('nk');
-const DASHBOARD_EQUIPMENT = ASSETS.filter((asset) => !['site', 'area', 'system'].includes(asset.type));
-const DASHBOARD_OPEN_ALARMS = ALARMS.filter((alarm) => alarm.state === 'active' || alarm.state === 'acknowledged');
-const DASHBOARD_WALL_SENSORS = SENSORS.filter((sensor) => sensor.quality !== 'bad').slice(0, 6);
+const DP_NAV: AppFrameNavItem[] = [
+  { id: 'overview', label: 'Overview', icon: <IconLayoutDashboard /> },
+  { id: 'alarms', label: 'Alarms', icon: <IconBell />, badge: '4' },
+  { id: 'trends', label: 'Trends', icon: <IconChartLine /> },
+  { id: 'assets', label: 'Assets', icon: <IconTopologyStar3 /> },
+  { id: 'work', label: 'Work orders', icon: <IconClipboardList /> },
+  { id: 'settings', label: 'Settings', icon: <IconSettings /> },
+];
 
-const DASHBOARD_EXPORT = makeSeries({ seed: 31, points: 48, base: 4.32, amplitude: 0.14, noise: 0.04, cycles: 1.2, decimals: 2, stepMs: DAY / 48 });
-const DASHBOARD_ENERGY = makeSeries({ seed: 43, points: 48, base: 31.8, amplitude: 0.6, noise: 0.3, drift: -0.8, stepMs: DAY / 48 });
-const DASHBOARD_FLARING = makeSeries({ seed: 47, points: 48, base: 13.5, amplitude: 2.5, noise: 0.9, drift: -1.5, min: 0, stepMs: DAY / 48 });
-const DASHBOARD_AVAILABILITY = makeSeries({ seed: 41, points: 30, base: 96.8, amplitude: 0.6, noise: 0.3, max: 100, stepMs: DAY });
-const DASHBOARD_OTHER_SITE_EXPORT = makeSeries({ seed: 91, points: 48, base: 4.46, amplitude: 0.05, noise: 0.03, decimals: 2, stepMs: DAY / 48 });
+const DP_AREAS = childrenOf('nk');
 
-const DASHBOARD_AREA_OPTIONS = [{ value: 'all', label: 'All areas' }, ...DASHBOARD_AREAS.map((area) => ({ value: area.id, label: area.name }))];
+const DP_UNITS = ASSETS.filter((asset) => !['site', 'area', 'system'].includes(asset.type));
 
-const DASHBOARD_ALARMS_BY_AREA = DASHBOARD_AREAS.map((area) => ({
-  id: area.id,
-  label: area.name,
-  detail: area.tag,
-  value: DASHBOARD_OPEN_ALARMS.filter((alarm) => findAsset(alarm.assetId)?.parentId === area.id).length,
-}));
+const DP_EXPORT = makeSeries({ seed: 31, points: 25, base: 4.32, amplitude: 0.14, noise: 0.04, cycles: 1.2, decimals: 2 });
 
-/** Downtime over the last 14 days, in hours, split two ways for the analytical page. */
-const DASHBOARD_DOWNTIME_DAYS = [0.4, 0, 1.2, 0, 0, 2.6, 0.3, 0, 0, 5.8, 3.1, 0.6, 0, 4.2].map((hours, index) => ({
-  day: formatDate(Date.UTC(2026, 1, 27 + index)),
-  hours,
-}));
+const DP_EXPORT_VALUES = [...DP_EXPORT.slice(0, -1).map((point) => point.v), PLANT_KPIS.gasExport.value];
 
-const DASHBOARD_DOWNTIME: Record<string, { title: string; items: { id: string; label: string; value: number; detail?: string }[] }> = {
-  cause: {
-    title: 'By cause',
-    items: [
-      { id: 'vibration', label: 'High vibration trips', value: 9.4 },
-      { id: 'instrument', label: 'Instrument faults', value: 3.9 },
-      { id: 'cooling', label: 'Cooling limitations', value: 2.6 },
-      { id: 'planned', label: 'Planned maintenance', value: 1.5 },
-      { id: 'other', label: 'Other', value: 0.8 },
-    ],
-  },
-  equipment: {
-    title: 'By equipment',
-    items: [
-      { id: '9103', label: 'Recompressor', detail: '23-KA-9103', value: 10.6 },
-      { id: '9114', label: 'Interstage cooler', detail: '23-HA-9114', value: 3.2 },
-      { id: '4001', label: 'Cooling water pump', detail: '40-PA-4001', value: 2.9 },
-      { id: '9101', label: '1st stage compressor', detail: '23-KA-9101', value: 1.5 },
-    ],
-  },
+const DP_EXPORT_YESTERDAY = makeValues({ seed: 32, points: 25, base: 4.24, amplitude: 0.1, noise: 0.03, cycles: 1.1, decimals: 2 });
+
+const DP_HOURS = DP_EXPORT.map((point) => formatTime(point.t));
+
+const DP_AVAILABILITY = [...makeValues({ seed: 41, points: 24, base: 96.9, amplitude: 0.5, noise: 0.2 }), PLANT_KPIS.availability.value];
+
+const DP_ENERGY = [...makeValues({ seed: 43, points: 24, base: 31.8, amplitude: 0.6, noise: 0.3, drift: -0.8 }), PLANT_KPIS.energyIntensity.value];
+
+const DP_FLARING = [...makeValues({ seed: 47, points: 24, base: 13.6, amplitude: 2.4, noise: 0.8, cycles: 1.5, drift: -2, min: 6 }), PLANT_KPIS.flaring.value];
+
+const DP_PLANT_HEALTH = [...makeValues({ seed: 71, points: 24, base: 92.4, amplitude: 0.8, noise: 0.3, drift: -1.6, decimals: 1 }), 91];
+
+const DP_WEEK_DAYS = ['Fri 6', 'Sat 7', 'Sun 8', 'Mon 9', 'Tue 10', 'Wed 11', 'Thu 12'];
+
+const DP_WEEK_EXPORT = [4.52, 4.49, 4.55, 4.47, 4.41, 4.21, 4.38];
+
+const DP_WEEK_ALARMS = {
+  critical: [0, 0, 1, 0, 0, 1, 1],
+  high: [2, 1, 2, 3, 2, 4, 2],
+  other: [5, 4, 4, 6, 5, 7, 5],
 };
 
-const DASHBOARD_ORDER_STATUS_ROWS = (['open', 'planned', 'in-progress', 'waiting', 'done'] as const).map((status) => ({
-  status: { open: 'Open', planned: 'Planned', 'in-progress': 'In progress', waiting: 'Waiting', done: 'Done' }[status],
-  count: WORK_ORDERS.filter((order) => order.status === status).length,
+const DP_ALARM_LOAD: HeatRow[] = DP_AREAS.map((area, index) => ({
+  label: area.name,
+  values: makeValues({ seed: 60 + index, points: 24, base: area.health === 'watch' ? 4 : 1.2, amplitude: 1.2, noise: 1.4, cycles: 2, min: 0, decimals: 0 }),
+  tone: area.health === 'watch' ? 'warning' : 'accent',
 }));
 
-const DASHBOARD_RUN_STATES: readonly { value: RunState; label: string }[] = [
-  { value: 'running', label: 'Running' },
-  { value: 'standby', label: 'Standby' },
-  { value: 'tripped', label: 'Tripped' },
-  { value: 'maintenance', label: 'Maintenance' },
+const DP_DAY: readonly [string, string] = ['24 h ago', 'Now'];
+
+const DP_SEVERITY_TONE: Record<Alarm['severity'], Tone> = { critical: 'critical', high: 'warning', medium: 'info', low: 'neutral' };
+
+const DP_SEVERITY_LABEL: Record<Alarm['severity'], string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' };
+
+const DP_ALARM_STATE: Record<Alarm['state'], string> = { active: 'Active', acknowledged: 'Acknowledged', cleared: 'Cleared', shelved: 'Shelved' };
+
+const DP_HEALTH_TONE: Record<Asset['health'], Tone> = { good: 'success', watch: 'warning', poor: 'critical' };
+
+const DP_HEALTH_LABEL: Record<Asset['health'], string> = { good: 'Good', watch: 'Watch', poor: 'Poor' };
+
+const DP_STATE_TONE: Record<Asset['state'], Tone> = {
+  running: 'success',
+  standby: 'info',
+  stopped: 'neutral',
+  tripped: 'critical',
+  maintenance: 'warning',
+};
+
+const DP_STATE_LABEL: Record<Asset['state'], string> = {
+  running: 'Running',
+  standby: 'Standby',
+  stopped: 'Stopped',
+  tripped: 'Tripped',
+  maintenance: 'Maintenance',
+};
+
+const DP_UNIT_COLUMNS: DataTableColumn<Asset>[] = [
+  { id: 'unit', header: 'Unit', nowrap: true, cell: (unit) => unit.name },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (unit) => <TagId>{unit.tag}</TagId> },
+  { id: 'state', header: 'State', nowrap: true, cell: (unit) => <StatusPill tone={DP_STATE_TONE[unit.state]}>{DP_STATE_LABEL[unit.state]}</StatusPill> },
+  { id: 'health', header: 'Health', numeric: true, nowrap: true, cell: (unit) => `${unit.healthScore} %` },
 ];
 
-const DASHBOARD_SITES = [
-  {
-    id: 'nordkapp',
-    name: 'Nordkapp',
-    region: 'Norwegian Sea',
-    status: { tone: 'warning', label: 'Reduced capacity' },
-    availability: PLANT_KPIS.availability.value,
-    exportRate: PLANT_KPIS.gasExport.value,
-    intensity: PLANT_KPIS.energyIntensity.value,
-    alarms: DASHBOARD_OPEN_ALARMS.length,
-    series: DASHBOARD_EXPORT,
-  },
-  {
-    id: 'hammerfest',
-    name: 'Hammerfest LNG',
-    region: 'Barents Sea',
-    status: { tone: 'success', label: 'Normal operation' },
-    availability: 98.9,
-    exportRate: 4.46,
-    intensity: 28.4,
-    alarms: 1,
-    series: DASHBOARD_OTHER_SITE_EXPORT,
-  },
-] as const;
-
-const DASHBOARD_WIDGETS = [
-  { id: 'availability', label: 'Availability', noun: 'availability', value: PLANT_KPIS.availability.value, unit: '%', decimals: 1 },
-  { id: 'export', label: 'Gas export', noun: 'gas export', value: PLANT_KPIS.gasExport.value, unit: 'MSm³/d', decimals: 2 },
-  { id: 'alarms', label: 'Open alarms', noun: 'open alarms', value: DASHBOARD_OPEN_ALARMS.length, unit: '', decimals: 0 },
-  { id: 'orders', label: 'Open work orders', noun: 'open work orders', value: PLANT_KPIS.openWorkOrders.value, unit: '', decimals: 0 },
-  { id: 'mtbf', label: 'MTBF', noun: 'MTBF', value: PLANT_KPIS.mtbf.value, unit: 'h', decimals: 0 },
-  { id: 'flaring', label: 'Flaring', noun: 'flaring', value: PLANT_KPIS.flaring.value, unit: 'kSm³/d', decimals: 1 },
+const DP_ALARM_COLUMNS: DataTableColumn<Alarm>[] = [
+  { id: 'severity', header: 'Severity', nowrap: true, cell: (alarm) => <StatusPill tone={DP_SEVERITY_TONE[alarm.severity]}>{DP_SEVERITY_LABEL[alarm.severity]}</StatusPill> },
+  { id: 'message', header: 'Alarm', cell: (alarm) => alarm.message },
+  { id: 'tag', header: 'Tag', nowrap: true, cell: (alarm) => <TagId>{alarm.sensorTag}</TagId> },
+  { id: 'value', header: 'Value', numeric: true, nowrap: true, cell: (alarm) => alarm.value },
+  { id: 'state', header: 'State', nowrap: true, muted: true, cell: (alarm) => DP_ALARM_STATE[alarm.state] },
+  { id: 'raised', header: 'Raised', numeric: true, nowrap: true, cell: (alarm) => formatAgo(alarm.raisedAt) },
 ];
 
-const DASHBOARD_EQUIPMENT_COLUMNS: readonly DataTableColumn<Asset>[] = [
-  {
-    id: 'asset',
-    header: 'Equipment',
-    cell: (asset) => (
-      <div className="min-w-0">
-        <p className="text-base-foreground">{asset.name}</p>
-        <p className="font-mono text-xs text-muted-foreground">{asset.tag}</p>
-      </div>
-    ),
-    sortValue: (asset) => asset.name,
-  },
-  { id: 'area', header: 'Area', cell: (asset) => findAsset(asset.parentId ?? '')?.name, width: 'w-48' },
-  { id: 'state', header: 'State', cell: (asset) => <StatusBadge status={asset.state} />, width: 'w-36' },
-  { id: 'health', header: 'Condition', cell: (asset) => <StatusIndicator {...healthStatus(asset.health)} size="sm" />, width: 'w-28' },
-  { id: 'score', header: 'Score', align: 'end', cell: (asset) => asset.healthScore, sortValue: (asset) => asset.healthScore, width: 'w-20' },
-];
-
-const dashboardTrail = (...labels: string[]): AppTopbarCrumb[] => labels.map((label, index) => ({ id: String(index), label }));
-
-const dashboardToggle = <T extends string>(values: readonly T[], value: T, checked: boolean): T[] =>
-  checked ? [...values, value] : values.filter((other) => other !== value);
-
-/** The app chrome around every dashboard here: one top bar, then the page on the base surface. */
-function DashboardShell({
-  title,
-  address,
-  trail,
-  children,
-  sidebar,
-  scroll = true,
-  onNavigate,
-}: {
-  title: string;
-  address: string;
-  trail: readonly AppTopbarCrumb[];
-  children: ReactNode;
-  sidebar?: ReactNode;
-  scroll?: boolean;
-  onNavigate?: (crumb: AppTopbarCrumb) => void;
-}) {
-  return (
-    <TemplateFrame title={`${title} · Plant operations`} address={address}>
-      <AppShell
-        contentLabel={title}
-        scroll={scroll}
-        sidebar={sidebar}
-        topbarSpan="window"
-        topbar={<AppTopbar icon={<IconBuildingFactory2 />} trail={trail} onNavigate={onNavigate} userName={DASHBOARD_USER.name} />}
-      >
-        {children}
-      </AppShell>
-    </TemplateFrame>
-  );
+function DpUser({ compact = false }: { compact?: boolean }) {
+  return <PersonChip name="Liv Wold" initials="LW" role="Shift supervisor" tone="blue" compact={compact} />;
 }
 
-/** The headline row: four tiles of one size, most important first. */
-function DashboardKpiRow({ loading = false }: { loading?: boolean }) {
-  // Placeholders sit on the base surface with an outline: a skeleton on a card disappears in dark themes.
-  if (loading) {
-    return (
-      <div aria-busy="true" aria-label="Loading headline figures" className="grid grid-cols-2 gap-4 @4xl:grid-cols-4">
-        {['Availability', 'Gas export', 'Energy intensity', 'Open alarms'].map((label) => (
-          <div key={label} className="flex flex-col gap-3 rounded-xl border border-default p-4">
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <Skeleton className="h-8 w-28" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-4 @4xl:grid-cols-4">
-      <KpiTile
-        label="Availability"
-        value={PLANT_KPIS.availability.value}
-        unit="%"
-        decimals={1}
-        delta={{ reference: PLANT_KPIS.availability.previous, goodDirection: 'up', caption: 'vs last week' }}
-      />
-      <KpiTile
-        label="Gas export"
-        value={PLANT_KPIS.gasExport.value}
-        unit="MSm³/d"
-        decimals={2}
-        delta={{ reference: PLANT_KPIS.gasExport.previous, goodDirection: 'up', caption: 'vs yesterday', decimals: 2 }}
-      />
-      <KpiTile
-        label="Energy intensity"
-        value={PLANT_KPIS.energyIntensity.value}
-        unit="kWh/boe"
-        decimals={1}
-        delta={{ reference: PLANT_KPIS.energyIntensity.previous, goodDirection: 'down', caption: 'vs last week' }}
-      />
-      <KpiTile
-        label="Open alarms"
-        value={DASHBOARD_OPEN_ALARMS.length}
-        decimals={0}
-        tone="critical"
-        status={{ tone: 'critical', label: '1 critical' }}
-        delta={{ reference: PLANT_KPIS.activeAlarms.previous, goodDirection: 'down', caption: 'vs yesterday', decimals: 0 }}
-      />
-    </div>
-  );
-}
-
-/** Gas export against the daily plan: the chart most dashboards here lead with. */
-function DashboardExportPanel({ height = 'h-52' }: { height?: string }) {
-  return (
-    <DashboardPanel title="Gas export" description="Last 24 hours against the daily plan">
-      <TrendChart
-        label="Gas export over the last 24 hours, between 4.1 and 4.5 million standard cubic metres per day, under the 4.5 plan"
-        series={[{ key: 'export', label: 'Gas export', points: DASHBOARD_EXPORT, variant: 'area' }]}
-        limits={[{ value: PLANT_KPIS.gasExport.target, label: 'Plan 4.50', tone: 'neutral' }]}
-        yDomain={[4, 4.6]}
-        yTicks={[4, 4.2, 4.4, 4.6]}
-        unit="MSm³/d"
-        decimals={2}
-        heightClassName={height}
-        maxTicks={5}
-        summary="Export averaged 4.33 MSm³/d, 4 % under plan; the dip follows the recompressor trip."
-      />
-    </DashboardPanel>
-  );
-}
-
-/** Open alarms, most severe first, as a compact list for a dashboard column. */
-function DashboardAlarmList({ limit = 4 }: { limit?: number }) {
-  return (
-    <ul className="flex w-full flex-col">
-      {DASHBOARD_OPEN_ALARMS.slice(0, limit).map((alarm) => (
-        <li key={alarm.id} className="flex flex-col gap-1 border-b border-default py-2.5 first:pt-0 last:border-b-0 last:pb-0">
-          <div className="flex items-center justify-between gap-3">
-            <SeverityBadge severity={alarm.severity} />
-            <span className="text-xs tabular-nums text-muted-foreground">{formatAgo(alarm.raisedAt)}</span>
-          </div>
-          <p className="text-sm text-base-foreground">{alarm.message}</p>
-          <p className="font-mono text-xs text-muted-foreground">{alarm.sensorTag}</p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function DashboardTemplateFullWidth() {
+function DpRange() {
   const [range, setRange] = useState('24h');
-  const [area, setArea] = useState('all');
-  const rows = DASHBOARD_EQUIPMENT.filter((asset) => area === 'all' || asset.parentId === area);
-
   return (
-    <DashboardShell title="Plant overview" address="/overview" trail={dashboardTrail('Nordkapp', 'Plant overview')}>
-      <ContentContainer>
-        <PageHeader
-          title="Plant overview"
-          status={<StatusIndicator tone="warning" label="Reduced capacity" variant="badge" />}
-          description="Nordkapp gas processing plant · updated 14:00 UTC"
-          actions={
-            <>
-              <div className="w-48">
-                <OptionSelect aria-label="Area" options={DASHBOARD_AREA_OPTIONS} value={area} onValueChange={setArea} />
-              </div>
-              <TimeRangeSwitch value={range} onValueChange={setRange} />
-              <Button variant="outline">
-                <IconRefresh /> Refresh
-              </Button>
-            </>
-          }
-        />
-        <DashboardKpiRow />
-        <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-3">
-          <div className="@4xl:col-span-2">
-            <DashboardExportPanel />
-          </div>
-          <DashboardPanel title="Open alarms by area" description={`${DASHBOARD_OPEN_ALARMS.length} open across the plant`}>
-            <BreakdownList label="Open alarms by area" items={DASHBOARD_ALARMS_BY_AREA} />
-          </DashboardPanel>
-        </div>
-        <DashboardPanel title="Equipment" description={`${rows.length} of ${DASHBOARD_EQUIPMENT.length} units`}>
-          <DataTable
-            label="Equipment"
-            surface="card"
-            columns={DASHBOARD_EQUIPMENT_COLUMNS}
-            rows={rows}
-            getRowId={(asset) => asset.id}
-            defaultSort={{ columnId: 'score', direction: 'asc' }}
-          />
-        </DashboardPanel>
-      </ContentContainer>
-    </DashboardShell>
+    <SegmentedControl value={range} onValueChange={(next) => setRange(String(next))}>
+      <SegmentedControlList size="small" aria-label="Time range">
+        <SegmentedControlButton value="8h">8 h</SegmentedControlButton>
+        <SegmentedControlButton value="24h">24 h</SegmentedControlButton>
+        <SegmentedControlButton value="7d">7 d</SegmentedControlButton>
+      </SegmentedControlList>
+    </SegmentedControl>
   );
 }
 
-function DashboardTemplateFilterRail() {
-  const [areas, setAreas] = useState<readonly string[]>(DASHBOARD_AREAS.map((area) => area.id));
-  const [states, setStates] = useState<readonly RunState[]>(DASHBOARD_RUN_STATES.map((state) => state.value));
-  const rows = DASHBOARD_EQUIPMENT.filter((asset) => areas.includes(asset.parentId ?? '') && states.includes(asset.state));
-  const average = rows.length === 0 ? null : rows.reduce((sum, asset) => sum + asset.healthScore, 0) / rows.length;
-
+function DpExportTrend({ height = 240, fill = true }: { height?: number; fill?: boolean }) {
+  const Chart = fill ? TrendArea : TrendLine;
   return (
-    <DashboardShell
-      title="Equipment health"
-      address="/health"
-      trail={dashboardTrail('Nordkapp', 'Equipment health')}
-      sidebar={
-        <aside aria-label="Filters" className="flex w-56 flex-col gap-6 overflow-y-auto border-r border-default p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-base-foreground">Filters</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setAreas(DASHBOARD_AREAS.map((area) => area.id));
-                setStates(DASHBOARD_RUN_STATES.map((state) => state.value));
-              }}
-            >
-              Reset
+    <Chart
+      label="Gas export over the last 24 hours against the daily plan and yesterday"
+      labels={DP_HOURS}
+      unit="MSm³/d"
+      decimals={2}
+      height={height}
+      highlightLast
+      series={[
+        { id: 'today', label: 'Today', values: DP_EXPORT_VALUES, tone: 'accent' },
+        { id: 'yesterday', label: 'Yesterday', values: DP_EXPORT_YESTERDAY, tone: 'neutral', dashed: true },
+      ]}
+      limits={[{ value: PLANT_KPIS.gasExport.target, label: 'Plan', tone: 'warning' }]}
+    />
+  );
+}
+
+function DpWeekBars({ height = 220, compact = false }: { height?: number; compact?: boolean }) {
+  return (
+    <Bars
+      label="Gas export per day over the last seven days against the plan"
+      categories={compact ? DP_WEEK_DAYS.map((day) => day.split(' ')[0]) : DP_WEEK_DAYS}
+      series={[{ id: 'export', label: 'Export', values: DP_WEEK_EXPORT, tone: 'accent' }]}
+      tones={DP_WEEK_EXPORT.map((value) => (value < 4.4 ? 'warning' : 'accent'))}
+      decimals={2}
+      limit={{ value: 4.5, label: 'Plan' }}
+      showValues={!compact}
+      height={height}
+    />
+  );
+}
+
+function DpAlarmBars({ height = 220 }: { height?: number }) {
+  return (
+    <Bars
+      label="Alarms raised per day over the last seven days by severity"
+      categories={DP_WEEK_DAYS}
+      stacked
+      showLegend
+      series={[
+        { id: 'critical', label: 'Critical', values: DP_WEEK_ALARMS.critical, tone: 'critical' },
+        { id: 'high', label: 'High', values: DP_WEEK_ALARMS.high, tone: 'warning' },
+        { id: 'other', label: 'Medium and low', values: DP_WEEK_ALARMS.other, tone: 'info' },
+      ]}
+      height={height}
+    />
+  );
+}
+
+function DashPagesFullWidth() {
+  return (
+    <BrowserFrame url="nordkapp.example.test/dashboards/production" look="studio" tab="Production · Nordkapp">
+      <AppFrame
+        variant="topbar"
+        brand={{ name: 'Nordkapp', detail: 'Gas processing', mark: <IconFlame /> }}
+        nav={DP_NAV.slice(0, 5)}
+        current="overview"
+        tools={<DpUser compact />}
+        title="Production"
+        subtitle="Thursday 12 March · updated 14:00 UTC"
+        status={
+          <StatusPill tone="warning" size="lg" icon={<IconAlertTriangle />}>
+            Reduced capacity
+          </StatusPill>
+        }
+        actions={
+          <>
+            <DpRange />
+            <Button variant="outline" size="sm">
+              <IconRefresh /> Refresh
             </Button>
-          </div>
-          <div className="flex flex-col gap-2">
-            <p id="dashboard-filter-area" className="text-xs font-medium text-muted-foreground">
-              Area
-            </p>
-            <CheckboxGroup aria-labelledby="dashboard-filter-area">
-              {DASHBOARD_AREAS.map((area) => (
-                <CheckboxItem key={area.id}>
-                  <CheckboxItemControl checked={areas.includes(area.id)} onCheckedChange={(checked) => setAreas(dashboardToggle(areas, area.id, checked))} />
-                  <CheckboxItemLabel>{area.name}</CheckboxItemLabel>
-                </CheckboxItem>
-              ))}
-            </CheckboxGroup>
-          </div>
-          <div className="flex flex-col gap-2">
-            <p id="dashboard-filter-state" className="text-xs font-medium text-muted-foreground">
-              Run state
-            </p>
-            <CheckboxGroup aria-labelledby="dashboard-filter-state">
-              {DASHBOARD_RUN_STATES.map((state) => (
-                <CheckboxItem key={state.value}>
-                  <CheckboxItemControl checked={states.includes(state.value)} onCheckedChange={(checked) => setStates(dashboardToggle(states, state.value, checked))} />
-                  <CheckboxItemLabel>{state.label}</CheckboxItemLabel>
-                </CheckboxItem>
-              ))}
-            </CheckboxGroup>
-          </div>
-        </aside>
-      }
-    >
-      <ContentContainer>
-        <PageHeader title="Equipment health" description="Condition score of every unit that matches the filters." />
-        <StatRow
-          label="Summary of the filtered equipment"
-          stats={[
-            { id: 'units', label: 'Units shown', value: rows.length, detail: `of ${DASHBOARD_EQUIPMENT.length}` },
-            { id: 'score', label: 'Average score', value: average === null ? '—' : formatValue(average, 0) },
-            { id: 'watch', label: 'Watch or poor', value: rows.filter((asset) => asset.health !== 'good').length },
-            { id: 'down', label: 'Not running', value: rows.filter((asset) => asset.state !== 'running').length },
-          ]}
-        />
-        {rows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">No equipment matches these filters. Tick an area and a run state.</p>
-        ) : (
-          <DashboardPanel title="Condition score" description="Lowest first. Under 70 needs a look; under 50 needs action.">
-            <CategoryChart
-              label="Condition score per unit, lowest first, against the watch threshold of 70"
-              layout="rows"
-              rows={[...rows].sort((a, b) => a.healthScore - b.healthScore).map((asset) => ({ name: asset.name, score: asset.healthScore }))}
-              categoryKey="name"
-              series={[{ key: 'score', label: 'Condition score' }]}
-              references={[{ value: 70, label: 'Watch 70', tone: 'warning' }]}
-              domain={[0, 100]}
-              ticks={[0, 25, 50, 75, 100]}
-              axisWidth={160}
-              valueLabels
-              heightClassName="h-80"
-            />
-          </DashboardPanel>
-        )}
-      </ContentContainer>
-    </DashboardShell>
+          </>
+        }
+      >
+        <Grid>
+          <Stat
+            className="col-span-3"
+            label="Gas export"
+            value={PLANT_KPIS.gasExport.value}
+            decimals={2}
+            unit="MSm³/d"
+            icon={<IconFlame />}
+            tone="accent"
+            emphasis="strong"
+            delta={{ value: PLANT_KPIS.gasExport.value - PLANT_KPIS.gasExport.previous, decimals: 2, caption: 'vs yesterday' }}
+            sparkline={DP_EXPORT_VALUES}
+          />
+          <Stat className="col-span-3" label="Availability" value={PLANT_KPIS.availability.value} decimals={1} unit="%" icon={<IconActivity />} tone="teal" delta={{ value: -0.7, caption: 'vs last week' }} sparkline={DP_AVAILABILITY} />
+          <Stat className="col-span-3" label="Energy intensity" value={PLANT_KPIS.energyIntensity.value} decimals={1} unit="kWh/boe" icon={<IconBolt />} tone="purple" delta={{ value: -1.4, good: 'down', caption: 'vs last week' }} sparkline={DP_ENERGY} />
+          <Stat className="col-span-3" label="Flaring" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" icon={<IconTrendingDown />} tone="amber" delta={{ value: -6.5, good: 'down', caption: 'vs last week' }} sparkline={DP_FLARING} />
+
+          <Panel className="col-span-8" title="Gas export" subtitle="Last 24 hours against the daily plan and yesterday">
+            <DpExportTrend height={250} />
+          </Panel>
+          <Panel className="col-span-4" title="Seven days" subtitle="MSm³ per day against the 4.50 plan">
+            <DpWeekBars height={250} compact />
+          </Panel>
+
+          <Panel className="col-span-5" title="Alarm load" subtitle="Alarms per hour by area, last 24 hours" icon={<IconChip tone="amber"><IconBell /></IconChip>}>
+            <div className="flex flex-1 flex-col justify-between gap-5">
+              <div className="flex gap-8">
+                <Stat variant="plain" size="sm" label="Raised" value={71} />
+                <Stat variant="plain" size="sm" label="Peak hour" value="9" unit="at 13:00" />
+                <Stat variant="plain" size="sm" label="From compression" value={62} unit="%" />
+              </div>
+              <HeatStrip label="Alarms per hour by area over the last 24 hours" rows={DP_ALARM_LOAD} axis={DP_DAY} size="lg" />
+            </div>
+          </Panel>
+          <Panel className="col-span-7" title="Equipment" subtitle="Gas compression" padding="none" icon={<IconChip tone="blue"><IconGauge /></IconChip>}>
+            <DataTable label="Gas compression equipment" flush columns={DP_UNIT_COLUMNS} rows={childrenOf('nk-23')} rowKey={(unit) => unit.id} rowTone={(unit) => (unit.state === 'running' ? undefined : DP_STATE_TONE[unit.state])} />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
-function DashboardTemplateTabbed() {
-  const [tab, setTab] = useState('production');
+const DP_SEVERITY_OPTIONS = [
+  { id: 'critical', label: 'Critical', tone: 'critical' as const, count: ALARMS.filter((alarm) => alarm.severity === 'critical').length },
+  { id: 'high', label: 'High', tone: 'warning' as const, count: ALARMS.filter((alarm) => alarm.severity === 'high').length },
+  { id: 'medium', label: 'Medium', tone: 'info' as const, count: ALARMS.filter((alarm) => alarm.severity === 'medium').length },
+  { id: 'low', label: 'Low', count: ALARMS.filter((alarm) => alarm.severity === 'low').length },
+];
 
+const DP_AREA_OPTIONS = DP_AREAS.map((area) => ({
+  id: area.id,
+  label: area.name,
+  count: ALARMS.filter((alarm) => findAsset(alarm.assetId)?.parentId === area.id).length,
+}));
+
+const DP_STATE_OPTIONS = [
+  { id: 'active', label: 'Active', count: ALARMS.filter((alarm) => alarm.state === 'active').length },
+  { id: 'acknowledged', label: 'Acknowledged', count: ALARMS.filter((alarm) => alarm.state === 'acknowledged').length },
+  { id: 'shelved', label: 'Shelved', count: ALARMS.filter((alarm) => alarm.state === 'shelved').length },
+  { id: 'cleared', label: 'Cleared', count: ALARMS.filter((alarm) => alarm.state === 'cleared').length },
+];
+
+function DashPagesFilterRail() {
+  const [severities, setSeverities] = useState<string[]>(['critical', 'high', 'medium']);
+  const [areas, setAreas] = useState<string[]>(DP_AREAS.map((area) => area.id));
+  const [states, setStates] = useState<string[]>(['active', 'acknowledged', 'shelved']);
+  const shown = ALARMS.filter((alarm) => severities.includes(alarm.severity) && states.includes(alarm.state) && areas.includes(findAsset(alarm.assetId)?.parentId ?? ''));
   return (
-    <DashboardShell title="Performance" address={`/performance/${tab}`} trail={dashboardTrail('Nordkapp', 'Performance')}>
-      <ContentContainer>
-        <Tabs
-          value={tab}
-          onValueChange={(next) => {
-            if (typeof next === 'string') setTab(next);
-          }}
-          className="flex w-full flex-col gap-6"
-        >
-          <PageHeader
-            title="Performance"
-            description="March 2026, month to date"
-            actions={
-              <Button variant="outline">
-                <IconDownload /> Export
+    <BrowserFrame url="control.nordkapp.example.test/dashboards/alarms" look="console" tab="Alarm performance">
+      <AppFrame
+        brand={{ name: 'Nordkapp', detail: 'Alarm performance', mark: <IconFlame /> }}
+        nav={DP_NAV.slice(0, 5)}
+        current="alarms"
+        padding="none"
+        tools={
+          <>
+            <span>Day shift · L. Wold</span>
+            <span className="font-medium tabular-nums">14:00:00 UTC</span>
+          </>
+        }
+      >
+        <Panes label="Alarm dashboard with filters" columns="15rem minmax(0, 1fr)">
+          <Pane
+            title="Filters"
+            subtitle={`${shown.length} of ${ALARMS.length}`}
+            footer={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setSeverities(DP_SEVERITY_OPTIONS.map((option) => option.id));
+                  setAreas(DP_AREAS.map((area) => area.id));
+                  setStates(DP_STATE_OPTIONS.map((option) => option.id));
+                }}
+              >
+                Show everything
               </Button>
             }
-            tabs={
-              <TabsList showSeparator className="w-full">
-                <TabsTrigger value="production">Production</TabsTrigger>
-                <TabsTrigger value="reliability">Reliability</TabsTrigger>
-                <TabsTrigger value="energy">Energy</TabsTrigger>
-              </TabsList>
-            }
+          >
+            <FilterGroup title="Severity" options={DP_SEVERITY_OPTIONS} value={severities} onChange={setSeverities} />
+            <FilterGroup title="Area" options={DP_AREA_OPTIONS} value={areas} onChange={setAreas} />
+            <FilterGroup title="State" options={DP_STATE_OPTIONS} value={states} onChange={setStates} />
+          </Pane>
+          <Pane surface="canvas" padding="none">
+            <Grid className="flex-1 grid-rows-[auto_auto_1fr]">
+              <StatGroup columns={4} label="Alarm figures" className="col-span-12">
+                <Stat variant="plain" size="lg" label="Matching alarms" value={shown.length} tone="accent" target={`of ${ALARMS.length} in 3 days`} />
+                <Stat variant="plain" size="lg" label="Critical" value={shown.filter((alarm) => alarm.severity === 'critical').length} tone="critical" target="Target 0" />
+                <Stat variant="plain" size="lg" label="Per operator hour" value={5.9} decimals={1} tone="warning" target="Target under 6.0" />
+                <Stat variant="plain" size="lg" label="Standing over 24 h" value={2} target="Export pump B, motor current" />
+              </StatGroup>
+              <Panel className="col-span-7" title="Raised per day" subtitle="Last 7 days by severity">
+                <DpAlarmBars height={190} />
+              </Panel>
+              <Panel className="col-span-5" title="Load by area" subtitle="Alarms per hour, last 24 h">
+                <HeatStrip label="Alarms per hour by area over the last 24 hours" rows={DP_ALARM_LOAD.filter((_, index) => areas.includes(DP_AREAS[index].id))} axis={DP_DAY} />
+              </Panel>
+              <Panel className="col-span-12" title="Alarms" subtitle={`${shown.length} match the filters`} padding="none">
+                {shown.length > 0 ? (
+                  <DataTable label="Alarms matching the filters" flush columns={DP_ALARM_COLUMNS} rows={shown} rowKey={(alarm) => alarm.id} rowTone={(alarm) => DP_SEVERITY_TONE[alarm.severity]} />
+                ) : (
+                  <EmptyPanel title="No alarms match" description="Tick a severity, an area and a state to see alarms here." />
+                )}
+              </Panel>
+            </Grid>
+          </Pane>
+        </Panes>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+type DpTab = 'production' | 'reliability' | 'energy';
+
+function isDpTab(value: string): value is DpTab {
+  return value === 'production' || value === 'reliability' || value === 'energy';
+}
+
+function DashPagesTabbed() {
+  const [tab, setTab] = useState<DpTab>('reliability');
+  return (
+    <BrowserFrame url={`nordkapp.example.test/dashboards/plant?tab=${tab}`} look="soft" tab="Plant dashboard">
+      <AppFrame
+        brand={{ name: 'Nordkapp', detail: 'Gas processing', mark: <IconFlame /> }}
+        nav={DP_NAV.slice(0, 5)}
+        current="overview"
+        tools={<DpUser compact />}
+        title="Plant dashboard"
+        subtitle="Three views of the same plant. Each tab is one question."
+        actions={
+          <TabStrip
+            label="Dashboard views"
+            value={tab}
+            onChange={(next) => {
+              if (isDpTab(next)) setTab(next);
+            }}
+            items={[
+              { id: 'production', label: 'Production' },
+              { id: 'reliability', label: 'Reliability' },
+              { id: 'energy', label: 'Energy' },
+            ]}
           />
-          <TabsPanel value="production" className="flex flex-col gap-4">
-            <div className="grid grid-cols-3 gap-4">
-              <KpiTile label="Gas export" value={PLANT_KPIS.gasExport.value} unit="MSm³/d" decimals={2} target={{ value: PLANT_KPIS.gasExport.target, label: 'Plan' }} />
-              <KpiTile label="OEE" value={PLANT_KPIS.oee.value} unit="%" decimals={1} target={{ value: PLANT_KPIS.oee.target }} />
-              <KpiTile label="Availability" value={PLANT_KPIS.availability.value} unit="%" decimals={1} target={{ value: PLANT_KPIS.availability.target }} />
-            </div>
-            <DashboardExportPanel height="h-56" />
-          </TabsPanel>
-          <TabsPanel value="reliability" className="flex flex-col gap-4">
-            <div className="grid grid-cols-3 gap-4">
-              <KpiTile label="MTBF" value={PLANT_KPIS.mtbf.value} unit="h" target={{ value: PLANT_KPIS.mtbf.target }} />
-              <KpiTile label="Open work orders" value={PLANT_KPIS.openWorkOrders.value} delta={{ reference: PLANT_KPIS.openWorkOrders.previous, goodDirection: 'down', caption: 'vs last week' }} />
-              <KpiTile label="Days since incident" value={PLANT_KPIS.daysSinceIncident.value} unit="d" />
-            </div>
-            <DashboardPanel title="Work orders by status" description="Every order touched this month">
-              <CategoryChart
-                label="Work orders by status this month"
-                rows={DASHBOARD_ORDER_STATUS_ROWS}
-                categoryKey="status"
-                series={[{ key: 'count', label: 'Work orders' }]}
-                valueLabels
-                heightClassName="h-56"
+        }
+      >
+        {tab === 'production' ? (
+          <Grid>
+            <Panel className="col-span-8" tone="purple" title="Gas export" subtitle="Last 24 hours against the plan">
+              <DpExportTrend height={250} />
+            </Panel>
+            <Grid stack className="col-span-4">
+              <Stat label="Gas export" value={PLANT_KPIS.gasExport.value} decimals={2} unit="MSm³/d" tone="purple" icon={<IconFlame />} delta={{ value: 0.17, decimals: 2, caption: 'vs yesterday' }} />
+              <Stat label="OEE" value={PLANT_KPIS.oee.value} decimals={1} unit="%" tone="teal" icon={<IconActivity />} target="Target 85.0" />
+            </Grid>
+            <Panel className="col-span-12" title="Seven days" subtitle="MSm³ per day against the 4.50 plan">
+              <DpWeekBars height={190} />
+            </Panel>
+          </Grid>
+        ) : null}
+        {tab === 'reliability' ? (
+          <Grid>
+            <Panel className="col-span-5" tone="teal" title="Area health" subtitle="Condition score out of 100">
+              <div className="grid flex-1 grid-cols-2 place-items-center gap-5">
+                {DP_AREAS.map((area) => (
+                  <RingGauge key={area.id} label={area.name} value={area.healthScore} unit="" size={96} tone={DP_HEALTH_TONE[area.health]} />
+                ))}
+              </div>
+            </Panel>
+            <Grid stack className="col-span-7">
+              <Grid columns={3}>
+                <Stat label="Availability" value={PLANT_KPIS.availability.value} decimals={1} unit="%" tone="teal" icon={<IconActivity />} target="Target 97.5" />
+                <Stat label="Time between failures" value={PLANT_KPIS.mtbf.value} unit="h" tone="amber" icon={<IconGauge />} target="Target 450" />
+                <Stat label="Units out" value={2} tone="pink" icon={<IconAlertTriangle />} target="Of 11" />
+              </Grid>
+              <Panel title="Availability" subtitle="Per cent, last 24 hours against the target">
+                <TrendArea
+                  label="Availability over the last 24 hours against the target"
+                  labels={DP_HOURS}
+                  unit="%"
+                  decimals={1}
+                  height={200}
+                  highlightLast
+                  yDomain={[95.5, 98.5]}
+                  series={[{ id: 'availability', label: 'Availability', values: DP_AVAILABILITY, tone: 'teal' }]}
+                  limits={[{ value: PLANT_KPIS.availability.target, label: 'Target', tone: 'neutral' }]}
+                />
+              </Panel>
+            </Grid>
+          </Grid>
+        ) : null}
+        {tab === 'energy' ? (
+          <Grid>
+            <Stat className="col-span-4" label="Energy intensity" value={PLANT_KPIS.energyIntensity.value} decimals={1} unit="kWh/boe" tone="amber" icon={<IconBolt />} delta={{ value: -1.4, good: 'down', caption: 'vs last week' }} sparkline={DP_ENERGY} />
+            <Stat className="col-span-4" label="Flaring" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" tone="pink" icon={<IconFlame />} delta={{ value: -6.5, good: 'down', caption: 'vs last week' }} sparkline={DP_FLARING} />
+            <Panel className="col-span-4" tone="teal" title="Where the power goes">
+              <Donut
+                label="Power use by consumer"
+                size={104}
+                legend="right"
+                centerCaption="MW"
+                segments={[
+                  { label: 'Compression', value: 28, tone: 'purple' },
+                  { label: 'Pumps', value: 6, tone: 'blue' },
+                  { label: 'Cooling', value: 4, tone: 'teal' },
+                  { label: 'Utilities', value: 3, tone: 'amber' },
+                ]}
               />
-            </DashboardPanel>
-          </TabsPanel>
-          <TabsPanel value="energy" className="flex flex-col gap-4">
-            <div className="grid grid-cols-3 gap-4">
-              <KpiTile label="Energy intensity" value={PLANT_KPIS.energyIntensity.value} unit="kWh/boe" decimals={1} target={{ value: PLANT_KPIS.energyIntensity.target }} />
-              <KpiTile label="Flaring" value={PLANT_KPIS.flaring.value} unit="kSm³/d" decimals={1} delta={{ reference: PLANT_KPIS.flaring.previous, goodDirection: 'down', caption: 'vs last week' }} />
-              <KpiTile label="Fuel gas" value={186} unit="kSm³/d" />
-            </div>
-            <DashboardPanel title="Energy intensity" description="Last 24 hours against the 30 kWh/boe target">
-              <TrendChart
-                label="Energy intensity over the last 24 hours, falling from 32 towards the 30 kilowatt hour per barrel target"
-                series={[{ key: 'intensity', label: 'Energy intensity', points: DASHBOARD_ENERGY }]}
-                limits={[{ value: PLANT_KPIS.energyIntensity.target, label: 'Target 30', tone: 'neutral' }]}
+            </Panel>
+            <Panel className="col-span-12" title="Energy intensity" subtitle="kWh per barrel of oil equivalent against the 30.0 target">
+              <TrendArea
+                label="Energy intensity over the last 24 hours against the target"
+                labels={DP_HOURS}
                 unit="kWh/boe"
                 decimals={1}
-                heightClassName="h-56"
-                maxTicks={5}
+                height={220}
+                highlightLast
+                series={[{ id: 'energy', label: 'Energy intensity', values: DP_ENERGY, tone: 'amber' }]}
+                limits={[{ value: 30, label: 'Target', tone: 'neutral' }]}
               />
-            </DashboardPanel>
-          </TabsPanel>
-        </Tabs>
-      </ContentContainer>
-    </DashboardShell>
+            </Panel>
+          </Grid>
+        ) : null}
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
-function DashboardTemplatePinnedSummary() {
+function DashPagesPinnedSummary() {
   return (
-    <DashboardShell title="Production trends" address="/trends" trail={dashboardTrail('Nordkapp', 'Production trends')}>
-      <ContentContainer>
-        <PageHeader title="Production trends" description="The summary on the right stays in view while the trends scroll." />
-        <TwoColumn
-          ratio="3:1"
-          stickyAside
-          asideLabel="Plant summary"
-          aside={
-            <DashboardPanel title="Right now" description="Updated 14:00 UTC">
-              <div className="flex flex-col gap-1">
-                <StatusIndicator tone="warning" label="Reduced capacity" />
-                <p className="text-xs text-muted-foreground">Recompressor tripped at 13:46.</p>
-              </div>
-              <dl className="flex flex-col divide-y divide-default">
-                {[
-                  { label: 'Gas export', value: PLANT_KPIS.gasExport.value, unit: 'MSm³/d', decimals: 2 },
-                  { label: 'Availability', value: PLANT_KPIS.availability.value, unit: '%', decimals: 1 },
-                  { label: 'Energy intensity', value: PLANT_KPIS.energyIntensity.value, unit: 'kWh/boe', decimals: 1 },
-                  { label: 'Flaring', value: PLANT_KPIS.flaring.value, unit: 'kSm³/d', decimals: 1 },
-                ].map((figure) => (
-                  <div key={figure.label} className="flex items-baseline justify-between gap-3 py-2">
-                    <dt className="text-sm text-muted-foreground">{figure.label}</dt>
-                    <dd>
-                      <ValueReadout value={figure.value} unit={figure.unit} decimals={figure.decimals} size="sm" />
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-              <SectionHeader title="Most severe alarm" size="sm" as="h4" />
-              <DashboardAlarmList limit={1} />
-            </DashboardPanel>
-          }
-        >
-          <DashboardExportPanel height="h-44" />
-          <DashboardPanel title="Energy intensity" description="kWh per barrel of oil equivalent">
-            <TrendChart
-              label="Energy intensity over the last 24 hours, falling from 32 towards 31 kilowatt hours per barrel"
-              series={[{ key: 'intensity', label: 'Energy intensity', points: DASHBOARD_ENERGY }]}
-              unit="kWh/boe"
-              decimals={1}
-              heightClassName="h-44"
-              maxTicks={5}
-            />
-          </DashboardPanel>
-          <DashboardPanel title="Flaring" description="Thousand standard cubic metres per day">
-            <TrendChart
-              label="Flaring over the last 24 hours, between 9 and 17 thousand standard cubic metres per day"
-              series={[{ key: 'flaring', label: 'Flaring', points: DASHBOARD_FLARING, variant: 'area' }]}
-              limits={[{ value: PLANT_KPIS.flaring.target, label: 'Permit 15', tone: 'warning' }]}
+    <BrowserFrame url="nordkapp.example.test/dashboards/trends" look="glass" tab="Production trends" minHeight={760}>
+      <AppFrame
+        brand={{ name: 'Nordkapp', mark: <IconFlame /> }}
+        nav={DP_NAV}
+        current="trends"
+        tools={<DpUser compact />}
+        title="Production trends"
+        subtitle="The summary on the right stays in view while the trends on the left scroll."
+        actions={<DpRange />}
+      >
+        <Panes label="Trends with pinned summary" columns="minmax(0, 1fr) 19rem">
+          <div className="flex min-w-0 flex-col gap-4">
+              <Panel tone="accent" title="Gas export" subtitle="MSm³/d against the plan and yesterday">
+                <DpExportTrend height={210} />
+              </Panel>
+              <Panel title="Availability" subtitle="Per cent against the 97.5 target">
+                <TrendLine
+                  label="Availability over the last 24 hours against the target"
+                  labels={DP_HOURS}
+                  unit="%"
+                  decimals={1}
+                  height={150}
+                  highlightLast
+                  yDomain={[95.5, 98.5]}
+                  series={[{ id: 'availability', label: 'Availability', values: DP_AVAILABILITY, tone: 'teal' }]}
+                  limits={[{ value: 97.5, label: 'Target', tone: 'neutral' }]}
+                />
+              </Panel>
+              <Panel title="Flaring" subtitle="kSm³/d against the 15.0 limit">
+                <TrendLine
+                  label="Flaring over the last 24 hours against the limit"
+                  labels={DP_HOURS}
+                  unit="kSm³/d"
+                  decimals={1}
+                  height={150}
+                  highlightLast
+                  series={[{ id: 'flaring', label: 'Flaring', values: DP_FLARING, tone: 'amber' }]}
+                  limits={[{ value: 15, label: 'Limit', tone: 'critical' }]}
+                />
+              </Panel>
+          </div>
+          <Pane title="Right now" subtitle="Updated 14:00 UTC" surface="well">
+            <div>
+              <Stat variant="plain" size="lg" label="Gas export" value={PLANT_KPIS.gasExport.value} decimals={2} unit="MSm³/d" delta={{ value: 0.17, decimals: 2, caption: 'vs yesterday' }} />
+            </div>
+            <div className="grid grid-cols-2 place-items-center gap-4">
+              <RingGauge label="Availability" value={PLANT_KPIS.availability.value} decimals={1} unit="%" size={96} tone="teal" />
+              <RingGauge label="OEE" value={PLANT_KPIS.oee.value} decimals={1} unit="%" size={96} tone="purple" />
+            </div>
+            <Meter label="Flaring" value={PLANT_KPIS.flaring.value} max={20} unit="kSm³/d" decimals={1} high={15} target={{ value: 15, label: 'Limit' }} tone="amber" />
+            <Callout tone="warning" icon={<IconAlertTriangle />} title="0.12 under plan">
+              The recompressor tripped at 13:46. Two stages carry the load until the bearing is inspected.
+            </Callout>
+          </Pane>
+        </Panes>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+type DpBreakdown = { id: string; area: string; flared: number; share: number; change: number };
+
+const DP_FLARE_BREAKDOWN: DpBreakdown[] = [
+  { id: 'nk-23', area: 'Gas compression', flared: 7.9, share: 64, change: -4.8 },
+  { id: 'nk-20', area: 'Inlet and separation', flared: 2.6, share: 21, change: -1.1 },
+  { id: 'nk-27', area: 'Gas export', flared: 1.4, share: 11, change: -0.5 },
+  { id: 'nk-40', area: 'Cooling water', flared: 0.5, share: 4, change: -0.1 },
+];
+
+const DP_FLARE_COLUMNS: DataTableColumn<DpBreakdown>[] = [
+  { id: 'area', header: 'Area', nowrap: true, cell: (row) => row.area },
+  { id: 'flared', header: 'kSm³/d', numeric: true, cell: (row) => row.flared.toFixed(1) },
+  { id: 'share', header: 'Share', numeric: true, cell: (row) => `${row.share} %` },
+  { id: 'change', header: 'Week on week', numeric: true, cell: (row) => row.change.toFixed(1) },
+];
+
+function DashPagesAnalytical() {
+  return (
+    <BrowserFrame url="nordkapp.example.test/analysis/flaring" look="blueprint" tab="Flaring analysis">
+      <AppFrame
+        brand={{ name: 'Nordkapp', detail: 'Flaring analysis', mark: <IconFlame /> }}
+        nav={[
+          { id: 'chart', label: 'Chart', icon: <IconChartLine /> },
+          { id: 'table', label: 'Table', icon: <IconTable /> },
+        ]}
+        current="chart"
+        tools={
+          <>
+            <div>
+              <p className="text-xs">Sheet</p>
+              <p className="text-sm font-semibold">NK-FL-007</p>
+            </div>
+            <div>
+              <p className="text-xs">Period</p>
+              <p className="text-sm font-semibold">11–12 Mar 2026</p>
+            </div>
+          </>
+        }
+      >
+        <Grid>
+          <Panel className="col-span-8" title="Flaring" subtitle="kSm³/d · 24 h · limit 15.0" icon={<IconChartLine className="size-4" />}>
+            <TrendLine
+              label="Flaring over the last 24 hours against the daily limit"
+              labels={DP_HOURS}
               unit="kSm³/d"
               decimals={1}
-              heightClassName="h-44"
-              maxTicks={5}
+              height={300}
+              highlightLast
+              series={[{ id: 'flaring', label: 'Flaring', values: DP_FLARING, tone: 'accent' }]}
+              limits={[{ value: 15, label: 'Limit', tone: 'warning' }]}
             />
-          </DashboardPanel>
-        </TwoColumn>
-      </ContentContainer>
-    </DashboardShell>
-  );
-}
-
-function DashboardTemplateAnalytical() {
-  const [split, setSplit] = useState('cause');
-  const breakdown = DASHBOARD_DOWNTIME[split];
-  const total = DASHBOARD_DOWNTIME_DAYS.reduce((sum, day) => sum + day.hours, 0);
-
-  return (
-    <DashboardShell title="Downtime analysis" address={`/analysis/downtime?by=${split}`} trail={dashboardTrail('Nordkapp', 'Analysis', 'Downtime')}>
-      <ContentContainer>
-        <PageHeader
-          title="Downtime analysis"
-          description={`${formatValue(total, 1)} hours of lost production in the last 14 days`}
-          actions={
-            <SegmentedControl
-              value={split}
-              onValueChange={(next) => {
-                if (typeof next === 'string') setSplit(next);
-              }}
-            >
-              <SegmentedControlList size="small" aria-label="Break down by">
-                <SegmentedControlButton value="cause">By cause</SegmentedControlButton>
-                <SegmentedControlButton value="equipment">By equipment</SegmentedControlButton>
-              </SegmentedControlList>
-            </SegmentedControl>
-          }
-        />
-        <TwoColumn
-          asideLabel="Breakdown"
-          aside={
-            <section className="flex flex-col gap-4">
-              <SectionHeader title={breakdown.title} description="Share of the 14-day total" size="sm" />
-              <BreakdownList label={`Downtime ${breakdown.title.toLowerCase()}`} items={breakdown.items} unit="h" decimals={1} ranked showShare scale="total" />
-              <p className="text-sm text-muted-foreground">
-                {split === 'cause'
-                  ? 'Vibration trips on the recompressor account for more than half of the lost hours.'
-                  : 'One unit, the recompressor, carries most of the downtime; the cooler and the pump share the rest.'}
-              </p>
-            </section>
-          }
-        >
-          <section className="flex flex-col gap-4">
-            <SectionHeader title="Downtime per day" description="Hours with export below 90 % of plan" size="sm" />
-            <CategoryChart
-              label="Downtime hours per day for the last 14 days; the worst day is 8 March with 5.8 hours"
-              rows={DASHBOARD_DOWNTIME_DAYS}
-              categoryKey="day"
-              series={[{ key: 'hours', label: 'Downtime' }]}
-              references={[{ value: 2, label: 'Tolerance 2 h', tone: 'warning', align: 'left' }]}
-              unit="h"
+          </Panel>
+          <Grid stack className="col-span-4">
+            <Stat label="Flared today" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" target="Limit 15.0" />
+            <Stat label="Week on week" value={-6.5} decimals={1} unit="kSm³/d" target="Was 18.9" />
+            <Stat label="Hours above limit" value={DP_FLARING.filter((value) => value > 15).length} unit="of 24" target="Tolerance 2" />
+          </Grid>
+          <Panel className="col-span-7" title="Breakdown by area" subtitle="Share of today’s total" icon={<IconTable className="size-4" />}>
+            <DataTable label="Flaring by area" columns={DP_FLARE_COLUMNS} rows={DP_FLARE_BREAKDOWN} rowKey={(row) => row.id} />
+          </Panel>
+          <Panel className="col-span-5" title="Ranked" subtitle="kSm³/d by area" icon={<IconChartBar className="size-4" />}>
+            <Bars
+              label="Flaring by area, ranked"
+              orientation="horizontal"
+              categories={DP_FLARE_BREAKDOWN.map((row) => row.area)}
+              series={[{ id: 'flared', label: 'Flared', values: DP_FLARE_BREAKDOWN.map((row) => row.flared), tone: 'accent' }]}
               decimals={1}
-              labelEvery={2}
-              heightClassName="h-80"
-              summary="Four days exceeded the 2 hour tolerance, all after the first vibration alarm on 4 March."
+              showValues
+              height={190}
             />
-          </section>
-        </TwoColumn>
-      </ContentContainer>
-    </DashboardShell>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
-function DashboardTemplateWall() {
+function DashPagesComparison() {
   return (
-    <DashboardShell title="Compression wall" address="/wall/compression" trail={dashboardTrail('Nordkapp', 'Walls', 'Gas compression')} scroll={false}>
-      <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-2 gap-px bg-default">
-        {DASHBOARD_WALL_SENSORS.map((sensor) => {
-          const limits = { low: sensor.lowLimit, high: sensor.highLimit, highHigh: sensor.highHighLimit };
-          const tone = toneFromLimits(sensor.value, limits);
-          const span = sensor.highLimit - sensor.lowLimit;
-          return (
-            <section key={sensor.id} aria-label={sensor.name} className="flex min-h-0 min-w-0 flex-col gap-2 bg-base-background p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="truncate text-sm font-medium text-base-foreground">{sensor.name}</h2>
-                  <p className="font-mono text-xs text-muted-foreground">{sensor.tag}</p>
-                </div>
-                <StatusIndicator tone={tone} label={tone === 'neutral' ? 'In range' : 'Outside limits'} size="sm" />
-              </div>
-              <ValueReadout value={sensor.value} unit={sensor.unit} decimals={sensor.decimals} size="lg" tone={tone} />
-              <div className="min-h-0 flex-1">
-                <Sparkline
-                  values={makeValues({ seed: sensor.seed, points: 60, base: sensor.value - span * 0.05, amplitude: span * 0.06, noise: span * 0.03, drift: span * 0.05, decimals: 2 })}
-                  label={`${sensor.name}, last hour`}
-                  variant="area"
-                  unit={sensor.unit}
-                  decimals={sensor.decimals}
-                  limit={sensor.highLimit}
-                  tone={tone}
-                  height={132}
-                />
-              </div>
-              <p className="text-xs tabular-nums text-muted-foreground">
-                High limit {formatValue(sensor.highLimit, sensor.decimals)} {sensor.unit}
-              </p>
-            </section>
-          );
-        })}
-      </div>
-    </DashboardShell>
+    <BrowserFrame url="nordkapp.example.test/compare?a=23-KA-9101&b=23-KA-9102" look="poster" tab="Compare stages">
+      <AppFrame
+        brand={{ name: 'Nordkapp' }}
+        nav={DP_NAV.slice(0, 5)}
+        current="trends"
+        title="1st stage against 2nd stage."
+        subtitle="Two compressors, the same six measures, mirrored around their names. The longer bar is the larger value; the better figure is underlined in green."
+        tools={<DpUser compact />}
+      >
+        <Grid>
+          <Stat className="col-span-6" size="lg" tone="blue" label="1st stage compressor · 23-KA-9101" value={72} unit="/ 100 health" target="Watch · vibration near its limit" />
+          <Stat className="col-span-6" size="lg" tone="purple" label="2nd stage compressor · 23-KA-9102" value={88} unit="/ 100 health" target="Good · carrying extra load" />
+          <Panel className="col-span-12" title="Measure by measure" subtitle="Now, 14:00 UTC">
+            <CompareRow label="Discharge pressure" unit="barg" a={48.6} b={96.2} decimals={1} better="none" />
+            <CompareRow label="Discharge temperature" unit="°C · lower is better" a={141.2} b={128.4} decimals={1} better="lower" />
+            <CompareRow label="Drive-end vibration" unit="mm/s · lower is better" a={6.8} b={3.9} decimals={1} better="lower" />
+            <CompareRow label="Polytropic efficiency" unit="% · higher is better" a={78.4} b={82.1} decimals={1} max={100} better="higher" />
+            <CompareRow label="Running hours" unit="h since overhaul" a={14210} b={6880} better="none" />
+            <CompareRow label="Open alarms" unit="lower is better" a={2} b={0} better="lower" />
+          </Panel>
+          <Panel className="col-span-7" title="Vibration, seven days" subtitle="mm/s per day, both stages">
+            <Bars
+              label="Drive-end vibration per day for both stages"
+              categories={DP_WEEK_DAYS}
+              showLegend
+              series={[
+                { id: 'a', label: '1st stage', values: [5.9, 6.0, 6.1, 6.3, 6.4, 6.6, 6.8], tone: 'blue' },
+                { id: 'b', label: '2nd stage', values: [3.8, 3.8, 3.9, 3.8, 3.9, 3.9, 3.9], tone: 'purple' },
+              ]}
+              decimals={1}
+              limit={{ value: 7.1, label: 'High limit' }}
+              height={200}
+            />
+          </Panel>
+          <Callout className="col-span-5" tone="amber" icon={<IconAlertTriangle />} title="The 1st stage is the one to watch.">
+            It runs 12.8 °C hotter and vibrates 2.9 mm/s more than its twin, with twice the hours since overhaul. A vibration survey, WO-104466, is open and unassigned.
+          </Callout>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
-function DashboardTemplateDrillDown() {
-  const [areaId, setAreaId] = useState<string | null>(null);
-  const area = areaId === null ? undefined : findAsset(areaId);
-  const units = area ? childrenOf(area.id) : [];
-  const trail = area
-    ? [
-        { id: 'site', label: 'Nordkapp' },
-        { id: 'areas', label: 'Areas' },
-        { id: area.id, label: area.name },
-      ]
-    : [
-        { id: 'site', label: 'Nordkapp' },
-        { id: 'areas', label: 'Areas' },
-      ];
-
+function DashPagesWall() {
   return (
-    <DashboardShell
-      title={area ? area.name : 'Areas'}
-      address={area ? `/areas/${area.id}` : '/areas'}
-      trail={trail}
-      onNavigate={(crumb) => {
-        if (crumb.id === 'areas') setAreaId(null);
-      }}
-    >
-      <ContentContainer>
-        {area ? (
+    <BrowserFrame url="wall.nordkapp.example.test/equipment" look="signal" tab="Wall screen 2">
+      <AppFrame
+        brand={{ name: 'Nordkapp' }}
+        title="Equipment"
+        subtitle="11 units · Thursday 12 March · 14:00 UTC"
+        status={
           <>
-            <PageHeader
+            <StatusPill tone="success" size="lg">
+              7 running
+            </StatusPill>
+            <StatusPill tone="info" size="lg">
+              2 standby
+            </StatusPill>
+            <StatusPill tone="warning" size="lg">
+              1 maintenance
+            </StatusPill>
+            <StatusPill tone="critical" size="lg">
+              1 tripped
+            </StatusPill>
+          </>
+        }
+      >
+        <Grid className="shell-grow grid-rows-[1fr_1fr_1fr_auto]">
+          {DP_UNITS.slice(0, 11).map((unit) => (
+            <Stat
+              key={unit.id}
+              className={unit.state === 'tripped' ? 'col-span-6' : 'col-span-3'}
+              size={unit.state === 'tripped' ? 'hero' : 'md'}
+              tone={DP_STATE_TONE[unit.state]}
+              label={unit.name}
+              value={unit.healthScore}
+              unit="/ 100"
+              state={DP_STATE_LABEL[unit.state]}
+              stateIcon={unit.state === 'tripped' ? <IconAlertTriangle /> : unit.state === 'running' ? <IconCircleCheck /> : undefined}
+              target={unit.tag}
+            />
+          ))}
+          <Panel className="col-span-12" tone="critical">
+            <p className="text-xl font-bold">Recompressor tripped on high vibration at 13:46 · bearing inspection in progress · due 20:00</p>
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function DashPagesDrillDown() {
+  const [areaId, setAreaId] = useState<string | null>('nk-23');
+  const area = DP_AREAS.find((entry) => entry.id === areaId);
+  const units = area ? childrenOf(area.id) : [];
+  return (
+    <BrowserFrame url={`nordkapp.example.test/dashboards/health${area ? `/${area.tag}` : ''}`} look="studio" tab="Asset health · Nordkapp">
+      <AppFrame
+        brand={{ name: 'Nordkapp', detail: 'Gas processing', mark: <IconFlame /> }}
+        nav={DP_NAV}
+        current="assets"
+        tools={<DpUser />}
+        title="Asset health"
+        subtitle="Pick an area to drill into it. The trail above the detail leads back."
+      >
+        <Grid>
+          <Panel className="col-span-5" title="Areas" subtitle="Condition score, worst first" padding="none">
+            <PickList
+              label="Plant areas"
+              selected={areaId ?? undefined}
+              onSelect={setAreaId}
+              items={[...DP_AREAS]
+                .sort((a, b) => a.healthScore - b.healthScore)
+                .map((entry) => ({
+                  id: entry.id,
+                  title: entry.name,
+                  tone: entry.health === 'good' ? 'neutral' : DP_HEALTH_TONE[entry.health],
+                  leading: <RingGauge label={`${entry.name} health`} value={entry.healthScore} unit="" size={44} tone={DP_HEALTH_TONE[entry.health]} hideLabel />,
+                  meta: `${childrenOf(entry.id).length === 1 ? '1 unit' : `${childrenOf(entry.id).length} units`} · ${entry.tag}`,
+                  trailing: <StatusPill tone={DP_HEALTH_TONE[entry.health]}>{DP_HEALTH_LABEL[entry.health]}</StatusPill>,
+                }))}
+            />
+          </Panel>
+          <Panel className="col-span-7" title="Plant health" subtitle="Average score, last 24 hours">
+            <TrendArea
+              label="Plant health score over the last 24 hours"
+              labels={DP_HOURS}
+              decimals={1}
+              height={210}
+              yDomain={[88, 95]}
+              highlightLast
+              series={[{ id: 'health', label: 'Health score', values: DP_PLANT_HEALTH, tone: 'accent' }]}
+              limits={[{ value: 90, label: 'Target', tone: 'neutral' }]}
+            />
+          </Panel>
+          {area ? (
+            <Panel
+              className="col-span-12"
+              tone={DP_HEALTH_TONE[area.health]}
               title={area.name}
-              status={<StatusIndicator {...healthStatus(area.health)} variant="badge" detail={`score ${area.healthScore}`} />}
-              meta={<p className="font-mono text-sm text-muted-foreground">{area.tag}</p>}
+              subtitle={`${units.length} units · health ${area.healthScore} of 100`}
+              padding="none"
               actions={
-                <Button variant="outline" onClick={() => setAreaId(null)}>
-                  Back to all areas
+                <Button variant="ghost" size="sm" onClick={() => setAreaId(null)}>
+                  Close
                 </Button>
               }
-            />
-            <DataTable
-              label={`Equipment in ${area.name}`}
-              columns={DASHBOARD_EQUIPMENT_COLUMNS.filter((column) => column.id !== 'area')}
-              rows={units}
-              getRowId={(asset) => asset.id}
-              defaultSort={{ columnId: 'score', direction: 'asc' }}
-            />
-          </>
-        ) : (
-          <>
-            <PageHeader title="Areas" description="Pick an area to see its equipment. The worst condition is listed first." />
-            <ul className="flex flex-col gap-3">
-              {[...DASHBOARD_AREAS]
-                .sort((a, b) => a.healthScore - b.healthScore)
-                .map((candidate) => {
-                  const alarms = DASHBOARD_OPEN_ALARMS.filter((alarm) => findAsset(alarm.assetId)?.parentId === candidate.id).length;
-                  return (
-                    <li key={candidate.id}>
-                      <button
-                        type="button"
-                        onClick={() => setAreaId(candidate.id)}
-                        className="flex w-full items-center gap-4 rounded-xl bg-card-background p-4 text-left outline-none transition-colors hover:bg-card-background-hover focus-visible:shadow-focus-ring"
-                      >
-                        <ProgressRing
-                          label={`${candidate.name} condition`}
-                          value={candidate.healthScore}
-                          unit=""
-                          decimals={0}
-                          size="sm"
-                          tone={healthStatus(candidate.health).tone}
-                          showLabel={false}
-                        />
-                        <span className="flex min-w-0 flex-1 flex-col">
-                          <span className="truncate text-sm font-medium text-base-foreground">{candidate.name}</span>
-                          <span className="font-mono text-xs text-muted-foreground">{candidate.tag}</span>
-                        </span>
-                        <span className="hidden w-28 shrink-0 @3xl:block">
-                          <Sparkline
-                            values={makeValues({ seed: candidate.healthScore, points: 24, base: candidate.healthScore, amplitude: 2, noise: 1, max: 100 })}
-                            label={`${candidate.name} condition, last 24 days`}
-                            height={28}
-                          />
-                        </span>
-                        <span className="w-24 shrink-0 text-sm tabular-nums text-medium-foreground">{childrenOf(candidate.id).length} units</span>
-                        <span className="w-24 shrink-0 text-sm tabular-nums text-medium-foreground">{alarms === 1 ? '1 alarm' : `${alarms} alarms`}</span>
-                        <StatusIndicator {...runStateStatus(candidate.state)} size="sm" />
-                        <IconChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
-                      </button>
-                    </li>
-                  );
-                })}
-            </ul>
-          </>
-        )}
-      </ContentContainer>
-    </DashboardShell>
-  );
-}
-
-function DashboardTemplateComparison() {
-  return (
-    <DashboardShell title="Compare sites" address="/compare?sites=nordkapp,hammerfest" trail={dashboardTrail('All sites', 'Compare')}>
-      <ContentContainer>
-        <PageHeader title="Compare sites" description="The same figures and the same scales, side by side. Last 24 hours." />
-        <div className="grid grid-cols-2 gap-6">
-          {DASHBOARD_SITES.map((site) => (
-            <section key={site.id} aria-label={site.name} className="flex min-w-0 flex-col gap-4">
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-default pb-3">
-                <div className="min-w-0">
-                  <h2 className="text-base font-semibold text-base-foreground">{site.name}</h2>
-                  <p className="text-xs text-muted-foreground">{site.region}</p>
-                </div>
-                <StatusIndicator tone={site.status.tone} label={site.status.label} size="sm" />
+            >
+              <div className="px-5 pb-3">
+                <Crumbs items={['Nordkapp plant', area.name]} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <KpiTile label="Gas export" value={site.exportRate} unit="MSm³/d" decimals={2} size="compact" />
-                <KpiTile label="Availability" value={site.availability} unit="%" decimals={1} size="compact" />
-                <KpiTile label="Energy intensity" value={site.intensity} unit="kWh/boe" decimals={1} size="compact" />
-                <KpiTile label="Open alarms" value={site.alarms} size="compact" />
-              </div>
-              <DashboardPanel title="Gas export" description="Against the 4.50 plan">
-                <TrendChart
-                  label={`Gas export at ${site.name} over the last 24 hours against the 4.5 plan`}
-                  series={[{ key: 'export', label: 'Gas export', points: site.series }]}
-                  limits={[{ value: 4.5, label: 'Plan 4.50', tone: 'neutral' }]}
-                  yDomain={[4, 4.6]}
-                  yTicks={[4, 4.2, 4.4, 4.6]}
-                  unit="MSm³/d"
-                  decimals={2}
-                  heightClassName="h-40"
-                  maxTicks={4}
-                />
-              </DashboardPanel>
-            </section>
-          ))}
-        </div>
-      </ContentContainer>
-    </DashboardShell>
-  );
-}
-
-function DashboardTemplateReport() {
-  return (
-    <DashboardShell title="Monthly report" address="/reports/2026-02" trail={dashboardTrail('Nordkapp', 'Reports', 'February 2026')}>
-      <ContentContainer width="detail" gap="groups">
-        <PageHeader
-          title="Operations report, February 2026"
-          meta={<p className="text-sm text-muted-foreground">Nordkapp gas processing plant · prepared by {PEOPLE[4].name} · issued 3 Mar 2026</p>}
-          actions={
-            <Button variant="outline">
-              <IconDownload /> Download PDF
-            </Button>
-          }
-          divider
-        />
-        <StatRow
-          label="Month in figures"
-          size="large"
-          stats={[
-            { id: 'availability', label: 'Availability', value: '97.1', unit: '%', detail: 'Target 97.5 %' },
-            { id: 'export', label: 'Gas export', value: '121.8', unit: 'MSm³', detail: 'Plan 126.0' },
-            { id: 'intensity', label: 'Energy intensity', value: '32.6', unit: 'kWh/boe', detail: 'Target 30.0' },
-            { id: 'incidents', label: 'Recordable incidents', value: '0', detail: '206 days without' },
-          ]}
-        />
-        <section className="flex flex-col gap-3">
-          <SectionHeader title="Summary" />
-          <p className="max-w-prose text-sm text-medium-foreground">
-            February closed 3 % under the export plan. Availability held at 97.1 % for most of the month; the shortfall came from two short
-            reductions on the compression train while the interstage cooler ran close to its temperature limit. No safety incidents were recorded.
-          </p>
-        </section>
-        <section className="flex flex-col gap-3">
-          <SectionHeader title="Production" />
-          <p className="max-w-prose text-sm text-medium-foreground">
-            Availability stayed inside a one-point band, as figure 1 shows. The two dips line up with the cooler limitation on 9 and 21 February,
-            when the 1st stage compressor was held back to keep discharge temperature under 145 °C.
-          </p>
-          <Figure number={1} caption="Daily availability, last 30 days, against the 97.5 % target." source="Source: production accounting, daily close.">
-            <TrendChart
-              label="Daily availability over the last 30 days, between 96 and 98 percent against a 97.5 percent target"
-              series={[{ key: 'availability', label: 'Availability', points: DASHBOARD_AVAILABILITY }]}
-              limits={[{ value: PLANT_KPIS.availability.target, label: 'Target 97.5', tone: 'neutral' }]}
-              yDomain={[95, 99]}
-              unit="%"
-              decimals={1}
-              heightClassName="h-48"
-              maxTicks={6}
-            />
-          </Figure>
-        </section>
-        <section className="flex flex-col gap-3">
-          <SectionHeader title="Maintenance" />
-          <p className="max-w-prose text-sm text-medium-foreground">
-            The backlog fell from 27 to 23 open work orders. Cleaning the cooler tube bundle is planned for the March window and should remove the
-            temperature limitation described above.
-          </p>
-          <Figure number={1} kind="Table" caption="Work orders by status at month end.">
-            <Table label="Work orders by status at month end">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead numeric>Work orders</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {DASHBOARD_ORDER_STATUS_ROWS.map((row) => (
-                  <TableRow key={row.status}>
-                    <TableCell>{row.status}</TableCell>
-                    <TableCell numeric>{row.count}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Figure>
-        </section>
-      </ContentContainer>
-    </DashboardShell>
-  );
-}
-
-function DashboardTemplateEmpty() {
-  const [added, setAdded] = useState<readonly string[]>([]);
-  const next = DASHBOARD_WIDGETS.find((widget) => !added.includes(widget.id));
-
-  return (
-    <DashboardShell title="My dashboard" address="/dashboards/new" trail={dashboardTrail('Dashboards', 'My dashboard')}>
-      <ContentContainer>
-        <PageHeader
-          title="My dashboard"
-          description={added.length === 0 ? 'Nothing here yet. Add the figures you check first thing in the morning.' : `${added.length} of ${DASHBOARD_WIDGETS.length} widgets added.`}
-          actions={
-            <Button disabled={!next} onClick={() => next && setAdded([...added, next.id])}>
-              <IconPlus /> Add widget
-            </Button>
-          }
-        />
-        <ul className="grid grid-cols-2 gap-4 @4xl:grid-cols-3">
-          {DASHBOARD_WIDGETS.map((widget) =>
-            added.includes(widget.id) ? (
-              <li key={widget.id} className="relative min-w-0">
-                <KpiTile label={widget.label} value={widget.value} unit={widget.unit} decimals={widget.decimals} className="h-full" />
-                <div className="absolute right-2 top-2">
-                  <IconAction label={`Remove ${widget.label}`} onClick={() => setAdded(added.filter((id) => id !== widget.id))}>
-                    <IconX />
-                  </IconAction>
-                </div>
-              </li>
-            ) : (
-              <li key={widget.id} className="min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setAdded([...added, widget.id])}
-                  className="flex h-full min-h-28 w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-emphasized p-4 text-sm text-muted-foreground outline-none transition-colors hover:bg-base-background-hover hover:text-base-foreground focus-visible:shadow-focus-ring"
-                >
-                  <IconPlus aria-hidden="true" className="size-5" />
-                  <span>Add {widget.noun}</span>
-                </button>
-              </li>
-            )
-          )}
-        </ul>
-      </ContentContainer>
-    </DashboardShell>
-  );
-}
-
-function DashboardTemplateLoading() {
-  const [loaded, setLoaded] = useState(false);
-
-  return (
-    <DashboardShell title="Plant overview" address="/overview" trail={dashboardTrail('Nordkapp', 'Plant overview')}>
-      <ContentContainer>
-        <PageHeader
-          title="Plant overview"
-          description={loaded ? 'Nordkapp gas processing plant · updated 14:00 UTC' : 'Nordkapp gas processing plant · loading the last 24 hours'}
-          actions={<Switch label="Show loaded page" checked={loaded} onCheckedChange={setLoaded} />}
-        />
-        <DashboardKpiRow loading={!loaded} />
-        <div className="grid grid-cols-1 gap-4 @4xl:grid-cols-3">
-          <div className="@4xl:col-span-2">
-            {loaded ? (
-              <DashboardExportPanel />
-            ) : (
-              <div aria-busy="true" aria-label="Loading gas export" className="flex h-full flex-col gap-4 rounded-xl border border-default p-4">
-                <div className="flex flex-col gap-2">
-                  <Skeleton className="h-5 w-32" />
-                  <Skeleton className="h-4 w-56" />
-                </div>
-                <Skeleton className="h-52 w-full" />
-              </div>
-            )}
-          </div>
-          {loaded ? (
-            <DashboardPanel title="Open alarms" description={`${DASHBOARD_OPEN_ALARMS.length} open, most severe first`}>
-              <DashboardAlarmList limit={3} />
-            </DashboardPanel>
+              <DataTable label={`Units in ${area.name}`} flush columns={DP_UNIT_COLUMNS} rows={units} rowKey={(unit) => unit.id} rowTone={(unit) => (unit.health === 'good' ? undefined : DP_HEALTH_TONE[unit.health])} />
+            </Panel>
           ) : (
-            <div aria-busy="true" aria-label="Loading open alarms" className="flex flex-col gap-4 rounded-xl border border-default p-4">
-              <Skeleton className="h-5 w-28" />
-              {[0, 1, 2].map((row) => (
-                <div key={row} className="flex flex-col gap-2">
-                  <Skeleton className="h-5 w-20" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-              ))}
-            </div>
+            <Panel className="col-span-12">
+              <EmptyPanel title="No area selected" description="Pick an area on the left to see its units, their state and their health." icon={<IconTopologyStar3 />} />
+            </Panel>
           )}
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function DashPagesReport() {
+  return (
+    <BrowserFrame url="nordkapp.example.test/reports/weekly/2026-11" look="editorial" tab="Weekly report, week 11" minHeight={760}>
+      <AppFrame
+        brand={{ name: 'Nordkapp weekly' }}
+        nav={[
+          { id: 'summary', label: 'Summary' },
+          { id: 'export', label: 'Export' },
+          { id: 'alarms', label: 'Alarms' },
+          { id: 'outlook', label: 'Outlook' },
+        ]}
+        current="summary"
+        title="A good week until Wednesday."
+        subtitle="Nordkapp weekly report, week 11, 6 to 12 March 2026. Export ran above plan for three days, then lost 0.3 MSm³/d to a cooler restriction and a recompressor trip."
+        tools={
+          <Button variant="outline" size="sm">
+            <IconDownload /> Download as PDF
+          </Button>
+        }
+      >
+        <Grid>
+          <StatGroup columns={4} label="Week in figures" className="col-span-12">
+            <Stat variant="plain" size="lg" label="Average export" value={4.43} decimals={2} unit="MSm³/d" delta={{ value: -0.07, decimals: 2, caption: 'against plan' }} />
+            <Stat variant="plain" size="lg" label="Availability" value={97.0} decimals={1} unit="%" delta={{ value: -0.5, caption: 'against target' }} />
+            <Stat variant="plain" size="lg" label="Alarms raised" value={55} delta={{ value: 9, decimals: 0, good: 'down', caption: 'on last week' }} />
+            <Stat variant="plain" size="lg" label="Flaring" value={12.4} decimals={1} unit="kSm³/d" delta={{ value: -6.5, good: 'down', caption: 'on last week' }} />
+          </StatGroup>
+          <div className="col-span-7">
+            <SectionHeader size="sm" level={3} title="Export fell on Wednesday and half recovered" description="MSm³ per day against the 4.50 plan." />
+            <div className="mt-4">
+              <DpWeekBars height={230} />
+            </div>
+          </div>
+          <div className="col-span-5 flex flex-col gap-5">
+            <p className="text-base leading-7 text-base-foreground">
+              Friday to Sunday ran at or above plan. On Wednesday the interstage cooler outlet climbed past 40 °C and the compression train was held back; export dropped to 4.21 MSm³/d.
+            </p>
+            <Callout tone="warning" title="One trip cost 0.12 MSm³/d on Thursday.">
+              The recompressor tripped on vibration at 13:46 after a 24 hour rise that no limit flagged. A tighter limit is proposed in MOC-0412.
+            </Callout>
+            <p className="text-base leading-7 text-base-foreground">Two stages now carry the load. Flaring stayed inside its limit all week and fell by a third.</p>
+          </div>
+          <div className="col-span-12">
+            <SectionHeader size="sm" level={3} title="Alarms rose with the load" description="Raised per day by severity. Wednesday was the busiest day of the month." />
+            <div className="mt-4">
+              <DpAlarmBars height={190} />
+            </div>
+          </div>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+const DP_STARTERS = [
+  { id: 'production', label: 'Production', description: 'Export, availability and plan for one site.', icon: <IconFlame /> },
+  { id: 'alarms', label: 'Alarm performance', description: 'Rates, standing alarms and load by area.', icon: <IconBell /> },
+  { id: 'health', label: 'Asset health', description: 'Condition scores with drill-down to units.', icon: <IconGauge /> },
+];
+
+function DashPagesEmpty() {
+  const [starter, setStarter] = useState('production');
+  return (
+    <BrowserFrame url="nordkapp.example.test/dashboards/new" look="soft" tab="New dashboard">
+      <AppFrame
+        variant="sidebar"
+        brand={{ name: 'Nordkapp', detail: 'Gas plant', mark: <IconFlame /> }}
+        nav={DP_NAV}
+        current="overview"
+        tools={<DpUser />}
+        title="Untitled dashboard"
+        subtitle="Created just now · only you can see it"
+        actions={
+          <Button size="sm">
+            <IconPlus /> Add a panel
+          </Button>
+        }
+      >
+        <div className="shell-grow flex flex-col gap-5">
+          <Panel className="flex-1">
+            <div className="flex flex-1 items-center justify-center">
+              <EmptyPanel
+                icon={<IconLayoutDashboard />}
+                title="This dashboard has no panels yet"
+                description="Add a panel to start from nothing, or pick a starter below and change it once it has your data."
+                action={
+                  <Button size="sm">
+                    <IconPlus /> Add a panel
+                  </Button>
+                }
+              />
+            </div>
+          </Panel>
+          <Panel
+            tone="purple"
+            title="Start from a layout"
+            subtitle="Each one comes filled with Nordkapp data"
+            actions={
+              <Button size="sm" variant="outline">
+                Use {DP_STARTERS.find((entry) => entry.id === starter)?.label.toLowerCase()}
+              </Button>
+            }
+          >
+            <ChoiceCards label="Starter layout" options={DP_STARTERS} value={starter} onChange={setStarter} />
+          </Panel>
         </div>
-        {loaded ? (
-          <DataTable label="Equipment" columns={DASHBOARD_EQUIPMENT_COLUMNS} rows={DASHBOARD_EQUIPMENT.slice(0, 5)} getRowId={(asset) => asset.id} />
-        ) : (
-          <SkeletonTable rows={5} columns={DASHBOARD_EQUIPMENT_COLUMNS.map((column) => column.header)} label="Loading equipment" />
-        )}
-      </ContentContainer>
-    </DashboardShell>
+      </AppFrame>
+    </BrowserFrame>
+  );
+}
+
+function DashPagesLoading() {
+  return (
+    <BrowserFrame url="nordkapp.example.test/dashboards/production" look="studio" tab="Production · Nordkapp">
+      <AppFrame
+        variant="topbar"
+        brand={{ name: 'Nordkapp', detail: 'Gas processing', mark: <IconFlame /> }}
+        nav={DP_NAV.slice(0, 5)}
+        current="overview"
+        tools={<DpUser compact />}
+        title="Production"
+        subtitle="Loading the last 24 hours from the historian"
+        status={<StatusPill tone="info">Loading</StatusPill>}
+        actions={
+          <Button variant="outline" size="sm" disabled>
+            <IconRefresh /> Refresh
+          </Button>
+        }
+      >
+        <Grid>
+          <Panel className="col-span-3">
+            <SkeletonBlock label="Loading gas export" shape="stat" animate={false} />
+          </Panel>
+          <Panel className="col-span-3">
+            <SkeletonBlock label="Loading availability" shape="stat" animate={false} />
+          </Panel>
+          <Panel className="col-span-3">
+            <SkeletonBlock label="Loading energy intensity" shape="stat" animate={false} />
+          </Panel>
+          <Stat className="col-span-3" label="Flaring" value={PLANT_KPIS.flaring.value} decimals={1} unit="kSm³/d" icon={<IconTrendingDown />} tone="amber" delta={{ value: -6.5, good: 'down', caption: 'vs last week' }} />
+          <Panel className="col-span-8" title="Gas export" subtitle="Last 24 hours against the daily plan and yesterday">
+            <SkeletonBlock label="Loading the gas export trend" shape="chart" height={250} animate={false} />
+          </Panel>
+          <Panel className="col-span-4" title="Seven days" subtitle="MSm³ per day against the 4.50 plan">
+            <SkeletonBlock label="Loading seven days of export" shape="chart" count={7} height={250} animate={false} />
+          </Panel>
+          <Panel className="col-span-12" title="Equipment" subtitle="Gas compression">
+            <SkeletonBlock label="Loading equipment" shape="rows" count={4} animate={false} />
+          </Panel>
+        </Grid>
+      </AppFrame>
+    </BrowserFrame>
   );
 }
 
@@ -995,19 +956,17 @@ export default definePage({
   id: 'dashboard-pages',
   title: 'Dashboard pages',
   summary:
-    'Whole pages of figures, charts and tables: the full-width dashboard from the Aura layout guide and ten ways to arrange it for filtering, comparing, drilling down and reporting.',
+    'Whole dashboards as page layouts: where the figures, charts, filters and tables go, and how the page behaves when it is empty or loading. Eleven pages in eight looks, each on the same Nordkapp data.',
   guidance: {
     use: [
-      'Lead with one row of headline figures, then the chart people steer by, then the list they act on.',
-      'A filter rail when filtering is the main activity; filters in the header when it is occasional.',
-      'Tabs to split one subject into views; a drill-down when the views form a hierarchy.',
-      'Skeletons that mirror the loaded layout, and a first-run state that offers something to add.',
+      'One question per dashboard. If the title needs "and", split it into tabs or pages.',
+      'Figures first, then the chart that explains them, then the table that lets people act.',
+      'Keep filters in a rail or in the title bar, never scattered across panels.',
     ],
     avoid: [
-      'More than four tiles in the headline row: the rest belongs in a panel.',
-      'Charts without a line of text that says what they show.',
-      'Different scales on charts that sit side by side to be compared.',
-      'A spinner over the whole page when only one panel is loading.',
+      'A wall of equal tiles: decide which figure leads and make it larger.',
+      'A spinner over the whole page while it loads; keep the layout and fill it in.',
+      'Charts without a plan, target or limit line. A trend alone does not say if it is good.',
     ],
   },
   source,
@@ -1015,228 +974,145 @@ export default definePage({
     {
       id: 'standard',
       title: 'Standard dashboards',
-      description: 'The full-width pattern, and two ways to scope it.',
+      description: 'The layouts most dashboards start from.',
       specimens: [
         {
-          id: 'DashboardTemplateFullWidth',
+          id: 'DashPagesFullWidth',
           title: 'Full-width dashboard',
-          note: 'Pick it as the default: header with filters, four figures, the main chart beside a breakdown, then a table.',
+          note: 'Pick it as the default: a row of figures, the main trend beside its weekly view, then detail.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/AppTopbar.tsx',
-            'templates/ContentContainer.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/KpiTile.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'industrial/charts/TimeRangeSwitch.tsx',
-            'patterns/collections/BreakdownList.tsx',
-            'patterns/collections/DataTable.tsx',
-          ],
-          Component: DashboardTemplateFullWidth,
+          bleed: true,
+          uses: ['kit/app-shells/BrowserFrame.tsx', 'kit/AppFrame.tsx', 'kit/Stat.tsx', 'kit/TrendArea.tsx', 'kit/Bars.tsx', 'kit/HeatStrip.tsx', 'kit/DataTable.tsx'],
+          Component: DashPagesFullWidth,
         },
         {
-          id: 'DashboardTemplateFilterRail',
+          id: 'DashPagesFilterRail',
           title: 'Dashboard with filter rail',
-          note: 'Pick it when people slice the same figures many ways: filters stay open on the left and everything follows them.',
+          note: 'Pick it when people slice one data set many ways and every panel must follow the same filters.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/ContentContainer.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/charts/CategoryChart.tsx',
-            'patterns/collections/StatRow.tsx',
-          ],
-          Component: DashboardTemplateFilterRail,
+          bleed: true,
+          uses: ['kit/dashboard-pages/FilterGroup.tsx', 'kit/app-shells/Panes.tsx', 'kit/app-shells/Pane.tsx', 'kit/StatGroup.tsx', 'kit/Bars.tsx', 'kit/DataTable.tsx'],
+          Component: DashPagesFilterRail,
         },
         {
-          id: 'DashboardTemplateTabbed',
+          id: 'DashPagesTabbed',
           title: 'Tabbed dashboard',
-          note: 'Pick it when one subject has three or four views with their own figures; the header and export stay put.',
+          note: 'Pick it when one audience asks a few separate questions of the same plant.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/ContentContainer.tsx',
-            'patterns/structure/PageHeader.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/KpiTile.tsx',
-            'industrial/charts/CategoryChart.tsx',
-            'industrial/charts/TrendChart.tsx',
-          ],
-          Component: DashboardTemplateTabbed,
+          bleed: true,
+          uses: ['kit/app-shells/TabStrip.tsx', 'kit/RingGauge.tsx', 'kit/TrendArea.tsx', 'kit/Stat.tsx', 'kit/Donut.tsx'],
+          Component: DashPagesTabbed,
         },
       ],
     },
     {
       id: 'analytical',
       title: 'Analytical layouts',
-      description: 'Pages built around reading and comparing charts.',
+      description: 'For reading one thing closely or two things against each other.',
       specimens: [
         {
-          id: 'DashboardTemplatePinnedSummary',
+          id: 'DashPagesPinnedSummary',
           title: 'Pinned summary column',
-          note: 'Pick it for a long page of trends: the current state stays beside them while they scroll.',
+          note: 'Pick it for a long column of trends where the current figures should never scroll away.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/ContentContainer.tsx',
-            'templates/TwoColumn.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'industrial/ValueReadout.tsx',
-          ],
-          Component: DashboardTemplatePinnedSummary,
+          bleed: true,
+          uses: ['kit/dashboard-pages/Callout.tsx', 'kit/app-shells/Panes.tsx', 'kit/TrendLine.tsx', 'kit/RingGauge.tsx', 'kit/Meter.tsx'],
+          Component: DashPagesPinnedSummary,
         },
         {
-          id: 'DashboardTemplateAnalytical',
+          id: 'DashPagesAnalytical',
           title: 'Chart with breakdown',
-          note: 'Pick it to answer one question: the trend on the left, what it is made of on the right.',
+          note: 'Pick it to explain one measure: the trend large, then the same total broken down as a table and ranked.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/ContentContainer.tsx',
-            'templates/TwoColumn.tsx',
-            'industrial/charts/CategoryChart.tsx',
-            'patterns/collections/BreakdownList.tsx',
-          ],
-          Component: DashboardTemplateAnalytical,
+          bleed: true,
+          uses: ['kit/TrendLine.tsx', 'kit/Bars.tsx', 'kit/DataTable.tsx', 'kit/Stat.tsx', 'kit/Panel.tsx'],
+          Component: DashPagesAnalytical,
         },
         {
-          id: 'DashboardTemplateComparison',
+          id: 'DashPagesComparison',
           title: 'Side-by-side comparison',
-          note: 'Pick it to compare two sites, lines or periods: the same panels in the same order on the same scales.',
+          note: 'Pick it to judge two units, sites or periods on the same measures.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/ContentContainer.tsx',
-            'dashboards/DashboardPanel.tsx',
-            'industrial/KpiTile.tsx',
-            'industrial/charts/TrendChart.tsx',
-          ],
-          Component: DashboardTemplateComparison,
+          bleed: true,
+          uses: ['kit/dashboard-pages/CompareRow.tsx', 'kit/dashboard-pages/Callout.tsx', 'kit/Bars.tsx', 'kit/Stat.tsx'],
+          Component: DashPagesComparison,
         },
       ],
     },
     {
       id: 'monitoring',
       title: 'Monitoring and drill-down',
-      description: 'Watching many things at once, and getting from the plant to one unit.',
+      description: 'State at a glance, and the way from the whole to one part.',
       specimens: [
         {
-          id: 'DashboardTemplateWall',
+          id: 'DashPagesWall',
           title: 'Monitoring wall',
-          note: 'Pick it for a screen nobody scrolls: six panels that fill the window, read from across the room.',
+          note: 'Pick it for a screen read from across the room: one tile per unit, filled with its state, the fault largest.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates/TemplateFrame.tsx', 'templates/AppShell.tsx', 'industrial/ValueReadout.tsx', 'industrial/Sparkline.tsx', 'industrial/StatusIndicator.tsx'],
-          Component: DashboardTemplateWall,
+          bleed: true,
+          uses: ['kit/Stat.tsx', 'kit/Panel.tsx', 'kit/AppFrame.tsx', 'kit/StatusPill.tsx'],
+          Component: DashPagesWall,
         },
         {
-          id: 'DashboardTemplateDrillDown',
+          id: 'DashPagesDrillDown',
           title: 'Overview with drill-down',
-          note: 'Pick it when the data is a hierarchy: a ranked list of areas, each opening the equipment inside it.',
+          note: 'Pick it when the overview is a list of parts and people open one without leaving the page.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/AppTopbar.tsx',
-            'templates/ContentContainer.tsx',
-            'industrial/ProgressRing.tsx',
-            'industrial/Sparkline.tsx',
-            'patterns/collections/DataTable.tsx',
-          ],
-          Component: DashboardTemplateDrillDown,
+          bleed: true,
+          uses: ['kit/list-and-detail/PickList.tsx', 'kit/app-shells/Crumbs.tsx', 'kit/TrendArea.tsx', 'kit/DataTable.tsx', 'kit/RingGauge.tsx'],
+          Component: DashPagesDrillDown,
         },
       ],
     },
     {
       id: 'reports',
       title: 'Reports',
-      description: 'A dashboard written to be read from top to bottom.',
+      description: 'A dashboard that is read once, top to bottom, and then filed.',
       specimens: [
         {
-          id: 'DashboardTemplateReport',
+          id: 'DashPagesReport',
           title: 'Report with narrative',
-          note: 'Pick it for a monthly or incident report: figures and charts sit inside the text that explains them.',
+          note: 'Pick it for a weekly or monthly report: headlines that state the finding, charts beside the words that explain them.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/ContentContainer.tsx',
-            'patterns/collections/StatRow.tsx',
-            'industrial/analytics/Figure.tsx',
-            'industrial/charts/TrendChart.tsx',
-            'primitives/table/Table.tsx',
-          ],
-          Component: DashboardTemplateReport,
+          bleed: true,
+          uses: ['kit/dashboard-pages/Callout.tsx', 'kit/StatGroup.tsx', 'kit/Bars.tsx', 'kit/SectionHeader.tsx', 'kit/AppFrame.tsx'],
+          Component: DashPagesReport,
         },
       ],
     },
     {
       id: 'states',
       title: 'Dashboard states',
-      description: 'Before there is anything to show.',
+      description: 'What the page looks like before there is anything to show.',
       specimens: [
         {
-          id: 'DashboardTemplateEmpty',
+          id: 'DashPagesEmpty',
           title: 'Empty dashboard',
-          note: 'Pick it for a dashboard people build themselves: placeholders show where widgets go and add one when pressed.',
+          note: 'Pick it for a dashboard nobody has built yet: say so, and offer a filled starter as the fastest way in.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: ['templates/TemplateFrame.tsx', 'templates/AppShell.tsx', 'templates/ContentContainer.tsx', 'industrial/KpiTile.tsx', 'patterns/collections/IconAction.tsx'],
-          Component: DashboardTemplateEmpty,
+          bleed: true,
+          uses: ['kit/EmptyPanel.tsx', 'kit/form-and-settings/ChoiceCards.tsx', 'kit/Panel.tsx', 'kit/AppFrame.tsx'],
+          Component: DashPagesEmpty,
         },
         {
-          id: 'DashboardTemplateLoading',
+          id: 'DashPagesLoading',
           title: 'Loading dashboard',
-          note: 'Pick it for the first paint: skeletons take the place of each panel, so nothing jumps when data arrives.',
+          note: 'Pick it while data arrives: the real layout with placeholders in the shape of each panel, and anything already loaded shown.',
           origin: 'custom',
           size: 'full',
-          align: 'stretch',
-          surface: 'muted',
-          uses: [
-            'templates/TemplateFrame.tsx',
-            'templates/AppShell.tsx',
-            'templates/ContentContainer.tsx',
-            'industrial/KpiTile.tsx',
-            'feedback/SkeletonTable.tsx',
-            'dashboards/DashboardPanel.tsx',
-          ],
-          Component: DashboardTemplateLoading,
+          bleed: true,
+          uses: ['kit/dashboard-pages/SkeletonBlock.tsx', 'kit/Panel.tsx', 'kit/Stat.tsx', 'kit/AppFrame.tsx'],
+          Component: DashPagesLoading,
         },
       ],
     },

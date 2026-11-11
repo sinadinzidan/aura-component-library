@@ -45,7 +45,7 @@ export type TrendLineProps = {
   className?: string;
 };
 
-const TICK = { fontSize: 12, fill: 'var(--kit-text-3)' };
+const TICK = { fontSize: 12, fill: 'var(--kit-text-2)' };
 const INITIAL = { width: 640, height: 240 };
 
 type TipEntry = { dataKey?: unknown; value?: unknown };
@@ -103,11 +103,18 @@ export function TrendLine({
     ...limits.map((limit): LegendItem => ({ label: limit.label, tone: limit.tone ?? 'neutral', mark: 'dashed' })),
   ];
   const filled = fill && chart.area !== 'none';
+  // Limit labels sit in the right margin, level with their line, so they never cross a series.
+  const limitTexts = limits.map((limit) => `${limit.label} ${formatNumber(limit.value, decimals)}`);
+  const rightMargin = Math.max(14, ...limitTexts.map((text) => text.length * 7 + 14));
+  // The value pill goes on the side the line did not come from, so it never covers the line end.
+  const before = lead ? lead.values.slice(Math.max(0, lastIndex - 3), lastIndex) : [];
+  const pillBelow = lastValue !== undefined && before.length > 0 && Math.max(...before) > lastValue;
 
   return (
     <ChartFrame label={label} legend={withLegend ? legend : undefined} headline={headline} notes={notes} height={height} className={className}>
+      {unit ? <span className="kit-chart-unit">{unit}</span> : null}
       <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL}>
-        <ComposedChart data={rows} margin={{ top: 30, right: 14, bottom: 0, left: 0 }}>
+        <ComposedChart data={rows} margin={{ top: 34, right: rightMargin, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={leadColor} stopOpacity={chart.area === 'solid' ? (look === 'poster' ? 1 : 0.4) : look === 'glass' ? 0.5 : 0.3} />
@@ -117,9 +124,8 @@ export function TrendLine({
           {chart.grid === 'none' ? null : (
             <CartesianGrid
               vertical={chart.grid === 'both'}
-              stroke="var(--kit-rule)"
+              stroke="var(--kit-grid)"
               strokeDasharray={look === 'console' ? '1 4' : undefined}
-              strokeOpacity={look === 'blueprint' ? 0.7 : 1}
             />
           )}
           <XAxis
@@ -196,7 +202,7 @@ export function TrendLine({
               <Line key={entry.id} {...common} />
             );
           })}
-          {limits.map((limit) => (
+          {limits.map((limit, limitIndex) => (
             <ReferenceLine
               key={limit.label}
               y={limit.value}
@@ -205,16 +211,12 @@ export function TrendLine({
               strokeDasharray={dash}
               ifOverflow="extendDomain"
               label={{
-                value: `${limit.label} ${formatNumber(limit.value, decimals)}${suffix}`,
-                position: 'insideTopLeft',
+                value: limitTexts[limitIndex],
+                position: 'right',
                 fontSize: 12,
                 fontWeight: 600,
                 fill: toneLine(limit.tone ?? 'neutral'),
-                // A halo in the surface colour keeps the label readable where a series crosses it.
-                stroke: 'var(--kit-halo)',
-                strokeWidth: 4,
-                paintOrder: 'stroke',
-                offset: 6,
+                offset: 8,
               }}
             />
           ))}
@@ -226,13 +228,15 @@ export function TrendLine({
               shape={({ cx = 0, cy = 0 }: { cx?: number; cy?: number }) => {
                 const text = `${formatNumber(lastValue, decimals)}${suffix}`;
                 const width = text.length * 7.3 + 18;
-                const top = cy - 34 < 0 ? cy + 12 : cy - 34;
+                const top = pillBelow ? cy + 18 : Math.max(cy - 40, 0);
+                const left = cx - width / 2;
                 return (
                   <g>
+                    <line x1={cx} y1={cy} x2={cx} y2={pillBelow ? top : top + 22} stroke={leadColor} strokeWidth={1.25} />
                     <circle cx={cx} cy={cy} r={9} fill={leadColor} opacity={0.22} />
                     <circle cx={cx} cy={cy} r={4.5} fill={leadColor} stroke="var(--base-background)" strokeWidth={2} />
-                    <rect x={cx - width + 10} y={top} width={width} height={22} rx={Math.min(chart.barRadius, 11)} fill={leadColor} />
-                    <text x={cx - width / 2 + 10} y={top + 15} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--base-background)">
+                    <rect x={left} y={top} width={width} height={22} rx={Math.min(chart.barRadius, 11)} fill={leadColor} />
+                    <text x={cx} y={top + 15} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--base-background)">
                       {text}
                     </text>
                   </g>
