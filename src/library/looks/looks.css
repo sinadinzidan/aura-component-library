@@ -1059,8 +1059,9 @@
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
     'head head'
-    'figure spark'
-    'meta spark';
+    'figure figure'
+    'meta meta'
+    'spark spark';
   align-content: space-between;
   column-gap: calc(var(--spacing) * 4);
   row-gap: calc(var(--spacing) * 2);
@@ -1081,6 +1082,14 @@
 .kit-stat[data-size='hero'] {
   --kit-fig: 4rem;
   row-gap: calc(var(--spacing) * 3);
+}
+
+/* large figures have room for the trend beside them */
+.kit-stat:is([data-size='lg'], [data-size='hero']) {
+  grid-template-areas:
+    'head head'
+    'figure spark'
+    'meta spark';
 }
 
 .kit-stat[data-variant='tile'] {
@@ -1154,12 +1163,11 @@
 .kit-stat-spark {
   grid-area: spark;
   align-self: end;
-  width: calc(var(--spacing) * 26);
-  max-width: 34cqw;
+  min-width: 0;
 }
 
-.kit-stat[data-size='sm'] .kit-stat-spark {
-  width: calc(var(--spacing) * 18);
+.kit-stat:is([data-size='lg'], [data-size='hero']) .kit-stat-spark {
+  width: calc(var(--spacing) * 36);
 }
 
 .kit-stat[data-look='studio'][data-variant='tile']:not([data-tone='neutral'])[data-emphasis='strong'] {
