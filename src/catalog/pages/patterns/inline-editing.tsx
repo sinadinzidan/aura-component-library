@@ -612,7 +612,7 @@ function InlineEditBulk() {
           <span className="text-sm text-muted-foreground">Select rows to change them together.</span>
         )}
       </div>
-      <Table label="Work orders" density="compact">
+      <Table label="Work orders">
         <TableHeader>
           <TableRow>
             <TableSelectionCell

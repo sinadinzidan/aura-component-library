@@ -22,7 +22,7 @@ type ResultsTableProps = {
   fields?: readonly QueryField[];
   /** Turns a cell into text. Defaults handle numbers, booleans, dates and nulls. */
   formatCell?: (cell: Cell, column: QueryColumn) => string;
-  /** The surface the results sit on, so the rows match it. */
+  /** The surface the results sit on, so the rows match it. `card` by default: the query builder shows results inside its card. */
   surface?: TableProps['surface'];
 };
 
@@ -58,7 +58,7 @@ export function ResultsTable({
   limit = 12,
   fields = [],
   formatCell = defaultFormat,
-  surface = 'base',
+  surface = 'card',
 }: ResultsTableProps) {
   const labelled = (cell: Cell, column: QueryColumn): string => {
     const option =

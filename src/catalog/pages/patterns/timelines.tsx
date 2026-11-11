@@ -19,6 +19,7 @@ import {
   IconTool,
   IconUserCheck,
 } from '@cognite/aura/icons';
+
 import { PersonAvatar } from '../../../library/display/PersonAvatar';
 import { DurationBars } from '../../../library/patterns/collaboration/DurationBars';
 import { PropertyList } from '../../../library/patterns/structure/PropertyList';

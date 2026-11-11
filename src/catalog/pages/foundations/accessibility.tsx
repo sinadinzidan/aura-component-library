@@ -426,7 +426,7 @@ function A11yGuideTableSemantics() {
           ))}
         </TableBody>
       </Table>
-      <p className="font-mono text-xs text-muted-foreground">
+      <p className="px-3 font-mono text-xs text-muted-foreground">
         &lt;caption&gt; · &lt;th scope=&quot;col&quot;&gt; · &lt;th scope=&quot;row&quot;&gt;
       </p>
     </div>

@@ -122,7 +122,7 @@ function MotionGuideEasings() {
 
 function MotionGuideReference() {
   return (
-    <div className="grid w-full grid-cols-1 gap-x-10 gap-y-6 lg:grid-cols-2">
+    <div className="grid w-full grid-cols-1 gap-x-4 gap-y-6 lg:grid-cols-2">
       <Table>
         <TableCaption side="top">Duration bands</TableCaption>
         <TableBody>

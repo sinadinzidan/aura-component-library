@@ -10,7 +10,6 @@ import {
 import { Input } from '@cognite/aura/components/input';
 import { Progress } from '@cognite/aura/components/progress';
 import { Separator } from '@cognite/aura/components/separator';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@cognite/aura/components/tooltip';
 import { IconArrowLeft, IconArrowRight, IconCheck } from '@cognite/aura/icons';
 import { useState } from 'react';
 
@@ -23,21 +22,30 @@ import { FormActions } from '../../../library/patterns/data-entry/FormActions';
 import { OptionSelect } from '../../../library/patterns/data-entry/OptionSelect';
 import { PanelFrame } from '../../../library/patterns/data-entry/PanelFrame';
 import { SetupChecklist } from '../../../library/patterns/data-entry/SetupChecklist';
-import { Stepper } from '../../../library/patterns/data-entry/Stepper';
-import type { StepperStep } from '../../../library/patterns/data-entry/Stepper';
 import { WizardFrame } from '../../../library/patterns/data-entry/WizardFrame';
+import { Step } from '../../../library/primitives/stepper/Step';
+import { Stepper } from '../../../library/primitives/stepper/Stepper';
 import { definePage } from '../../types';
 
 import source from './wizards.tsx?raw';
 
-const PIPELINE_STEPS: readonly StepperStep[] = [
+/** One step of a wizard: the shape `WizardFrame` takes and the page maps onto `Step`. */
+type WizardStep = {
+  id: string;
+  label: string;
+  description?: string;
+  state?: 'error' | 'disabled';
+  optional?: boolean;
+};
+
+const PIPELINE_STEPS: readonly WizardStep[] = [
   { id: 'source', label: 'Source', description: 'Where the data comes from.' },
   { id: 'mapping', label: 'Mapping', description: 'Match tags to assets.' },
   { id: 'schedule', label: 'Schedule', description: 'When the pipeline runs.' },
   { id: 'review', label: 'Review', description: 'Check and create.' },
 ];
 
-const SHORT_STEPS: readonly StepperStep[] = [
+const SHORT_STEPS: readonly WizardStep[] = [
   { id: 'source', label: 'Source' },
   { id: 'schedule', label: 'Schedule' },
   { id: 'review', label: 'Review' },
@@ -66,54 +74,34 @@ function labelOf(options: readonly { value: string; label: string }[], value: st
 }
 
 function WizardHorizontalStepper() {
-  return <Stepper steps={PIPELINE_STEPS} current={1} label="Create pipeline" />;
+  return (
+    <Stepper label="Create pipeline" current={1}>
+      {PIPELINE_STEPS.map((step) => (
+        <Step key={step.id} label={step.label} />
+      ))}
+    </Stepper>
+  );
 }
 
 function WizardCompactCount() {
   const [current, setCurrent] = useState(1);
-  const step = PIPELINE_STEPS[current];
-  const next = PIPELINE_STEPS[current + 1];
   return (
-    <div className="flex w-full max-w-xs items-center gap-3">
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Previous step"
-              disabled={current === 0}
-              onClick={() => setCurrent(current - 1)}
-            >
-              <IconArrowLeft />
-            </Button>
-          }
-        />
-        <TooltipContent>Previous step</TooltipContent>
-      </Tooltip>
-      <div aria-live="polite" className="flex min-w-0 flex-1 flex-col">
-        <span className="text-xs tabular-nums text-muted-foreground">
-          Step {current + 1} of {PIPELINE_STEPS.length}
-        </span>
-        <span className="truncate text-sm font-medium text-base-foreground">{step.label}</span>
-        <span className="truncate text-xs text-muted-foreground">{next ? `Next: ${next.label}` : 'Last step'}</span>
+    <div className="flex w-full max-w-xs flex-col gap-3">
+      <div aria-live="polite">
+        <Stepper label="Create pipeline" current={current} variant="compact">
+          {PIPELINE_STEPS.map((step) => (
+            <Step key={step.id} label={step.label} />
+          ))}
+        </Stepper>
       </div>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Next step"
-              disabled={current === PIPELINE_STEPS.length - 1}
-              onClick={() => setCurrent(current + 1)}
-            >
-              <IconArrowRight />
-            </Button>
-          }
-        />
-        <TooltipContent>Next step</TooltipContent>
-      </Tooltip>
+      <div className="flex items-center gap-2">
+        <Button variant="secondary" size="sm" disabled={current === 0} onClick={() => setCurrent(current - 1)}>
+          <IconArrowLeft /> Back
+        </Button>
+        <Button variant="secondary" size="sm" disabled={current === PIPELINE_STEPS.length - 1} onClick={() => setCurrent(current + 1)}>
+          Next <IconArrowRight />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -121,69 +109,50 @@ function WizardCompactCount() {
 function WizardVerticalStepper() {
   return (
     <div className="w-full max-w-xs">
-      <Stepper steps={PIPELINE_STEPS} current={2} orientation="vertical" label="Create pipeline" />
+      <Stepper label="Create pipeline" current={2} orientation="vertical">
+        {PIPELINE_STEPS.map((step) => (
+          <Step key={step.id} label={step.label} description={step.description} />
+        ))}
+      </Stepper>
     </div>
   );
 }
 
 function WizardProgressBar() {
   const current = 1;
-  const step = PIPELINE_STEPS[current];
   return (
     <div className="flex w-full max-w-md flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-sm font-medium text-base-foreground">{step.label}</span>
-        <span className="text-sm tabular-nums text-muted-foreground">
-          Step {current + 1} of {PIPELINE_STEPS.length}
-        </span>
-      </div>
-      <Progress
-        value={current + 1}
-        max={PIPELINE_STEPS.length}
-        size="sm"
-        aria-label="Create pipeline progress"
-        aria-valuetext={`Step ${current + 1} of ${PIPELINE_STEPS.length}: ${step.label}`}
-      />
-      <p className="text-xs text-muted-foreground">{step.description}</p>
+      <Stepper label="Create pipeline" current={current} variant="progress">
+        {PIPELINE_STEPS.map((step) => (
+          <Step key={step.id} label={step.label} />
+        ))}
+      </Stepper>
+      <p className="text-xs text-muted-foreground">{PIPELINE_STEPS[current].description}</p>
     </div>
   );
 }
 
 function WizardStepStates() {
   return (
-    <Stepper
-      label="Step states"
-      current={2}
-      steps={[
-        { id: 'done', label: 'Done' },
-        { id: 'error', label: 'Error', state: 'error' },
-        { id: 'current', label: 'Current' },
-        { id: 'upcoming', label: 'Upcoming' },
-        { id: 'disabled', label: 'Locked', state: 'disabled' },
-      ]}
-    />
+    <Stepper label="Step states">
+      <Step label="Done" state="complete" />
+      <Step label="Error" state="error" />
+      <Step label="Current" state="current" />
+      <Step label="Upcoming" state="upcoming" />
+      <Step label="Locked" state="disabled" />
+    </Stepper>
   );
 }
 
 function WizardOptionalAndDisabled() {
   return (
     <div className="w-full max-w-xs">
-      <Stepper
-        label="Connect historian"
-        orientation="vertical"
-        current={1}
-        steps={[
-          { id: 'connect', label: 'Connect', description: 'historian.nordkapp.test' },
-          { id: 'select', label: 'Select tags', description: '1,284 tags found.' },
-          { id: 'backfill', label: 'Backfill history', description: 'Load data from before today.', optional: true },
-          {
-            id: 'start',
-            label: 'Start extraction',
-            description: 'Available once tags are selected.',
-            state: 'disabled',
-          },
-        ]}
-      />
+      <Stepper label="Connect historian" orientation="vertical" current={1}>
+        <Step label="Connect" description="historian.nordkapp.test" />
+        <Step label="Select tags" description="1,284 tags found." />
+        <Step label="Backfill history" description="Load data from before today." optional />
+        <Step label="Start extraction" description="Available once tags are selected." state="disabled" />
+      </Stepper>
     </div>
   );
 }
@@ -385,7 +354,7 @@ function WizardDialog() {
 }
 
 function WizardSidePanel() {
-  const steps: readonly StepperStep[] = [
+  const steps: readonly WizardStep[] = [
     { id: 'isolate', label: 'Confirm isolation', description: 'Permit PTW-2291 is closed.' },
     { id: 'instruments', label: 'Check instruments', description: '12 of 12 transmitters report good quality.' },
     { id: 'limits', label: 'Verify alarm limits', description: 'Compare against the trip matrix.' },
@@ -410,13 +379,11 @@ function WizardSidePanel() {
           </FormActions>
         }
       >
-        <Stepper
-          steps={steps}
-          current={current}
-          orientation="vertical"
-          label="Return to service"
-          onStepSelect={setCurrent}
-        />
+        <Stepper label="Return to service" current={current} orientation="vertical" onStepSelect={setCurrent}>
+          {steps.map((step) => (
+            <Step key={step.id} label={step.label} description={step.description} />
+          ))}
+        </Stepper>
       </PanelFrame>
     </div>
   );
@@ -491,7 +458,7 @@ function WizardSuccessStep() {
 
 function WizardBranching() {
   const [method, setMethod] = useState('file');
-  const steps: readonly StepperStep[] =
+  const steps: readonly WizardStep[] =
     method === 'file'
       ? [
           { id: 'method', label: 'Method' },
@@ -506,7 +473,11 @@ function WizardBranching() {
         ];
   return (
     <div className="flex w-full max-w-xl flex-col gap-6">
-      <Stepper steps={steps} current={0} label="Import assets" />
+      <Stepper label="Import assets" current={0}>
+        {steps.map((step) => (
+          <Step key={step.id} label={step.label} />
+        ))}
+      </Stepper>
       <ChoiceCardGroup
         label="How do you want to import assets?"
         layout="grid"
@@ -523,7 +494,7 @@ function WizardBranching() {
 }
 
 function WizardOptionalStep() {
-  const steps: readonly StepperStep[] = [
+  const steps: readonly WizardStep[] = [
     { id: 'source', label: 'Source' },
     { id: 'backfill', label: 'Backfill', optional: true },
     { id: 'review', label: 'Review' },
@@ -578,7 +549,7 @@ function WizardOptionalStep() {
 
 function WizardErrorStep() {
   const [failed, setFailed] = useState(true);
-  const steps: readonly StepperStep[] = [
+  const steps: readonly WizardStep[] = [
     { id: 'source', label: 'Source' },
     { id: 'connect', label: 'Connect', state: failed ? 'error' : undefined },
     { id: 'review', label: 'Review' },
@@ -889,7 +860,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/data-entry/Stepper.tsx', 'patterns/data-entry/stepStatus.ts'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx', 'primitives/stepper/stepState.ts'],
           Component: WizardHorizontalStepper,
         },
         {
@@ -899,6 +870,7 @@ export default definePage({
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/StepperSummary.tsx'],
           Component: WizardCompactCount,
         },
         {
@@ -908,7 +880,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/data-entry/Stepper.tsx', 'patterns/data-entry/stepStatus.ts'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx', 'primitives/stepper/stepState.ts'],
           Component: WizardVerticalStepper,
         },
         {
@@ -918,6 +890,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/StepperSummary.tsx'],
           Component: WizardProgressBar,
         },
         {
@@ -927,7 +900,7 @@ export default definePage({
           origin: 'custom',
           size: 'lg',
           align: 'stretch',
-          uses: ['patterns/data-entry/Stepper.tsx', 'patterns/data-entry/stepStatus.ts'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx', 'primitives/stepper/stepState.ts'],
           Component: WizardStepStates,
         },
         {
@@ -937,7 +910,7 @@ export default definePage({
           origin: 'custom',
           size: 'sm',
           align: 'stretch',
-          uses: ['patterns/data-entry/Stepper.tsx', 'patterns/data-entry/stepStatus.ts'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx', 'primitives/stepper/stepState.ts'],
           Component: WizardOptionalAndDisabled,
         },
       ],
@@ -1016,7 +989,8 @@ export default definePage({
           align: 'stretch',
           uses: [
             'patterns/data-entry/PanelFrame.tsx',
-            'patterns/data-entry/Stepper.tsx',
+            'primitives/stepper/Stepper.tsx',
+            'primitives/stepper/Step.tsx',
             'patterns/data-entry/FormActions.tsx',
           ],
           Component: WizardSidePanel,
@@ -1054,7 +1028,7 @@ export default definePage({
           origin: 'custom',
           size: 'md',
           align: 'stretch',
-          uses: ['patterns/data-entry/Stepper.tsx', 'forms/ChoiceCardGroup.tsx'],
+          uses: ['primitives/stepper/Stepper.tsx', 'primitives/stepper/Step.tsx', 'forms/ChoiceCardGroup.tsx'],
           Component: WizardBranching,
         },
         {
