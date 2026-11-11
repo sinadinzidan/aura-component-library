@@ -96,7 +96,7 @@ export function PivotTable({
             <th scope="col" rowSpan={2} className={cn('sticky left-0 top-0 z-20 min-w-44 border-b border-default bg-muted-background text-left align-bottom text-xs font-medium text-medium-foreground', pad)}>
               {rowFieldLabels.length === 0 ? 'All records' : rowFieldLabels.join(' / ')}
             </th>
-            <th scope="colgroup" colSpan={Math.max(columnCount, 1)} className={cn('sticky top-0 z-10 border-b border-default bg-muted-background text-center text-xs font-medium text-medium-foreground', pad)}>
+            <th scope="colgroup" colSpan={Math.max(columnCount, 1)} className={cn('sticky top-0 z-10 h-9 border-b border-default bg-muted-background text-center text-xs font-medium text-medium-foreground', pad)}>
               {columnFieldLabel ? `${measureLabel} by ${columnFieldLabel.toLowerCase()}` : measureLabel}
             </th>
             <th scope="col" rowSpan={2} className={cn('sticky top-0 z-10 min-w-20 border-b border-l border-default bg-muted-background text-right align-bottom text-xs font-medium text-base-foreground', pad)}>

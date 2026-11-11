@@ -168,6 +168,39 @@ async function auditPage(page, pageId, theme) {
         }
         if (lines.length > 0) leaves.push({ element, lines });
       }
+      // A line that something opaque is painted over at the overlap point is not really visible:
+      // a sticky footer or header over scrolling rows, a sheet or drawer over the dimmed page
+      // behind it, a popup over the editor text. Only an opaque box that is NOT an ancestor of
+      // the text counts, so text drawn over other text still reports.
+      const opaque = (element) => {
+        const colour = getComputedStyle(element).backgroundColor;
+        if (colour === 'transparent') return false;
+        const alpha = /\/\s*([\d.]+)(%?)\s*\)/.exec(colour) ?? /rgba?\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\s*\)/.exec(colour);
+        if (!alpha) return true;
+        return (alpha[2] === '%' ? Number(alpha[1]) / 100 : Number(alpha[1])) >= 0.95;
+      };
+      // Brings the point into the viewport by scrolling only the page (never the specimen's own
+      // scrollers, which would change what is covering what), asks what is painted there, and
+      // puts the scroll position back so the other measurements stay valid.
+      const pageScroller = () => {
+        for (let node = card.parentElement; node; node = node.parentElement) {
+          if (node.scrollHeight > node.clientHeight + 1 && /auto|scroll/.test(getComputedStyle(node).overflowY)) return node;
+        }
+        return document.scrollingElement;
+      };
+      const coveredAt = (leaf, x, y) => {
+        const scroller = pageScroller();
+        const start = scroller.scrollTop;
+        const before = card.getBoundingClientRect().top;
+        if (y < 0 || y > window.innerHeight - 1) scroller.scrollTop = start + y - window.innerHeight / 2;
+        const hit = document.elementFromPoint(x, y + (card.getBoundingClientRect().top - before));
+        scroller.scrollTop = start;
+        for (let node = hit; node && node !== document.body; node = node.parentElement) {
+          if (node.contains(leaf.element)) return false;
+          if (opaque(node)) return true;
+        }
+        return false;
+      };
       let reported = 0;
       for (let a = 0; a < leaves.length && reported < 2; a += 1) {
         for (let b = a + 1; b < leaves.length && reported < 2; b += 1) {
@@ -175,15 +208,20 @@ async function auditPage(page, pageId, theme) {
           const second = leaves[b];
           if (first.element.contains(second.element) || second.element.contains(first.element)) continue;
           let hit = false;
+          let point = null;
           for (const one of first.lines) {
             for (const two of second.lines) {
               const width = Math.min(one.right, two.right) - Math.max(one.left, two.left);
               const height = Math.min(one.bottom, two.bottom) - Math.max(one.top, two.top);
               if (width <= 2 || height <= 3) continue;
               const smaller = Math.min((one.right - one.left) * (one.bottom - one.top), (two.right - two.left) * (two.bottom - two.top));
-              if ((width * height) / smaller >= 0.4) hit = true;
+              if ((width * height) / smaller >= 0.4) {
+                hit = true;
+                point = { x: Math.max(one.left, two.left) + width / 2, y: Math.max(one.top, two.top) + height / 2 };
+              }
             }
           }
+          if (hit && point && (coveredAt(first, point.x, point.y) || coveredAt(second, point.x, point.y))) hit = false;
           if (hit) {
             reported += 1;
             add('text-overlap', `${describe(first.element)} over ${describe(second.element)}`);
