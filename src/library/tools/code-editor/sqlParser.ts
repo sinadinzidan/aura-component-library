@@ -10,7 +10,8 @@ export type CompareOp = '=' | '!=' | '<>' | '<' | '<=' | '>' | '>=' | 'LIKE' | '
 
 export type Expr =
   | { kind: 'compare'; op: CompareOp; negate: boolean; left: Operand; right: Operand; start: number; end: number }
-  | { kind: 'and' | 'or'; left: Expr; right: Expr }
+  | { kind: 'and'; left: Expr; right: Expr }
+  | { kind: 'or'; left: Expr; right: Expr }
   | { kind: 'not'; operand: Expr };
 
 export type OrderTerm = { column: Ref; direction: 'asc' | 'desc' };

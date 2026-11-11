@@ -78,7 +78,7 @@ export function ViewerScene({
     <>
       <SceneLights />
       <ViewerRig target={target} mode={mode} onPose={onPose} onLivePose={onLivePose} autoRotate={autoRotate} />
-      <Ground size={[44, 28]} cell={2} majorEvery={5} center={[0, 0]} />
+      <Ground size={[80, 56]} cell={2} majorEvery={5} center={[0, 0]} />
       <ViewerModel
         display={display}
         colors={colors}

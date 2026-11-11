@@ -30,7 +30,7 @@ describe(PidDrawing.name, () => {
 
     expect(screen.getAllByRole('button')).toHaveLength(6);
     expect(screen.getByRole('button', { name: /23-KA-9101 1st stage compressor, running/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /23-XV-9171|23-XV-9111 Inlet shutdown valve, open/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /23-XV-9111 Inlet shutdown valve, open/ })).toBeInTheDocument();
   });
 
   it('selects by tag on click and with the keyboard', async () => {
@@ -119,15 +119,16 @@ describe(SplitScene.name, () => {
   });
 
   it('flies the camera to the focused tag and back to the overview', async () => {
+    const valve = COMPRESSION_SCENE.find((item) => item.tag === '23-XV-9171');
+    const distanceToValve = (position: { x: number; y: number; z: number }) => Math.hypot(position.x - (valve?.position[0] ?? 0), position.y - 1, position.z - (valve?.position[2] ?? 0));
     const view = await renderScene(scene());
-    await view.advance(0.1);
-    const overview = view.camera.position.length();
+    const overview = distanceToValve(view.camera.position);
     await view.rerender(scene({ focusTag: '23-XV-9171' }));
-    await view.advance(0.1);
-    const close = view.camera.position.clone();
+    const focused = distanceToValve(view.camera.position);
+    await view.rerender(scene({ focusTag: null }));
 
-    expect(close.distanceTo(view.camera.position)).toBe(0);
-    expect(view.camera.position.length()).not.toBe(overview);
+    expect(focused).toBeLessThan(overview * 0.7);
+    expect(distanceToValve(view.camera.position)).toBeCloseTo(overview, 3);
     await view.unmount();
   });
 

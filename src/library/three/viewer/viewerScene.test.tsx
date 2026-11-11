@@ -74,7 +74,7 @@ describe(ViewerModel.name, () => {
     const view = await renderScene(<ViewerModel colors={COLORS} colorMode="health" />);
     const colours = new Set(partMeshes(view.objects()).map((mesh) => materialOf(mesh).color.getStyle()));
 
-    expect(colours.size).toBe(3);
+    expect(colours.size).toBe(4);
 
     await view.unmount();
   });

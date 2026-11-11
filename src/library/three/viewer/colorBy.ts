@@ -50,8 +50,12 @@ const SYSTEM_KEYS: Record<ViewerSystem, ColorKey> = { separation: 'sys1', compre
 const STATUS_KEYS: Record<ViewerPart['status'], ColorKey> = { running: 'success', standby: 'info', stopped: 'neutral', tripped: 'critical' };
 const HEALTH_KEYS: Record<ViewerPart['health'], ColorKey> = { good: 'success', watch: 'warning', poor: 'critical' };
 
-/** The colour a part takes in a mode. Material mode leaves everything steel. */
+/**
+ * The colour a part takes in a mode. Material mode leaves everything steel, and so does structure in
+ * the run state and health modes: a frame is not a machine, and a green skid would drown the parts.
+ */
 export function colorKeyFor(part: ViewerPart, mode: ColorMode): ColorKey {
+  if (part.system === 'structure' && (mode === 'status' || mode === 'health')) return 'steel';
   switch (mode) {
     case 'none':
       return 'steel';

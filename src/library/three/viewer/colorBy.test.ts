@@ -24,6 +24,12 @@ describe('colorKeyFor', () => {
     expect(colorKeyFor(part('antisurge'), 'health')).toBe('critical');
   });
 
+  it('leaves structure steel when colouring by state or health, but not by system', () => {
+    expect(colorKeyFor(part('base-frame'), 'status')).toBe('steel');
+    expect(colorKeyFor(part('base-frame'), 'health')).toBe('steel');
+    expect(colorKeyFor(part('base-frame'), 'system')).toBe('sys5');
+  });
+
   it('gives each system its own colour', () => {
     const keys = ['separator', 'compressor', 'cooler', 'suction-line', 'base-frame'].map((id) => colorKeyFor(part(id), 'system'));
     expect(new Set(keys).size).toBe(5);
@@ -40,6 +46,7 @@ describe('legends', () => {
 
   it('lists only colours that are in use', () => {
     expect(legendInUse('status', VIEWER_PARTS).map((entry) => entry.label)).toEqual(['Running', 'Standby', 'Tripped']);
+    expect(legendInUse('status', [part('base-frame')])).toEqual([]);
     expect(legendInUse('status', [part('motor')]).map((entry) => entry.label)).toEqual(['Running']);
   });
 
