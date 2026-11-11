@@ -7,9 +7,6 @@ import { StatusIndicator } from '../StatusIndicator';
 import { RESPONSE_LABEL, SEVERITY_LABEL, alarmPriorityStatus, rationalise } from './priorityMatrix';
 import type { AlarmPriority, ConsequenceSeverity } from './priorityMatrix';
 
-/** Column headings of the worksheet, in the order `RationalisationRow` renders its cells. */
-export const RATIONALISATION_COLUMNS = ['Alarm', 'Cause', 'Consequence of no action', 'Operator action', 'Time to respond', 'Priority'] as const;
-
 export type RationalisationRowProps = {
   /** Instrument tag of the alarm. */
   tag: string;

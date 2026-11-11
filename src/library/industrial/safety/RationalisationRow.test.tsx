@@ -1,7 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 
-import { RATIONALISATION_COLUMNS, RationalisationRow } from './RationalisationRow';
+import { RATIONALISATION_COLUMNS } from './rationalisationColumns';
+import { RationalisationRow } from './RationalisationRow';
 import type { RationalisationRowProps } from './RationalisationRow';
 
 const BASE: RationalisationRowProps = {

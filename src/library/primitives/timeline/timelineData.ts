@@ -42,7 +42,10 @@ const DAY = 24 * HOUR;
 export function formatTimelineDuration(milliseconds: number): string {
   const value = Math.max(0, Math.round(milliseconds / SECOND) * SECOND);
   if (value < MINUTE) return `${value / SECOND} s`;
-  if (value < HOUR) return `${Math.round(value / MINUTE)} min`;
+  if (value < HOUR) {
+    const minutes = Math.round(value / MINUTE);
+    return minutes === 60 ? '1 h' : `${minutes} min`;
+  }
   if (value < DAY) {
     const hours = Math.floor(value / HOUR);
     const minutes = Math.round((value % HOUR) / MINUTE);

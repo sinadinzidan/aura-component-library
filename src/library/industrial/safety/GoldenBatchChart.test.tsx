@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 
-import { GoldenBatchChart } from './GoldenBatchChart';
 import type { AlignedPoint, BatchPhase, BatchPoint } from './goldenBatch';
+import { GoldenBatchChart } from './GoldenBatchChart';
 
 const PHASES: BatchPhase[] = [
   { id: 'heat', label: 'Heat', start: 0, end: 40 },
