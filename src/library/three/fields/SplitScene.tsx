@@ -47,9 +47,9 @@ export function SplitScene({ links, selectedTag, hoverTag, focusTag, drawingOnly
   const onDrawing = (item: PlantEquipment): boolean => links.some((link) => link.sceneId === item.id && link.drawingId !== null);
   const target = useMemo(() => {
     const focus = items.find((item) => item.tag === focusTag);
-    if (focus) return frameBounds(equipmentBounds(focus), { aspect, padding: 2.2, minDistance: 15 });
+    if (focus) return frameBounds(equipmentBounds(focus), { aspect, padding: 2.7, minDistance: 15 });
     const all = unionBounds(items.map(equipmentBounds));
-    return frameBounds(all ?? { min: [-10, 0, -10], max: [10, 5, 10] }, { aspect, padding: 0.78 });
+    return frameBounds(all ?? { min: [-10, 0, -10], max: [10, 5, 10] }, { aspect, padding: 1.02 });
   }, [items, focusTag, aspect]);
   const radius = boundsRadius(unionBounds(items.map(equipmentBounds)) ?? { min: [-10, 0, -10], max: [10, 5, 10] });
 

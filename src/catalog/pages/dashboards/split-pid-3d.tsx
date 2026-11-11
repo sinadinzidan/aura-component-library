@@ -209,7 +209,7 @@ function SplitPidScenePane({ state, dispatch, still }: { state: LinkedSelectionS
   );
 }
 
-function SplitPidField({ initial = INITIAL_LINKED_SELECTION, initialRatio = 50, still = false }: { initial?: LinkedSelectionState; initialRatio?: number; still?: boolean }) {
+function SplitPidField({ initial = INITIAL_LINKED_SELECTION, initialRatio = 54, still = false }: { initial?: LinkedSelectionState; initialRatio?: number; still?: boolean }) {
   const [state, dispatch] = useReducer(linkedSelectionReducer, initial);
   const [ratio, setRatio] = useState(initialRatio);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

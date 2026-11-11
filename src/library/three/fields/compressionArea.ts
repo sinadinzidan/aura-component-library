@@ -36,18 +36,18 @@ export const COMPRESSION_LINKS: readonly TagLink[] = [
   { tag: '23-GT-9001', drawingId: null, sceneId: 'N-4107' },
 ];
 
-export const COMPRESSION_DRAWING_SIZE = { width: 760, height: 360 } as const;
+export const COMPRESSION_DRAWING_SIZE = { width: 640, height: 340 } as const;
 export const COMPRESSION_LINE_Y = 170;
 export const COMPRESSION_RECYCLE_Y = 70;
 
 /** Symbols on the drawing, left to right along the process line. */
 export const COMPRESSION_DRAWING: readonly DrawingItem[] = [
-  { id: 'S-101', tag: '23-XV-9111', symbol: 'shutdown-valve', cx: 84, cy: COMPRESSION_LINE_Y, size: 40, valveType: 'shutdown' },
+  { id: 'S-101', tag: '23-XV-9111', symbol: 'shutdown-valve', cx: 100, cy: COMPRESSION_LINE_Y, size: 40, valveType: 'shutdown' },
   { id: 'S-102', tag: '23-VA-9120', symbol: 'vertical-vessel', cx: 196, cy: COMPRESSION_LINE_Y, size: 72 },
-  { id: 'S-103', tag: '23-KA-9101', symbol: 'compressor', cx: 330, cy: COMPRESSION_LINE_Y, size: 60 },
-  { id: 'S-104', tag: '23-HA-9114', symbol: 'heat-exchanger', cx: 462, cy: COMPRESSION_LINE_Y, size: 60 },
-  { id: 'S-105', tag: '23-KA-9102', symbol: 'compressor', cx: 594, cy: COMPRESSION_LINE_Y, size: 60 },
-  { id: 'S-106', tag: '23-HV-9162', symbol: 'control-valve', cx: 400, cy: COMPRESSION_RECYCLE_Y, size: 40, valveType: 'control' },
+  { id: 'S-103', tag: '23-KA-9101', symbol: 'compressor', cx: 296, cy: COMPRESSION_LINE_Y, size: 60 },
+  { id: 'S-104', tag: '23-HA-9114', symbol: 'heat-exchanger', cx: 396, cy: COMPRESSION_LINE_Y, size: 60 },
+  { id: 'S-105', tag: '23-KA-9102', symbol: 'compressor', cx: 496, cy: COMPRESSION_LINE_Y, size: 60 },
+  { id: 'S-106', tag: '23-HV-9162', symbol: 'control-valve', cx: 346, cy: COMPRESSION_RECYCLE_Y, size: 40, valveType: 'control' },
 ];
 
 /** Objects in the 3D model, with their own scene ids. `id` is the scene id, `tag` the common key. */

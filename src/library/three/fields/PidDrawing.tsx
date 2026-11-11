@@ -91,7 +91,7 @@ export function PidDrawing({ links, selectedTag, hoverTag, onSelect, onHover, in
       <PipeLine points={[portOf(scrubber, 'out'), portOf(first, 'in')]} weight="heavy" flow="forward" />
       <PipeLine points={[portOf(first, 'out'), portOf(cooler, 'in')]} weight="heavy" flow="forward" />
       <PipeLine points={[portOf(cooler, 'out'), portOf(second, 'in')]} weight="heavy" flow="forward" />
-      <PipeLine points={[portOf(second, 'out'), { x: 748, y }]} weight="heavy" flow="forward" />
+      <PipeLine points={[portOf(second, 'out'), { x: 628, y }]} weight="heavy" flow="forward" />
       {/* Recycle */}
       <PipeLine points={[{ x: tee, y }, { x: tee, y: COMPRESSION_RECYCLE_Y }, portOf(recycle, 'out')]} flow="reverse" />
       <PipeLine points={[portOf(recycle, 'in'), { x: scrubber.cx, y: COMPRESSION_RECYCLE_Y }, portOf(scrubber, 'top')]} flow="reverse" />
@@ -99,10 +99,10 @@ export function PidDrawing({ links, selectedTag, hoverTag, onSelect, onHover, in
       <text x={tee + 8} y={COMPRESSION_RECYCLE_Y - 8} className="fill-muted-foreground text-[10px]">
         Recycle
       </text>
-      <text x={14} y={y - 12} className="fill-muted-foreground text-[10px]">
-        Gas from separation
+      <text x={10} y={y - 10} className="fill-muted-foreground text-[10px]">
+        Gas in
       </text>
-      <text x={748} y={y - 12} textAnchor="end" className="fill-muted-foreground text-[10px]">
+      <text x={628} y={y - 12} textAnchor="end" className="fill-muted-foreground text-[10px]">
         To export
       </text>
 
