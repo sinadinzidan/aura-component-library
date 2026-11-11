@@ -41,7 +41,7 @@ export type GanttChartProps = {
 const ROW = 36;
 const BAR_HEIGHT = 20;
 const HEADER_ROW = 24;
-const LIST_WIDTH = 288;
+const LIST_WIDTH = 320;
 const HANDLE = 7;
 const LEAD_DAYS = 7;
 const TRAIL_DAYS = 14;
@@ -295,7 +295,7 @@ export function GanttChart({
                       ))}
                     </div>
                   ))}
-                  <span className="absolute -bottom-px rounded-sm bg-base-foreground px-1 text-xs font-medium text-base-background" style={{ left: todayX, transform: 'translateX(-50%)', top: 2 }}>
+                  <span className="absolute rounded-sm bg-base-foreground px-1 text-xs leading-4 font-medium text-base-background" style={{ left: todayX, transform: 'translateX(-50%)', top: 4 }}>
                     Today
                   </span>
                 </div>
@@ -420,7 +420,7 @@ export function GanttChart({
         ) : null}
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t border-default px-3 py-1.5 text-xs text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-x-4 overflow-hidden border-t border-default px-3 py-1.5 text-xs whitespace-nowrap text-muted-foreground">
         {compact ? null : (
           <span className="flex items-center gap-3">
             <span className="flex items-center gap-1.5">
@@ -439,7 +439,7 @@ export function GanttChart({
           </span>
         )}
         <span className="min-w-0 truncate">{locked ? 'Scroll to move through time.' : 'Drag a bar to reschedule it. Drag an end to change its duration.'}</span>
-        <span role="status" aria-label="Chart activity" aria-live="polite" className="ml-auto shrink-0 tabular-nums">
+        <span role="status" aria-label="Chart activity" aria-live="polite" className="ml-auto min-w-0 max-w-[55%] truncate tabular-nums">
           {state.message}
         </span>
       </div>

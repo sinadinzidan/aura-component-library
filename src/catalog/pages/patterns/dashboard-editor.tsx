@@ -28,6 +28,7 @@ import type { DashboardPreset, DashboardWidgetType } from '../../../library/tool
 import { DashboardEmptyState } from '../../../library/tools/dashboard-editor/DashboardEmptyState';
 import type { EditorWidget } from '../../../library/tools/dashboard-editor/editorReducer';
 import { EditorToolbar } from '../../../library/tools/dashboard-editor/EditorToolbar';
+import { moveItem } from '../../../library/tools/dashboard-editor/gridLayout';
 import { LayoutPresetPicker } from '../../../library/tools/dashboard-editor/LayoutPresetPicker';
 import { WidgetChrome } from '../../../library/tools/dashboard-editor/WidgetChrome';
 import { WidgetPalette } from '../../../library/tools/dashboard-editor/WidgetPalette';
@@ -200,7 +201,7 @@ const DASH_TYPES: readonly DashboardWidgetType[] = [
     render: (widget) => <DashTrendBody widget={widget} />,
   },
   { type: 'category', label: 'Comparison bars', description: 'Work completed per site, this week and last.', icon: <IconChartBar />, w: 6, h: 4, minW: 4, minH: 3, render: (widget) => <DashCategoryBody widget={widget} /> },
-  { type: 'alarms', label: 'Alarm list', description: 'Open alarms, most severe first.', icon: <IconAlertTriangle />, w: 4, h: 4, minW: 3, minH: 3, render: (widget) => <DashAlarmsBody widget={widget} /> },
+  { type: 'alarms', label: 'Alarm list', description: 'Open alarms, most severe first.', icon: <IconAlertTriangle />, w: 4, h: 5, minW: 3, minH: 4, render: (widget) => <DashAlarmsBody widget={widget} /> },
   { type: 'donut', label: 'Work order split', description: 'Orders by type as a donut with legend.', icon: <IconChartDonut />, w: 4, h: 4, minW: 3, minH: 3, render: (widget) => <DashDonutBody widget={widget} /> },
   { type: 'breakdown', label: 'Weakest assets', description: 'Ranked list of the lowest health scores.', icon: <IconListDetails />, w: 4, h: 3, minW: 3, minH: 3, render: (widget) => <DashBreakdownBody widget={widget} /> },
   { type: 'stats', label: 'Figure row', description: 'Three plant figures side by side.', icon: <IconLayoutList />, w: 6, h: 2, minW: 4, minH: 2, render: (widget) => <DashStatsBody widget={widget} /> },
@@ -216,9 +217,9 @@ function dashWidget(id: string, type: string, title: string, x: number, y: numbe
 const DASH_DEFAULT: readonly EditorWidget[] = [
   dashWidget('a', 'kpi', 'Availability', 0, 0, 3, 2),
   dashWidget('b', 'kpi', 'Plant availability, 7 days', 3, 0, 3, 2),
-  dashWidget('c', 'alarms', 'Open alarms', 6, 0, 6, 4),
+  dashWidget('c', 'alarms', 'Open alarms', 6, 0, 6, 5),
   dashWidget('d', 'trend', 'Discharge pressure', 0, 2, 6, 4),
-  dashWidget('e', 'donut', 'Work orders', 6, 4, 6, 4),
+  dashWidget('e', 'donut', 'Work orders', 6, 5, 6, 4),
   dashWidget('f', 'category', 'Work completed by site', 0, 6, 6, 4),
 ];
 
@@ -334,7 +335,7 @@ function DashEditorResizeHandles() {
 
 function DashEditorDropPlaceholder() {
   const origin = DASH_SMALL;
-  const lifted = [origin[0], { ...origin[1], x: 6 }, origin[2]];
+  const lifted = moveItem(origin, 's1', 4, 0, 12);
   return (
     <div className="w-full">
       <DashboardCanvas
@@ -343,8 +344,9 @@ function DashEditorDropPlaceholder() {
         rowHeight={56}
         gap={12}
         editing
-        selectedId="s2"
-        drag={{ id: 's2', kind: 'move', origin }}
+        selectedId="s1"
+        previewOffset={{ dx: 18, dy: 26 }}
+        drag={{ id: 's1', kind: 'move', origin }}
         renderWidget={(widget) => <DashKpiBody widget={widget} />}
       />
     </div>

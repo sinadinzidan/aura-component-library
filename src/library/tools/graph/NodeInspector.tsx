@@ -25,7 +25,8 @@ export type NodeInspectorProps = {
   onClose?: () => void;
 };
 
-const RUN_OPTIONS = (['idle', 'running', 'done', 'failed'] as const).map((value) => ({ value, label: RUN_STATE_LABEL[value] }));
+/** Shorter than the node's own wording so four options fit the panel: "Idle" is the node's "Not run". */
+const RUN_OPTIONS = (['idle', 'running', 'done', 'failed'] as const).map((value) => ({ value, label: value === 'idle' ? 'Idle' : RUN_STATE_LABEL[value] }));
 const RUN_TONE = { idle: 'neutral', running: 'info', done: 'success', failed: 'critical' } as const;
 const RUN_SHAPE = { idle: 'ring', running: 'square', done: 'dot', failed: 'diamond' } as const;
 

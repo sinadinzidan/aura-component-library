@@ -37,8 +37,10 @@ type CodeEditorProps = {
   /** The text range to underline as an error. */
   error?: CodeRange | null;
   placeholder?: string;
-  /** Height utility for the editing area, for example `h-64`. Ignored for a single line. */
+  /** Height utility for the editing area, for example `h-64`. Ignored for a single line and with `fill`. */
   heightClassName?: string;
+  /** Take all the height of the parent instead of a fixed one; the parent must have a height. */
+  fill?: boolean;
   /** One line, no gutter; Enter runs instead of adding a line. */
   singleLine?: boolean;
   lineNumbers?: boolean;
@@ -75,6 +77,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
     error = null,
     placeholder,
     heightClassName = 'h-64',
+    fill = false,
     singleLine = false,
     lineNumbers = !singleLine,
     highlighter = auraHighlighter,
@@ -206,12 +209,12 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(function
   const errorLine = range ? present.value.slice(0, range.start).split('\n').length - 1 : -1;
 
   return (
-    <div className="flex w-full min-w-0 flex-col" data-slot="code-editor" data-language={language}>
+    <div className={`flex w-full min-w-0 flex-col ${fill ? 'h-full' : ''}`} data-slot="code-editor" data-language={language}>
       <Label htmlFor={`${id}-field`} className={hideLabel ? 'sr-only' : undefined}>
         {label}
       </Label>
       <div
-        className={`flex min-w-0 overflow-hidden rounded-lg border bg-base-background focus-within:shadow-focus-ring ${error ? 'border-critical-foreground-strong' : 'border-default'} ${singleLine ? 'h-9' : heightClassName}`}
+        className={`flex min-w-0 overflow-hidden rounded-lg border bg-base-background focus-within:shadow-focus-ring ${error ? 'border-critical-foreground-strong' : 'border-default'} ${singleLine ? 'h-9' : fill ? 'min-h-0 flex-1' : heightClassName}`}
       >
         {lineNumbers ? (
           <div aria-hidden="true" className="relative w-12 shrink-0 overflow-hidden border-r border-default bg-muted-background">

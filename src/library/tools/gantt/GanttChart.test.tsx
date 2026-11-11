@@ -1,8 +1,8 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { CONFLICT_TASKS, GANTT_TODAY, MAINTENANCE_WEEK_TASKS, TURNAROUND_TASKS } from './ganttFixtures';
 import { GanttChart } from './GanttChart';
+import { CONFLICT_TASKS, GANTT_TODAY, MAINTENANCE_WEEK_TASKS, TURNAROUND_TASKS } from './ganttFixtures';
 
 function renderChart(props: Partial<Parameters<typeof GanttChart>[0]> = {}) {
   return render(

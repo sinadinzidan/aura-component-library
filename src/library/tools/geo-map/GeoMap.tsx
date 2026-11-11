@@ -50,7 +50,15 @@ export type MapRoute = {
   idle?: boolean;
 };
 
-export type MapRegion = { id: string; name: string; points: readonly LatLong[]; /** Drawn hatched: nothing is known about it. */ noData?: boolean };
+export type MapRegion = {
+  id: string;
+  name: string;
+  points: readonly LatLong[];
+  /** Where the name sits. Defaults to the middle of the outline's bounding box. */
+  labelAt?: LatLong;
+  /** Drawn hatched: nothing is known about it. */
+  noData?: boolean;
+};
 
 export type BlockLayer = { box: { south: number; north: number; west: number; east: number }; lonStep: number; latStep: number; licensedIds: readonly string[] };
 
@@ -130,6 +138,8 @@ export function GeoMap({
   const frameRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const captured = useRef(false);
+  // True from the end of a drag until the next press, so the click that follows a drag is ignored.
+  const dragged = useRef(false);
   const [state, dispatch] = useReducer(mapReducer, undefined, () => createMapState(initialView, initialSize, { projection, layers, selectedId: initialSelectedId }));
   const [pointer, setPointer] = useState<LatLong | null>(null);
   const [announcement, setAnnouncement] = useState('');
@@ -179,7 +189,7 @@ export function GeoMap({
       bounds = size.width / view.scale < Math.PI * 1.6 ? { north: corners[0].lat, south: corners[1].lat, west: Math.min(...lons), east: Math.max(...lons) } : undefined;
     }
     const lines = graticule(proj, view, size, step, bounds);
-    const regionPaths = regions.map((region) => ({ region, d: pathThrough(projectPoints(proj, view, size, region.points), true), at: toScreen(proj, view, size, regionLabelPoint(region.points)) }));
+    const regionPaths = regions.map((region) => ({ region, d: pathThrough(projectPoints(proj, view, size, region.points), true), at: toScreen(proj, view, size, region.labelAt ?? regionLabelPoint(region.points)) }));
     const routePaths = routes.map((route) => {
       const projected = projectPoints(proj, view, size, route.points);
       return { route, d: pathThrough(projected), chevrons: route.kind === 'pipeline' ? chevronsAlong(projected, 84, size) : chevronsAlong(projected, 120, size) };
@@ -255,6 +265,7 @@ export function GeoMap({
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return;
     captured.current = false;
+    dragged.current = false;
     dispatch({ type: 'drag-start', point: local(event) });
   };
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -270,6 +281,7 @@ export function GeoMap({
   };
   const endDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (captured.current && event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    dragged.current = captured.current || state.drag?.moved === true;
     captured.current = false;
     dispatch({ type: 'drag-end' });
   };
@@ -330,7 +342,7 @@ export function GeoMap({
         onPointerLeave={() => setPointer(null)}
         onClick={(event) => {
           if (event.target === event.currentTarget || (event.target instanceof SVGElement && event.target.dataset.background !== undefined)) {
-            if (!state.drag?.moved) select(null);
+            if (!dragged.current) select(null);
           }
         }}
         onKeyDown={onKeyDown}
@@ -353,7 +365,7 @@ export function GeoMap({
             const active = region.id === highlightedRegionId;
             return (
               <g key={region.id} data-region={region.id} data-active={active ? '' : undefined}>
-                <path d={d} strokeWidth={active ? 2 : 1} strokeDasharray="6 4" className={`${active ? 'fill-medium-background stroke-base-foreground' : 'fill-none stroke-muted-foreground'}`} opacity={active ? 0.6 : 1} />
+                <path d={d} strokeWidth={active ? 2 : 1} strokeDasharray="4 4" className={active ? 'fill-medium-background stroke-base-foreground' : 'fill-none stroke-default'} opacity={active ? 0.7 : 1} />
                 {region.noData ? <path d={d} strokeWidth={0} fill={`url(#${id}-hatch)`} opacity={0.5} /> : null}
                 {at && isInFrame(size, at, 0) ? (
                   <text x={at.x} y={at.y} textAnchor="middle" fontSize={11} fontStyle="italic" style={HALO} strokeWidth={3} className="fill-muted-foreground stroke-base-background">
@@ -421,7 +433,7 @@ export function GeoMap({
                     aria-pressed={isSelected}
                     aria-label={`${marker.name}, ${marker.statusLabel}${marker.valueLabel ? `, ${marker.valueLabel}` : ''}`}
                     className="cursor-pointer outline-none [&:focus-visible>circle:first-child]:stroke-base-foreground"
-                    onClick={() => !state.drag?.moved && select(isSelected ? null : marker.id)}
+                    onClick={() => !dragged.current && select(isSelected ? null : marker.id)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
@@ -446,7 +458,7 @@ export function GeoMap({
                   tabIndex={0}
                   aria-label={`${members.length} sites: ${members.map((member) => member.name).join(', ')}. Zoom to separate them.`}
                   className="cursor-pointer outline-none"
-                  onClick={() => !state.drag?.moved && dispatch({ type: 'fit', points: members.map((member) => member.position) })}
+                  onClick={() => !dragged.current && dispatch({ type: 'fit', points: members.map((member) => member.position) })}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();

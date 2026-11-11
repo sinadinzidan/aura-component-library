@@ -24,7 +24,7 @@ const GROUPS_COLLAPSED = ['prep', 'iso', 'inst', 'rec'];
 function GanttChartFull() {
   return (
     <div className="h-176 w-full">
-      <GanttChart tasks={TURNAROUND_TASKS} today={GANTT_TODAY} label="Compression train turnaround, March 2026" />
+      <GanttChart tasks={TURNAROUND_TASKS} today={GANTT_TODAY} label="Compression train turnaround, March 2026" initialZoom="week" />
     </div>
   );
 }
@@ -40,7 +40,7 @@ function GanttChartMaintenanceWeek() {
 function GanttChartDarkScope() {
   return (
     <ThemeScope preset="control-room" className="h-176 w-full">
-      <GanttChart tasks={TURNAROUND_TASKS} today={GANTT_TODAY} label="Compression train turnaround, March 2026" initialCritical initialSelection="ka1" />
+      <GanttChart tasks={TURNAROUND_TASKS} today={GANTT_TODAY} label="Compression train turnaround, March 2026" initialCritical initialSelection="ka1" initialZoom="week" />
     </ThemeScope>
   );
 }

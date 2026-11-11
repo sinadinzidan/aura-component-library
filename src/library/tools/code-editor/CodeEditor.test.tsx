@@ -82,7 +82,7 @@ describe(CodeEditor.name, () => {
     renderEditor({ value: '', language: 'sql' });
     field().focus();
 
-    await userEvent.keyboard("count(*");
+    await userEvent.keyboard('count(*');
     expect(field()).toHaveValue('count(*)');
     await userEvent.keyboard(')');
     expect(field()).toHaveValue('count(*)');

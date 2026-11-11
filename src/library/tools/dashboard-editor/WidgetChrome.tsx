@@ -56,7 +56,7 @@ export function WidgetChrome({ children, editing = false, selected = false, drag
       {sizeLabel && (selected || dragging) ? (
         <span
           aria-hidden="true"
-          className="absolute bottom-2 left-2 z-10 rounded-md bg-muted-background px-2 py-0.5 text-xs font-medium tabular-nums text-medium-foreground"
+          className="absolute -top-2.5 left-3 z-10 rounded-md bg-base-background px-1.5 text-xs font-medium tabular-nums text-medium-foreground"
         >
           {sizeLabel}
         </span>

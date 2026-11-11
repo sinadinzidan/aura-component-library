@@ -66,7 +66,8 @@ export function QueryWorkbench({ database, initialQuery = '', runOnStart = false
   };
 
   return (
-    <div className={`@container flex min-h-0 min-w-0 flex-col gap-3 @3xl:grid @3xl:grid-cols-[15rem_minmax(0,1fr)] ${className}`} data-slot="query-workbench">
+    <div className={`@container min-h-0 min-w-0 ${className}`} data-slot="query-workbench">
+      <div className="flex size-full min-h-0 min-w-0 flex-col gap-3 @3xl:grid @3xl:grid-cols-[15rem_minmax(0,1fr)] @3xl:grid-rows-1">
       <aside className="flex min-h-0 flex-col gap-3 @3xl:border-r @3xl:border-default @3xl:pr-3">
         <SegmentedControl
           value={tab}
@@ -113,7 +114,7 @@ export function QueryWorkbench({ database, initialQuery = '', runOnStart = false
             onChange={setText}
             onRun={run}
             error={result && !result.ok && ranText === text ? result.error : null}
-            heightClassName="h-full"
+            fill
             placeholder="SELECT * FROM assets LIMIT 10"
             highlighter={highlighter}
           />
@@ -127,6 +128,7 @@ export function QueryWorkbench({ database, initialQuery = '', runOnStart = false
             <ErrorPanel text={ranText} error={result.error} />
           )}
         </div>
+      </div>
       </div>
     </div>
   );

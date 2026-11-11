@@ -30,7 +30,7 @@ function NodeGraphSurface({ label, width, height, children }: { label: string; w
     <svg role="img" aria-label={label} viewBox={`0 0 ${width} ${height}`} fill="none" className="block w-full" style={{ maxWidth: width }}>
       <defs>
         {(['default', 'selected', 'ok', 'bad'] as const).map((kind) => (
-          <marker key={kind} id={`ng-arrow-${kind}`} viewBox="0 0 10 10" refX={9} refY={5} markerWidth={7} markerHeight={7} orient="auto-start-reverse" className={kind === 'selected' ? 'text-base-foreground' : kind === 'ok' ? 'text-info-foreground-strong' : kind === 'bad' ? 'text-critical-foreground-strong' : 'text-medium-foreground'}>
+          <marker key={kind} id={`ng-arrow-${kind}`} viewBox="0 0 10 10" refX={9} refY={5} markerUnits="userSpaceOnUse" markerWidth={10} markerHeight={10} orient="auto-start-reverse" className={kind === 'selected' ? 'text-base-foreground' : kind === 'ok' ? 'text-info-foreground-strong' : kind === 'bad' ? 'text-critical-foreground-strong' : 'text-medium-foreground'}>
             <path d="M 0 0 L 10 5 L 0 10 Z" fill="currentColor" />
           </marker>
         ))}

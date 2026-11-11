@@ -25,6 +25,8 @@ type DashboardCanvasProps = {
   selectedId?: string | null;
   /** The drag in progress, from the editor state. */
   drag?: EditorDrag | null;
+  /** Pixel offset applied to the dragged widget when no pointer is driving it; for static previews. */
+  previewOffset?: { dx: number; dy: number };
   /** Draws one widget. It is rendered inert while editing. */
   renderWidget: (widget: EditorWidget) => ReactNode;
   /** Icon buttons shown on a widget in edit mode. */
@@ -79,6 +81,7 @@ export function DashboardCanvas({
   editing = false,
   selectedId = null,
   drag = null,
+  previewOffset,
   renderWidget,
   renderActions,
   onAction = noop,
@@ -222,7 +225,7 @@ export function DashboardCanvas({
               )}
               style={{
                 ...cell,
-                transform: follow && snapped ? `translate(${follow.dx - snapped.x}px, ${follow.dy - snapped.y}px)` : undefined,
+                transform: follow && snapped ? `translate(${follow.dx - snapped.x}px, ${follow.dy - snapped.y}px)` : dragging && previewOffset ? `translate(${previewOffset.dx}px, ${previewOffset.dy}px)` : undefined,
               }}
               onFocus={(event) => {
                 if (editing && !pointer.current && event.target === event.currentTarget && !selected) onAction({ type: 'select', id: widget.id });

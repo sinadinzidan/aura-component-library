@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { PidCanvas } from './PidCanvas';
 import { PID_FIXTURE, PID_FIXTURE_ALARMS, PID_FIXTURE_READINGS } from './pidFixture';
 import { ALL_LAYERS_ON } from './pidModel';
-import { PidCanvas } from './PidCanvas';
 
 function renderCanvas(props: Partial<Parameters<typeof PidCanvas>[0]> = {}) {
   return render(

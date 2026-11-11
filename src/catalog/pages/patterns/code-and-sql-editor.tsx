@@ -294,7 +294,7 @@ function CodeSqlSyntaxError() {
 }
 
 function CodeSqlTypeError() {
-  const sql = "SELECT id FROM alarms WHERE severity > 3";
+  const sql = 'SELECT id FROM alarms WHERE severity > 3';
   const result = runQuery(sql, CODESQL_DATABASE);
   return <div className="w-full max-w-xl">{result.ok ? null : <ErrorPanel text={sql} error={result.error} />}</div>;
 }

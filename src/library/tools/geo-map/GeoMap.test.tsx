@@ -216,6 +216,21 @@ describe(GeoMap.name, () => {
     expect(Element.prototype.setPointerCapture).toHaveBeenCalled();
   });
 
+  it('keeps the selection when a drag ends, but clears it on a plain click on empty map', () => {
+    renderMap({ initialSelectedId: 'nordkapp' });
+
+    fireEvent.pointerDown(map(), { button: 0, clientX: 300, clientY: 200, pointerId: 1 });
+    fireEvent.pointerMove(map(), { clientX: 380, clientY: 240, pointerId: 1 });
+    fireEvent.pointerUp(map(), { pointerId: 1 });
+    fireEvent.click(map());
+    expect(screen.getByRole('button', { name: /^Nordkapp/ })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.pointerDown(map(), { button: 0, clientX: 300, clientY: 200, pointerId: 1 });
+    fireEvent.pointerUp(map(), { pointerId: 1 });
+    fireEvent.click(map());
+    expect(screen.getByRole('button', { name: /^Nordkapp/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
   it('does not treat a press that barely moves as a drag', () => {
     renderMap();
     (Element.prototype.setPointerCapture as ReturnType<typeof vi.fn>).mockClear();

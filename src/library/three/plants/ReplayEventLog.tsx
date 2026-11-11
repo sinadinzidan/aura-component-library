@@ -1,7 +1,7 @@
 import { cn } from '../../../lib/utils';
 import type { ReplayEvent } from '../../experiences/journeys/replayState';
-import { StatusDot } from '../../industrial/StatusDot';
 import type { DotShape, Tone } from '../../industrial/status';
+import { StatusDot } from '../../industrial/StatusDot';
 
 export type ReplayEventLogProps = {
   events: readonly ReplayEvent[];

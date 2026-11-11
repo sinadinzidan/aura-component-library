@@ -1,5 +1,6 @@
-import { backspacePair, caretLine, caretPosition, commentPrefix, enterWithIndent, indentSelection, outdentSelection, toggleComment, typeCharacter } from './editing';
 import type { TextState } from '../rich-text/textState';
+
+import { backspacePair, caretLine, caretPosition, commentPrefix, enterWithIndent, indentSelection, outdentSelection, toggleComment, typeCharacter } from './editing';
 
 /** Builds a state from text where `|` marks the caret or both ends of the selection. */
 function at(marked: string): TextState {
@@ -29,7 +30,7 @@ describe(typeCharacter.name, () => {
   });
 
   it('wraps a selection', () => {
-    expect(show(typeCharacter(at("WHERE unit = |barg|"), "'"))).toBe("WHERE unit = '|barg|'");
+    expect(show(typeCharacter(at('WHERE unit = |barg|'), "'"))).toBe("WHERE unit = '|barg|'");
   });
 
   it('steps over a closing character that is already there', () => {
@@ -38,7 +39,7 @@ describe(typeCharacter.name, () => {
   });
 
   it('types an apostrophe after a letter as itself', () => {
-    expect(typeCharacter(at("don|"), "'")).toBeNull();
+    expect(typeCharacter(at('don|'), "'")).toBeNull();
   });
 
   it('does not pair in front of a word', () => {

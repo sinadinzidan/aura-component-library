@@ -413,7 +413,7 @@ export function SchedulerCalendar(props: SchedulerCalendarProps) {
                 {columns.map((column) => (
                   <ul key={column.id} aria-label={`All day, ${column.label}`} className="flex min-h-8 flex-col gap-0.5 border-l border-default p-0.5">
                     {allDay
-                      .filter((item) => item.dayId === column.dayId && (column.resourceId === undefined || column.resourceId === item.resourceId || item.kind === 'permit'))
+                      .filter((item) => item.dayId === column.dayId && (column.resourceId === undefined || column.resourceId === item.resourceId))
                       .map((item) => (
                         <li key={item.id} className="flex">
                           <EventBlock inline resizable={false} event={item} tone={tone(item.resourceId)} crewName={crewName(item.resourceId)} selected={state.selectedId === item.id} lines={2} compact onActivate={() => activate(item)} onKeyDown={onEventKeyDown(item)} />
